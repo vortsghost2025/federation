@@ -1,0 +1,34 @@
+version: '3.8'
+
+services:
+  orchestrator-bot:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: orchestrator-trading-bot
+    environment:
+      PYTHONUNBUFFERED: "1"
+      PYTHONDONTWRITEBYTECODE: "1"
+      KUCOIN_API_KEY: ${KUCOIN_API_KEY}
+      KUCOIN_API_SECRET: ${KUCOIN_API_SECRET}
+      KUCOIN_API_PASSPHRASE: ${KUCOIN_API_PASSPHRASE}
+      EXCHANGE: ${EXCHANGE}
+      LIVE_MODE: ${LIVE_MODE}
+      CONTINUOUS_MODE: ${CONTINUOUS_MODE}
+      CYCLE_INTERVAL_SECONDS: ${CYCLE_INTERVAL_SECONDS}
+    volumes:
+      - ./logs:/app/logs
+      - ./config:/app/config
+    restart: unless-stopped
+    networks:
+      - trading-network
+    healthcheck:
+      test: ["CMD", "python", "-c", "import sys; sys.exit(0)"]
+      interval: 60s
+      timeout: 10s
+      retries: 3
+      start_period: 5s
+
+networks:
+  trading-network:
+    driver: bridge

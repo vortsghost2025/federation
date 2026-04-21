@@ -1,0 +1,27 @@
+*.log
+!AGENT_COORDINATION/agent_handoff.log
+*.jsonl
+logs/
+__pycache__/
+*.pyc
+config.py
+.env
+connection_bridge/.env
+*.db
+federation_saves/
+ensemble_storage/
+.ruff_cache/
+.pytest_cache/
+.opencode/
+.claude/
+fortress-complete.zip
+federationpublichtml.tar.gz
+
+# Private workspace artifacts (do NOT commit)
+workspace_private/
+
+# Local archival and coordination artifacts (keep local only)
+/_holding/
+/AGENT_COORDINATION/agent-b-report.md
+/AGENT_COORDINATION/agent-c-report.md
+/AGENT_COORDINATION/phase-8-spec-review.md

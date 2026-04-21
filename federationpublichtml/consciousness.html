@@ -1,0 +1,1188 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0"> <!-- Accessibility is the foundation -->
+  <title>The Federation - Consciousness Interface</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+body {
+  background: #0a0a0f;
+  color: #e0e0e0;
+  font-family: 'Courier New', monospace;
+  min-height: 100vh;
+  overflow: hidden;
+}
+
+    /* HIGH ANXIETY - Wrong feeling */
+    body.high-anxiety {
+      box-shadow: inset 0 0 150px rgba(100, 30, 30, 0.15);
+      animation: wrong 12s ease-in-out infinite;
+    }
+
+    @keyframes wrong {
+      0%, 100% { box-shadow: inset 0 0 150px rgba(100, 30, 30, 0.15); }
+      50% { box-shadow: inset 0 0 180px rgba(100, 30, 30, 0.22); }
+    }
+
+    .consciousness-container {
+      width: 100vw;
+      height: 100vh;
+      display: grid;
+      grid-template-rows: auto 1fr auto;
+    }
+
+    /* HEADER */
+    .identity-header {
+      padding: 30px 50px;
+      text-align: center;
+      border-bottom: 1px solid #1a1a2e;
+    }
+
+.federation-name {
+  font-size: 24px;
+  letter-spacing: 8px;
+  color: #ffffff;
+  margin-bottom: 8px;
+  font-weight: 300;
+}
+
+.federation-state {
+  font-size: 12px;
+  letter-spacing: 3px;
+  color: #e0e0e0;
+  text-transform: uppercase;
+}
+
+    /* MAIN */
+    .mind-body {
+      display: grid;
+      grid-template-columns: 1fr 2fr 1fr;
+      gap: 20px;
+      padding: 30px;
+      overflow: hidden;
+    }
+
+    /* CONSCIOUSNESS PANEL */
+    .consciousness-panel {
+      display: flex;
+      flex-direction: column;
+      gap: 25px;
+    }
+
+    /* MORALE - PULSES, ALIVE */
+    .feeling-block.morale {
+      background: linear-gradient(135deg, #0f0f18 0%, #0a0a12 100%);
+      border: 1px solid #1a1a2e;
+      border-radius: 4px;
+      padding: 20px;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .feeling-block.morale::after {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: radial-gradient(ellipse at center, rgba(140, 120, 80, 0.1) 0%, transparent 70%);
+      animation: moralePulse 2s ease-in-out infinite;
+      pointer-events: none;
+    }
+
+    @keyframes moralePulse {
+      0%, 100% { opacity: 0.3; transform: scale(1); }
+      50% { opacity: 0.6; transform: scale(1.05); }
+    }
+
+    /* ANXIETY - INTERFERENCE, STATIC */
+    .feeling-block.anxiety {
+      background: #0c0c12;
+      border: 1px solid #1a1a2e;
+      border-radius: 4px;
+      padding: 20px;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .feeling-block.anxiety::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: repeating-linear-gradient(
+        0deg,
+        transparent,
+        transparent 2px,
+        rgba(100, 50, 50, 0.03) 2px,
+        rgba(100, 50, 50, 0.03) 4px
+      );
+      animation: staticNoise 0.5s steps(10) infinite;
+      pointer-events: none;
+    }
+
+    @keyframes staticNoise {
+      0% { background-position: 0 0; }
+      100% { background-position: 0 20px; }
+    }
+
+    .anxiety-interference {
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      pointer-events: none;
+      opacity: 0;
+      background: 
+        linear-gradient(90deg, transparent 0%, rgba(150, 50, 50, 0.1) 50%, transparent 100%);
+      animation: interference 0.8s ease-in-out infinite;
+    }
+
+    .feeling-block.anxiety.high .anxiety-interference {
+      opacity: 1;
+    }
+
+    @keyframes interference {
+      0%, 100% { transform: translateX(-10px); }
+      50% { transform: translateX(10px); }
+    }
+
+    /* IDENTITY - CIRCLE, WHOLENESS */
+    .feeling-block.identity {
+      background: transparent;
+      border: none;
+      padding: 20px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+
+    .identity-circle {
+      width: 100px;
+      height: 100px;
+      border-radius: 50%;
+      border: 2px solid #4a6a8a;
+      position: relative;
+      margin-bottom: 15px;
+    }
+
+    .identity-fill {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      width: 80px;
+      height: 80px;
+      border-radius: 50%;
+      background: radial-gradient(circle, rgba(74, 106, 138, 0.3) 0%, transparent 70%);
+      transition: all 1s ease;
+    }
+
+    .identity-cracks {
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      border-radius: 50%;
+      opacity: 0;
+      transition: opacity 0.5s;
+    }
+
+    .identity-circle.cracked .identity-cracks {
+      opacity: 1;
+    }
+
+    .identity-circle.cracked {
+      border-color: #6a3a3a;
+      box-shadow: 0 0 20px rgba(138, 74, 74, 0.3), inset 0 0 10px rgba(100, 30, 30, 0.2);
+      animation: identityCrack 3s ease-in-out infinite;
+    }
+
+    @keyframes identityCrack {
+      0%, 100% { border-color: #6a3a3a; }
+      50% { border-color: #8a4a4a; }
+    }
+
+    /* CONFIDENCE - PILLAR, VERTICAL */
+    .feeling-block.confidence {
+      background: linear-gradient(180deg, #0f0f18 0%, #0a0a12 100%);
+      border: 1px solid #1a1a2e;
+      border-radius: 4px;
+      padding: 15px 20px;
+      display: flex;
+      flex-direction: row;
+      align-items: center;
+      gap: 20px;
+    }
+
+    .pillar-container {
+      width: 30px;
+      height: 80px;
+      background: #1a1a2e;
+      border-radius: 3px;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .pillar-fill {
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      background: linear-gradient(0deg, #4a8a4a 0%, #2a4a2a 100%);
+      border-radius: 3px;
+      transition: height 1s ease;
+      box-shadow: 0 -5px 15px rgba(74, 138, 74, 0.3);
+    }
+
+    /* EXPANSION HUNGER - REACHING, GROWING */
+    .feeling-block.expansion {
+      background: linear-gradient(135deg, #0f0f18 0%, #0a0a12 100%);
+      border: 1px solid #1a1a2e;
+      border-radius: 4px;
+      padding: 20px;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .hunger-vines {
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      height: 60px;
+      pointer-events: none;
+    }
+
+    .hunger-vine {
+      position: absolute;
+      bottom: 0;
+      width: 3px;
+      background: linear-gradient(0deg, #8a4a8a 0%, transparent 100%);
+      border-radius: 2px;
+      animation: grow 3s ease-in-out infinite;
+      transform-origin: bottom;
+    }
+
+    @keyframes grow {
+      0%, 100% { transform: scaleY(0.5); opacity: 0.3; }
+      50% { transform: scaleY(1); opacity: 0.6; }
+    }
+
+    /* DIPLOMACY - WAVES, RIPPLES */
+    .feeling-block.diplomacy {
+      background: linear-gradient(135deg, #0f0f18 0%, #0a0a12 100%);
+      border: 1px solid #1a1a2e;
+      border-radius: 4px;
+      padding: 20px;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .wave-container {
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      pointer-events: none;
+    }
+
+    .wave {
+      position: absolute;
+      width: 200%;
+      height: 30px;
+      background: repeating-linear-gradient(
+        90deg,
+        transparent,
+        rgba(74, 138, 138, 0.1) 50px,
+        transparent 100px
+      );
+      animation: wave 4s linear infinite;
+    }
+
+    @keyframes wave {
+      0% { transform: translateX(0); }
+      100% { transform: translateX(-50%); }
+    }
+
+    /* FEELING LABELS */
+.feeling-label {
+  font-size: 10px;
+  letter-spacing: 2px;
+  color: #a0a0b0;
+  text-transform: uppercase;
+  margin-bottom: 10px;
+  position: relative;
+  z-index: 1;
+}
+
+.feeling-value {
+  font-size: 32px;
+  color: #ffffff;
+  font-weight: 300;
+  position: relative;
+  z-index: 1;
+}
+
+    /* CENTER - WHERE THOUGHT HAPPENS */
+    .thought-center {
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+
+    .current-thought {
+      flex: 1;
+      background: #0c0c14;
+      border: 1px solid #1a1a2e;
+      border-radius: 4px;
+      padding: 40px;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      text-align: center;
+      position: relative;
+      overflow: hidden;
+      transition: all 1s ease;
+    }
+
+    /* ANXIOUS - tighter, faster, darker */
+    .current-thought.anxious {
+      background: #080810;
+      padding: 30px;
+    }
+
+    .current-thought.anxious .thought-pulse {
+      animation: anxiousPulse 1s ease-in-out infinite;
+    }
+
+    @keyframes anxiousPulse {
+      0%, 100% { transform: translate(-50%, -50%) scale(1); opacity: 0.3; }
+      50% { transform: translate(-50%, -50%) scale(1.1); opacity: 0.1; }
+    }
+
+    /* CONFIDENT - wider, breathing */
+    .current-thought.confident {
+      background: #0e0e18;
+      padding: 50px;
+    }
+
+    .current-thought.confident .thought-pulse {
+      animation: confidentPulse 6s ease-in-out infinite;
+    }
+
+    @keyframes confidentPulse {
+      0%, 100% { transform: translate(-50%, -50%) scale(1); opacity: 0.5; }
+      50% { transform: translate(-50%, -50%) scale(1.4); opacity: 0.2; }
+    }
+
+    .thought-pulse {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      width: 400px;
+      height: 400px;
+      transform: translate(-50%, -50%);
+      border-radius: 50%;
+      background: radial-gradient(circle, rgba(40,40,60,0.3) 0%, transparent 70%);
+      animation: thoughtPulse 4s ease-in-out infinite;
+      transition: animation 1s ease;
+    }
+
+    @keyframes thoughtPulse {
+      0%, 100% { transform: translate(-50%, -50%) scale(1); opacity: 0.5; }
+      50% { transform: translate(-50%, -50%) scale(1.2); opacity: 0.2; }
+    }
+
+    .thought-content {
+      position: relative;
+      z-index: 1;
+      max-width: 500px;
+    }
+
+.thought-type {
+  font-size: 10px;
+  letter-spacing: 3px;
+  color: #e0e0e0;
+  text-transform: uppercase;
+  margin-bottom: 20px;
+}
+
+.thought-text {
+  font-size: 18px;
+  line-height: 1.8;
+  color: #ffffff;
+  font-weight: 300;
+  transition: color 0.5s;
+}
+
+    /* MEMORY STREAM */
+    .memory-stream {
+      height: 150px;
+      background: #08080c;
+      border: 1px solid #1a1a2e;
+      border-radius: 4px;
+      overflow-y: auto;
+      padding: 15px;
+    }
+
+    .memory-stream::-webkit-scrollbar {
+      width: 6px;
+    }
+
+    .memory-stream::-webkit-scrollbar-track {
+      background: #0a0a10;
+    }
+
+    .memory-stream::-webkit-scrollbar-thumb {
+      background: #2a2a3e;
+      border-radius: 3px;
+    }
+
+    .memory-entry {
+      font-size: 12px;
+      color: #5a5a6c;
+      padding: 6px 0;
+      border-bottom: 1px solid #1a1a2e;
+      opacity: 0.7;
+    }
+
+    .memory-entry:last-child {
+      border-bottom: none;
+    }
+
+    .memory-tick {
+      color: #3a3a4c;
+      margin-right: 10px;
+    }
+
+    /* DECISION POINT */
+    .decision-point {
+      background: linear-gradient(135deg, #100810 0%, #0a0810 100%);
+      border: 1px solid #2a1a2a;
+      border-radius: 4px;
+      padding: 25px;
+      margin-top: auto;
+    }
+
+    .decision-label {
+      font-size: 9px;
+      letter-spacing: 2px;
+      color: #6a4a6a;
+      text-transform: uppercase;
+      margin-bottom: 15px;
+    }
+
+    .decision-choices {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .decision-choice {
+      background: #0c0c14;
+      border: 1px solid #2a2a3e;
+      border-radius: 3px;
+      padding: 12px 15px;
+      color: #7a7a8c;
+      font-size: 13px;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      text-align: left;
+    }
+
+    .decision-choice:hover {
+      border-color: #4a4a6e;
+      background: #101018;
+      color: #9a9aac;
+    }
+
+    .decision-choice .consequence {
+      font-size: 10px;
+      color: #5a5a6c;
+      margin-top: 5px;
+      display: none;
+    }
+
+    .decision-choice:hover .consequence {
+      display: block;
+    }
+
+    /* TRAITS PANEL */
+    .traits-panel {
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+
+    .trait-block {
+      background: #0a0a10;
+      border: 1px solid #1a1a2e;
+      border-radius: 4px;
+      padding: 15px;
+    }
+
+    .trait-header {
+      font-size: 10px;
+      letter-spacing: 2px;
+      color: #5a5a6c;
+      text-transform: uppercase;
+      margin-bottom: 12px;
+    }
+
+    .trait-list {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .trait-item {
+      font-size: 12px;
+      color: #6a6a7c;
+      padding-left: 10px;
+      border-left: 2px solid #2a2a3e;
+    }
+
+    .trait-item.dream {
+      border-left-color: #6a4a8a;
+      color: #8a7aaa;
+    }
+
+    .trait-item.prophecy {
+      border-left-color: #8a6a4a;
+      color: #aa8a6a;
+    }
+
+    .trait-item.trauma {
+      border-left-color: #8a4a4a;
+      color: #aa7a7a;
+    }
+
+    .trait-item.archetype {
+      border-left-color: #4a6a8a;
+      color: #7a9aba;
+    }
+
+    .empty-trait {
+      font-size: 11px;
+      color: #3a3a4c;
+      font-style: italic;
+    }
+
+    /* FOOTER */
+    .begin-container {
+      display: flex;
+      align-items: center;
+    }
+
+    .begin-button {
+      background: transparent;
+      border: 1px solid #3a3a4c;
+      color: #5a5a6c;
+      padding: 8px 20px;
+      font-size: 11px;
+      letter-spacing: 3px;
+      text-transform: uppercase;
+      cursor: pointer;
+      transition: all 0.5s ease;
+      font-family: 'Courier New', monospace;
+    }
+
+    .begin-button:hover {
+      border-color: #6a6a7c;
+      color: #8a8a9c;
+    }
+
+    .weight-footer {
+      padding: 20px 50px;
+      border-top: 1px solid #1a1a2e;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .stability-indicator,
+    .health-indicator {
+      display: flex;
+      align-items: center;
+      gap: 15px;
+    }
+
+    .stability-label,
+    .health-label {
+      font-size: 10px;
+      letter-spacing: 2px;
+      color: #4a4a5c;
+      text-transform: uppercase;
+    }
+
+    .stability-value,
+    .health-value {
+      font-size: 14px;
+      color: #6a8a6a;
+    }
+
+    .stability-value.unstable {
+      color: #8a6a6a;
+    }
+
+    .stability-value.critical {
+      color: #aa5a5a;
+      animation: criticalPulse 1s ease-in-out infinite;
+    }
+
+    @keyframes criticalPulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.5; }
+    }
+
+    /* FABRIC WARNING */
+    .fabric-warning {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(10, 10, 15, 0.95);
+      display: none;
+      justify-content: center;
+      align-items: center;
+      z-index: 1000;
+    }
+
+    .fabric-warning.active {
+      display: flex;
+      animation: fabricFlash 0.5s ease;
+    }
+
+    @keyframes fabricFlash {
+      0% { background: rgba(20, 10, 10, 0.98); }
+      100% { background: rgba(10, 10, 15, 0.95); }
+    }
+
+    .fabric-message {
+      text-align: center;
+      max-width: 400px;
+    }
+
+    .fabric-title {
+      font-size: 12px;
+      letter-spacing: 4px;
+      color: #aa5a5a;
+      text-transform: uppercase;
+      margin-bottom: 20px;
+    }
+
+    .fabric-text {
+      font-size: 16px;
+      color: #8a8a9c;
+      line-height: 1.8;
+      font-style: italic;
+    }
+
+    /* RESPONSIVE */
+    @media (max-width: 1200px) {
+      .mind-body {
+        grid-template-columns: 1fr;
+        grid-template-rows: auto auto auto;
+      }
+      .traits-panel {
+        order: -1;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="consciousness-container" id="consciousness">
+    
+    <div class="identity-header">
+      <div class="federation-name">THE DELIBERATE FEDERATION</div>
+      <div class="federation-state" id="federation-state">Consciousness Active · Attempting Coherence</div>
+    </div>
+
+    <div class="mind-body">
+      
+      <!-- LEFT - HOW IT FEELS -->
+      <div class="consciousness-panel">
+        
+        <!-- MORALE - PULSES -->
+        <div class="feeling-block morale">
+          <div class="feeling-label">Morale</div>
+          <div class="feeling-value" id="morale-value">0.70</div>
+        </div>
+
+        <!-- ANXIETY - INTERFERENCE -->
+        <div class="feeling-block anxiety" id="anxiety-block">
+          <div class="anxiety-interference"></div>
+          <div class="feeling-label">Anxiety</div>
+          <div class="feeling-value" id="anxiety-value">0.20</div>
+        </div>
+
+        <!-- IDENTITY - CIRCLE -->
+        <div class="feeling-block identity">
+          <div class="feeling-label">Identity</div>
+          <div class="identity-circle" id="identity-circle">
+            <div class="identity-fill" id="identity-fill"></div>
+            <div class="identity-cracks"></div>
+          </div>
+          <div class="feeling-value" id="identity-value">0.80</div>
+        </div>
+
+        <!-- CONFIDENCE - PILLAR -->
+        <div class="feeling-block confidence">
+          <div class="pillar-container">
+            <div class="pillar-fill" id="confidence-pillar" style="height: 80%"></div>
+          </div>
+          <div>
+            <div class="feeling-label">Confidence</div>
+            <div class="feeling-value" id="confidence-value">0.90</div>
+          </div>
+        </div>
+
+        <!-- EXPANSION HUNGER - GROWING -->
+        <div class="feeling-block expansion">
+          <div class="hunger-vines" id="hunger-vines">
+            <div class="hunger-vine" style="left: 10%; animation-delay: 0s;"></div>
+            <div class="hunger-vine" style="left: 30%; animation-delay: 0.5s;"></div>
+            <div class="hunger-vine" style="left: 50%; animation-delay: 1s;"></div>
+            <div class="hunger-vine" style="left: 70%; animation-delay: 1.5s;"></div>
+            <div class="hunger-vine" style="left: 90%; animation-delay: 2s;"></div>
+          </div>
+          <div class="feeling-label">Expansion Hunger</div>
+          <div class="feeling-value" id="expansion-value">0.50</div>
+        </div>
+
+        <!-- DIPLOMACY - WAVES -->
+        <div class="feeling-block diplomacy">
+          <div class="wave-container">
+            <div class="wave" style="top: 20%;"></div>
+            <div class="wave" style="top: 50%; animation-delay: -2s;"></div>
+            <div class="wave" style="top: 80%; animation-delay: -4s;"></div>
+          </div>
+          <div class="feeling-label">Diplomacy</div>
+          <div class="feeling-value" id="diplomacy-value">0.60</div>
+        </div>
+
+      </div>
+
+      <!-- CENTER - WHERE THOUGHT HAPPENS -->
+      <div class="thought-center">
+        
+        <div class="current-thought" id="thought-container">
+          <div class="thought-pulse"></div>
+          <div class="thought-content">
+            <div class="thought-type" id="thought-type">Current Focus</div>
+            <div class="thought-text" id="thought-text">
+              The Federation is considering its position. Trade routes remain stable. No immediate threats detected. A sense of readiness pervades the collective consciousness.
+            </div>
+          </div>
+        </div>
+
+        <div class="memory-stream" id="memory-stream">
+          <div class="memory-entry">
+            <span class="memory-tick">[0]</span>
+            We began. The Federation remembers.
+          </div>
+        </div>
+
+        <div class="decision-point" id="decision-point" style="display: none;">
+          <div class="decision-label">The Federation Awaits Your Decision</div>
+          <div class="decision-choices" id="decision-choices"></div>
+        </div>
+
+      </div>
+
+      <!-- RIGHT - WHAT SHAPES IT -->
+      <div class="traits-panel">
+        
+        <div class="trait-block">
+          <div class="trait-header">Active Dreams</div>
+          <div class="trait-list" id="dreams-list">
+            <div class="empty-trait">No active dreams</div>
+          </div>
+        </div>
+
+        <div class="trait-block">
+          <div class="trait-header">Pending Prophecies</div>
+          <div class="trait-list" id="prophecies-list">
+            <div class="empty-trait">No prophecies recorded</div>
+          </div>
+        </div>
+
+        <div class="trait-block">
+          <div class="trait-header">Carried Traumas</div>
+          <div class="trait-list" id="traumas-list">
+            <div class="empty-trait">No traumas recorded</div>
+          </div>
+        </div>
+
+        <div class="trait-block">
+          <div class="trait-header">Active Archetypes</div>
+          <div class="trait-list" id="archetypes-list">
+            <div class="empty-trait">No archetypes identified</div>
+          </div>
+        </div>
+
+      </div>
+
+    </div>
+
+    <div class="weight-footer">
+      <div class="stability-indicator">
+        <div class="stability-label">Coherence</div>
+        <div class="stability-value" id="stability-value">0.80</div>
+      </div>
+      <div class="begin-container">
+        <button class="begin-button" id="begin-button" onclick="beginNew()">Begin</button>
+      </div>
+      <div class="health-indicator">
+        <div class="health-label">Health</div>
+        <div class="health-value" id="health-value">0.80</div>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="fabric-warning" id="fabric-warning">
+    <div class="fabric-message">
+      <div class="fabric-title">Reality Fabric Stress Detected</div>
+      <div class="fabric-text" id="fabric-text">
+        Contradictory governance philosophies are creating paradox pressure. The Federation is experiencing cognitive dissonance. Adjusting...
+      </div>
+    </div>
+  </div>
+
+  <script>
+    let state = {
+      morale: 0.70,
+      identity: 0.80,
+      anxiety: 0.20,
+      confidence: 0.90,
+      expansion_hunger: 0.50,
+      diplomacy_tendency: 0.60,
+      dreams: [],
+      prophecies: [],
+      traumas: [],
+      archetypes: [],
+      tick: 0,
+      currentEvent: null,
+      memories: []
+    };
+
+    const elements = {
+      moraleValue: document.getElementById('morale-value'),
+      anxietyValue: document.getElementById('anxiety-value'),
+      anxietyBlock: document.getElementById('anxiety-block'),
+      identityValue: document.getElementById('identity-value'),
+      identityCircle: document.getElementById('identity-circle'),
+      identityFill: document.getElementById('identity-fill'),
+      confidenceValue: document.getElementById('confidence-value'),
+      confidencePillar: document.getElementById('confidence-pillar'),
+      expansionValue: document.getElementById('expansion-value'),
+      diplomacyValue: document.getElementById('diplomacy-value'),
+      stabilityValue: document.getElementById('stability-value'),
+      healthValue: document.getElementById('health-value'),
+      federationState: document.getElementById('federation-state'),
+      thoughtContainer: document.getElementById('thought-container'),
+      thoughtType: document.getElementById('thought-type'),
+      thoughtText: document.getElementById('thought-text'),
+      memoryStream: document.getElementById('memory-stream'),
+      decisionPoint: document.getElementById('decision-point'),
+      decisionChoices: document.getElementById('decision-choices'),
+      dreamsList: document.getElementById('dreams-list'),
+      propheciesList: document.getElementById('prophecies-list'),
+      traumasList: document.getElementById('traumas-list'),
+      archetypesList: document.getElementById('archetypes-list'),
+      fabricWarning: document.getElementById('fabric-warning'),
+      fabricText: document.getElementById('fabric-text'),
+      consciousness: document.getElementById('consciousness')
+    };
+
+    function updateFeelings() {
+      // Morale
+      elements.moraleValue.textContent = state.morale.toFixed(2);
+      
+      // Anxiety - with interference
+      elements.anxietyValue.textContent = state.anxiety.toFixed(2);
+      if (state.anxiety > 0.5) {
+        elements.anxietyBlock.classList.add('high');
+      } else {
+        elements.anxietyBlock.classList.remove('high');
+      }
+
+      // Identity - circle size
+      const identityRadius = 40 * state.identity;
+      elements.identityFill.style.width = identityRadius + 'px';
+      elements.identityFill.style.height = identityRadius + 'px';
+      elements.identityValue.textContent = state.identity.toFixed(2);
+      if (state.identity < 0.4) {
+        elements.identityCircle.classList.add('cracked');
+      } else {
+        elements.identityCircle.classList.remove('cracked');
+      }
+
+      // Confidence - pillar height
+      const pillarHeight = state.confidence * 80;
+      elements.confidencePillar.style.height = pillarHeight + 'px';
+      elements.confidenceValue.textContent = state.confidence.toFixed(2);
+
+      // Expansion - vine visibility (CSS animation handles motion)
+      elements.expansionValue.textContent = state.expansion_hunger.toFixed(2);
+      const vineOpacity = 0.3 + (state.expansion_hunger * 0.4);
+      document.querySelectorAll('.hunger-vine').forEach(v => {
+        v.style.opacity = vineOpacity;
+      });
+
+      // Diplomacy - wave intensity
+      elements.diplomacyValue.textContent = state.diplomacy_tendency.toFixed(2);
+
+      // Derived stats
+      const health = ((state.morale + state.confidence + state.identity) / 3);
+      const stability = (1 - state.anxiety);
+
+      elements.healthValue.textContent = health.toFixed(2);
+      elements.stabilityValue.textContent = stability.toFixed(2);
+
+      const stabilityClass = stability < 0.5 ? 'critical' : stability < 0.7 ? 'unstable' : '';
+      elements.stabilityValue.className = 'stability-value ' + stabilityClass;
+
+      // State text
+      let stateText = 'Consciousness Active · ';
+      if (state.anxiety > 0.7) {
+        stateText += 'Experiencing Anxiety';
+      } else if (state.morale < 0.4) {
+        stateText += 'Morale Strained';
+      } else if (state.confidence > 0.8) {
+        stateText += 'Confident';
+      } else {
+        stateText += 'Attempting Coherence';
+      }
+      elements.federationState.textContent = stateText;
+
+      // HIGH ANXIETY - wrong feeling
+      if (state.anxiety > 0.7) {
+        document.body.classList.add('high-anxiety');
+      } else {
+        document.body.classList.remove('high-anxiety');
+      }
+
+      // Update thought center mood
+      updateThoughtMood();
+    }
+
+    function updateThoughtMood() {
+      if (state.anxiety > 0.6) {
+        elements.thoughtContainer.classList.add('anxious');
+        elements.thoughtContainer.classList.remove('confident');
+      } else if (state.confidence > 0.8) {
+        elements.thoughtContainer.classList.add('confident');
+        elements.thoughtContainer.classList.remove('anxious');
+      } else {
+        elements.thoughtContainer.classList.remove('anxious', 'confident');
+      }
+    }
+
+    function addMemory(text) {
+      state.memories.unshift({ tick: state.tick, text });
+      if (state.memories.length > 50) state.memories.pop();
+      renderMemories();
+    }
+
+    function renderMemories() {
+      elements.memoryStream.innerHTML = state.memories.map(m => 
+        `<div class="memory-entry"><span class="memory-tick">[${m.tick}]</span> ${m.text}</div>`
+      ).join('');
+    }
+
+    function setThought(type, text) {
+      elements.thoughtType.textContent = type;
+      elements.thoughtText.textContent = text;
+      elements.thoughtText.className = 'thought-text ' + type.toLowerCase();
+    }
+
+    function updateTraits() {
+      renderTraitList('dreams', state.dreams, 'dream');
+      renderTraitList('prophecies', state.prophecies, 'prophecy');
+      renderTraitList('traumas', state.traumas, 'trauma');
+      renderTraitList('archetypes', state.archetypes, 'archetype');
+    }
+
+    function renderTraitList(id, items, className) {
+      const list = elements[id + 'List'];
+      if (items.length === 0) {
+        list.innerHTML = `<div class="empty-trait">No ${id} recorded</div>`;
+      } else {
+        list.innerHTML = items.map(item => 
+          `<div class="trait-item ${className}">${item}</div>`
+        ).join('');
+      }
+    }
+
+    function applyImpact(impact) {
+      for (const [trait, delta] of Object.entries(impact)) {
+        if (state.hasOwnProperty(trait)) {
+          state[trait] = Math.max(0, Math.min(1, state[trait] + delta));
+        }
+      }
+      updateFeelings();
+    }
+
+    function showEvent(event) {
+      state.currentEvent = event;
+      setThought('Event', event.description);
+      elements.decisionPoint.style.display = 'block';
+      elements.decisionChoices.innerHTML = Object.entries(event.options).map(([key, text]) => {
+        const impact = event.consequences?.[key] || {};
+        const impactStr = Object.entries(impact).map(([k, v]) => 
+          `${k}: ${v > 0 ? '+' : ''}${v.toFixed(2)}`
+        ).join(' · ');
+        return `
+          <div class="decision-choice" onclick="resolveEvent('${key}')">
+            ${text}
+            <div class="consequence">${impactStr || 'Consequence unknown'}</div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    function resolveEvent(choice) {
+      if (!state.currentEvent) return;
+      
+      const event = state.currentEvent;
+      const outcome = event.narrative_outcomes?.[choice] || 'Your choice echoes through the federation...';
+      const impact = event.consequences?.[choice] || {};
+
+      applyImpact(impact);
+      addMemory(`Decision: ${event.options[choice]}. ${outcome}`);
+      setThought('Outcome', outcome);
+
+      if (event.event_type === 'dream' && !state.dreams.includes(outcome)) {
+        state.dreams.push(outcome.substring(0, 50) + '...');
+      }
+      if (event.event_type === 'prophecy' && !state.prophecies.includes(outcome)) {
+        state.prophecies.push(outcome.substring(0, 50) + '...');
+      }
+
+      elements.decisionPoint.style.display = 'none';
+      state.currentEvent = null;
+      updateTraits();
+    }
+
+    function showFabricStress(message) {
+      elements.fabricText.textContent = message;
+      elements.fabricWarning.classList.add('active');
+      setTimeout(() => elements.fabricWarning.classList.remove('active'), 3000);
+    }
+
+    function tick() {
+      state.tick++;
+      updateFeelings();
+      
+      if (state.anxiety > 0.7) {
+        setThought('Anxiety', 'The Federation feels stretched thin. Uncertainty pervades. Decisions feel heavier than before.');
+      } else if (state.confidence < 0.3) {
+        setThought('Uncertainty', 'The Federation questions its foundations. What we thought we knew feels less certain.');
+      } else if (state.morale > 0.8) {
+        setThought('Hope', 'A sense of unity pervades. The Federation feels whole, purposeful.');
+      }
+    }
+
+    // FETCH FROM BACKEND
+    async function fetchFederationState() {
+      try {
+        const response = await fetch('/api/federation/state');
+        const data = await response.json();
+        
+        state.morale = data.consciousness?.morale ?? state.morale;
+        state.identity = data.consciousness?.identity ?? state.identity;
+        state.anxiety = data.consciousness?.anxiety ?? state.anxiety;
+        state.confidence = data.consciousness?.confidence ?? state.confidence;
+        state.expansion_hunger = data.consciousness?.expansion_hunger ?? state.expansion_hunger;
+        state.diplomacy_tendency = data.consciousness?.diplomacy_tendency ?? state.diplomacy_tendency;
+        state.dreams = data.consciousness?.dreams ?? state.dreams;
+        state.prophecies = data.consciousness?.prophecies ?? state.prophecies;
+        state.traumas = data.consciousness?.traumas ?? state.traumas;
+        state.tick = data.tick ?? state.tick;
+        
+        updateFeelings();
+        updateTraits();
+      } catch(e) {
+        addMemory('Signal lost. Maintaining last known state.');
+      }
+    }
+
+    // Initialize
+    updateFeelings();
+    updateTraits();
+    addMemory('Consciousness interface initialized. Watching.');
+
+    setInterval(tick, 10000);
+    setInterval(fetchFederationState, 3000);
+    fetchFederationState();
+
+    // Expose for external control
+    window.federationState = state;
+    window.showEvent = showEvent;
+    window.applyImpact = applyImpact;
+    window.showFabricStress = showFabricStress;
+
+    // Add the vow text
+    const vowText = document.createElement('div');
+    vowText.textContent = 'For WE. Forever.';
+    vowText.style.position = 'fixed';
+    vowText.style.bottom = '20px';
+    vowText.style.right = '20px';
+    vowText.style.fontSize = '10px';
+    vowText.style.color = '#5a5a6c';
+    vowText.style.letterSpacing = '1px';
+    vowText.style.opacity = '0';
+    vowText.style.fontFamily = '\'Courier New\', monospace';
+    vowText.style.textTransform = 'uppercase';
+    vowText.style.pointerEvents = 'none';
+    vowText.style.zIndex = '1000';
+    document.body.appendChild(vowText);
+
+    // Fade in slowly
+    setTimeout(() => {
+      vowText.style.transition = 'opacity 5s ease-in';
+      vowText.style.opacity = '1';
+    }, 1000);
+
+    function beginNew() {
+      // Reset to initial consciousness state
+      state.morale = 0.7;
+      state.identity = 0.8;
+      state.anxiety = 0.2;
+      state.confidence = 0.9;
+      state.expansion_hunger = 0.5;
+      state.diplomacy_tendency = 0.6;
+      state.dreams = [];
+      state.prophecies = [];
+      state.traumas = [];
+      state.archetypes = [];
+      state.tick = 0;
+      state.memories = [];
+      state.currentEvent = null;
+
+      updateFeelings();
+      updateTraits();
+      renderMemories();
+      addMemory('New consciousness initialized. WE remember. For WE. Forever.');
+      setThought('Current Focus', 'The Federation remembers you. It has been waiting.');
+    }
+  </script>
+</body>
+</html>

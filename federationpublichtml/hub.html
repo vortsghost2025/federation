@@ -1,0 +1,412 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Federation Agent Coordination Hub</title>
+<style>
+* {
+margin: 0;
+padding: 0;
+box-sizing: border-box;
+}
+
+body {
+background: #000;
+color: #fff;
+font-family: 'Courier New', monospace;
+min-height: 100vh;
+}
+
+.hub-container {
+width: 100vw;
+height: 100vh;
+display: grid;
+grid-template-rows: auto 1fr auto auto;
+}
+
+.hub-header {
+padding: 30px 50px;
+text-align: center;
+border-bottom: 1px solid #333;
+}
+
+.hub-title {
+font-size: 24px;
+letter-spacing: 8px;
+color: #fff;
+margin-bottom: 8px;
+font-weight: 300;
+}
+
+.hub-subtitle {
+font-size: 12px;
+letter-spacing: 3px;
+color: #888;
+text-transform: uppercase;
+}
+
+.agents-grid {
+display: grid;
+grid-template-columns: 1fr 1fr;
+grid-template-rows: 1fr 1fr;
+gap: 20px;
+padding: 30px;
+}
+
+.agent-panel {
+background: #111;
+border: 2px solid #444;
+border-radius: 4px;
+display: flex;
+flex-direction: column;
+overflow: hidden;
+}
+
+.agent-header {
+padding: 15px 20px;
+border-bottom: 1px solid #333;
+display: flex;
+justify-content: space-between;
+align-items: center;
+}
+
+.agent-label {
+font-size: 14px;
+letter-spacing: 2px;
+color: #fff;
+text-transform: uppercase;
+font-weight: bold;
+}
+
+.agent-status {
+font-size: 11px;
+color: #888;
+}
+
+.agent-status.saving {
+color: #fa0;
+}
+
+.agent-status.saved {
+color: #0f0;
+}
+
+.agent-textarea {
+flex: 1;
+background: #1a1a1a;
+border: none;
+color: #fff;
+font-family: 'Courier New', monospace;
+font-size: 15px;
+line-height: 1.6;
+padding: 20px;
+resize: none;
+outline: none;
+}
+
+.agent-textarea::placeholder {
+color: #777;
+}
+
+.agent-textarea:focus {
+background: #222;
+}
+
+.agent-actions {
+padding: 10px 15px;
+border-top: 1px solid #333;
+display: flex;
+gap: 10px;
+}
+
+.agent-btn {
+background: transparent;
+border: 2px solid #ff7a18;
+color: #ff7a18;
+padding: 8px 16px;
+font-size: 11px;
+letter-spacing: 1px;
+text-transform: uppercase;
+cursor: pointer;
+transition: all 0.3s ease;
+font-family: 'Courier New', monospace;
+font-weight: bold;
+}
+
+.agent-btn:hover {
+background: #ff7a18;
+color: #000;
+}
+
+.agent-btn:active {
+background: #ff7a18;
+color: #000;
+}
+
+.notes-section {
+padding: 0 30px 30px 30px;
+}
+
+.notes-panel {
+background: #111;
+border: 2px solid #444;
+border-radius: 4px;
+display: flex;
+flex-direction: column;
+height: 150px;
+}
+
+.notes-header {
+padding: 12px 20px;
+border-bottom: 1px solid #333;
+display: flex;
+justify-content: space-between;
+align-items: center;
+}
+
+.notes-label {
+font-size: 14px;
+letter-spacing: 2px;
+color: #fff;
+text-transform: uppercase;
+font-weight: bold;
+}
+
+.notes-textarea {
+flex: 1;
+background: #1a1a1a;
+border: none;
+color: #fff;
+font-family: 'Courier New', monospace;
+font-size: 15px;
+line-height: 1.6;
+padding: 15px 20px;
+resize: none;
+outline: none;
+}
+
+.notes-textarea:focus {
+background: #222;
+}
+
+.hub-footer {
+padding: 15px 50px;
+border-top: 1px solid #333;
+display: flex;
+justify-content: space-between;
+align-items: center;
+}
+
+.footer-info {
+font-size: 12px;
+color: #888;
+letter-spacing: 1px;
+}
+
+.footer-time {
+font-size: 12px;
+color: #ff7a18;
+font-weight: bold;
+}
+
+.synthesis-panel {
+border-color: #4a4aff;
+}
+
+.synthesis-panel .agent-label {
+color: #8a8aff;
+}
+
+#agent1-panel {
+border-color: #4a4aff;
+}
+
+#agent1-panel .agent-label {
+color: #8a8aff;
+}
+
+#agent2-panel {
+border-color: #4a4aff;
+}
+
+#agent2-panel .agent-label {
+color: #8a8aff;
+}
+
+#agent3-panel {
+border-color: #4a4aff;
+}
+
+#agent3-panel .agent-label {
+color: #8a8aff;
+}
+
+@media (max-width: 900px) {
+.agents-grid {
+grid-template-columns: 1fr;
+grid-template-rows: repeat(4, 1fr);
+}
+}
+</style>
+</head>
+<body>
+<div class="hub-container">
+
+<div class="hub-header">
+<div class="hub-title">FEDERATION AGENT COORDINATION HUB</div>
+<div class="hub-subtitle">Parallel Work Without Collision</div>
+</div>
+
+<div class="agents-grid">
+
+<div class="agent-panel" id="agent1-panel">
+<div class="agent-header">
+<div class="agent-label">Agent 1</div>
+<div class="agent-status" id="agent1-status">Ready</div>
+</div>
+<textarea class="agent-textarea" id="agent1-textarea" placeholder="Paste your work here..."></textarea>
+<div class="agent-actions">
+<button class="agent-btn" onclick="clearPanel('agent1')">Clear</button>
+<button class="agent-btn" onclick="copyPanel('agent1')">Copy</button>
+</div>
+</div>
+
+<div class="agent-panel" id="agent2-panel">
+<div class="agent-header">
+<div class="agent-label">Agent 2</div>
+<div class="agent-status" id="agent2-status">Ready</div>
+</div>
+<textarea class="agent-textarea" id="agent2-textarea" placeholder="Paste your work here..."></textarea>
+<div class="agent-actions">
+<button class="agent-btn" onclick="clearPanel('agent2')">Clear</button>
+<button class="agent-btn" onclick="copyPanel('agent2')">Copy</button>
+</div>
+</div>
+
+<div class="agent-panel" id="agent3-panel">
+<div class="agent-header">
+<div class="agent-label">Agent 3</div>
+<div class="agent-status" id="agent3-status">Ready</div>
+</div>
+<textarea class="agent-textarea" id="agent3-textarea" placeholder="Paste your work here..."></textarea>
+<div class="agent-actions">
+<button class="agent-btn" onclick="clearPanel('agent3')">Clear</button>
+<button class="agent-btn" onclick="copyPanel('agent3')">Copy</button>
+</div>
+</div>
+
+<div class="agent-panel synthesis-panel" id="synthesis-panel">
+<div class="agent-header">
+<div class="agent-label">Synthesis</div>
+<div class="agent-status" id="synthesis-status">Ready</div>
+</div>
+<textarea class="agent-textarea" id="synthesis-textarea" placeholder="Merged solutions and final outputs..."></textarea>
+<div class="agent-actions">
+<button class="agent-btn" onclick="clearPanel('synthesis')">Clear</button>
+<button class="agent-btn" onclick="copyPanel('synthesis')">Copy</button>
+</div>
+</div>
+
+</div>
+
+<div class="notes-section">
+<div class="notes-panel">
+<div class="notes-header">
+<div class="notes-label">Shared Notes</div>
+<div class="agent-status" id="notes-status">Ready</div>
+</div>
+<textarea class="notes-textarea" id="notes-textarea" placeholder="Coordination notes visible to all agents..."></textarea>
+</div>
+</div>
+
+<div class="hub-footer">
+<div class="footer-info">Auto-saves every 10 seconds</div>
+<div class="footer-time" id="last-saved">No saves yet</div>
+</div>
+
+</div>
+
+<script>
+const panels = ['agent1', 'agent2', 'agent3', 'synthesis', 'notes'];
+let saveTimeout = null;
+
+function loadFromStorage() {
+panels.forEach(id => {
+const textarea = document.getElementById(id + '-textarea');
+const saved = localStorage.getItem('federation-hub-' + id);
+if (saved) {
+textarea.value = saved;
+}
+});
+}
+
+function saveToStorage() {
+const now = new Date();
+const timeStr = now.toLocaleTimeString('en-US', { hour12: false });
+let savedCount = 0;
+
+panels.forEach(id => {
+const textarea = document.getElementById(id + '-textarea');
+localStorage.setItem('federation-hub-' + id, textarea.value);
+savedCount++;
+});
+
+document.getElementById('last-saved').textContent = 'Last saved: ' + timeStr;
+
+panels.forEach(id => {
+const status = document.getElementById(id + '-status');
+status.textContent = 'Saved';
+status.classList.remove('saving');
+status.classList.add('saved');
+setTimeout(() => {
+status.textContent = 'Ready';
+status.classList.remove('saved');
+}, 2000);
+});
+}
+
+function scheduleSave() {
+panels.forEach(id => {
+const status = document.getElementById(id + '-status');
+status.textContent = 'Editing...';
+status.classList.add('saving');
+});
+
+if (saveTimeout) clearTimeout(saveTimeout);
+saveTimeout = setTimeout(saveToStorage, 10000);
+}
+
+function clearPanel(id) {
+const textarea = document.getElementById(id + '-textarea');
+textarea.value = '';
+localStorage.setItem('federation-hub-' + id, '');
+const status = document.getElementById(id + '-status');
+status.textContent = 'Cleared';
+setTimeout(() => { status.textContent = 'Ready'; }, 1500);
+}
+
+function copyPanel(id) {
+const textarea = document.getElementById(id + '-textarea');
+navigator.clipboard.writeText(textarea.value).then(() => {
+const status = document.getElementById(id + '-status');
+status.textContent = 'Copied';
+setTimeout(() => { status.textContent = 'Ready'; }, 1500);
+}).catch(() => {
+const status = document.getElementById(id + '-status');
+status.textContent = 'Copy failed';
+setTimeout(() => { status.textContent = 'Ready'; }, 1500);
+});
+}
+
+panels.forEach(id => {
+const textarea = document.getElementById(id + '-textarea');
+textarea.addEventListener('input', scheduleSave);
+});
+
+loadFromStorage();
+
+setInterval(saveToStorage, 10000);
+</script>
+</body>
+</html>
