@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>USS FEDERATION - Bridge Station</title>
+  <link rel="stylesheet" href="lcars.css">
+  <style>
+    @font-face {
+      font-family: 'LCARS';
+      src: local('Arial Black');
+    }
+  </style>
+</head>
+<body>
+  <div class="stars"></div>
+  
+  <div class="lcars-frame">
+    <!-- Top Bar -->
+    <div class="lcars-top">
+      USS FEDERATION - BRIDGE STATION
+    </div>
+    
+    <!-- Left Bar -->
+    <div class="lcars-left"></div>
+    
+    <!-- Main Content -->
+    <div class="lcars-main">
+      <!-- Ship Name -->
+      <div class="ship-name">
+        USS <span>FEDERATION</span> NCC-2024
+      </div>
+      
+      <!-- Character Display -->
+      <div class="character-display">
+        <div class="character-icon" id="captain-icon">👨‍✈️</div>
+        <div style="color: var(--lcars-gold); font-size: 18px; letter-spacing: 3px;">
+          CAPTAIN <span id="captain-name">PLAYER</span>
+        </div>
+      </div>
+      
+      <!-- Status Panel -->
+      <div class="status-panel">
+        <div class="status-box">
+          <h3>ENERGY</h3>
+          <div class="status-value" id="energy">100</div>
+        </div>
+        <div class="status-box">
+          <h3>SHARDS</h3>
+          <div class="status-value" id="shards">0</div>
+        </div>
+        <div class="status-box">
+          <h3>TICK</h3>
+          <div class="status-value" id="tick">0</div>
+        </div>
+      </div>
+      
+      <!-- Resource Bars -->
+      <div style="margin: 15px 0;">
+        <div style="color: var(--lcars-blue); margin-bottom: 5px; letter-spacing: 2px;">SHIELD POWER</div>
+        <div class="resource-bar">
+          <div class="resource-fill" id="energy-bar" style="width: 100%;"></div>
+          <div class="resource-label" id="energy-percent">100%</div>
+        </div>
+      </div>
+      
+      <!-- Big Action Buttons -->
+      <div class="action-buttons">
+        <button class="lcars-btn pulse-glow" onclick="gameAction('explore')">
+          🚀 EXPLORE
+        </button>
+        <button class="lcars-btn blue" onclick="gameAction('rest')">
+          🔋 REST
+        </button>
+        <button class="lcars-btn purple" onclick="gameAction('unlockLore')">
+          📚 LORE
+        </button>
+      </div>
+      
+      <!-- Event Log -->
+      <div style="margin-top: 20px;">
+        <div style="color: var(--lcars-orange); margin-bottom: 10px; letter-spacing: 2px;">
+          SHIP'S LOG
+        </div>
+        <div class="lcars-log" id="event-log">
+          <div class="log-entry gold">Bridge Station Online. All systems nominal.</div>
+          <div class="log-entry blue">Welcome aboard, Captain!</div>
+        </div>
+      </div>
+      
+      <!-- Save/Load -->
+      <div style="display: flex; gap: 15px; justify-content: center; margin-top: 15px;">
+        <button class="lcars-btn" style="padding: 15px 30px; font-size: 16px;" onclick="saveGame()">
+          💾 SAVE
+        </button>
+        <button class="lcars-btn blue" style="padding: 15px 30px; font-size: 16px;" onclick="loadGame()">
+          📂 LOAD
+        </button>
+      </div>
+    </div>
+    
+    <!-- Right Bar -->
+    <div class="lcars-right"></div>
+    
+    <!-- Bottom Bar -->
+    <div class="lcars-bottom"></div>
+  </div>
+
+  <!-- Game Engine -->
+  <script type="module">
+    import { PlayerActions } from './PlayerActions.js';
+    import { UISystem } from './UISystem.js';
+    import { ResourceSystem } from './ResourceSystem.js';
+    import { EventSystem } from './EventSystem.js';
+    import { ZoneSystem } from './ZoneSystem.js';
+    import { ProgressionSystem } from './ProgressionSystem.js';
+    import { AgentSystem } from './AgentSystem.js';
+    import { PersistenceSystem } from './PersistenceSystem.js';
+
+    let gameState = PersistenceSystem.load();
+
+    function gameLoop() {
+      gameState.world.tick++;
+      ResourceSystem.update(gameState);
+      EventSystem.update(gameState);
+      ZoneSystem.update(gameState);
+      ProgressionSystem.update(gameState);
+      AgentSystem.update(gameState);
+      updateLCARS(gameState);
+
+      if (gameState.world.tick % 30 === 0) {
+        PersistenceSystem.save(gameState);
+      }
+
+      setTimeout(gameLoop, 2000);
+    }
+
+    function updateLCARS(state) {
+      // Update status boxes
+      document.getElementById('energy').textContent = state.player?.energy || 100;
+      document.getElementById('shards').textContent = state.player?.shards || 0;
+      document.getElementById('tick').textContent = state.world?.tick || 0;
+
+      // Update energy bar
+      const energyPercent = Math.min(100, (state.player?.energy || 100));
+      document.getElementById('energy-bar').style.width = energyPercent + '%';
+      document.getElementById('energy-percent').textContent = energyPercent + '%';
+
+      // Update event log
+      if (state.lastEvent) {
+        const log = document.getElementById('event-log');
+        const entry = document.createElement('div');
+        entry.className = 'log-entry ' + getRandomColorClass();
+        entry.textContent = state.lastEvent;
+        log.insertBefore(entry, log.firstChild.nextSibling);
+        
+        // Keep only last 10 entries
+        while (log.children.length > 12) {
+          log.removeChild(log.lastChild);
+        }
+      }
+    }
+
+    function getRandomColorClass() {
+      const colors = ['gold', 'blue', 'orange', 'purple'];
+      return colors[Math.floor(Math.random() * colors.length)];
+    }
+
+    function gameAction(action) {
+      if (action === "explore") {
+        PlayerActions.explore(gameState);
+        addLogEntry("🚀 Exploring new sector...", "blue");
+      } else if (action === "rest") {
+        PlayerActions.rest(gameState);
+        addLogEntry("🔋 Recharging shields...", "gold");
+      } else if (action === "unlockLore") {
+        PlayerActions.unlockLore(gameState);
+        addLogEntry("📚 Accessing Federation archives...", "purple");
+      }
+      updateLCARS(gameState);
+    }
+
+    function addLogEntry(text, color) {
+      const log = document.getElementById('event-log');
+      const entry = document.createElement('div');
+      entry.className = 'log-entry ' + color;
+      entry.textContent = text;
+      log.insertBefore(entry, log.firstChild.nextSibling);
+    }
+
+    function saveGame() {
+      PersistenceSystem.save(gameState);
+      addLogEntry("💾 Mission progress saved!", "gold");
+    }
+
+    function loadGame() {
+      gameState = PersistenceSystem.load();
+      updateLCARS(gameState);
+      addLogEntry("📂 Mission data loaded!", "blue");
+    }
+
+    // Make functions global
+    window.gameAction = gameAction;
+    window.saveGame = saveGame;
+    window.loadGame = loadGame;
+
+    // Start
+    updateLCARS(gameState);
+    gameLoop();
+  </script>
+</body>
+</html>

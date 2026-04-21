@@ -1,0 +1,765 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FEDERATION STARSHIP</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        :root {
+            --lcars-orange: #ff9900;
+            --lcars-blue: #99ccff;
+            --lcars-purple: #cc99cc;
+            --lcars-red: #ff6666;
+            --lcars-yellow: #ffcc66;
+            --lcars-tan: #ffcc99;
+            --lcars-bg: #000000;
+            --lcars-dark: #1a1a2e;
+        }
+
+        @font-face {
+            font-family: 'LCARS';
+            src: local('Antique Olive'), local('Eurostile');
+        }
+
+        body {
+            background: var(--lcars-bg);
+            color: var(--lcars-orange);
+            font-family: 'LCARS', 'Segoe UI', Arial, sans-serif;
+            min-height: 100vh;
+            overflow-x: hidden;
+        }
+
+        /* Top bar - classic LCARS shape */
+        .top-bar {
+            display: flex;
+            align-items: center;
+            padding: 10px 20px;
+            background: linear-gradient(90deg, var(--lcars-orange) 0%, var(--lcars-orange) 60%, transparent 60%);
+            position: relative;
+            height: 80px;
+        }
+
+        .top-bar::before {
+            content: '';
+            position: absolute;
+            right: 0;
+            top: 0;
+            width: 200px;
+            height: 80px;
+            background: var(--lcars-orange);
+            border-radius: 0 0 0 40px;
+        }
+
+        .top-bar::after {
+            content: '';
+            position: absolute;
+            right: 200px;
+            top: 30px;
+            width: calc(100% - 420px);
+            height: 50px;
+            background: var(--lcars-orange);
+            border-radius: 40px 0 0 40px;
+        }
+
+        .ship-name {
+            font-size: 2.5rem;
+            font-weight: bold;
+            color: var(--lcars-bg);
+            z-index: 10;
+            padding-left: 20px;
+            text-transform: uppercase;
+            letter-spacing: 4px;
+        }
+
+        .main-container {
+            display: grid;
+            grid-template-columns: 280px 1fr 300px;
+            gap: 15px;
+            padding: 15px;
+            height: calc(100vh - 95px);
+        }
+
+        /* Left panel - Ship Status */
+        .left-panel {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .status-block {
+            background: var(--lcars-dark);
+            border: 4px solid var(--lcars-orange);
+            border-radius: 20px 0 20px 20px;
+            padding: 15px;
+            flex: 1;
+        }
+
+        .status-block h2 {
+            background: var(--lcars-orange);
+            color: var(--lcars-bg);
+            padding: 10px 20px;
+            margin: -15px -15px 15px -15px;
+            border-radius: 16px 0 0 0;
+            font-size: 1.1rem;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+        }
+
+        .stat-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 8px 0;
+            border-bottom: 2px solid var(--lcars-dark);
+        }
+
+        .stat-label {
+            color: var(--lcars-tan);
+            font-size: 1rem;
+            text-transform: uppercase;
+        }
+
+        .stat-value {
+            color: var(--lcars-orange);
+            font-size: 1.4rem;
+            font-weight: bold;
+        }
+
+        .progress-bar {
+            width: 100%;
+            height: 20px;
+            background: var(--lcars-dark);
+            border-radius: 10px;
+            overflow: hidden;
+            margin-top: 5px;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: var(--lcars-orange);
+            transition: width 0.5s ease;
+        }
+
+        .progress-fill.fuel { background: var(--lcars-blue); }
+        .progress-fill.shields { background: var(--lcars-purple); }
+        .progress-fill.hull { background: var(--lcars-red); }
+        .progress-fill.morale { background: var(--lcars-yellow); }
+
+        /* Center panel - Main View */
+        .center-panel {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .main-view {
+            flex: 1;
+            background: var(--lcars-dark);
+            border: 4px solid var(--lcars-blue);
+            border-radius: 0;
+            position: relative;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .main-view::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 60px;
+            height: 60px;
+            border-top: 4px solid var(--lcars-blue);
+            border-left: 4px solid var(--lcars-blue);
+        }
+
+        .main-view::after {
+            content: '';
+            position: absolute;
+            bottom: 0;
+            right: 0;
+            width: 60px;
+            height: 60px;
+            border-bottom: 4px solid var(--lcars-blue);
+            border-right: 4px solid var(--lcars-blue);
+        }
+
+        .event-title {
+            font-size: 2.5rem;
+            color: var(--lcars-orange);
+            text-transform: uppercase;
+            margin-bottom: 20px;
+            text-align: center;
+            padding: 0 20px;
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.7; }
+        }
+
+        .event-description {
+            font-size: 1.3rem;
+            color: var(--lcars-tan);
+            text-align: center;
+            max-width: 80%;
+            line-height: 1.6;
+            margin-bottom: 30px;
+        }
+
+        .event-icon {
+            font-size: 8rem;
+            margin-bottom: 20px;
+            filter: drop-shadow(0 0 20px var(--lcars-orange));
+        }
+
+        .choices-container {
+            display: flex;
+            gap: 15px;
+            flex-wrap: wrap;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .choice-btn {
+            min-width: 200px;
+            padding: 20px 40px;
+            background: var(--lcars-orange);
+            color: var(--lcars-bg);
+            border: none;
+            font-size: 1.5rem;
+            font-family: inherit;
+            font-weight: bold;
+            text-transform: uppercase;
+            cursor: pointer;
+            transition: all 0.2s;
+            clip-path: polygon(20px 0, 100% 0, 100% calc(100% - 20px), calc(100% - 20px) 100%, 0 100%, 0 20px);
+        }
+
+        .choice-btn:hover {
+            background: var(--lcars-yellow);
+            transform: scale(1.05);
+        }
+
+        .choice-btn:active {
+            transform: scale(0.98);
+        }
+
+        .choice-btn.blue {
+            background: var(--lcars-blue);
+        }
+
+        .choice-btn.purple {
+            background: var(--lcars-purple);
+        }
+
+        .choice-btn.red {
+            background: var(--lcars-red);
+        }
+
+        /* Bottom bar */
+        .bottom-bar {
+            background: var(--lcars-orange);
+            height: 50px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 30px;
+            clip-path: polygon(40px 0, 100% 0, 100% 100%, 0 100%, 0 20px);
+        }
+
+        .turn-display {
+            color: var(--lcars-bg);
+            font-size: 1.4rem;
+            font-weight: bold;
+        }
+
+        /* Right panel - Actions */
+        .right-panel {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .action-block {
+            background: var(--lcars-dark);
+            border-left: 4px solid var(--lcars-purple);
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .action-block:first-child {
+            border-radius: 20px 20px 0 0;
+        }
+
+        .action-block:last-child {
+            border-radius: 0 0 20px 20px;
+        }
+
+        .action-btn {
+            padding: 18px 25px;
+            background: var(--lcars-purple);
+            color: var(--lcars-bg);
+            border: none;
+            font-size: 1.2rem;
+            font-family: inherit;
+            font-weight: bold;
+            text-transform: uppercase;
+            cursor: pointer;
+            transition: all 0.2s;
+            border-radius: 10px;
+        }
+
+        .action-btn:hover {
+            background: var(--lcars-tan);
+        }
+
+        .action-btn.orange {
+            background: var(--lcars-orange);
+        }
+
+        .action-btn.blue {
+            background: var(--lcars-blue);
+        }
+
+        .tech-list {
+            list-style: none;
+            color: var(--lcars-tan);
+            font-size: 0.9rem;
+            margin-top: 10px;
+        }
+
+        .tech-list li {
+            padding: 5px 0;
+            border-bottom: 1px solid var(--lcars-dark);
+        }
+
+        /* Outcome overlay */
+        .outcome-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.9);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.3s;
+        }
+
+        .outcome-overlay.show {
+            opacity: 1;
+            pointer-events: all;
+        }
+
+        .outcome-text {
+            font-size: 3rem;
+            color: var(--lcars-orange);
+            text-transform: uppercase;
+            margin-bottom: 30px;
+        }
+
+        .outcome-reward {
+            font-size: 1.5rem;
+            color: var(--lcars-tan);
+            margin-bottom: 40px;
+        }
+
+        .continue-btn {
+            padding: 20px 60px;
+            background: var(--lcars-blue);
+            color: var(--lcars-bg);
+            border: none;
+            font-size: 1.5rem;
+            font-family: inherit;
+            font-weight: bold;
+            text-transform: uppercase;
+            cursor: pointer;
+        }
+
+        /* Game over screen */
+        .game-over {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: var(--lcars-bg);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 2000;
+            display: none;
+        }
+
+        .game-over.show {
+            display: flex;
+        }
+
+        .game-over-text {
+            font-size: 4rem;
+            color: var(--lcars-red);
+            text-transform: uppercase;
+            margin-bottom: 20px;
+        }
+
+        .final-stats {
+            color: var(--lcars-tan);
+            font-size: 1.3rem;
+            margin-bottom: 40px;
+            text-align: center;
+        }
+
+        /* Stars background */
+        .stars {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: -1;
+        }
+
+        .star {
+            position: absolute;
+            background: white;
+            border-radius: 50%;
+            animation: twinkle 2s infinite;
+        }
+
+        @keyframes twinkle {
+            0%, 100% { opacity: 0.3; }
+            50% { opacity: 1; }
+        }
+
+        /* Loading */
+        .loading {
+            font-size: 2rem;
+            color: var(--lcars-orange);
+            text-transform: uppercase;
+            animation: blink 1s infinite;
+        }
+
+        @keyframes blink {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.3; }
+        }
+
+        /* Responsive */
+        @media (max-width: 1200px) {
+            .main-container {
+                grid-template-columns: 1fr;
+            }
+            .left-panel, .right-panel {
+                flex-direction: row;
+            }
+            .status-block, .action-block {
+                flex: 1;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="stars" id="stars"></div>
+
+    <div class="top-bar">
+        <div class="ship-name" id="shipName">USS FEDERATION</div>
+    </div>
+
+    <div class="main-container">
+        <!-- Left Panel - Ship Status -->
+        <div class="left-panel">
+            <div class="status-block">
+                <h2>SHIP STATUS</h2>
+                <div class="stat-row">
+                    <span class="stat-label">CREDITS</span>
+                    <span class="stat-value" id="credits">1000</span>
+                </div>
+                <div class="stat-row">
+                    <span class="stat-label">FUEL</span>
+                    <span class="stat-value" id="fuel">100</span>
+                </div>
+                <div class="progress-bar">
+                    <div class="progress-fill fuel" id="fuelBar" style="width: 100%"></div>
+                </div>
+                <div class="stat-row">
+                    <span class="stat-label">SHIELDS</span>
+                    <span class="stat-value" id="shields">100</span>
+                </div>
+                <div class="progress-bar">
+                    <div class="progress-fill shields" id="shieldsBar" style="width: 100%"></div>
+                </div>
+                <div class="stat-row">
+                    <span class="stat-label">HULL</span>
+                    <span class="stat-value" id="hull">100</span>
+                </div>
+                <div class="progress-bar">
+                    <div class="progress-fill hull" id="hullBar" style="width: 100%"></div>
+                </div>
+                <div class="stat-row">
+                    <span class="stat-label">MORALE</span>
+                    <span class="stat-value" id="morale">80</span>
+                </div>
+                <div class="progress-bar">
+                    <div class="progress-fill morale" id="moraleBar" style="width: 80%"></div>
+                </div>
+            </div>
+            <div class="status-block">
+                <h2>MISSION</h2>
+                <div class="stat-row">
+                    <span class="stat-label">SECTORS</span>
+                    <span class="stat-value" id="sectors">1</span>
+                </div>
+                <div class="stat-row">
+                    <span class="stat-label">ALLIES</span>
+                    <span class="stat-value" id="allies">0</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Center Panel - Main View -->
+        <div class="center-panel">
+            <div class="main-view" id="mainView">
+                <div class="loading" id="loading">INITIALIZING SYSTEMS...</div>
+                <div id="eventContent" style="display: none;">
+                    <div class="event-icon" id="eventIcon"></div>
+                    <div class="event-title" id="eventTitle"></div>
+                    <div class="event-description" id="eventDesc"></div>
+                    <div class="choices-container" id="choices"></div>
+                </div>
+            </div>
+            <div class="bottom-bar">
+                <div class="turn-display">TURN: <span id="turn">1</span></div>
+                <div class="turn-display">STARDATE: <span id="stardate">47634.44</span></div>
+            </div>
+        </div>
+
+        <!-- Right Panel - Actions -->
+        <div class="right-panel">
+            <div class="action-block">
+                <button class="action-btn orange" onclick="explore()">EXPLORE</button>
+                <button class="action-btn blue" onclick="newEvent()">NEW MISSION</button>
+                <button class="action-btn" onclick="resetGame()">RESET</button>
+            </div>
+            <div class="action-block">
+                <h2 style="color: var(--lcars-purple); margin-bottom: 10px;">TECHNOLOGY</h2>
+                <ul class="tech-list" id="techList">
+                    <li>None discovered</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+
+    <!-- Outcome Overlay -->
+    <div class="outcome-overlay" id="outcomeOverlay">
+        <div class="outcome-text" id="outcomeText"></div>
+        <div class="outcome-reward" id="outcomeReward"></div>
+        <button class="continue-btn" onclick="closeOutcome()">CONTINUE</button>
+    </div>
+
+    <!-- Game Over Screen -->
+    <div class="game-over" id="gameOver">
+        <div class="game-over-text" id="gameOverText">GAME OVER</div>
+        <div class="final-stats" id="finalStats"></div>
+        <button class="continue-btn" onclick="resetGame()">PLAY AGAIN</button>
+    </div>
+
+    <script>
+        const API_URL = 'http://localhost:8000';
+        
+        // Event icons (emoji for now, can be replaced with SVGs)
+        const EVENT_ICONS = {
+            alien_ship: '👽',
+            nebula: '🌌',
+            distress: '📡',
+            asteroid: '☄️',
+            station: '🛸',
+            anomaly: '🌀',
+            default: '🚀'
+        };
+
+        let gameState = null;
+        let currentEvent = null;
+
+        // Create stars background
+        function createStars() {
+            const container = document.getElementById('stars');
+            for (let i = 0; i < 200; i++) {
+                const star = document.createElement('div');
+                star.className = 'star';
+                star.style.left = Math.random() * 100 + '%';
+                star.style.top = Math.random() * 100 + '%';
+                star.style.width = Math.random() * 3 + 1 + 'px';
+                star.style.height = star.style.width;
+                star.style.animationDelay = Math.random() * 2 + 's';
+                container.appendChild(star);
+            }
+        }
+
+        // Update UI with game state
+        function updateUI(state) {
+            gameState = state;
+            document.getElementById('turn').textContent = state.turn;
+            document.getElementById('credits').textContent = state.credits;
+            document.getElementById('fuel').textContent = state.fuel;
+            document.getElementById('shields').textContent = state.shields;
+            document.getElementById('hull').textContent = state.hull;
+            document.getElementById('morale').textContent = state.crew_morale;
+            document.getElementById('sectors').textContent = state.discovered_sectors;
+            document.getElementById('allies').textContent = state.allies;
+
+            // Update progress bars
+            document.getElementById('fuelBar').style.width = state.fuel + '%';
+            document.getElementById('shieldsBar').style.width = state.shields + '%';
+            document.getElementById('hullBar').style.width = state.hull + '%';
+            document.getElementById('moraleBar').style.width = state.crew_morale + '%';
+
+            // Update tech list
+            const techList = document.getElementById('techList');
+            if (state.technologies_unlocked.length > 0) {
+                techList.innerHTML = state.technologies_unlocked.map(t => 
+                    `<li>${t.replace(/_/g, ' ')}</li>`
+                ).join('');
+            } else {
+                techList.innerHTML = '<li>None discovered</li>';
+            }
+
+            // Update stardate
+            const stardate = 47634.44 + (state.turn * 0.1);
+            document.getElementById('stardate').textContent = stardate.toFixed(2);
+        }
+
+        // Load event
+        function loadEvent(event) {
+            currentEvent = event;
+            document.getElementById('loading').style.display = 'none';
+            document.getElementById('eventContent').style.display = 'block';
+
+            document.getElementById('eventIcon').textContent = EVENT_ICONS[event.image] || EVENT_ICONS.default;
+            document.getElementById('eventTitle').textContent = event.title;
+            document.getElementById('eventDesc').textContent = event.description;
+
+            const choicesDiv = document.getElementById('choices');
+            choicesDiv.innerHTML = '';
+
+            const colors = ['', 'blue', 'purple', 'red'];
+            event.choices.forEach((choice, i) => {
+                const btn = document.createElement('button');
+                btn.className = `choice-btn ${colors[i % colors.length]}`;
+                btn.textContent = choice.text;
+                btn.onclick = () => makeChoice(choice.id);
+                choicesDiv.appendChild(btn);
+            });
+        }
+
+        // API calls
+        async function fetchState() {
+            try {
+                const resp = await fetch(`${API_URL}/state`);
+                const data = await resp.json();
+                updateUI(data);
+            } catch (e) {
+                console.error('Failed to fetch state:', e);
+            }
+        }
+
+        async function newEvent() {
+            try {
+                const resp = await fetch(`${API_URL}/event`);
+                const data = await resp.json();
+                loadEvent(data);
+            } catch (e) {
+                console.error('Failed to fetch event:', e);
+            }
+        }
+
+        async function makeChoice(choiceId) {
+            if (!currentEvent) return;
+
+            try {
+                const resp = await fetch(`${API_URL}/choose/${choiceId}`, { method: 'POST' });
+                const data = await resp.json();
+
+                // Show outcome
+                document.getElementById('outcomeText').textContent = data.outcome.toUpperCase();
+                
+                let rewardText = '';
+                const reward = data.reward;
+                for (const [key, value] of Object.entries(reward)) {
+                    const sign = value > 0 ? '+' : '';
+                    rewardText += `${key.toUpperCase()}: ${sign}${value}  `;
+                }
+                document.getElementById('outcomeReward').textContent = rewardText || 'No changes';
+                
+                document.getElementById('outcomeOverlay').classList.add('show');
+
+                // Check game over
+                if (data.game_over) {
+                    setTimeout(() => {
+                        document.getElementById('outcomeOverlay').classList.remove('show');
+                        document.getElementById('gameOverText').textContent = data.game_over;
+                        document.getElementById('finalStats').innerHTML = `
+                            TURNS: ${gameState.turn}<br>
+                            SECTORS EXPLORED: ${gameState.discovered_sectors}<br>
+                            ALLIES: ${gameState.allies}<br>
+                            TECHNOLOGIES: ${gameState.technologies_unlocked.length}
+                        `;
+                        document.getElementById('gameOver').classList.add('show');
+                    }, 1500);
+                }
+
+                updateUI(data.new_state);
+            } catch (e) {
+                console.error('Failed to make choice:', e);
+            }
+        }
+
+        async function resetGame() {
+            try {
+                const resp = await fetch(`${API_URL}/reset`, { method: 'POST' });
+                const data = await resp.json();
+                updateUI(data.state);
+                document.getElementById('gameOver').classList.remove('show');
+                document.getElementById('loading').style.display = 'block';
+                document.getElementById('eventContent').style.display = 'none';
+            } catch (e) {
+                console.error('Failed to reset:', e);
+            }
+        }
+
+        function closeOutcome() {
+            document.getElementById('outcomeOverlay').classList.remove('show');
+            newEvent();
+        }
+
+        function explore() {
+            newEvent();
+        }
+
+        // Initialize
+        createStars();
+        fetchState().then(() => {
+            setTimeout(newEvent, 1000);
+        });
+    </script>
+</body>
+</html>

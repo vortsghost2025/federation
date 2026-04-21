@@ -1,0 +1,31 @@
+version: '3.8'
+
+services:
+  federation-game:
+    image: nginx:alpine
+    container_name: federation-game
+    ports:
+      - "8080:80"
+    volumes:
+      - ./federationpublichtml:/usr/share/nginx/html:ro
+      - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    restart: unless-stopped
+    networks:
+      - federation-network
+
+  federation-api:
+    build:
+      context: .
+      dockerfile: Dockerfile.api
+    container_name: federation-api
+    ports:
+      - "8100:8100"
+    volumes:
+      - ./:/app
+    restart: unless-stopped
+    networks:
+      - federation-network
+
+networks:
+  federation-network:
+    driver: bridge

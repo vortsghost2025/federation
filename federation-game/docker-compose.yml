@@ -1,0 +1,68 @@
+version: '3.8'
+
+services:
+  db:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_USER: federation
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-federation2026}
+      POSTGRES_DB: federation_game
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U federation"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - federation-net
+
+  backend:
+    build: ./backend
+    environment:
+      DATABASE_URL: postgresql://federation:${DB_PASSWORD:-federation2026}@db:5432/federation_game
+      CORS_ORIGINS: "*"
+    ports:
+      - "8000:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes:
+      - ../federation_game_console.py:/app/game_engine.py:ro
+      - ../federation_game_events.py:/app/events.py:ro
+      - ../federation_game_factions.py:/app/factions.py:ro
+      - ../federation_game_npcs.py:/app/npcs.py:ro
+      - ../federation_game_quests.py:/app/quests.py:ro
+      - ../federation_game_state.py:/app/state.py:ro
+      - ../federation_game_technology.py:/app/technology.py:ro
+      - ../federation_game_turns.py:/app/turns.py:ro
+    networks:
+      - federation-net
+
+  frontend:
+    build: ./frontend
+    ports:
+      - "3000:80"
+    depends_on:
+      - backend
+    networks:
+      - federation-net
+
+  nginx:
+    image: nginx:alpine
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - backend
+      - frontend
+    networks:
+      - federation-net
+
+volumes:
+  postgres_data:
+
+networks:
+  federation-net:
+    driver: bridge
