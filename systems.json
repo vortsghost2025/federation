@@ -1,0 +1,164 @@
+{
+  "source_modules": [
+    {
+      "path": "backend/main.py",
+      "imports": [
+        "json",
+        "random",
+        "asyncio",
+        "datetime",
+        "typing",
+        "fastapi",
+        "pydantic",
+        "sys",
+        "os",
+        "uvicorn"
+      ],
+      "functions": [
+        "clamp_percent",
+        "enrich_event",
+        "snapshot_metrics",
+        "calculate_deltas",
+        "summarize_delta_direction",
+        "build_explainability",
+        "get_governance_status",
+        "build_governance_event",
+        "apply_governance_pressure",
+        "root",
+        "get_state",
+        "get_atlas",
+        "get_engine_status",
+        "get_random_event",
+        "make_choice",
+        "reset_game",
+        "get_log",
+        "websocket_endpoint",
+        "__init__",
+        "connect",
+        "disconnect",
+        "broadcast"
+      ]
+    },
+    {
+      "path": "generate_map.py",
+      "imports": [
+        "__future__",
+        "ast",
+        "json",
+        "re",
+        "subprocess",
+        "pathlib",
+        "typing"
+      ],
+      "functions": [
+        "_git_ls",
+        "_safe_parse",
+        "_extract_routes",
+        "_extract_tests",
+        "main"
+      ]
+    },
+    {
+      "path": "test_live_state.py",
+      "imports": [
+        "json",
+        "sys",
+        "urllib"
+      ],
+      "functions": [
+        "request",
+        "main"
+      ]
+    }
+  ],
+  "static_assets": [
+    "frontend/index.html"
+  ],
+  "docs_or_config": [
+    "FEDERATION_REPO_SYSTEMS_MAP.md",
+    "FEDERATION_SYSTEMS_MAP.md",
+    "systems.json"
+  ],
+  "tests": [
+    {
+      "path": "test_live_state.py",
+      "test_functions": []
+    }
+  ],
+  "api_routes": [
+    {
+      "method": "GET",
+      "path": "/",
+      "module": "backend/main.py"
+    },
+    {
+      "method": "GET",
+      "path": "/state",
+      "module": "backend/main.py"
+    },
+    {
+      "method": "GET",
+      "path": "/atlas",
+      "module": "backend/main.py"
+    },
+    {
+      "method": "GET",
+      "path": "/engine-status",
+      "module": "backend/main.py"
+    },
+    {
+      "method": "GET",
+      "path": "/event",
+      "module": "backend/main.py"
+    },
+    {
+      "method": "POST",
+      "path": "/choose/{choice_id}",
+      "module": "backend/main.py"
+    },
+    {
+      "method": "POST",
+      "path": "/reset",
+      "module": "backend/main.py"
+    },
+    {
+      "method": "GET",
+      "path": "/log",
+      "module": "backend/main.py"
+    },
+    {
+      "method": "WEBSOCKET",
+      "path": "/ws",
+      "module": "backend/main.py"
+    }
+  ],
+  "import_graph": {
+    "backend/main.py": [
+      "json",
+      "random",
+      "asyncio",
+      "datetime",
+      "typing",
+      "fastapi",
+      "pydantic",
+      "sys",
+      "os",
+      "uvicorn"
+    ],
+    "generate_map.py": [
+      "__future__",
+      "ast",
+      "json",
+      "re",
+      "subprocess",
+      "pathlib",
+      "typing"
+    ],
+    "test_live_state.py": [
+      "json",
+      "sys",
+      "urllib"
+    ]
+  },
+  "parse_errors": []
+}
