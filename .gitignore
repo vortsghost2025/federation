@@ -76,3 +76,17 @@ fix7a_v2.py
 # Legacy NPC JS systems (not used by current index.html or adult.html)
 NPCAutonomySystem.js
 NPCChatSystem.js
+
+# VPS backend test/check/debug files (pulled from server but not part of clean repo)
+federation-game/backend/test_*.py
+federation-game/backend/check_*.py
+federation-game/backend/npc_autonomy.py
+federation-game/backend/npc_chat.py
+federation-game/backend/faction_dynamics.py
+
+# VPS backend stubs (old names before refactor, kept on server for compatibility)
+federation-game/backend/factions.py
+federation-game/backend/npcs.py
+federation-game/backend/quests.py
+federation-game/backend/technology.py
+federation-game/backend/timeline.py
