@@ -24,17 +24,20 @@ import uuid
 # ENUMS
 # ============================================================================
 
+
 class PersonalityTrait(Enum):
     """Core personality traits"""
-    LOYALTY = "loyalty"          # 0-1: Faithful to cause vs. self-interested
-    AMBITION = "ambition"        # 0-1: Seeks power vs. content with role
-    WISDOM = "wisdom"            # 0-1: Thoughtful vs. reactive
-    CHARISMA = "charisma"        # 0-1: Persuasive/likable vs. isolated
-    CUNNING = "cunning"          # 0-1: Strategic/deceptive vs. straightforward
+
+    LOYALTY = "loyalty"  # 0-1: Faithful to cause vs. self-interested
+    AMBITION = "ambition"  # 0-1: Seeks power vs. content with role
+    WISDOM = "wisdom"  # 0-1: Thoughtful vs. reactive
+    CHARISMA = "charisma"  # 0-1: Persuasive/likable vs. isolated
+    CUNNING = "cunning"  # 0-1: Strategic/deceptive vs. straightforward
 
 
 class CharacterStatus(Enum):
     """Current status of a character"""
+
     ACTIVE = "active"
     IMPRISONED = "imprisoned"
     DEAD = "dead"
@@ -46,20 +49,22 @@ class CharacterStatus(Enum):
 
 class CharacterArchetype(Enum):
     """Character personality archetypes"""
-    HERO = "hero"                # Courageous, noble, inspiring
-    SCHOLAR = "scholar"          # Intellectual, curious, studious
-    ROGUE = "rogue"              # Cunning, self-serving, charming
-    WARRIOR = "warrior"          # Strength, honor, combat focused
-    MYSTIC = "mystic"            # Spiritual, prophetic, mysterious
-    LEADER = "leader"            # Commanding, strategic, diplomatic
-    SAGE = "sage"                # Wise, peaceful, philosophical
-    WANDERER = "wanderer"        # Adventurous, unpredictable, curious
-    DECEIVER = "deceiver"        # Manipulative, ambitious, ruthless
-    GUARDIAN = "guardian"        # Protective, steadfast, traditional
+
+    HERO = "hero"  # Courageous, noble, inspiring
+    SCHOLAR = "scholar"  # Intellectual, curious, studious
+    ROGUE = "rogue"  # Cunning, self-serving, charming
+    WARRIOR = "warrior"  # Strength, honor, combat focused
+    MYSTIC = "mystic"  # Spiritual, prophetic, mysterious
+    LEADER = "leader"  # Commanding, strategic, diplomatic
+    SAGE = "sage"  # Wise, peaceful, philosophical
+    WANDERER = "wanderer"  # Adventurous, unpredictable, curious
+    DECEIVER = "deceiver"  # Manipulative, ambitious, ruthless
+    GUARDIAN = "guardian"  # Protective, steadfast, traditional
 
 
 class CreatureType(Enum):
     """Types of mystical creatures"""
+
     SKY_FURK = "sky_furk"
     PLASMA_KITE = "plasma_kite"
     THRUMBACK = "thrumback"
@@ -72,6 +77,7 @@ class CreatureType(Enum):
 
 class CreatureRarity(Enum):
     """Creature rarity levels"""
+
     COMMON = "common"
     RARE = "rare"
     LEGENDARY = "legendary"
@@ -80,6 +86,7 @@ class CreatureRarity(Enum):
 
 class CompanionBonus(Enum):
     """Types of bonuses companions provide"""
+
     MORALE = "morale"
     RESEARCH = "research"
     COMBAT = "combat"
@@ -93,9 +100,11 @@ class CompanionBonus(Enum):
 # DIALOGUE SYSTEM
 # ============================================================================
 
+
 @dataclass
 class DialogueOption:
     """A dialogue choice presented to the player"""
+
     id: str
     text: str
     requires_reputation: float = 0.0
@@ -108,6 +117,7 @@ class DialogueOption:
 @dataclass
 class DialogueNode:
     """A dialogue conversation point"""
+
     id: str
     speaker: str  # Character name
     text: str
@@ -120,7 +130,9 @@ class DialogueEngine:
 
     def __init__(self):
         self.dialogues: Dict[str, DialogueNode] = {}
-        self.conversation_history: Dict[str, List[Tuple[str, str]]] = {}  # player_id -> [(char_id, dialogue_id)]
+        self.conversation_history: Dict[
+            str, List[Tuple[str, str]]
+        ] = {}  # player_id -> [(char_id, dialogue_id)]
 
     def register_dialogue(self, dialogue: DialogueNode) -> None:
         """Register a dialogue node"""
@@ -134,7 +146,7 @@ class DialogueEngine:
         self,
         dialogue_id: str,
         player_reputation: float,
-        character_status: CharacterStatus
+        character_status: CharacterStatus,
     ) -> List[DialogueOption]:
         """Get dialogue options available to player based on reputation/status"""
         dialogue = self.get_dialogue(dialogue_id)
@@ -152,10 +164,7 @@ class DialogueEngine:
         return available
 
     def process_dialogue_choice(
-        self,
-        dialogue_id: str,
-        option_id: str,
-        character: 'Character'
+        self, dialogue_id: str, option_id: str, character: "Character"
     ) -> Tuple[str, float]:
         """Process player dialogue choice and return response + loyalty change"""
         dialogue = self.get_dialogue(dialogue_id)
@@ -164,7 +173,9 @@ class DialogueEngine:
 
         for option in dialogue.options:
             if option.id == option_id:
-                character.loyalty = max(-1.0, min(1.0, character.loyalty + option.affects_loyalty))
+                character.loyalty = max(
+                    -1.0, min(1.0, character.loyalty + option.affects_loyalty)
+                )
                 return option.response, option.affects_loyalty
 
         return "Option not found", 0.0
@@ -174,20 +185,22 @@ class DialogueEngine:
 # CHARACTER CLASS
 # ============================================================================
 
+
 @dataclass
 class Character:
     """Represents an NPC character in the game"""
+
     char_id: str
     name: str
-    title: str                    # Role/title (e.g., "Admiral", "Scholar")
-    description: str              # Physical/character description
+    title: str  # Role/title (e.g., "Admiral", "Scholar")
+    description: str  # Physical/character description
 
     # Personality (5 traits, 0.0-1.0 scale)
-    loyalty: float = 0.5          # Faithful vs. self-interested
-    ambition: float = 0.5         # Power-seeking vs. content
-    wisdom: float = 0.5           # Thoughtful vs. reactive
-    charisma: float = 0.5         # Charming vs. isolated
-    cunning: float = 0.5          # Strategic vs. straightforward
+    loyalty: float = 0.5  # Faithful vs. self-interested
+    ambition: float = 0.5  # Power-seeking vs. content
+    wisdom: float = 0.5  # Thoughtful vs. reactive
+    charisma: float = 0.5  # Charming vs. isolated
+    cunning: float = 0.5  # Strategic vs. straightforward
 
     # Relationships
     affiliation: Optional[str] = None  # faction_id or None
@@ -209,8 +222,8 @@ class Character:
 
     # Internal state
     created_turn: int = 0
-    rumor_level: float = 0.0      # How much others talk about this character
-    corruption_level: float = 0.0 # 0.0 normal, 1.0 fully corrupted
+    rumor_level: float = 0.0  # How much others talk about this character
+    corruption_level: float = 0.0  # 0.0 normal, 1.0 fully corrupted
 
     def __post_init__(self):
         """Validate personality traits"""
@@ -234,7 +247,7 @@ class Character:
         action: str,
         player_id: str,
         turn: int,
-        dialogue_engine: Optional[DialogueEngine] = None
+        dialogue_engine: Optional[DialogueEngine] = None,
     ) -> Dict:
         """Interact with character (conversation, trade, etc.)"""
         self.last_interaction_turn = turn
@@ -248,33 +261,33 @@ class Character:
                 return {"success": False, "message": "Dialogue not found"}
 
             options = dialogue_engine.get_available_options(
-                self.dialogue_id,
-                self.relationship_to_player,
-                self.status
+                self.dialogue_id, self.relationship_to_player, self.status
             )
 
             return {
                 "success": True,
                 "dialogue": dialogue.text,
                 "options": [{"id": o.id, "text": o.text} for o in options],
-                "char_name": self.name
+                "char_name": self.name,
             }
 
         elif action == "gift":
             # Increase relationship through gift-giving
             relationship_change = random.uniform(0.05, 0.15)
-            self.relationship_to_player = min(1.0, self.relationship_to_player + relationship_change)
+            self.relationship_to_player = min(
+                1.0, self.relationship_to_player + relationship_change
+            )
             return {
                 "success": True,
                 "message": f"{self.name} appreciates your gift!",
-                "relationship_change": relationship_change
+                "relationship_change": relationship_change,
             }
 
         elif action == "trade":
             return {
                 "success": True,
                 "message": f"Trading with {self.name}",
-                "inventory": self.inventory
+                "inventory": self.inventory,
             }
 
         return {"success": False, "message": "Unknown action"}
@@ -287,20 +300,22 @@ class Character:
 # COMPANION CLASS
 # ============================================================================
 
+
 @dataclass
 class Companion(Character):
     """Extended character that can join the player's party"""
+
     can_join_player_party: bool = True
     is_recruited: bool = False
     companion_bonus: CompanionBonus = CompanionBonus.MORALE
-    bonus_value: float = 0.15     # Base bonus (15%)
+    bonus_value: float = 0.15  # Base bonus (15%)
 
     # Behavioral traits
     personality_quirks: List[str] = field(default_factory=list)
-    special_ability: str = ""      # Unique action they can perform
-    betrayal_risk: float = 0.0     # 0.0 loyal, 1.0 will definitely betray
+    special_ability: str = ""  # Unique action they can perform
+    betrayal_risk: float = 0.0  # 0.0 loyal, 1.0 will definitely betray
 
-    def get_party_bonus(self) -> Dict[str, float]:
+    def get_party_bonus(self) -> Dict[str, Union[float, str]]:
         """Get the bonus this companion provides to party"""
         bonus_multiplier = (self.loyalty + 0.5) * self.bonus_value
 
@@ -308,7 +323,7 @@ class Companion(Character):
             "bonus_type": self.companion_bonus.value,
             "value": bonus_multiplier,
             "ability": self.special_ability,
-            "is_active": self.is_recruited
+            "is_active": self.is_recruited,
         }
 
     def check_betrayal(self, turn: int, current_morale: float) -> bool:
@@ -317,7 +332,9 @@ class Companion(Character):
             return False
 
         # Betrayal risk increases with low loyalty and low morale
-        betrayal_chance = self.betrayal_risk * (1.0 - self.loyalty) * (1.0 - current_morale)
+        betrayal_chance = (
+            self.betrayal_risk * (1.0 - self.loyalty) * (1.0 - current_morale)
+        )
 
         return random.random() < betrayal_chance
 
@@ -330,9 +347,11 @@ class Companion(Character):
 # CREATURE CLASS
 # ============================================================================
 
+
 @dataclass
 class Creature:
     """Represents a mystical creature of the mythic era"""
+
     creature_id: str
     name: str
     description: str
@@ -340,22 +359,24 @@ class Creature:
     rarity: CreatureRarity
 
     # Attributes
-    size: str                          # Tiny, Small, Medium, Large, Huge
-    intelligence: float = 0.5          # 0.0 animal-like, 1.0 sentient
-    danger_level: float = 0.5          # 0.0 docile, 1.0 deadly
-    domestication_level: float = 0.3   # 0.0 wild, 1.0 tame
+    size: str  # Tiny, Small, Medium, Large, Huge
+    intelligence: float = 0.5  # 0.0 animal-like, 1.0 sentient
+    danger_level: float = 0.5  # 0.0 docile, 1.0 deadly
+    domestication_level: float = 0.3  # 0.0 wild, 1.0 tame
 
     # Abilities and habitats
     special_ability: str = ""
-    habitat: str = ""                  # Where it's found
-    lore: str = ""                     # Creature mythology/backstory
+    habitat: str = ""  # Where it's found
+    lore: str = ""  # Creature mythology/backstory
 
     # Gameplay benefits
     gameplay_bonuses: Dict[str, float] = field(default_factory=dict)
-    situational_help: Dict[str, str] = field(default_factory=dict)  # situation -> how it helps
+    situational_help: Dict[str, str] = field(
+        default_factory=dict
+    )  # situation -> how it helps
 
     # Relationship with player
-    affinity_level: float = 0.0        # -1.0 hostile, 1.0 bonded
+    affinity_level: float = 0.0  # -1.0 hostile, 1.0 bonded
     is_tamed: bool = False
     spotted_locations: List[str] = field(default_factory=list)
 
@@ -384,6 +405,7 @@ class Creature:
 # NPC SYSTEM
 # ============================================================================
 
+
 class NPCSystem:
     """Master system for managing all characters, companions, and creatures"""
 
@@ -392,10 +414,16 @@ class NPCSystem:
         self.companions: Dict[str, Companion] = {}
         self.creatures: Dict[str, Creature] = {}
 
-        self.player_relationships: Dict[str, Dict[str, float]] = {}  # player_id -> char_id -> reputation
+        self.player_relationships: Dict[
+            str, Dict[str, float]
+        ] = {}  # player_id -> char_id -> reputation
         self.dialogue_engine = DialogueEngine()
-        self.encountered_creatures: Dict[str, Set[str]] = {}  # player_id -> creature_ids encountered
-        self.recruited_companions: Dict[str, Set[str]] = {}   # player_id -> companion_ids recruited
+        self.encountered_creatures: Dict[
+            str, Set[str]
+        ] = {}  # player_id -> creature_ids encountered
+        self.recruited_companions: Dict[
+            str, Set[str]
+        ] = {}  # player_id -> companion_ids recruited
 
     def register_character(self, character: Character) -> bool:
         """Register a character to the system"""
@@ -432,19 +460,23 @@ class NPCSystem:
             return {
                 "type": "character",
                 "entity": char,
-                "description": f"You encounter {char.name}, {char.title}. {char.description}"
+                "description": f"You encounter {char.name}, {char.title}. {char.description}",
             }
         else:
             creature = random.choice(list(self.creatures.values()))
             return {
                 "type": "creature",
                 "entity": creature,
-                "description": f"A {creature.name} appears! {creature.description}"
+                "description": f"A {creature.name} appears! {creature.description}",
             }
 
     def get_potential_companions(self) -> List[Companion]:
         """Get all characters who could join as companions"""
-        return [c for c in self.companions.values() if c.can_join_player_party and not c.is_recruited]
+        return [
+            c
+            for c in self.companions.values()
+            if c.can_join_player_party and not c.is_recruited
+        ]
 
     def recruit_companion(self, player_id: str, companion_id: str) -> Tuple[bool, str]:
         """Recruit a companion to player's party"""
@@ -469,11 +501,7 @@ class NPCSystem:
         return True, f"{companion.name} has joined your party!"
 
     def interact_with_character(
-        self,
-        player_id: str,
-        char_id: str,
-        action: str,
-        turn: int
+        self, player_id: str, char_id: str, action: str, turn: int
     ) -> Dict:
         """Interact with a character"""
         if char_id not in self.characters:
@@ -484,12 +512,7 @@ class NPCSystem:
 
         return result
 
-    def change_relationship(
-        self,
-        player_id: str,
-        char_id: str,
-        delta: float
-    ) -> float:
+    def change_relationship(self, player_id: str, char_id: str, delta: float) -> float:
         """Change player's relationship with a character"""
         if char_id not in self.characters:
             return 0.0
@@ -507,7 +530,11 @@ class NPCSystem:
         character.relationship_to_player = new_rep
 
         # Check for recruitment opportunity if companion
-        if char_id in self.companions and new_rep >= 0.5 and not self.companions[char_id].is_recruited:
+        if (
+            char_id in self.companions
+            and new_rep >= 0.5
+            and not self.companions[char_id].is_recruited
+        ):
             self.recruit_companion(player_id, char_id)
 
         return new_rep
@@ -517,7 +544,7 @@ class NPCSystem:
         player_id: str,
         creature_id: str,
         player_charisma: float = 0.5,
-        turn: int = 0
+        turn: int = 0,
     ) -> Dict:
         """Encounter and attempt to tame a creature"""
         if creature_id not in self.creatures:
@@ -539,7 +566,7 @@ class NPCSystem:
             "creature": creature,
             "affinity": creature.affinity_level,
             "tamed": creature.is_tamed,
-            "bonus": creature.gameplay_bonuses if creature.is_tamed else {}
+            "bonus": creature.gameplay_bonuses if creature.is_tamed else {},
         }
 
     def get_character_dialogue(
@@ -547,7 +574,7 @@ class NPCSystem:
         char_id: str,
         initial_dialogue_id: str,
         player_reputation: float,
-        character_status: Optional[CharacterStatus] = None
+        character_status: Optional[CharacterStatus] = None,
     ) -> Dict:
         """Get dialogue for a character"""
         if char_id not in self.characters:
@@ -561,9 +588,7 @@ class NPCSystem:
             return {"success": False, "message": "Dialogue not found"}
 
         options = self.dialogue_engine.get_available_options(
-            initial_dialogue_id,
-            player_reputation,
-            status
+            initial_dialogue_id, player_reputation, status
         )
 
         return {
@@ -571,7 +596,7 @@ class NPCSystem:
             "character": character.name,
             "dialogue_text": dialogue.text,
             "available_options": [{"id": o.id, "text": o.text} for o in options],
-            "context": dialogue.context
+            "context": dialogue.context,
         }
 
     def get_character_report(self, char_id: str) -> Dict:
@@ -600,15 +625,17 @@ class NPCSystem:
         # Add companion-specific info
         if char_id in self.companions:
             comp = self.companions[char_id]
-            report.update({
-                "is_companion": True,
-                "is_recruited": comp.is_recruited,
-                "bonus_type": comp.companion_bonus.value,
-                "bonus_value": comp.bonus_value,
-                "special_ability": comp.special_ability,
-                "quirks": comp.personality_quirks,
-                "betrayal_risk": comp.betrayal_risk,
-            })
+            report.update(
+                {
+                    "is_companion": True,
+                    "is_recruited": comp.is_recruited,
+                    "bonus_type": comp.companion_bonus.value,
+                    "bonus_value": comp.bonus_value,
+                    "special_ability": comp.special_ability,
+                    "quirks": comp.personality_quirks,
+                    "betrayal_risk": comp.betrayal_risk,
+                }
+            )
 
         return report
 
@@ -639,13 +666,17 @@ class NPCSystem:
 
     def get_all_characters_active(self) -> List[Character]:
         """Get all active characters"""
-        return [c for c in self.characters.values() if c.status == CharacterStatus.ACTIVE]
+        return [
+            c for c in self.characters.values() if c.status == CharacterStatus.ACTIVE
+        ]
 
     def get_characters_by_faction(self, faction_id: str) -> List[Character]:
         """Get all characters affiliated with a faction"""
         return [c for c in self.characters.values() if c.affiliation == faction_id]
 
-    def get_characters_by_archetype(self, archetype: CharacterArchetype) -> List[Character]:
+    def get_characters_by_archetype(
+        self, archetype: CharacterArchetype
+    ) -> List[Character]:
         """Get all characters of a specific archetype"""
         return [c for c in self.characters.values() if c.personality_type == archetype]
 
@@ -656,26 +687,34 @@ class NPCSystem:
         for char in self.characters.values():
             # Character corruption growth
             if char.corruption_level > 0:
-                char.corruption_level = min(1.0, char.corruption_level + random.uniform(0.01, 0.05))
+                char.corruption_level = min(
+                    1.0, char.corruption_level + random.uniform(0.01, 0.05)
+                )
 
                 if char.corruption_level >= 1.0:
                     char.status = CharacterStatus.CORRUPTED
-                    events.append({
-                        "type": "character_corruption",
-                        "character": char.name,
-                        "message": f"{char.name} has been fully corrupted!"
-                    })
+                    events.append(
+                        {
+                            "type": "character_corruption",
+                            "character": char.name,
+                            "message": f"{char.name} has been fully corrupted!",
+                        }
+                    )
 
             # Companion betrayal check
             if char.char_id in self.companions:
                 comp = self.companions[char.char_id]
-                if comp.is_recruited and comp.check_betrayal(char.last_interaction_turn, 0.5):
+                if comp.is_recruited and comp.check_betrayal(
+                    char.last_interaction_turn, 0.5
+                ):
                     comp.is_recruited = False
-                    events.append({
-                        "type": "companion_betrayal",
-                        "character": char.name,
-                        "message": f"{char.name} has betrayed you!"
-                    })
+                    events.append(
+                        {
+                            "type": "companion_betrayal",
+                            "character": char.name,
+                            "message": f"{char.name} has betrayed you!",
+                        }
+                    )
 
             # Rumor spread
             char.rumor_level = min(1.0, char.rumor_level + random.uniform(0.01, 0.03))
@@ -686,6 +725,7 @@ class NPCSystem:
 # ============================================================================
 # CHARACTER FACTORY: BUILD 35+ PRE-BUILT CHARACTERS
 # ============================================================================
+
 
 def build_historical_figures() -> List[Character]:
     """Create historical figures - great thinkers, generals, philosophers"""
@@ -702,7 +742,12 @@ def build_historical_figures() -> List[Character]:
             cunning=0.4,
             personality_type=CharacterArchetype.SCHOLAR,
             affiliation="research_division",
-            skills=["Mathematics", "Physics", "Prophecy Calculation", "Strategic Analysis"],
+            skills=[
+                "Mathematics",
+                "Physics",
+                "Prophecy Calculation",
+                "Strategic Analysis",
+            ],
             inventory={"scientific_papers": 50, "research_equipment": 10},
         ),
         Character(
@@ -1325,6 +1370,7 @@ def build_unique_npcs() -> List[Character]:
 # CREATURE FACTORY: BUILD 8+ MYTHIC CREATURES
 # ============================================================================
 
+
 def build_creatures() -> List[Creature]:
     """Create mythic creatures from the federation universe"""
     creatures = [
@@ -1342,7 +1388,10 @@ def build_creatures() -> List[Creature]:
             habitat="High altitude clouds, mountain peaks",
             lore="Sky-Furks are ancient creatures that have guided travelers for millennia.",
             gameplay_bonuses={"movement_speed": 0.25, "travel_safety": 0.15},
-            situational_help={"travel": "Speeds up journeys", "escape": "Helps flee danger"}
+            situational_help={
+                "travel": "Speeds up journeys",
+                "escape": "Helps flee danger",
+            },
         ),
         Creature(
             creature_id="creature_002",
@@ -1358,7 +1407,10 @@ def build_creatures() -> List[Creature]:
             habitat="Electromagnetic storms, crystalline caves",
             lore="Plasma-Kites are said to be manifestations of pure knowledge.",
             gameplay_bonuses={"research_speed": 0.40, "breakthrough_chance": 0.20},
-            situational_help={"research": "Accelerates discoveries", "crisis": "Provides energy"}
+            situational_help={
+                "research": "Accelerates discoveries",
+                "crisis": "Provides energy",
+            },
         ),
         Creature(
             creature_id="creature_003",
@@ -1374,7 +1426,10 @@ def build_creatures() -> List[Creature]:
             habitat="Volcanic regions, storm-torn skies",
             lore="Thrumbacks were ancient weapons before becoming legendary allies.",
             gameplay_bonuses={"combat_power": 0.50, "defense": 0.25},
-            situational_help={"battle": "Devastates enemies", "protection": "Strong defense"}
+            situational_help={
+                "battle": "Devastates enemies",
+                "protection": "Strong defense",
+            },
         ),
         Creature(
             creature_id="creature_004",
@@ -1390,7 +1445,10 @@ def build_creatures() -> List[Creature]:
             habitat="Temperate cloud layers, storm formations",
             lore="Cloud-Gnashers influence emotions and morale through mystic presence.",
             gameplay_bonuses={"morale": 0.30, "inspiration": 0.20},
-            situational_help={"morale": "Boosts team spirit", "depression": "Lifts despair"}
+            situational_help={
+                "morale": "Boosts team spirit",
+                "depression": "Lifts despair",
+            },
         ),
         Creature(
             creature_id="creature_005",
@@ -1406,7 +1464,10 @@ def build_creatures() -> List[Creature]:
             habitat="Dimensional rifts, quiet forgotten places",
             lore="Void-Skippers are said to be fragments of the world between worlds.",
             gameplay_bonuses={"stealth": 0.45, "escape_chance": 0.35},
-            situational_help={"exploration": "Reveals hidden paths", "danger": "Enables escape"}
+            situational_help={
+                "exploration": "Reveals hidden paths",
+                "danger": "Enables escape",
+            },
         ),
         Creature(
             creature_id="creature_006",
@@ -1421,8 +1482,14 @@ def build_creatures() -> List[Creature]:
             special_ability="Prophecy Enhancement - Deepens visions",
             habitat="Collective consciousness spaces, meditation centers",
             lore="Dream-Wyrms are manifestations of shared consciousness and future sight.",
-            gameplay_bonuses={"prophecy_accuracy": 0.50, "consciousness_connection": 0.35},
-            situational_help={"prophecy": "Enhances visions", "crisis": "Reveals solutions"}
+            gameplay_bonuses={
+                "prophecy_accuracy": 0.50,
+                "consciousness_connection": 0.35,
+            },
+            situational_help={
+                "prophecy": "Enhances visions",
+                "crisis": "Reveals solutions",
+            },
         ),
         Creature(
             creature_id="creature_007",
@@ -1438,7 +1505,9 @@ def build_creatures() -> List[Creature]:
             habitat="Deep chasms, paradox zones",
             lore="Harmonic Maw is the antagonist of nature, if it can be tamed, victory is assured.",
             gameplay_bonuses={"power": 1.0, "invulnerability": 0.50},
-            situational_help={"ultimate_battle": "Enables victory against impossible odds"}
+            situational_help={
+                "ultimate_battle": "Enables victory against impossible odds"
+            },
         ),
         Creature(
             creature_id="creature_008",
@@ -1453,8 +1522,15 @@ def build_creatures() -> List[Creature]:
             special_ability="Collective Insight - Shared knowledge network",
             habitat="Crystal formations, enlightened temples",
             lore="Prism Assemblies represent unity of consciousness and cooperative power.",
-            gameplay_bonuses={"diplomacy": 0.30, "faction_unity": 0.40, "knowledge": 0.35},
-            situational_help={"diplomacy": "Aids negotiations", "unity": "Brings factions together"}
+            gameplay_bonuses={
+                "diplomacy": 0.30,
+                "faction_unity": 0.40,
+                "knowledge": 0.35,
+            },
+            situational_help={
+                "diplomacy": "Aids negotiations",
+                "unity": "Brings factions together",
+            },
         ),
     ]
     return creatures
@@ -1464,17 +1540,18 @@ def build_creatures() -> List[Creature]:
 # FACTORY FUNCTION: BUILD COMPLETE NPC SYSTEM
 # ============================================================================
 
+
 def build_npc_system() -> NPCSystem:
     """Factory function to build the complete NPC system"""
     system = NPCSystem()
 
     # Register all characters
     all_characters = (
-        build_historical_figures() +
-        build_faction_leaders() +
-        build_antagonists() +
-        build_mysterious_figures() +
-        build_unique_npcs()
+        build_historical_figures()
+        + build_faction_leaders()
+        + build_antagonists()
+        + build_mysterious_figures()
+        + build_unique_npcs()
     )
 
     for char in all_characters:

@@ -14,6 +14,7 @@ ensemble_storage/
 .pytest_cache/
 .opencode/
 .claude/
+.kilocode/
 fortress-complete.zip
 federationpublichtml.tar.gz
 
@@ -26,3 +27,52 @@ workspace_private/
 /AGENT_COORDINATION/agent-c-report.md
 /AGENT_COORDINATION/phase-8-spec-review.md
 .a0proj/
+
+# One-off patch, test, and debug scripts (local only)
+patch_*.py
+patch_*.sh
+fix_*.py
+check_*.py
+test_*.py
+test_*.json
+deploy_*.py
+inspect_*.py
+get_*.py
+find_*.py
+parse_*.py
+verify_*.py
+
+# Legacy/backup HTML snapshots
+index_original.html
+index_patched.html
+index_patched_v3.html
+
+# Multiple NPC system JS versions (only keep current)
+NPCAutonomySystem_v*.js
+NPCAutonomySystem_current.js
+NPCAutonomySystem_deployed.js
+NPCChatSystem.v2.js
+
+# Standalone scripts that were exploration/experimentation
+npc_autonomy.py
+npc_autonomy_current.py
+npc_chat.py
+faction_dynamics.py
+phase6b_world_state.py
+phase6c_broadcast.py
+main_patch_notes.py
+demo_federation_complete_game.py
+
+# Cron file (VPS-specific)
+federation-sim.cron
+
+# Docker compose variants (VPS-specific, kept on server)
+docker-compose.vps.yml
+docker-compose.vps-fixed.yml
+
+# Additional one-off scripts
+fix7a_v2.py
+
+# Legacy NPC JS systems (not used by current index.html or adult.html)
+NPCAutonomySystem.js
+NPCChatSystem.js
