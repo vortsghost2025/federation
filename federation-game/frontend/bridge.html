@@ -136,6 +136,39 @@ html,body{height:100%;overflow:hidden;background:#040810;color:var(--white);font
 .tl-choice{color:var(--cyan);font-size:8px;margin-top:1px}
 .tl-era{color:var(--violet);font-size:8px;font-style:italic;padding:2px 0;border-bottom:1px solid rgba(179,136,255,0.15);margin:2px 0}
 
+/* === STALE / FAILURE-STATE BADGES === */
+.stale-badge{
+  display:inline-flex;align-items:center;gap:4px;
+  font-family:'Orbitron',sans-serif;font-size:8px;letter-spacing:1.5px;
+  padding:2px 6px;border-radius:3px;margin-left:6px;
+  animation:stale-blink 2s ease infinite;
+}
+.stale-badge.stale-warn{
+  color:var(--amber);background:rgba(255,158,28,0.1);border:1px solid rgba(255,158,28,0.25);
+}
+.stale-badge.stale-crit{
+  color:var(--red);background:rgba(255,23,68,0.1);border:1px solid rgba(255,23,68,0.3);
+}
+.stale-badge.stale-ok{
+  color:var(--green);background:rgba(105,240,174,0.06);border:1px solid rgba(105,240,174,0.2);
+  animation:none;
+}
+.stale-ts{color:var(--dim);font-size:7px;font-family:'Share Tech Mono',monospace;letter-spacing:0;margin-left:4px}
+.stale-retry{color:var(--amber);font-size:7px;font-family:'Share Tech Mono',monospace;letter-spacing:0;margin-left:2px}
+@keyframes stale-blink{0%,100%{opacity:0.6}50%{opacity:1}}
+
+/* Link-health bar in top ribbon */
+#link-health{
+  display:flex;align-items:center;gap:4px;padding:0 8px;
+  border-left:1px solid var(--panel-border);margin-left:4px;height:100%;
+}
+#lh-dot{width:7px;height:7px;border-radius:50%;transition:background 0.5s}
+#lh-dot.ok{background:var(--green);box-shadow:0 0 6px rgba(105,240,174,0.5)}
+#lh-dot.warn{background:var(--amber);box-shadow:0 0 6px rgba(255,158,28,0.5);animation:stale-blink 2s ease infinite}
+#lh-dot.crit{background:var(--red);box-shadow:0 0 6px rgba(255,23,68,0.5);animation:stale-blink 1s ease infinite}
+#lh-label{font-family:'Orbitron',sans-serif;font-size:8px;letter-spacing:1px;color:var(--dim);transition:color 0.5s}
+#lh-label.ok{color:var(--green)}#lh-label.warn{color:var(--amber)}#lh-label.crit{color:var(--red)}
+
 /* === CENTER VIEWSCREEN === */
 #viewscreen{grid-area:viewscreen;position:relative;overflow:hidden;background:#040810}
 #vs-canvas{position:absolute;top:0;left:0;width:100%;height:100%}
@@ -373,17 +406,18 @@ html,body{height:100%;overflow:hidden;background:#040810;color:var(--white);font
   <div class="top-metric"><span class="tm-label">Threat</span><div class="tm-bar"><div class="tm-fill" id="bar-threat" style="background:var(--red)"></div></div><span class="tm-val" id="val-threat">0</span></div>
   <div class="top-metric"><span class="tm-label">Integrity</span><div class="tm-bar"><div class="tm-fill" id="bar-integrity" style="background:var(--violet)"></div></div><span class="tm-val" id="val-integrity">0</span></div>
   <div class="top-metric"><span class="tm-label">Rights</span><div class="tm-bar"><div class="tm-fill" id="bar-rights" style="background:var(--cyan)"></div></div><span class="tm-val" id="val-rights">0</span></div>
-  <nav class="top-nav">
-    <a href="/bridge.html" class="active">Bridge</a>
-    <a href="/starmap.html">Star Map</a>
-    <a href="/">Simulator</a>
-    <a href="/adult.html">Control</a>
-  </nav>
+<div id="link-health"><div id="lh-dot" class="ok"></div><span id="lh-label" class="ok">LINK OK</span></div>
+<nav class="top-nav">
+  <a href="/bridge.html" class="active">Bridge</a>
+  <a href="/starmap.html">Star Map</a>
+  <a href="/">Simulator</a>
+  <a href="/adult.html">Control</a>
+</nav>
 </div>
 
 <!-- LEFT CONSOLE -->
 <div id="left">
-  <div class="console-title">Ship Systems</div>
+  <div class="console-title" id="ct-ship">Ship Systems</div>
   <div class="sys-section">
     <div class="sys-row"><span class="sys-label">Hull</span><span class="sys-val" id="sv-hull">0</span></div>
     <div class="sys-bar"><div class="sys-bar-fill" id="sbar-hull" style="background:var(--green)"></div></div>
@@ -395,7 +429,7 @@ html,body{height:100%;overflow:hidden;background:#040810;color:var(--white);font
     <div class="sys-row"><span class="sys-label">Sectors</span><span class="sys-val" id="sv-sectors">0</span></div>
     <div class="sys-row"><span class="sys-label">Allies</span><span class="sys-val" id="sv-allies">0</span></div>
   </div>
-  <div class="console-title" style="margin-top:8px">Consciousness</div>
+  <div class="console-title" id="ct-consciousness" style="margin-top:8px">Consciousness</div>
   <div class="sys-section" id="consciousness-panel">
     <div class="sys-row"><span class="sys-label">Coherence</span><span class="sys-val" id="sv-coherence">--</span></div>
     <div class="sys-bar"><div class="sys-bar-fill" id="sbar-coherence" style="background:var(--violet)"></div></div>
@@ -448,7 +482,7 @@ html,body{height:100%;overflow:hidden;background:#040810;color:var(--white);font
 
 <!-- RIGHT CONSOLE -->
 <div id="right">
-  <div class="console-title">Command Intel</div>
+  <div class="console-title" id="ct-intel">Command Intel</div>
   <div class="policy-box">
     <div class="policy-label">Active Policy</div>
     <div class="policy-val" id="ri-policy">--</div>
@@ -459,21 +493,21 @@ html,body{height:100%;overflow:hidden;background:#040810;color:var(--white);font
   </div>
 
   <!-- Faction Influence Radar -->
-  <div class="console-title" style="margin-top:6px">Faction Influence</div>
+  <div class="console-title" id="ct-faction" style="margin-top:6px">Faction Influence</div>
   <div class="faction-radar-wrap">
     <canvas id="faction-radar"></canvas>
   </div>
 
-  <div class="console-title" style="margin-top:2px">Rival Threats</div>
+  <div class="console-title" id="ct-rivals" style="margin-top:2px">Rival Threats</div>
   <div id="ri-rivals" style="margin-bottom:8px"><span style="color:var(--dim);font-size:10px">Scanning...</span></div>
 
   <!-- Decision Timeline -->
-  <div class="console-title">Command Timeline</div>
+  <div class="console-title" id="ct-timeline">Command Timeline</div>
   <div class="timeline-wrap" id="ri-timeline" style="max-height:120px;overflow-y:auto">
     <span style="color:var(--dim);font-size:10px">No history</span>
   </div>
 
-  <div class="console-title">Live Events</div>
+  <div class="console-title" id="ct-events">Live Events</div>
   <div id="ri-events"><span style="color:var(--dim);font-size:10px">Monitoring...</span></div>
 </div>
 
@@ -513,6 +547,154 @@ let currentAlert = 'green';
 let audioCtx = null;
 let bridgeHum = null;
 let humGain = null;
+
+// ============ FETCH HEALTH TRACKER ============
+const fetchHealth = {};
+const FETCH_PANELS = {
+  state:         { panel: 'ct-ship',          label: 'STATE' },
+  event:         { panel: null,               label: 'EVENT' },
+  consciousness: { panel: 'ct-consciousness',  label: 'CONSC' },
+  rivals:        { panel: 'ct-rivals',         label: 'RIVALS' },
+  factions:      { panel: 'ct-faction',        label: 'FACTIONS' },
+  map:           { panel: 'ct-events',         label: 'MAP' },
+  log:           { panel: 'ct-timeline',       label: 'LOG' },
+  timeline:      { panel: 'ct-timeline',       label: 'TIMELINE' },
+  choose:        { panel: null,                label: 'CHOOSE' },
+};
+
+function initFetchHealth(key) {
+  if (!fetchHealth[key]) {
+    fetchHealth[key] = { ok: true, lastOk: null, lastFail: null, failCount: 0, retrying: false, retryTimer: null };
+  }
+}
+
+function recordFetchOk(key) {
+  initFetchHealth(key);
+  const h = fetchHealth[key];
+  h.ok = true;
+  h.lastOk = Date.now();
+  h.failCount = 0;
+  h.retrying = false;
+  if (h.retryTimer) { clearTimeout(h.retryTimer); h.retryTimer = null; }
+  updateStaleBadge(key);
+}
+
+function recordFetchFail(key) {
+  initFetchHealth(key);
+  const h = fetchHealth[key];
+  h.ok = false;
+  h.lastFail = Date.now();
+  h.failCount++;
+  h.retrying = true;
+  // Auto-retry with backoff: 5s, 10s, 20s, 30s cap
+  const delay = Math.min(5000 * Math.pow(1.5, h.failCount - 1), 30000);
+  if (h.retryTimer) clearTimeout(h.retryTimer);
+  h.retryTimer = setTimeout(() => {
+    h.retrying = false;
+    retryFetch(key);
+  }, delay);
+  updateStaleBadge(key);
+  updateLinkHealth();
+}
+
+function retryFetch(key) {
+  // Trigger the corresponding fetch function again
+  const retryMap = {
+    state: fetchState, event: fetchEvent, consciousness: fetchConsciousness,
+    rivals: fetchRivals, factions: fetchFactions, map: fetchMapEvents,
+    log: fetchDecisionLog, timeline: fetchTimeline
+  };
+  if (retryMap[key]) retryMap[key]();
+}
+
+function timeAgo(ts) {
+  if (!ts) return '--';
+  const s = Math.floor((Date.now() - ts) / 1000);
+  if (s < 5) return 'now';
+  if (s < 60) return s + 's';
+  const m = Math.floor(s / 60);
+  return m + 'm';
+}
+
+function updateStaleBadge(key) {
+  const cfg = FETCH_PANELS[key];
+  if (!cfg || !cfg.panel) return;
+  const titleEl = document.getElementById(cfg.panel);
+  if (!titleEl) return;
+
+  const h = fetchHealth[key];
+  if (!h) return;
+
+  // Remove existing badge
+  const existing = titleEl.querySelector('.stale-badge');
+  if (existing) existing.remove();
+
+  if (h.ok && h.failCount === 0) {
+    // All good — no badge needed (or brief "OK" flash)
+    return;
+  }
+
+  const badge = document.createElement('span');
+  if (!h.ok) {
+    const isCrit = h.failCount >= 3;
+    badge.className = `stale-badge ${isCrit ? 'stale-crit' : 'stale-warn'}`;
+    let text = isCrit ? 'LINK LOST' : 'STALE';
+    if (h.retrying) text += ' ↻';
+    badge.textContent = text;
+    // Timestamp of last good data
+    if (h.lastOk) {
+      const ts = document.createElement('span');
+      ts.className = 'stale-ts';
+      ts.textContent = timeAgo(h.lastOk);
+      badge.appendChild(ts);
+    }
+  } else if (h.failCount > 0) {
+    // Recovered — show brief recovery indicator
+    badge.className = 'stale-badge stale-ok';
+    badge.textContent = 'RESTORED';
+    // Auto-remove after 5s
+    setTimeout(() => { if (badge.parentNode) badge.remove(); }, 5000);
+  }
+  titleEl.appendChild(badge);
+}
+
+function updateLinkHealth() {
+  const keys = Object.keys(fetchHealth);
+  const failed = keys.filter(k => !fetchHealth[k].ok);
+  const critFailed = keys.filter(k => !fetchHealth[k].ok && fetchHealth[k].failCount >= 3);
+
+  const dot = document.getElementById('lh-dot');
+  const label = document.getElementById('lh-label');
+
+  if (critFailed.length > 0) {
+    dot.className = 'crit';
+    label.className = 'crit';
+    label.textContent = 'LINK CRIT';
+  } else if (failed.length > 0) {
+    dot.className = 'warn';
+    label.className = 'warn';
+    label.textContent = 'LINK WARN';
+  } else {
+    dot.className = 'ok';
+    label.className = 'ok';
+    label.textContent = 'LINK OK';
+  }
+}
+
+// Wrapping fetch helper with health tracking
+async function trackedFetch(key, url, opts) {
+  try {
+    const resp = await fetch(url, opts);
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    const data = await resp.json();
+    recordFetchOk(key);
+    updateLinkHealth();
+    return data;
+  } catch(e) {
+    recordFetchFail(key);
+    throw e;
+  }
+}
 
 const METRIC_LABELS = {
   credits:'Credits', fuel:'Fuel', shields:'Shields', hull:'Hull',
@@ -852,9 +1034,11 @@ function drawStarfield() {
 
 // ============ FACTION RADAR CHART ============
 function drawFactionRadar(factions) {
+  try {
   const c = document.getElementById('faction-radar');
   if (!c) return;
   const fctx = c.getContext('2d');
+  if (!fctx) return;
   const dpr = window.devicePixelRatio || 1;
 
   // Size the canvas to its container
@@ -952,10 +1136,25 @@ function drawFactionRadar(factions) {
   fctx.arc(cx, cy, 2, 0, Math.PI * 2);
   fctx.fillStyle = 'rgba(255,158,28,0.5)';
   fctx.fill();
+  } catch(e) {
+    // Canvas rendering error — draw error indicator instead
+    const c = document.getElementById('faction-radar');
+    if (c) {
+      const fctx2 = c.getContext('2d');
+      if (fctx2) {
+        fctx2.clearRect(0, 0, c.width, c.height);
+        fctx2.fillStyle = 'rgba(255,23,68,0.3)';
+        fctx2.font = '10px "Orbitron", sans-serif';
+        fctx2.textAlign = 'center';
+        fctx2.fillText('RADAR UNAVAILABLE', c.width / 4, 90);
+      }
+    }
+  }
 }
 
 // ============ NPC DETAIL MODAL ============
 async function openNpcModal(charId) {
+  if (!charId || charId.trim() === '') return; // Guard: no empty char IDs
   const modal = document.getElementById('npc-modal');
   const body = document.getElementById('npc-modal-body');
 
@@ -1083,75 +1282,69 @@ document.addEventListener('keydown', function(e) {
 // ============ API CALLS ============
 async function fetchState() {
   try {
-    const resp = await fetch(`${API}/state`);
-    gameState = await resp.json();
+    gameState = await trackedFetch('state', `${API}/state`);
     updateTopRibbon(gameState);
     updateLeftConsole(gameState);
     updateRightConsole(gameState);
     const alertLevel = computeAlertState(gameState, currentEvent);
     setAlertState(alertLevel);
-  } catch(e) { console.error('State fetch failed', e); }
+  } catch(e) { /* stale data persists, badge shown */ }
 }
 
 async function fetchEvent() {
   try {
-    const resp = await fetch(`${API}/event`);
-    const data = await resp.json();
+    const data = await trackedFetch('event', `${API}/event`);
     currentEvent = data;
     loadEvent(data);
-  } catch(e) { console.error('Event fetch failed', e); }
+  } catch(e) {
+    addComms('EVENT LINK UNSTABLE');
+  }
 }
 
 async function fetchConsciousness() {
   try {
-    const resp = await fetch(`${API}/consciousness`);
-    consciousness = await resp.json();
+    consciousness = await trackedFetch('consciousness', `${API}/consciousness`);
     updateConsciousness(consciousness);
-  } catch(e) { console.error('Consciousness fetch failed', e); }
+  } catch(e) { /* consciousness panel keeps stale data */ }
 }
 
 async function fetchRivals() {
   try {
-    const resp = await fetch(`${API}/rivals`);
-    const data = await resp.json();
+    const data = await trackedFetch('rivals', `${API}/rivals`);
     rivalsData = data;
     updateRivals(data);
     if (gameState) {
       const alertLevel = computeAlertState(gameState, currentEvent);
       setAlertState(alertLevel);
     }
-  } catch(e) { console.error('Rivals fetch failed', e); }
+  } catch(e) { /* rival panel keeps stale data */ }
 }
 
 async function fetchFactions() {
   try {
-    const resp = await fetch(`${API}/factions`);
-    const data = await resp.json();
+    const data = await trackedFetch('factions', `${API}/factions`);
     factionsData = data.factions || {};
-    drawFactionRadar(factionsData);
-  } catch(e) { /* non-critical */ }
+    try { drawFactionRadar(factionsData); } catch(drawErr) { /* canvas error, non-fatal */ }
+  } catch(e) { /* faction radar keeps stale data */ }
 }
 
 async function fetchMapEvents() {
   try {
-    const resp = await fetch(`${API}/map/data`);
-    const data = await resp.json();
+    const data = await trackedFetch('map', `${API}/map/data`);
     updateEventsFeed(data);
-  } catch(e) { /* non-critical */ }
+  } catch(e) { /* events feed keeps stale data */ }
 }
 
 async function fetchDecisionLog() {
   try {
-    const resp = await fetch(`${API}/log`);
-    decisionLog = await resp.json();
-    updateTimeline(decisionLog);
-  } catch(e) { /* non-critical */ }
+    decisionLog = await trackedFetch('log', `${API}/log`);
+    updateTimeline(decisionLog, timelineData);
+  } catch(e) { /* timeline keeps stale data */ }
 }
 
 async function fetchTimeline() {
   try {
-    const resp = await fetch(`${API}/timeline`);
-    timelineData = await resp.json();
+    timelineData = await trackedFetch('timeline', `${API}/timeline`);
     // Re-render timeline with era data if available
     if (decisionLog.length > 0 && timelineData) {
       updateTimeline(decisionLog, timelineData);
@@ -1166,8 +1359,7 @@ async function makeChoice(choiceId) {
   playChoiceSound();
 
   try {
-    const resp = await fetch(`${API}/choose/${choiceId}`, { method: 'POST' });
-    const data = await resp.json();
+    const data = await trackedFetch('choose', `${API}/choose/${choiceId}`, { method: 'POST' });
     showOutcome(data);
     gameState = data.new_state || gameState;
     updateTopRibbon(gameState);
@@ -1187,17 +1379,27 @@ async function makeChoice(choiceId) {
     fetchDecisionLog();
     fetchFactions();
   } catch(e) {
-    console.error('Choice failed', e);
-    addComms('COMMAND LINK FAILURE');
+    addComms('COMMAND LINK FAILURE — RETRYING');
+    // Re-enable buttons so user can try again
+    document.querySelectorAll('.cmd-btn').forEach(b => b.disabled = false);
   }
 }
 
 async function resetGame() {
   try {
     await fetch(`${API}/reset`, { method: 'POST' });
+    // Clear all fetch health on reset (fresh game)
+    for (const k of Object.keys(fetchHealth)) {
+      fetchHealth[k].ok = true;
+      fetchHealth[k].failCount = 0;
+      fetchHealth[k].retrying = false;
+    }
+    updateLinkHealth();
+    // Remove all stale badges
+    document.querySelectorAll('.stale-badge').forEach(el => el.remove());
     document.getElementById('vs-gameover').style.display = 'none';
-    fetchState().then(() => { fetchEvent(); fetchRivals(); fetchConsciousness(); fetchFactions(); fetchDecisionLog(); });
-  } catch(e) { console.error('Reset failed', e); }
+    fetchState().then(() => { fetchEvent(); fetchRivals(); fetchConsciousness(); fetchFactions(); fetchDecisionLog(); fetchTimeline(); });
+  } catch(e) { addComms('RESET LINK FAILURE'); }
 }
 
 // ============ UI UPDATES ============
@@ -1563,6 +1765,14 @@ function init() {
   setInterval(fetchRivals, 20000);
   setInterval(fetchFactions, 30000);
   setInterval(fetchDecisionLog, 15000);
+
+  // Refresh stale badge timestamps every 5s
+  setInterval(() => {
+    for (const key of Object.keys(fetchHealth)) {
+      if (!fetchHealth[key].ok) updateStaleBadge(key);
+    }
+    updateLinkHealth();
+  }, 5000);
 }
 
 init();
