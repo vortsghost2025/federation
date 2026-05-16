@@ -100,6 +100,7 @@ except ImportError:
 
 app = FastAPI(title="Federation Game API", version="1.0.0")
 from auth_endpoints import router as auth_router
+from map_endpoints import router as map_router
 from faction_dynamics import (
     get_faction_dynamics,
     get_faction_detail,
@@ -111,6 +112,7 @@ from faction_dynamics import (
 )
 
 app.include_router(auth_router)
+app.include_router(map_router)
 
 app.add_middleware(
     CORSMiddleware,
