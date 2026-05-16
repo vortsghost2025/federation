@@ -5,6 +5,7 @@ Star Trek LCARS Interface for Kids
 
 import json
 import random
+import hashlib
 import asyncio
 from datetime import datetime
 from typing import Optional, Dict, List, Any
@@ -48,6 +49,8 @@ from npc_autonomy import (
 )
 from quests import create_quest_library, QuestSystem, FactionAffiliation
 from technology import create_technology_tree, TechTree
+from dataclasses import asdict
+from federation_game_db import db_manager
 
 # New integrated subsystems
 try:
@@ -214,6 +217,25 @@ class GameState:
                 print(f"Warning: HistoryArcOrchestrator init failed: {e}")
                 self.history_arc = None
 
+        # DB persistence: init and attempt snapshot restore
+        try:
+            db_initialized = db_manager.initialize()
+            if db_initialized:
+                snapshot = db_manager.load_latest_snapshot()
+                if snapshot:
+                    self._restore_from_snapshot(snapshot)
+                    self.engine_systems["persistence"]["loaded"] = True
+                    self.engine_systems["persistence"]["last_checkpoint"] = (
+                        snapshot.get("created_at")
+                    )
+                else:
+                    self.engine_systems["persistence"]["loaded"] = True
+            else:
+                self.engine_systems["persistence"]["loaded"] = False
+        except Exception as e:
+            print(f"Warning: DB persistence init failed: {e}")
+            self.engine_systems["persistence"]["loaded"] = False
+
         # Wire political engine if available
         if POLITICAL_SYSTEM_AVAILABLE:
             try:
@@ -261,6 +283,152 @@ class GameState:
                 "game_state_v2": {"loaded": self.game_state_v2 is not None},
                 "console_engine": {"loaded": self.console_engine is not None},
             }
+        )
+
+    def _restore_from_snapshot(self, snapshot: Dict[str, Any]) -> None:
+        try:
+            fed_json = snapshot.get("federation_state_json")
+            if fed_json and self.game_state_v2:
+                fed_data = json.loads(fed_json)
+                federation_data = fed_data.get("federation", {})
+                fed = self.game_state_v2.federation
+                fed.morale = federation_data.get("morale", 0.5)
+                fed.identity_strength = federation_data.get("identity_strength", 0.3)
+                fed.stability = federation_data.get("stability", 0.6)
+                fed.technological_level = federation_data.get(
+                    "technological_level", 0.2
+                )
+                fed.military_power = federation_data.get("military_power", 0.3)
+                fed.treasury = federation_data.get("treasury", 1000)
+                fed.population = federation_data.get("population", 10000)
+                fed.territory_size = federation_data.get("territory_size", 100.0)
+                last_updated_str = federation_data.get("last_updated")
+                if last_updated_str:
+                    try:
+                        from datetime import datetime as _dt
+
+                        fed.last_updated = _dt.fromisoformat(last_updated_str)
+                    except (ValueError, TypeError):
+                        pass
+                subsystems_data = fed_data.get("subsystems", {})
+                self.game_state_v2._restore_subsystems(subsystems_data)
+                stats_data = fed_data.get("statistics", {})
+                if stats_data:
+                    stats = self.game_state_v2.statistics
+                    for key, val in stats_data.items():
+                        if hasattr(stats, key):
+                            setattr(stats, key, val)
+                self.game_state_v2.technology_data = fed_data.get("technology_data", {})
+                self.game_state_v2.quest_data = fed_data.get("quest_data", {})
+                self.game_state_v2.npc_data = fed_data.get("npc_data", {})
+                self.game_state_v2.political_data = fed_data.get("political_data", {})
+                phase_str = fed_data.get("game_phase", "genesis")
+                try:
+                    from federation_game_state import GamePhase
+
+                    self.game_state_v2.game_phase = GamePhase(phase_str)
+                except Exception:
+                    pass
+        except Exception as e:
+            print(f"Warning: federation_state restore failed: {e}")
+
+        try:
+            arc_json = snapshot.get("history_arc_json")
+            if arc_json and self.history_arc:
+                arc_data = json.loads(arc_json)
+                self.history_arc.import_full_state(arc_data)
+        except Exception as e:
+            print(f"Warning: history_arc restore failed: {e}")
+
+        try:
+            log_json = snapshot.get("turn_log_json")
+            if log_json:
+                self.log = json.loads(log_json)
+        except Exception as e:
+            print(f"Warning: turn_log restore failed: {e}")
+
+    def save_to_db(self, snapshot_type: str = "auto") -> bool:
+        try:
+            game_state_json = json.dumps(
+                {
+                    "turn": self.turn,
+                    "credits": self.credits,
+                    "fuel": self.fuel,
+                    "shields": self.shields,
+                    "hull": self.hull,
+                    "crew_morale": self.crew_morale,
+                    "discovered_sectors": self.discovered_sectors,
+                    "allies": self.allies,
+                    "federation_stability": self.federation_stability,
+                    "public_trust": self.public_trust,
+                    "council_support": self.council_support,
+                    "constitutional_integrity": self.constitutional_integrity,
+                    "rights_protection": self.rights_protection,
+                    "emergency_powers": self.emergency_powers,
+                    "active_policy": self.active_policy,
+                    "federation_name": self.federation_name,
+                },
+                default=str,
+            )
+        except Exception:
+            game_state_json = None
+
+        federation_state_json = None
+        try:
+            if self.game_state_v2:
+                fed_data = {
+                    "federation": asdict(self.game_state_v2.federation),
+                    "subsystems": self.game_state_v2._serialize_subsystems(),
+                    "statistics": asdict(self.game_state_v2.statistics),
+                    "action_history": self.game_state_v2._serialize_action_history(),
+                    "game_phase": self.game_state_v2.game_phase.value,
+                    "victory_type": self.game_state_v2.victory_type.value
+                    if self.game_state_v2.victory_type
+                    else None,
+                    "defeat_reason": self.game_state_v2.defeat_reason,
+                    "is_game_over": self.game_state_v2.is_game_over,
+                    "technology_data": self.game_state_v2.technology_data,
+                    "quest_data": self.game_state_v2.quest_data,
+                    "npc_data": self.game_state_v2.npc_data,
+                    "political_data": self.game_state_v2.political_data,
+                }
+                federation_state_json = json.dumps(fed_data, default=str)
+        except Exception:
+            federation_state_json = None
+
+        history_arc_json = None
+        try:
+            if self.history_arc:
+                history_arc_json = json.dumps(
+                    self.history_arc.export_full_state(), default=str
+                )
+        except Exception:
+            history_arc_json = None
+
+        turn_log_json = None
+        try:
+            recent_log = self.log[-100:] if self.log else []
+            turn_log_json = json.dumps(recent_log, default=str)
+        except Exception:
+            turn_log_json = None
+
+        state_hash = None
+        try:
+            raw = json.dumps(
+                {"turn": self.turn, "stability": self.federation_stability},
+                sort_keys=True,
+            )
+            state_hash = hashlib.sha256(raw.encode()).hexdigest()[:16]
+        except Exception:
+            pass
+
+        return db_manager.save_snapshot(
+            game_state_json=game_state_json,
+            federation_state_json=federation_state_json,
+            history_arc_json=history_arc_json,
+            turn_log_json=turn_log_json,
+            state_hash=state_hash,
+            snapshot_type=snapshot_type,
         )
 
 
@@ -3687,6 +3855,10 @@ async def simulation_tick_endpoint():
                 goal_actions += 1
         except Exception:
             pass
+    try:
+        game_state.save_to_db(snapshot_type="auto")
+    except Exception:
+        pass
     return {
         "status": "completed",
         "thoughts_generated": len(results.get("thoughts", [])),
@@ -4297,6 +4469,60 @@ async def websocket_endpoint(websocket: WebSocket):
                 await websocket.send_json({"type": "pong"})
     except WebSocketDisconnect:
         manager.disconnect(websocket)
+
+
+@app.post("/state/save")
+async def state_save():
+    try:
+        success = game_state.save_to_db(snapshot_type="manual")
+        if success:
+            return {
+                "status": "saved",
+                "snapshot_type": "manual",
+                "db_initialized": db_manager._initialized,
+            }
+        return {"status": "failed", "db_initialized": db_manager._initialized}
+    except Exception as e:
+        return {
+            "status": "error",
+            "message": str(e),
+            "db_initialized": db_manager._initialized,
+        }
+
+
+@app.get("/state/load")
+async def state_load():
+    try:
+        if not db_manager._initialized:
+            return {"status": "unavailable", "message": "Database not initialized"}
+        snapshot = db_manager.load_latest_snapshot()
+        if snapshot is None:
+            return {"status": "no_snapshot", "message": "No snapshot found"}
+        game_state._restore_from_snapshot(snapshot)
+        game_state.engine_systems["persistence"]["loaded"] = True
+        game_state.engine_systems["persistence"]["last_checkpoint"] = snapshot.get(
+            "created_at"
+        )
+        return {
+            "status": "restored",
+            "snapshot_type": snapshot.get("snapshot_type"),
+            "created_at": snapshot.get("created_at"),
+        }
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+
+
+@app.get("/state/info")
+async def state_info():
+    try:
+        count = db_manager.get_snapshot_count() if db_manager._initialized else 0
+        return {
+            "db_initialized": db_manager._initialized,
+            "snapshot_count": count,
+            "persistence": game_state.engine_systems.get("persistence", {}),
+        }
+    except Exception as e:
+        return {"db_initialized": False, "snapshot_count": 0, "error": str(e)}
 
 
 if __name__ == "__main__":
