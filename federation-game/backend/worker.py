@@ -73,7 +73,7 @@ def check_significant_events(history_data, political_data):
     events = []
 
     # ── Era transition ─────────────────────────────────
-    details = history_data.get("details", {})
+    details = history_data.get("details") or {}
     if details.get("era_changed"):
         era = details.get("era", "unknown")
         events.append(
@@ -96,7 +96,7 @@ def check_significant_events(history_data, political_data):
         )
 
     # ── Rival hostile actions ──────────────────────────
-    rival_actions = details.get("rival_actions", {})
+    rival_actions = details.get("rival_actions") or {}
     hostile_keywords = (
         "incursion",
         "espionage",
@@ -124,7 +124,7 @@ def check_significant_events(history_data, political_data):
             break
 
     # ── History branch point ───────────────────────────
-    event_obj = details.get("event", {})
+    event_obj = details.get("event") or {}
     if event_obj.get("branch_point"):
         event_name = event_obj.get("name", "Unknown Event")
         events.append(
@@ -132,6 +132,19 @@ def check_significant_events(history_data, political_data):
                 "\U0001f500",
                 "Timeline Branch Point",
                 f"{event_name} — the timeline has diverged",
+            )
+        )
+
+    # ── Chaosbringer activity ──────────────────────────
+    chaosbringer = details.get("chaosbringer_report") or {}
+    if isinstance(chaosbringer, dict) and chaosbringer.get("active"):
+        agent = chaosbringer.get("agent_name", "Unknown Agent")
+        action = chaosbringer.get("action", "unknown activity")
+        events.append(
+            (
+                "\U0001f525",
+                "Chaosbringer Activity",
+                f"{agent}: {action}",
             )
         )
 
@@ -224,7 +237,7 @@ def run_tick():
                     if path == "/history-arc/advance":
                         history_data = data
                     elif path == "/political/process-turn":
-                        political_data = data.get("details", [])
+                        political_data = data.get("details") or []
                 except Exception:
                     pass
             elif status >= 400:

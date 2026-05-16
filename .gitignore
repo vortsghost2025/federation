@@ -102,3 +102,9 @@ gen_remote_writer.py
 transfer_db.py
 transfer_db.ps1
 write_db_remote.py
+
+# Base64 transfer helpers (local only)
+encode_worker.ps1
+worker_b64_oneline.txt
+worker_b64.txt
+dc_b64.txt
