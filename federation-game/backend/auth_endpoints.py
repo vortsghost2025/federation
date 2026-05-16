@@ -31,15 +31,5 @@ async def login(req: LoginRequest):
     SESSIONS[token] = {"username": req.username, "created": datetime.utcnow()}
     return {"access_token": token, "token_type": "bearer"}
 
-@router.post("/state/save")
-async def save_state(state: dict, username: str = Depends(get_current_user)):
-    PLAYER_STATE[username] = state
-    return {"message": "State saved"}
 
-@router.get("/state/load")
-async def load_state(username: str = Depends(get_current_user)):
-    state = PLAYER_STATE.get(username)
-    if state is None:
-        raise HTTPException(status_code=404, detail="No saved state for user")
-    return state
 
