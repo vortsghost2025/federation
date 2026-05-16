@@ -90,3 +90,15 @@ federation-game/backend/npcs.py
 federation-game/backend/quests.py
 federation-game/backend/technology.py
 federation-game/backend/timeline.py
+
+# Windows device name artifacts (nul is Windows /dev/null equivalent)
+nul
+**/nul
+
+# Decode/transfer helper scripts (local only)
+decode_b64.ps1
+make_b64.py
+gen_remote_writer.py
+transfer_db.py
+transfer_db.ps1
+write_db_remote.py
