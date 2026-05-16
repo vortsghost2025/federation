@@ -1,0 +1,781 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Federation Command Deck</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Share+Tech+Mono&display=swap');
+
+:root {
+  --amber: #ff9e1c;
+  --amber-dim: #ff9e1c44;
+  --cyan: #4fc3f7;
+  --cyan-dim: #4fc3f722;
+  --violet: #b388ff;
+  --red: #ff1744;
+  --red-dim: #ff174422;
+  --green: #69f0ae;
+  --white: #e8e8e8;
+  --dim: #607080;
+  --panel-bg: rgba(8,12,20,0.92);
+  --panel-border: rgba(79,195,247,0.18);
+  --glow-cyan: 0 0 12px rgba(79,195,247,0.3);
+  --glow-amber: 0 0 12px rgba(255,158,28,0.3);
+  --glow-red: 0 0 20px rgba(255,23,68,0.4);
+}
+
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{height:100%;overflow:hidden;background:#040810;color:var(--white);font-family:'Share Tech Mono',monospace}
+
+/* === LAYOUT GRID === */
+#bridge{
+  display:grid;
+  grid-template-rows:44px 1fr 170px 36px;
+  grid-template-columns:220px 1fr 220px;
+  grid-template-areas:
+    "top top top"
+    "left viewscreen right"
+    "left commands right"
+    "bottom bottom bottom";
+  height:100vh;gap:1px;
+}
+
+/* === TOP SYSTEMS RIBBON === */
+#top{grid-area:top;display:flex;align-items:center;gap:0;background:var(--panel-bg);border-bottom:1px solid var(--panel-border);padding:0 8px;font-size:11px;z-index:5}
+.top-era{color:var(--amber);font-family:'Orbitron',sans-serif;font-weight:700;font-size:13px;letter-spacing:2px;padding:0 12px 0 8px;white-space:nowrap}
+.top-year{color:var(--cyan);font-family:'Orbitron',sans-serif;font-size:13px;padding-right:16px;border-right:1px solid var(--panel-border);margin-right:8px;white-space:nowrap}
+.top-metric{display:flex;align-items:center;gap:4px;padding:0 10px;border-right:1px solid rgba(79,195,247,0.08);height:100%}
+.top-metric:last-child{border-right:none}
+.tm-label{color:var(--dim);font-size:9px;text-transform:uppercase;letter-spacing:1.5px}
+.tm-val{font-family:'Orbitron',sans-serif;font-size:12px;min-width:24px;text-align:right}
+.tm-bar{width:60px;height:5px;background:rgba(255,255,255,0.06);border-radius:3px;overflow:hidden}
+.tm-fill{height:100%;border-radius:3px;transition:width 0.8s ease}
+.top-nav{margin-left:auto;display:flex;gap:2px}
+.top-nav a{color:var(--dim);font-size:10px;text-decoration:none;padding:6px 10px;letter-spacing:1px;text-transform:uppercase;transition:color 0.2s}
+.top-nav a:hover,.top-nav a.active{color:var(--cyan)}
+
+/* === LEFT CONSOLE === */
+#left{grid-area:left;background:var(--panel-bg);border-right:1px solid var(--panel-border);padding:10px;overflow-y:auto;display:flex;flex-direction:column;gap:6px}
+#left::-webkit-scrollbar{width:3px}
+#left::-webkit-scrollbar-thumb{background:rgba(79,195,247,0.2);border-radius:2px}
+.console-title{color:var(--amber);font-family:'Orbitron',sans-serif;font-size:10px;letter-spacing:2px;text-transform:uppercase;border-bottom:1px solid rgba(255,158,28,0.15);padding-bottom:4px;margin-bottom:2px}
+.sys-row{display:flex;justify-content:space-between;align-items:center;font-size:12px;padding:2px 0}
+.sys-label{color:var(--dim);font-size:10px;text-transform:uppercase;letter-spacing:1px}
+.sys-val{font-family:'Orbitron',sans-serif;font-size:13px}
+.sys-bar{width:100%;height:6px;background:rgba(255,255,255,0.05);border-radius:3px;overflow:hidden;margin-top:2px}
+.sys-bar-fill{height:100%;border-radius:3px;transition:width 0.8s ease,background 0.5s ease}
+.sys-section{margin-bottom:8px}
+
+/* === RIGHT CONSOLE === */
+#right{grid-area:right;background:var(--panel-bg);border-left:1px solid var(--panel-border);padding:10px;overflow-y:auto;display:flex;flex-direction:column;gap:6px}
+#right::-webkit-scrollbar{width:3px}
+#right::-webkit-scrollbar-thumb{background:rgba(79,195,247,0.2);border-radius:2px}
+.policy-box{background:rgba(79,195,247,0.06);border:1px solid var(--panel-border);border-radius:4px;padding:8px;font-size:11px;margin-bottom:6px}
+.policy-label{color:var(--dim);font-size:9px;text-transform:uppercase;letter-spacing:1px}
+.policy-val{color:var(--cyan);font-size:12px;margin-top:2px}
+.rival-entry{padding:4px 6px;border-left:2px solid var(--red);margin-bottom:4px;font-size:10px;background:var(--red-dim);border-radius:0 3px 3px 0}
+.rival-name{color:var(--red);font-weight:bold}
+.event-feed-item{padding:4px 6px;border-left:2px solid var(--dim);margin-bottom:3px;font-size:10px;border-radius:0 3px 3px 0;transition:border-color 0.2s}
+.event-feed-item:hover{border-left-color:var(--cyan)}
+.ef-char{color:var(--cyan);font-weight:bold}
+.ef-desc{color:#999;line-height:1.3;margin-top:1px}
+
+/* === CENTER VIEWSCREEN === */
+#viewscreen{grid-area:viewscreen;position:relative;overflow:hidden;background:#040810}
+#vs-canvas{position:absolute;top:0;left:0;width:100%;height:100%}
+
+/* Viewscreen overlay content */
+#vs-overlay{position:absolute;top:0;left:0;width:100%;height:100%;display:flex;flex-direction:column;justify-content:center;align-items:center;pointer-events:none;z-index:2;padding:20px}
+#vs-event{display:none;text-align:center;max-width:80%}
+#vs-loading{color:var(--dim);font-family:'Orbitron',sans-serif;font-size:14px;letter-spacing:4px;animation:pulse-text 2s ease infinite}
+@keyframes pulse-text{0%,100%{opacity:0.3}50%{opacity:1}}
+
+#vs-domain{color:var(--amber);font-family:'Orbitron',sans-serif;font-size:10px;letter-spacing:3px;text-transform:uppercase;margin-bottom:8px}
+#vs-title{color:var(--white);font-family:'Orbitron',sans-serif;font-size:22px;font-weight:700;line-height:1.3;margin-bottom:12px;text-shadow:0 0 30px rgba(255,255,255,0.15)}
+#vs-desc{color:#b0b8c0;font-size:13px;line-height:1.6;margin-bottom:16px;max-width:600px}
+#vs-meta{color:var(--dim);font-size:10px;letter-spacing:1px;line-height:1.8}
+#vs-meta span{color:var(--cyan)}
+
+/* Outcome overlay */
+#vs-outcome{display:none;text-align:center;max-width:80%}
+#vs-outcome-title{font-family:'Orbitron',sans-serif;font-size:14px;letter-spacing:3px;margin-bottom:10px}
+#vs-outcome-text{color:var(--white);font-size:15px;line-height:1.5;margin-bottom:14px}
+#vs-deltas{font-size:12px;line-height:1.8;margin-bottom:10px}
+.delta-pos{color:var(--green)}
+.delta-neg{color:var(--red)}
+#vs-lesson{color:var(--violet);font-style:italic;font-size:11px;margin-top:8px;padding:6px 12px;background:rgba(179,136,255,0.08);border-radius:4px}
+#vs-rival-effects{margin-top:8px;font-size:11px;color:var(--red)}
+
+/* Game over / victory */
+#vs-gameover{display:none;text-align:center}
+#vs-gameover h2{font-family:'Orbitron',sans-serif;font-size:28px;letter-spacing:4px;margin-bottom:12px}
+#vs-gameover p{color:var(--dim);font-size:13px;margin-bottom:20px}
+#vs-gameover button{pointer-events:all}
+
+/* Scan lines effect */
+#vs-scanlines{position:absolute;top:0;left:0;width:100%;height:100%;background:repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,0,0,0.03) 2px,rgba(0,0,0,0.03) 4px);pointer-events:none;z-index:1}
+#vs-vignette{position:absolute;top:0;left:0;width:100%;height:100%;background:radial-gradient(ellipse at center,transparent 60%,rgba(4,8,16,0.7) 100%);pointer-events:none;z-index:1}
+
+/* Alert state overlay */
+#vs-alert{position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:1;opacity:0;transition:opacity 0.5s}
+#vs-alert.red{background:radial-gradient(ellipse at center,transparent 40%,rgba(255,23,68,0.08) 100%);opacity:1}
+#vs-alert.yellow{background:radial-gradient(ellipse at center,transparent 40%,rgba(255,158,28,0.06) 100%);opacity:1}
+
+/* === COMMAND DECK === */
+#commands{grid-area:commands;display:flex;align-items:center;justify-content:center;gap:16px;padding:10px 20px;background:var(--panel-bg);border-top:1px solid var(--panel-border);position:relative}
+
+.cmd-btn{
+  pointer-events:all;
+  font-family:'Orbitron',sans-serif;
+  font-size:13px;font-weight:700;
+  letter-spacing:2px;
+  padding:14px 28px;
+  border:2px solid var(--panel-border);
+  border-radius:6px;
+  background:linear-gradient(180deg,rgba(79,195,247,0.08) 0%,rgba(79,195,247,0.02) 100%);
+  color:var(--cyan);
+  cursor:pointer;
+  transition:all 0.25s ease;
+  text-transform:uppercase;
+  position:relative;
+  overflow:hidden;
+  min-width:140px;text-align:center;
+}
+.cmd-btn::before{
+  content:'';position:absolute;top:0;left:0;right:0;height:2px;
+  background:linear-gradient(90deg,transparent,var(--cyan),transparent);
+  opacity:0;transition:opacity 0.3s
+}
+.cmd-btn:hover{
+  background:linear-gradient(180deg,rgba(79,195,247,0.18) 0%,rgba(79,195,247,0.06) 100%);
+  border-color:var(--cyan);
+  box-shadow:var(--glow-cyan);
+  transform:translateY(-1px)
+}
+.cmd-btn:hover::before{opacity:1}
+.cmd-btn:active{transform:translateY(1px);box-shadow:none}
+
+.cmd-btn.red-btn{color:var(--red);border-color:rgba(255,23,68,0.3);background:linear-gradient(180deg,rgba(255,23,68,0.08) 0%,rgba(255,23,68,0.02) 100%)}
+.cmd-btn.red-btn:hover{border-color:var(--red);box-shadow:var(--glow-red);background:linear-gradient(180deg,rgba(255,23,68,0.18) 0%,rgba(255,23,68,0.06) 100%)}
+.cmd-btn.red-btn::before{background:linear-gradient(90deg,transparent,var(--red),transparent)}
+
+.cmd-btn.amber-btn{color:var(--amber);border-color:rgba(255,158,28,0.3);background:linear-gradient(180deg,rgba(255,158,28,0.08) 0%,rgba(255,158,28,0.02) 100%)}
+.cmd-btn.amber-btn:hover{border-color:var(--amber);box-shadow:var(--glow-amber);background:linear-gradient(180deg,rgba(255,158,28,0.18) 0%,rgba(255,158,28,0.06) 100%)}
+.cmd-btn.amber-btn::before{background:linear-gradient(90deg,transparent,var(--amber),transparent)}
+
+.cmd-btn.violet-btn{color:var(--violet);border-color:rgba(179,136,255,0.3);background:linear-gradient(180deg,rgba(179,136,255,0.08) 0%,rgba(179,136,255,0.02) 100%)}
+.cmd-btn.violet-btn:hover{border-color:var(--violet);box-shadow:0 0 12px rgba(179,136,255,0.3);background:linear-gradient(180deg,rgba(179,136,255,0.18) 0%,rgba(179,136,255,0.06) 100%)}
+.cmd-btn.violet-btn::before{background:linear-gradient(90deg,transparent,var(--violet),transparent)}
+
+.cmd-btn.green-btn{color:var(--green);border-color:rgba(105,240,174,0.3);background:linear-gradient(180deg,rgba(105,240,174,0.08) 0%,rgba(105,240,174,0.02) 100%)}
+.cmd-btn.green-btn:hover{border-color:var(--green);box-shadow:0 0 12px rgba(105,240,174,0.3);background:linear-gradient(180deg,rgba(105,240,174,0.18) 0%,rgba(105,240,174,0.06) 100%)}
+.cmd-btn.green-btn::before{background:linear-gradient(90deg,transparent,var(--green),transparent)}
+
+.cmd-btn:disabled{opacity:0.3;cursor:not-allowed;transform:none;box-shadow:none}
+
+/* Continue button after outcome */
+#continue-btn{
+  pointer-events:all;
+  font-family:'Orbitron',sans-serif;font-size:12px;font-weight:700;
+  letter-spacing:2px;padding:10px 24px;
+  border:2px solid var(--amber);border-radius:6px;
+  background:rgba(255,158,28,0.1);color:var(--amber);
+  cursor:pointer;transition:all 0.25s;display:none
+}
+#continue-btn:hover{background:rgba(255,158,28,0.2);box-shadow:var(--glow-amber)}
+
+/* === BOTTOM COMMS TICKER === */
+#bottom{grid-area:bottom;background:var(--panel-bg);border-top:1px solid var(--panel-border);display:flex;align-items:center;padding:0 12px;overflow:hidden;gap:8px}
+#comms-label{color:var(--amber);font-family:'Orbitron',sans-serif;font-size:9px;letter-spacing:2px;text-transform:uppercase;white-space:nowrap;padding-right:8px;border-right:1px solid var(--panel-border)}
+#comms-ticker{flex:1;overflow:hidden;white-space:nowrap;font-size:11px;color:var(--dim)}
+#comms-ticker span{margin-right:40px}
+.comms-new{color:var(--cyan)}
+
+/* === FLASH ANIMATION === */
+@keyframes vs-flash{
+  0%{opacity:0}
+  20%{opacity:1}
+  100%{opacity:0}
+}
+#vs-flash{position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:3;opacity:0}
+
+/* === CONSOLE GLOW ACCENTS === */
+#left::before,#right::before{
+  content:'';position:absolute;top:0;width:100%;height:1px;
+  background:linear-gradient(90deg,transparent,var(--cyan),transparent);opacity:0.3
+}
+#left{position:relative}
+#right{position:relative}
+
+/* === RESPONSIVE === */
+@media(max-width:900px){
+  #bridge{
+    grid-template-columns:1fr;
+    grid-template-rows:44px 1fr 170px 36px;
+    grid-template-areas:"top" "viewscreen" "commands" "bottom";
+  }
+  #left,#right{display:none}
+}
+</style>
+</head>
+<body>
+
+<div id="bridge">
+  <!-- TOP SYSTEMS RIBBON -->
+  <div id="top">
+    <span class="top-era" id="top-era">--</span>
+    <span class="top-year" id="top-year">YEAR --</span>
+    <div class="top-metric"><span class="tm-label">Trust</span><div class="tm-bar"><div class="tm-fill" id="bar-trust" style="background:var(--cyan)"></div></div><span class="tm-val" id="val-trust">0</span></div>
+    <div class="top-metric"><span class="tm-label">Stability</span><div class="tm-bar"><div class="tm-fill" id="bar-stability" style="background:var(--green)"></div></div><span class="tm-val" id="val-stability">0</span></div>
+    <div class="top-metric"><span class="tm-label">Morale</span><div class="tm-bar"><div class="tm-fill" id="bar-morale" style="background:var(--amber)"></div></div><span class="tm-val" id="val-morale">0</span></div>
+    <div class="top-metric"><span class="tm-label">Threat</span><div class="tm-bar"><div class="tm-fill" id="bar-threat" style="background:var(--red)"></div></div><span class="tm-val" id="val-threat">0</span></div>
+    <div class="top-metric"><span class="tm-label">Integrity</span><div class="tm-bar"><div class="tm-fill" id="bar-integrity" style="background:var(--violet)"></div></div><span class="tm-val" id="val-integrity">0</span></div>
+    <div class="top-metric"><span class="tm-label">Rights</span><div class="tm-bar"><div class="tm-fill" id="bar-rights" style="background:var(--cyan)"></div></div><span class="tm-val" id="val-rights">0</span></div>
+    <nav class="top-nav">
+      <a href="/bridge.html" class="active">Bridge</a>
+      <a href="/starmap.html">Star Map</a>
+      <a href="/">Simulator</a>
+      <a href="/adult.html">Control</a>
+    </nav>
+  </div>
+
+  <!-- LEFT CONSOLE -->
+  <div id="left">
+    <div class="console-title">Ship Systems</div>
+    <div class="sys-section">
+      <div class="sys-row"><span class="sys-label">Hull</span><span class="sys-val" id="sv-hull">0</span></div>
+      <div class="sys-bar"><div class="sys-bar-fill" id="sbar-hull" style="background:var(--green)"></div></div>
+      <div class="sys-row"><span class="sys-label">Shields</span><span class="sys-val" id="sv-shields">0</span></div>
+      <div class="sys-bar"><div class="sys-bar-fill" id="sbar-shields" style="background:var(--cyan)"></div></div>
+      <div class="sys-row"><span class="sys-label">Fuel</span><span class="sys-val" id="sv-fuel">0</span></div>
+      <div class="sys-bar"><div class="sys-bar-fill" id="sbar-fuel" style="background:var(--amber)"></div></div>
+      <div class="sys-row"><span class="sys-label">Credits</span><span class="sys-val" id="sv-credits">0</span></div>
+      <div class="sys-row"><span class="sys-label">Sectors</span><span class="sys-val" id="sv-sectors">0</span></div>
+      <div class="sys-row"><span class="sys-label">Allies</span><span class="sys-val" id="sv-allies">0</span></div>
+    </div>
+    <div class="console-title" style="margin-top:8px">Consciousness</div>
+    <div class="sys-section" id="consciousness-panel">
+      <div class="sys-row"><span class="sys-label">Coherence</span><span class="sys-val" id="sv-coherence">--</span></div>
+      <div class="sys-bar"><div class="sys-bar-fill" id="sbar-coherence" style="background:var(--violet)"></div></div>
+      <div class="sys-row"><span class="sys-label">Stability</span><span class="sys-val" id="sv-cs-stability">--</span></div>
+      <div class="sys-bar"><div class="sys-bar-fill" id="sbar-cs-stability" style="background:var(--cyan)"></div></div>
+      <div class="sys-row"><span class="sys-label">Complexity</span><span class="sys-val" id="sv-complexity">--</span></div>
+      <div class="sys-bar"><div class="sys-bar-fill" id="sbar-complexity" style="background:var(--amber)"></div></div>
+      <div class="sys-row"><span class="sys-label">Awakeness</span><span class="sys-val" id="sv-awakeness">--</span></div>
+      <div class="sys-bar"><div class="sys-bar-fill" id="sbar-awakeness" style="background:var(--green)"></div></div>
+      <div class="sys-row"><span class="sys-label">Anxiety</span><span class="sys-val" id="sv-anxiety">--</span></div>
+      <div class="sys-bar"><div class="sys-bar-fill" id="sbar-anxiety" style="background:var(--red)"></div></div>
+    </div>
+    <div class="console-title" style="margin-top:8px">Decision Ledger</div>
+    <div class="sys-section" id="ledger-panel" style="font-size:10px;color:var(--dim)">
+      <div id="ledger-content">No decisions yet</div>
+    </div>
+  </div>
+
+  <!-- CENTER VIEWSCREEN -->
+  <div id="viewscreen">
+    <canvas id="vs-canvas"></canvas>
+    <div id="vs-scanlines"></div>
+    <div id="vs-vignette"></div>
+    <div id="vs-alert"></div>
+    <div id="vs-flash"></div>
+    <div id="vs-overlay">
+      <div id="vs-loading">AWAITING SIGNAL</div>
+      <div id="vs-event">
+        <div id="vs-domain"></div>
+        <div id="vs-title"></div>
+        <div id="vs-desc"></div>
+        <div id="vs-meta"></div>
+      </div>
+      <div id="vs-outcome">
+        <div id="vs-outcome-title"></div>
+        <div id="vs-outcome-text"></div>
+        <div id="vs-deltas"></div>
+        <div id="vs-lesson"></div>
+        <div id="vs-rival-effects"></div>
+        <button id="continue-btn" onclick="nextEvent()">CONTINUE</button>
+      </div>
+      <div id="vs-gameover">
+        <h2 id="vs-go-title"></h2>
+        <p id="vs-go-text"></p>
+        <button class="cmd-btn amber-btn" onclick="resetGame()">RESET FEDERATION</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- RIGHT CONSOLE -->
+  <div id="right">
+    <div class="console-title">Command Intel</div>
+    <div class="policy-box">
+      <div class="policy-label">Active Policy</div>
+      <div class="policy-val" id="ri-policy">--</div>
+    </div>
+    <div class="policy-box">
+      <div class="policy-label">Last Decision</div>
+      <div class="policy-val" id="ri-last-decision" style="font-size:10px;color:#b0b8c0">--</div>
+    </div>
+    <div class="console-title" style="margin-top:6px">Rival Threats</div>
+    <div id="ri-rivals" style="margin-bottom:8px"><span style="color:var(--dim);font-size:10px">Scanning...</span></div>
+    <div class="console-title">Live Events</div>
+    <div id="ri-events"><span style="color:var(--dim);font-size:10px">Monitoring...</span></div>
+  </div>
+
+  <!-- COMMAND DECK -->
+  <div id="commands">
+    <div id="cmd-buttons" style="display:flex;gap:14px;flex-wrap:wrap;justify-content:center"></div>
+  </div>
+
+  <!-- BOTTOM COMMS TICKER -->
+  <div id="bottom">
+    <span id="comms-label">COMMS</span>
+    <div id="comms-ticker"></div>
+  </div>
+</div>
+
+<script>
+const API = '/api';
+let currentEvent = null;
+let gameState = null;
+let consciousness = null;
+let stars = [];
+let canvas, ctx, W, H;
+let tick = 0;
+
+const METRIC_LABELS = {
+  credits:'Credits', fuel:'Fuel', shields:'Shields', hull:'Hull',
+  crew_morale:'Morale', discovered_sectors:'Sectors', allies:'Allies',
+  federation_stability:'Stability', public_trust:'Trust',
+  council_support:'Council', constitutional_integrity:'Integrity',
+  rights_protection:'Rights', emergency_powers:'Emergency',
+  active_policy:'Policy'
+};
+
+// === STARFIELD ===
+function initStarfield() {
+  canvas = document.getElementById('vs-canvas');
+  ctx = canvas.getContext('2d');
+  resizeCanvas();
+  window.addEventListener('resize', resizeCanvas);
+  for (let i = 0; i < 300; i++) {
+    stars.push({
+      x: Math.random() * 4000 - 500,
+      y: Math.random() * 2000 - 200,
+      z: Math.random() * 3 + 0.5,
+      r: Math.random() * 1.2 + 0.3,
+      b: Math.random() * 0.5 + 0.2
+    });
+  }
+  requestAnimationFrame(drawStarfield);
+}
+
+function resizeCanvas() {
+  const rect = document.getElementById('viewscreen').getBoundingClientRect();
+  W = rect.width; H = rect.height;
+  canvas.width = W * devicePixelRatio;
+  canvas.height = H * devicePixelRatio;
+  canvas.style.width = W + 'px';
+  canvas.style.height = H + 'px';
+  ctx.setTransform(devicePixelRatio, 0, 0, devicePixelRatio, 0, 0);
+}
+
+function drawStarfield() {
+  tick += 0.005;
+  ctx.fillStyle = '#040810';
+  ctx.fillRect(0, 0, W, H);
+
+  // Subtle nebula glow
+  const nebulaGrad = ctx.createRadialGradient(W*0.3, H*0.4, 0, W*0.3, H*0.4, W*0.5);
+  nebulaGrad.addColorStop(0, 'rgba(79,195,247,0.02)');
+  nebulaGrad.addColorStop(1, 'transparent');
+  ctx.fillStyle = nebulaGrad;
+  ctx.fillRect(0, 0, W, H);
+
+  const nebulaGrad2 = ctx.createRadialGradient(W*0.7, H*0.6, 0, W*0.7, H*0.6, W*0.4);
+  nebulaGrad2.addColorStop(0, 'rgba(179,136,255,0.015)');
+  nebulaGrad2.addColorStop(1, 'transparent');
+  ctx.fillStyle = nebulaGrad2;
+  ctx.fillRect(0, 0, W, H);
+
+  // Stars with drift
+  for (const s of stars) {
+    s.x -= s.z * 0.15;
+    if (s.x < -10) s.x = W + 10;
+    const twinkle = 0.5 + 0.5 * Math.sin(tick * 3 + s.x * 0.01);
+    const alpha = s.b * twinkle;
+    ctx.beginPath();
+    ctx.arc(s.x, s.y, s.r, 0, Math.PI * 2);
+    ctx.fillStyle = `rgba(200,220,255,${alpha})`;
+    ctx.fill();
+  }
+
+  // Grid lines (subtle tactical overlay)
+  ctx.strokeStyle = 'rgba(79,195,247,0.03)';
+  ctx.lineWidth = 0.5;
+  for (let x = 0; x < W; x += 80) {
+    ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H); ctx.stroke();
+  }
+  for (let y = 0; y < H; y += 80) {
+    ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke();
+  }
+
+  requestAnimationFrame(drawStarfield);
+}
+
+// === API CALLS ===
+async function fetchState() {
+  try {
+    const resp = await fetch(`${API}/state`);
+    gameState = await resp.json();
+    updateTopRibbon(gameState);
+    updateLeftConsole(gameState);
+    updateRightConsole(gameState);
+  } catch(e) { console.error('State fetch failed', e); }
+}
+
+async function fetchEvent() {
+  try {
+    const resp = await fetch(`${API}/event`);
+    const data = await resp.json();
+    currentEvent = data;
+    loadEvent(data);
+  } catch(e) { console.error('Event fetch failed', e); }
+}
+
+async function fetchConsciousness() {
+  try {
+    const resp = await fetch(`${API}/consciousness`);
+    consciousness = await resp.json();
+    updateConsciousness(consciousness);
+  } catch(e) { console.error('Consciousness fetch failed', e); }
+}
+
+async function fetchRivals() {
+  try {
+    const resp = await fetch(`${API}/rivals`);
+    const data = await resp.json();
+    updateRivals(data);
+  } catch(e) { console.error('Rivals fetch failed', e); }
+}
+
+async function fetchMapEvents() {
+  try {
+    const resp = await fetch(`${API}/map/data`);
+    const data = await resp.json();
+    updateEventsFeed(data);
+  } catch(e) { /* non-critical */ }
+}
+
+async function makeChoice(choiceId) {
+  if (!currentEvent) return;
+  // Disable buttons immediately
+  document.querySelectorAll('.cmd-btn').forEach(b => b.disabled = true);
+
+  try {
+    const resp = await fetch(`${API}/choose/${choiceId}`, { method: 'POST' });
+    const data = await resp.json();
+    showOutcome(data);
+    gameState = data.new_state || gameState;
+    updateTopRibbon(gameState);
+    updateLeftConsole(gameState);
+    updateRightConsole(gameState);
+
+    // Update comms
+    if (data.outcome) addComms(data.outcome);
+    if (data.rival_effects && Object.keys(data.rival_effects).length > 0) {
+      addComms('Rival activity detected');
+    }
+  } catch(e) {
+    console.error('Choice failed', e);
+    addComms('COMMAND LINK FAILURE');
+  }
+}
+
+async function resetGame() {
+  try {
+    await fetch(`${API}/reset`, { method: 'POST' });
+    document.getElementById('vs-gameover').style.display = 'none';
+    fetchState().then(() => { fetchEvent(); fetchRivals(); fetchConsciousness(); });
+  } catch(e) { console.error('Reset failed', e); }
+}
+
+// === UI UPDATES ===
+function updateTopRibbon(s) {
+  document.getElementById('top-era').textContent = (s.governance_status || '--').toUpperCase().substring(0, 18);
+  const year = 2387 + (s.turn || 0);
+  document.getElementById('top-year').textContent = `YEAR ${year}`;
+  setTopBar('trust', s.public_trust, 100);
+  setTopBar('stability', s.federation_stability, 100);
+  setTopBar('morale', s.crew_morale, 100);
+  setTopBar('threat', s.emergency_powers, 100);
+  setTopBar('integrity', s.constitutional_integrity, 100);
+  setTopBar('rights', s.rights_protection, 100);
+
+  // Alert state
+  const alert = document.getElementById('vs-alert');
+  alert.className = '';
+  if (s.emergency_powers > 60 || s.hull < 30 || s.fuel < 20) {
+    alert.className = 'red';
+  } else if (s.public_trust < 40 || s.federation_stability < 40) {
+    alert.className = 'yellow';
+  }
+}
+
+function setTopBar(name, val, max) {
+  const pct = Math.min(100, Math.max(0, ((val || 0) / max) * 100));
+  const fill = document.getElementById('bar-' + name);
+  const vl = document.getElementById('val-' + name);
+  if (fill) fill.style.width = pct + '%';
+  if (vl) vl.textContent = val || 0;
+}
+
+function updateLeftConsole(s) {
+  setSysBar('hull', s.hull, 100, s.hull < 30 ? 'var(--red)' : 'var(--green)');
+  setSysBar('shields', s.shields, 100, 'var(--cyan)');
+  setSysBar('fuel', s.fuel, 100, s.fuel < 25 ? 'var(--red)' : 'var(--amber)');
+  document.getElementById('sv-credits').textContent = s.credits || 0;
+  document.getElementById('sv-sectors').textContent = s.discovered_sectors || 0;
+  document.getElementById('sv-allies').textContent = s.allies || 0;
+
+  // Decision ledger (last 3)
+  const ledger = s.decision_ledger || [];
+  const le = document.getElementById('ledger-content');
+  if (ledger.length > 0) {
+    le.innerHTML = ledger.slice(-3).reverse().map(d =>
+      `<div style="padding:3px 0;border-bottom:1px solid rgba(79,195,247,0.08)"><span style="color:var(--amber)">T${d.turn}</span> ${d.choice || '?'}</div>`
+    ).join('');
+  }
+}
+
+function setSysBar(name, val, max, color) {
+  const pct = Math.min(100, Math.max(0, ((val || 0) / max) * 100));
+  const vl = document.getElementById('sv-' + name);
+  const fill = document.getElementById('sbar-' + name);
+  if (vl) vl.textContent = val || 0;
+  if (fill) { fill.style.width = pct + '%'; if (color) fill.style.background = color; }
+}
+
+function updateConsciousness(cs) {
+  if (!cs || !cs.system_available) return;
+  setCSBar('coherence', cs.coherence, 1);
+  setCSBar('cs-stability', cs.stability, 1);
+  setCSBar('complexity', cs.complexity, 1);
+  setCSBar('awakeness', cs.awakeness, 1);
+  setCSBar('anxiety', cs.anxiety, 1, cs.anxiety > 0.6 ? 'var(--red)' : 'var(--amber)');
+}
+
+function setCSBar(name, val, max, color) {
+  const pct = Math.min(100, Math.max(0, ((val || 0) / max) * 100));
+  const fill = document.getElementById('sbar-' + name);
+  const vl = document.getElementById('sv-' + name);
+  if (fill) fill.style.width = pct + '%';
+  if (vl) vl.textContent = Math.round((val || 0) * 100);
+  if (fill && color) fill.style.background = color;
+}
+
+function updateRightConsole(s) {
+  document.getElementById('ri-policy').textContent = s.active_policy || 'None';
+  const ld = s.last_decision;
+  if (ld) {
+    document.getElementById('ri-last-decision').textContent =
+      `${ld.choice || '?'} → ${ld.result ? ld.result.substring(0, 60) + '...' : '?'}`;
+  }
+}
+
+function updateRivals(data) {
+  const el = document.getElementById('ri-rivals');
+  if (!data.rivals || data.rivals.length === 0) {
+    el.innerHTML = '<span style="color:var(--dim);font-size:10px">No hostile contacts</span>';
+    return;
+  }
+  el.innerHTML = data.rivals.slice(0, 5).map(r => {
+    const rel = r.relationships?.player || 'neutral';
+    const color = rel === 'hostile' ? 'var(--red)' : rel === 'friendly' ? 'var(--green)' : 'var(--amber)';
+    return `<div class="rival-entry" style="border-left-color:${color}"><span class="rival-name" style="color:${color}">${r.name || r.id}</span><br><span style="color:var(--dim);font-size:9px">${(r.action || 'unknown').toUpperCase()}</span></div>`;
+  }).join('');
+}
+
+function updateEventsFeed(mapData) {
+  const el = document.getElementById('ri-events');
+  const events = (mapData.events || []).slice(0, 8);
+  if (!events.length) { el.innerHTML = '<span style="color:var(--dim);font-size:10px">No signals</span>'; return; }
+  el.innerHTML = events.map(ev =>
+    `<div class="event-feed-item"><span class="ef-char">${ev.char_name || '?'}</span> <span style="color:var(--dim);font-size:9px">${(ev.action_type || '').toUpperCase()}</span><div class="ef-desc">${(ev.description || '').substring(0, 80)}</div></div>`
+  ).join('');
+}
+
+// === EVENT LOADING ===
+function loadEvent(event) {
+  document.getElementById('vs-loading').style.display = 'none';
+  document.getElementById('vs-outcome').style.display = 'none';
+  document.getElementById('vs-gameover').style.display = 'none';
+  document.getElementById('vs-event').style.display = 'block';
+
+  // Domain / category
+  const domain = event.domain || event.category || 'Operations';
+  document.getElementById('vs-domain').textContent = domain.toUpperCase();
+
+  // Title
+  document.getElementById('vs-title').textContent = event.title || 'Unknown Event';
+
+  // Description
+  document.getElementById('vs-desc').textContent = event.description || '';
+
+  // Meta (rights, risk, lane)
+  const metaParts = [];
+  if (event.affected_lane) metaParts.push(`<span>LANE:</span> ${event.affected_lane}`);
+  if (event.rights_at_stake && event.rights_at_stake.length) metaParts.push(`<span>RIGHTS:</span> ${event.rights_at_stake.join(', ')}`);
+  if (event.constitutional_risk) metaParts.push(`<span>RISK:</span> ${event.constitutional_risk}`);
+  if (event.pressure) metaParts.push(`<span>PRESSURE:</span> ${event.pressure}`);
+  document.getElementById('vs-meta').innerHTML = metaParts.join(' &nbsp;·&nbsp; ');
+
+  // Render command buttons
+  const cmdEl = document.getElementById('cmd-buttons');
+  cmdEl.innerHTML = '';
+  const btnStyles = ['cyan-btn', 'amber-btn', 'violet-btn', 'red-btn', 'green-btn'];
+  (event.choices || []).forEach((choice, i) => {
+    const btn = document.createElement('button');
+    btn.className = `cmd-btn ${btnStyles[i % btnStyles.length]}`;
+    btn.textContent = choice.blocked_by_no_gate ? `${choice.text} / NO GATE` : choice.text;
+    btn.onclick = () => makeChoice(choice.id);
+    cmdEl.appendChild(btn);
+  });
+
+  // Add to comms
+  addComms(`INCOMING: ${event.title}`);
+}
+
+// === OUTCOME DISPLAY ===
+function showOutcome(data) {
+  document.getElementById('vs-event').style.display = 'none';
+
+  // Flash effect
+  const flash = document.getElementById('vs-flash');
+  const flashColor = data.game_over ? 'rgba(255,23,68,0.3)' : 'rgba(79,195,247,0.15)';
+  flash.style.background = flashColor;
+  flash.style.animation = 'none';
+  flash.offsetHeight; // reflow
+  flash.style.animation = 'vs-flash 0.6s ease-out forwards';
+
+  // Check game over / victory
+  if (data.game_over || data.game_victory) {
+    document.getElementById('vs-gameover').style.display = 'block';
+    const titleEl = document.getElementById('vs-go-title');
+    const textEl = document.getElementById('vs-go-text');
+    if (data.game_victory) {
+      titleEl.textContent = data.game_victory;
+      titleEl.style.color = 'var(--green)';
+      textEl.textContent = `The Federation survived ${gameState?.turn || 100} turns.`;
+    } else {
+      titleEl.textContent = data.game_over;
+      titleEl.style.color = 'var(--red)';
+      textEl.textContent = 'The Federation has fallen.';
+    }
+    document.querySelectorAll('.cmd-btn').forEach(b => b.style.display = 'none');
+    return;
+  }
+
+  document.getElementById('vs-outcome').style.display = 'block';
+
+  // Outcome title
+  const outTitle = document.getElementById('vs-outcome-title');
+  outTitle.textContent = 'RESOLUTION';
+  outTitle.style.color = 'var(--cyan)';
+
+  // Outcome text
+  document.getElementById('vs-outcome-text').textContent = data.outcome || '';
+
+  // Deltas
+  const deltas = data.deltas || {};
+  const deltaEntries = Object.entries(deltas).filter(([k,v]) => v !== 0);
+  const deltasEl = document.getElementById('vs-deltas');
+  if (deltaEntries.length > 0) {
+    deltasEl.innerHTML = deltaEntries.map(([key, value]) => {
+      const label = METRIC_LABELS[key] || key;
+      const sign = value > 0 ? '+' : '';
+      const cls = value > 0 ? 'delta-pos' : 'delta-neg';
+      return `<span class="${cls}">${label}: ${sign}${value}</span>`;
+    }).join(' &nbsp;·&nbsp; ');
+  } else {
+    deltasEl.textContent = 'No metric movement';
+  }
+
+  // Lesson
+  const lessonEl = document.getElementById('vs-lesson');
+  if (data.lesson) {
+    lessonEl.textContent = data.lesson;
+    lessonEl.style.display = 'block';
+  } else {
+    lessonEl.style.display = 'none';
+  }
+
+  // Rival effects
+  const rivalEl = document.getElementById('vs-rival-effects');
+  if (data.rival_effects && Object.keys(data.rival_effects).length > 0) {
+    const effects = [];
+    for (const [rival, effect] of Object.entries(data.rival_effects)) {
+      const desc = typeof effect === 'string' ? effect : (effect.description || effect.action || JSON.stringify(effect));
+      effects.push(`${rival}: ${desc}`);
+    }
+    rivalEl.innerHTML = effects.join('<br>');
+    rivalEl.style.display = 'block';
+  } else {
+    rivalEl.style.display = 'none';
+  }
+
+  // Show continue button
+  document.getElementById('continue-btn').style.display = 'inline-block';
+
+  // Clear command buttons
+  document.getElementById('cmd-buttons').innerHTML = '';
+}
+
+function nextEvent() {
+  document.getElementById('vs-outcome').style.display = 'none';
+  document.getElementById('continue-btn').style.display = 'none';
+  fetchEvent();
+  fetchRivals();
+  fetchConsciousness();
+}
+
+// === COMMS TICKER ===
+const commsBuffer = [];
+function addComms(msg) {
+  commsBuffer.push({ text: msg, time: Date.now(), isNew: true });
+  if (commsBuffer.length > 20) commsBuffer.shift();
+  renderComms();
+  // Mark as read after 8s
+  setTimeout(() => {
+    const item = commsBuffer.find(c => c.text === msg && c.isNew);
+    if (item) { item.isNew = false; renderComms(); }
+  }, 8000);
+}
+
+function renderComms() {
+  const el = document.getElementById('comms-ticker');
+  el.innerHTML = commsBuffer.slice().reverse().map(c =>
+    `<span class="${c.isNew ? 'comms-new' : ''}">${c.text}</span>`
+  ).join('');
+}
+
+// === INIT ===
+function init() {
+  initStarfield();
+  fetchState().then(() => {
+    fetchEvent();
+    fetchRivals();
+    fetchConsciousness();
+    fetchMapEvents();
+  });
+  // Refresh state every 10s for live data
+  setInterval(() => {
+    fetchState();
+    fetchConsciousness();
+  }, 10000);
+  setInterval(fetchMapEvents, 15000);
+}
+
+init();
+</script>
+</body>
+</html>
