@@ -52,10 +52,10 @@ class DatabaseManager:
         if self._initialized:
             return True
 
-    database_url = os.environ.get(
-        "DATABASE_URL",
-        "postgresql://federation:federation_pwd@postgres:5432/federation_game",
-    )
+        database_url = os.environ.get(
+            "DATABASE_URL",
+            "postgresql://federation:federation_pwd@postgres:5432/federation_game",
+        )
 
         max_attempts = 3
         for attempt in range(1, max_attempts + 1):
