@@ -23,6 +23,13 @@
   --glow-cyan: 0 0 12px rgba(79,195,247,0.3);
   --glow-amber: 0 0 12px rgba(255,158,28,0.3);
   --glow-red: 0 0 20px rgba(255,23,68,0.4);
+  --glow-green: 0 0 12px rgba(105,240,174,0.3);
+
+  /* Alert state colors — overridden by JS */
+  --alert-color: var(--cyan);
+  --alert-glow: rgba(79,195,247,0.05);
+  --alert-border: rgba(79,195,247,0.08);
+  --alert-ribbon-bg: rgba(79,195,247,0.08);
 }
 
 *{margin:0;padding:0;box-sizing:border-box}
@@ -39,10 +46,31 @@ html,body{height:100%;overflow:hidden;background:#040810;color:var(--white);font
     "left commands right"
     "bottom bottom bottom";
   height:100vh;gap:1px;
+  transition: box-shadow 1s ease;
+}
+
+/* Alert-state body glow */
+#bridge.alert-green{  box-shadow: inset 0 0 80px rgba(105,240,174,0.03);}
+#bridge.alert-yellow{ box-shadow: inset 0 0 80px rgba(255,158,28,0.06);}
+#bridge.alert-red{    box-shadow: inset 0 0 80px rgba(255,23,68,0.08); animation: red-pulse 3s ease-in-out infinite;}
+#bridge.alert-crisis{ box-shadow: inset 0 0 100px rgba(179,136,255,0.1), inset 0 0 60px rgba(255,255,255,0.04); animation: crisis-pulse 2s ease-in-out infinite;}
+
+@keyframes red-pulse{
+  0%,100%{box-shadow:inset 0 0 80px rgba(255,23,68,0.06)}
+  50%{box-shadow:inset 0 0 120px rgba(255,23,68,0.12)}
+}
+@keyframes crisis-pulse{
+  0%,100%{box-shadow:inset 0 0 100px rgba(179,136,255,0.08),inset 0 0 60px rgba(255,255,255,0.02)}
+  50%{box-shadow:inset 0 0 140px rgba(179,136,255,0.16),inset 0 0 80px rgba(255,255,255,0.06)}
 }
 
 /* === TOP SYSTEMS RIBBON === */
-#top{grid-area:top;display:flex;align-items:center;gap:0;background:var(--panel-bg);border-bottom:1px solid var(--panel-border);padding:0 8px;font-size:11px;z-index:5}
+#top{grid-area:top;display:flex;align-items:center;gap:0;background:var(--panel-bg);border-bottom:1px solid var(--panel-border);padding:0 8px;font-size:11px;z-index:5;transition:border-color 0.8s,background 0.8s}
+#top.alert-border-red{border-bottom-color:rgba(255,23,68,0.4);background:linear-gradient(180deg,rgba(255,23,68,0.06) 0%,var(--panel-bg) 100%)}
+#top.alert-border-yellow{border-bottom-color:rgba(255,158,28,0.35);background:linear-gradient(180deg,rgba(255,158,28,0.04) 0%,var(--panel-bg) 100%)}
+#top.alert-border-crisis{border-bottom-color:rgba(179,136,255,0.5);background:linear-gradient(180deg,rgba(179,136,255,0.06) 0%,var(--panel-bg) 100%)}
+#top.alert-border-green{border-bottom-color:rgba(105,240,174,0.2);background:linear-gradient(180deg,rgba(105,240,174,0.02) 0%,var(--panel-bg) 100%)}
+
 .top-era{color:var(--amber);font-family:'Orbitron',sans-serif;font-weight:700;font-size:13px;letter-spacing:2px;padding:0 12px 0 8px;white-space:nowrap}
 .top-year{color:var(--cyan);font-family:'Orbitron',sans-serif;font-size:13px;padding-right:16px;border-right:1px solid var(--panel-border);margin-right:8px;white-space:nowrap}
 .top-metric{display:flex;align-items:center;gap:4px;padding:0 10px;border-right:1px solid rgba(79,195,247,0.08);height:100%}
@@ -54,6 +82,21 @@ html,body{height:100%;overflow:hidden;background:#040810;color:var(--white);font
 .top-nav{margin-left:auto;display:flex;gap:2px}
 .top-nav a{color:var(--dim);font-size:10px;text-decoration:none;padding:6px 10px;letter-spacing:1px;text-transform:uppercase;transition:color 0.2s}
 .top-nav a:hover,.top-nav a.active{color:var(--cyan)}
+
+/* Alert indicator in top ribbon */
+#alert-indicator{
+  font-family:'Orbitron',sans-serif;font-size:9px;font-weight:700;letter-spacing:2px;
+  padding:3px 10px;border-radius:3px;margin-right:8px;white-space:nowrap;
+  transition:all 0.6s ease;
+}
+#alert-indicator.green{color:var(--green);background:rgba(105,240,174,0.1);border:1px solid rgba(105,240,174,0.25)}
+#alert-indicator.yellow{color:var(--amber);background:rgba(255,158,28,0.1);border:1px solid rgba(255,158,28,0.3)}
+#alert-indicator.red{color:var(--red);background:rgba(255,23,68,0.12);border:1px solid rgba(255,23,68,0.35);animation:alert-label-pulse 2s ease infinite}
+#alert-indicator.crisis{color:#e0d0ff;background:rgba(179,136,255,0.12);border:1px solid rgba(179,136,255,0.4);animation:alert-label-pulse 1.5s ease infinite}
+
+@keyframes alert-label-pulse{
+  0%,100%{opacity:0.8}50%{opacity:1}
+}
 
 /* === LEFT CONSOLE === */
 #left{grid-area:left;background:var(--panel-bg);border-right:1px solid var(--panel-border);padding:10px;overflow-y:auto;display:flex;flex-direction:column;gap:6px}
@@ -75,7 +118,8 @@ html,body{height:100%;overflow:hidden;background:#040810;color:var(--white);font
 .policy-label{color:var(--dim);font-size:9px;text-transform:uppercase;letter-spacing:1px}
 .policy-val{color:var(--cyan);font-size:12px;margin-top:2px}
 .rival-entry{padding:4px 6px;border-left:2px solid var(--red);margin-bottom:4px;font-size:10px;background:var(--red-dim);border-radius:0 3px 3px 0}
-.rival-name{color:var(--red);font-weight:bold}
+.rival-name{font-weight:bold}
+.rival-threat{font-size:9px;color:var(--dim);margin-top:1px}
 .event-feed-item{padding:4px 6px;border-left:2px solid var(--dim);margin-bottom:3px;font-size:10px;border-radius:0 3px 3px 0;transition:border-color 0.2s}
 .event-feed-item:hover{border-left-color:var(--cyan)}
 .ef-char{color:var(--cyan);font-weight:bold}
@@ -117,10 +161,60 @@ html,body{height:100%;overflow:hidden;background:#040810;color:var(--white);font
 #vs-scanlines{position:absolute;top:0;left:0;width:100%;height:100%;background:repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,0,0,0.03) 2px,rgba(0,0,0,0.03) 4px);pointer-events:none;z-index:1}
 #vs-vignette{position:absolute;top:0;left:0;width:100%;height:100%;background:radial-gradient(ellipse at center,transparent 60%,rgba(4,8,16,0.7) 100%);pointer-events:none;z-index:1}
 
-/* Alert state overlay */
-#vs-alert{position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:1;opacity:0;transition:opacity 0.5s}
-#vs-alert.red{background:radial-gradient(ellipse at center,transparent 40%,rgba(255,23,68,0.08) 100%);opacity:1}
-#vs-alert.yellow{background:radial-gradient(ellipse at center,transparent 40%,rgba(255,158,28,0.06) 100%);opacity:1}
+/* Alert state overlay — enhanced with 4 states */
+#vs-alert{position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:1;opacity:0;transition:opacity 0.8s ease}
+#vs-alert.green{background:radial-gradient(ellipse at center,transparent 50%,rgba(105,240,174,0.03) 100%);opacity:1}
+#vs-alert.yellow{background:radial-gradient(ellipse at center,transparent 40%,rgba(255,158,28,0.05) 100%);opacity:1}
+#vs-alert.red{background:radial-gradient(ellipse at center,transparent 35%,rgba(255,23,68,0.08) 100%);opacity:1}
+#vs-alert.crisis{background:radial-gradient(ellipse at center,transparent 30%,rgba(179,136,255,0.1) 100%,rgba(255,255,255,0.02) 100%);opacity:1}
+
+/* === EVENT-TYPE VIEWSCREEN TRANSITIONS === */
+#vs-transition{position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:4;opacity:0;transition:opacity 0.3s}
+
+/* Diplomacy: soft blue transmission sweep */
+@keyframes trans-diplomacy{
+  0%{background:linear-gradient(90deg,rgba(79,195,247,0.15) 0%,transparent 15%);opacity:1}
+  30%{background:linear-gradient(90deg,transparent 40%,rgba(79,195,247,0.12) 50%,transparent 60%);opacity:1}
+  60%{background:linear-gradient(90deg,transparent 80%,rgba(79,195,247,0.08) 100%);opacity:0.6}
+  100%{opacity:0}
+}
+#vs-transition.anim-diplomacy{animation:trans-diplomacy 1.2s ease-out forwards}
+
+/* War/hostile: red tactical pulse */
+@keyframes trans-hostile{
+  0%{background:rgba(255,23,68,0.2);opacity:1}
+  15%{background:rgba(255,23,68,0.05);opacity:0.3}
+  25%{background:rgba(255,23,68,0.15);opacity:0.8}
+  40%{background:rgba(255,23,68,0.02);opacity:0.1}
+  55%{background:rgba(255,23,68,0.08);opacity:0.4}
+  100%{opacity:0}
+}
+#vs-transition.anim-hostile{animation:trans-hostile 0.8s ease-out forwards}
+
+/* Anomaly: purple distortion ripple */
+@keyframes trans-anomaly{
+  0%{background:radial-gradient(circle at center,rgba(179,136,255,0.25) 0%,transparent 40%);opacity:1;transform:scale(0.8)}
+  40%{background:radial-gradient(circle at center,rgba(179,136,255,0.12) 0%,transparent 60%);opacity:0.7;transform:scale(1.1)}
+  70%{background:radial-gradient(circle at center,rgba(179,136,255,0.04) 0%,transparent 80%);opacity:0.3;transform:scale(1.3)}
+  100%{opacity:0;transform:scale(1.5)}
+}
+#vs-transition.anim-anomaly{animation:trans-anomaly 1.4s ease-out forwards}
+
+/* Economy: amber market signal */
+@keyframes trans-economy{
+  0%{background:repeating-linear-gradient(90deg,rgba(255,158,28,0.12) 0px,transparent 4px,transparent 20px);opacity:1}
+  50%{background:repeating-linear-gradient(90deg,rgba(255,158,28,0.06) 0px,transparent 2px,transparent 30px);opacity:0.5}
+  100%{opacity:0}
+}
+#vs-transition.anim-economy{animation:trans-economy 1s ease-out forwards}
+
+/* Governance: white-cyan dossier overlay */
+@keyframes trans-governance{
+  0%{background:linear-gradient(180deg,rgba(220,240,255,0.15) 0%,transparent 30%);opacity:1}
+  40%{background:linear-gradient(180deg,rgba(220,240,255,0.06) 0%,transparent 50%);opacity:0.5}
+  100%{opacity:0}
+}
+#vs-transition.anim-governance{animation:trans-governance 1.1s ease-out forwards}
 
 /* === COMMAND DECK === */
 #commands{grid-area:commands;display:flex;align-items:center;justify-content:center;gap:16px;padding:10px 20px;background:var(--panel-bg);border-top:1px solid var(--panel-border);position:relative}
@@ -221,116 +315,118 @@ html,body{height:100%;overflow:hidden;background:#040810;color:var(--white);font
 </head>
 <body>
 
-<div id="bridge">
-  <!-- TOP SYSTEMS RIBBON -->
-  <div id="top">
-    <span class="top-era" id="top-era">--</span>
-    <span class="top-year" id="top-year">YEAR --</span>
-    <div class="top-metric"><span class="tm-label">Trust</span><div class="tm-bar"><div class="tm-fill" id="bar-trust" style="background:var(--cyan)"></div></div><span class="tm-val" id="val-trust">0</span></div>
-    <div class="top-metric"><span class="tm-label">Stability</span><div class="tm-bar"><div class="tm-fill" id="bar-stability" style="background:var(--green)"></div></div><span class="tm-val" id="val-stability">0</span></div>
-    <div class="top-metric"><span class="tm-label">Morale</span><div class="tm-bar"><div class="tm-fill" id="bar-morale" style="background:var(--amber)"></div></div><span class="tm-val" id="val-morale">0</span></div>
-    <div class="top-metric"><span class="tm-label">Threat</span><div class="tm-bar"><div class="tm-fill" id="bar-threat" style="background:var(--red)"></div></div><span class="tm-val" id="val-threat">0</span></div>
-    <div class="top-metric"><span class="tm-label">Integrity</span><div class="tm-bar"><div class="tm-fill" id="bar-integrity" style="background:var(--violet)"></div></div><span class="tm-val" id="val-integrity">0</span></div>
-    <div class="top-metric"><span class="tm-label">Rights</span><div class="tm-bar"><div class="tm-fill" id="bar-rights" style="background:var(--cyan)"></div></div><span class="tm-val" id="val-rights">0</span></div>
-    <nav class="top-nav">
-      <a href="/bridge.html" class="active">Bridge</a>
-      <a href="/starmap.html">Star Map</a>
-      <a href="/">Simulator</a>
-      <a href="/adult.html">Control</a>
-    </nav>
-  </div>
+<div id="bridge" class="alert-green">
+<!-- TOP SYSTEMS RIBBON -->
+<div id="top" class="alert-border-green">
+  <span id="alert-indicator" class="green">GREEN ALERT</span>
+  <span class="top-era" id="top-era">--</span>
+  <span class="top-year" id="top-year">YEAR --</span>
+  <div class="top-metric"><span class="tm-label">Trust</span><div class="tm-bar"><div class="tm-fill" id="bar-trust" style="background:var(--cyan)"></div></div><span class="tm-val" id="val-trust">0</span></div>
+  <div class="top-metric"><span class="tm-label">Stability</span><div class="tm-bar"><div class="tm-fill" id="bar-stability" style="background:var(--green)"></div></div><span class="tm-val" id="val-stability">0</span></div>
+  <div class="top-metric"><span class="tm-label">Morale</span><div class="tm-bar"><div class="tm-fill" id="bar-morale" style="background:var(--amber)"></div></div><span class="tm-val" id="val-morale">0</span></div>
+  <div class="top-metric"><span class="tm-label">Threat</span><div class="tm-bar"><div class="tm-fill" id="bar-threat" style="background:var(--red)"></div></div><span class="tm-val" id="val-threat">0</span></div>
+  <div class="top-metric"><span class="tm-label">Integrity</span><div class="tm-bar"><div class="tm-fill" id="bar-integrity" style="background:var(--violet)"></div></div><span class="tm-val" id="val-integrity">0</span></div>
+  <div class="top-metric"><span class="tm-label">Rights</span><div class="tm-bar"><div class="tm-fill" id="bar-rights" style="background:var(--cyan)"></div></div><span class="tm-val" id="val-rights">0</span></div>
+  <nav class="top-nav">
+    <a href="/bridge.html" class="active">Bridge</a>
+    <a href="/starmap.html">Star Map</a>
+    <a href="/">Simulator</a>
+    <a href="/adult.html">Control</a>
+  </nav>
+</div>
 
-  <!-- LEFT CONSOLE -->
-  <div id="left">
-    <div class="console-title">Ship Systems</div>
-    <div class="sys-section">
-      <div class="sys-row"><span class="sys-label">Hull</span><span class="sys-val" id="sv-hull">0</span></div>
-      <div class="sys-bar"><div class="sys-bar-fill" id="sbar-hull" style="background:var(--green)"></div></div>
-      <div class="sys-row"><span class="sys-label">Shields</span><span class="sys-val" id="sv-shields">0</span></div>
-      <div class="sys-bar"><div class="sys-bar-fill" id="sbar-shields" style="background:var(--cyan)"></div></div>
-      <div class="sys-row"><span class="sys-label">Fuel</span><span class="sys-val" id="sv-fuel">0</span></div>
-      <div class="sys-bar"><div class="sys-bar-fill" id="sbar-fuel" style="background:var(--amber)"></div></div>
-      <div class="sys-row"><span class="sys-label">Credits</span><span class="sys-val" id="sv-credits">0</span></div>
-      <div class="sys-row"><span class="sys-label">Sectors</span><span class="sys-val" id="sv-sectors">0</span></div>
-      <div class="sys-row"><span class="sys-label">Allies</span><span class="sys-val" id="sv-allies">0</span></div>
-    </div>
-    <div class="console-title" style="margin-top:8px">Consciousness</div>
-    <div class="sys-section" id="consciousness-panel">
-      <div class="sys-row"><span class="sys-label">Coherence</span><span class="sys-val" id="sv-coherence">--</span></div>
-      <div class="sys-bar"><div class="sys-bar-fill" id="sbar-coherence" style="background:var(--violet)"></div></div>
-      <div class="sys-row"><span class="sys-label">Stability</span><span class="sys-val" id="sv-cs-stability">--</span></div>
-      <div class="sys-bar"><div class="sys-bar-fill" id="sbar-cs-stability" style="background:var(--cyan)"></div></div>
-      <div class="sys-row"><span class="sys-label">Complexity</span><span class="sys-val" id="sv-complexity">--</span></div>
-      <div class="sys-bar"><div class="sys-bar-fill" id="sbar-complexity" style="background:var(--amber)"></div></div>
-      <div class="sys-row"><span class="sys-label">Awakeness</span><span class="sys-val" id="sv-awakeness">--</span></div>
-      <div class="sys-bar"><div class="sys-bar-fill" id="sbar-awakeness" style="background:var(--green)"></div></div>
-      <div class="sys-row"><span class="sys-label">Anxiety</span><span class="sys-val" id="sv-anxiety">--</span></div>
-      <div class="sys-bar"><div class="sys-bar-fill" id="sbar-anxiety" style="background:var(--red)"></div></div>
-    </div>
-    <div class="console-title" style="margin-top:8px">Decision Ledger</div>
-    <div class="sys-section" id="ledger-panel" style="font-size:10px;color:var(--dim)">
-      <div id="ledger-content">No decisions yet</div>
-    </div>
+<!-- LEFT CONSOLE -->
+<div id="left">
+  <div class="console-title">Ship Systems</div>
+  <div class="sys-section">
+    <div class="sys-row"><span class="sys-label">Hull</span><span class="sys-val" id="sv-hull">0</span></div>
+    <div class="sys-bar"><div class="sys-bar-fill" id="sbar-hull" style="background:var(--green)"></div></div>
+    <div class="sys-row"><span class="sys-label">Shields</span><span class="sys-val" id="sv-shields">0</span></div>
+    <div class="sys-bar"><div class="sys-bar-fill" id="sbar-shields" style="background:var(--cyan)"></div></div>
+    <div class="sys-row"><span class="sys-label">Fuel</span><span class="sys-val" id="sv-fuel">0</span></div>
+    <div class="sys-bar"><div class="sys-bar-fill" id="sbar-fuel" style="background:var(--amber)"></div></div>
+    <div class="sys-row"><span class="sys-label">Credits</span><span class="sys-val" id="sv-credits">0</span></div>
+    <div class="sys-row"><span class="sys-label">Sectors</span><span class="sys-val" id="sv-sectors">0</span></div>
+    <div class="sys-row"><span class="sys-label">Allies</span><span class="sys-val" id="sv-allies">0</span></div>
   </div>
+  <div class="console-title" style="margin-top:8px">Consciousness</div>
+  <div class="sys-section" id="consciousness-panel">
+    <div class="sys-row"><span class="sys-label">Coherence</span><span class="sys-val" id="sv-coherence">--</span></div>
+    <div class="sys-bar"><div class="sys-bar-fill" id="sbar-coherence" style="background:var(--violet)"></div></div>
+    <div class="sys-row"><span class="sys-label">Stability</span><span class="sys-val" id="sv-cs-stability">--</span></div>
+    <div class="sys-bar"><div class="sys-bar-fill" id="sbar-cs-stability" style="background:var(--cyan)"></div></div>
+    <div class="sys-row"><span class="sys-label">Complexity</span><span class="sys-val" id="sv-complexity">--</span></div>
+    <div class="sys-bar"><div class="sys-bar-fill" id="sbar-complexity" style="background:var(--amber)"></div></div>
+    <div class="sys-row"><span class="sys-label">Awakeness</span><span class="sys-val" id="sv-awakeness">--</span></div>
+    <div class="sys-bar"><div class="sys-bar-fill" id="sbar-awakeness" style="background:var(--green)"></div></div>
+    <div class="sys-row"><span class="sys-label">Anxiety</span><span class="sys-val" id="sv-anxiety">--</span></div>
+    <div class="sys-bar"><div class="sys-bar-fill" id="sbar-anxiety" style="background:var(--red)"></div></div>
+  </div>
+  <div class="console-title" style="margin-top:8px">Decision Ledger</div>
+  <div class="sys-section" id="ledger-panel" style="font-size:10px;color:var(--dim)">
+    <div id="ledger-content">No decisions yet</div>
+  </div>
+</div>
 
-  <!-- CENTER VIEWSCREEN -->
-  <div id="viewscreen">
-    <canvas id="vs-canvas"></canvas>
-    <div id="vs-scanlines"></div>
-    <div id="vs-vignette"></div>
-    <div id="vs-alert"></div>
-    <div id="vs-flash"></div>
-    <div id="vs-overlay">
-      <div id="vs-loading">AWAITING SIGNAL</div>
-      <div id="vs-event">
-        <div id="vs-domain"></div>
-        <div id="vs-title"></div>
-        <div id="vs-desc"></div>
-        <div id="vs-meta"></div>
-      </div>
-      <div id="vs-outcome">
-        <div id="vs-outcome-title"></div>
-        <div id="vs-outcome-text"></div>
-        <div id="vs-deltas"></div>
-        <div id="vs-lesson"></div>
-        <div id="vs-rival-effects"></div>
-        <button id="continue-btn" onclick="nextEvent()">CONTINUE</button>
-      </div>
-      <div id="vs-gameover">
-        <h2 id="vs-go-title"></h2>
-        <p id="vs-go-text"></p>
-        <button class="cmd-btn amber-btn" onclick="resetGame()">RESET FEDERATION</button>
-      </div>
+<!-- CENTER VIEWSCREEN -->
+<div id="viewscreen">
+  <canvas id="vs-canvas"></canvas>
+  <div id="vs-scanlines"></div>
+  <div id="vs-vignette"></div>
+  <div id="vs-alert" class="green"></div>
+  <div id="vs-flash"></div>
+  <div id="vs-transition"></div>
+  <div id="vs-overlay">
+    <div id="vs-loading">AWAITING SIGNAL</div>
+    <div id="vs-event">
+      <div id="vs-domain"></div>
+      <div id="vs-title"></div>
+      <div id="vs-desc"></div>
+      <div id="vs-meta"></div>
+    </div>
+    <div id="vs-outcome">
+      <div id="vs-outcome-title"></div>
+      <div id="vs-outcome-text"></div>
+      <div id="vs-deltas"></div>
+      <div id="vs-lesson"></div>
+      <div id="vs-rival-effects"></div>
+      <button id="continue-btn" onclick="nextEvent()">CONTINUE</button>
+    </div>
+    <div id="vs-gameover">
+      <h2 id="vs-go-title"></h2>
+      <p id="vs-go-text"></p>
+      <button class="cmd-btn amber-btn" onclick="resetGame()">RESET FEDERATION</button>
     </div>
   </div>
+</div>
 
-  <!-- RIGHT CONSOLE -->
-  <div id="right">
-    <div class="console-title">Command Intel</div>
-    <div class="policy-box">
-      <div class="policy-label">Active Policy</div>
-      <div class="policy-val" id="ri-policy">--</div>
-    </div>
-    <div class="policy-box">
-      <div class="policy-label">Last Decision</div>
-      <div class="policy-val" id="ri-last-decision" style="font-size:10px;color:#b0b8c0">--</div>
-    </div>
-    <div class="console-title" style="margin-top:6px">Rival Threats</div>
-    <div id="ri-rivals" style="margin-bottom:8px"><span style="color:var(--dim);font-size:10px">Scanning...</span></div>
-    <div class="console-title">Live Events</div>
-    <div id="ri-events"><span style="color:var(--dim);font-size:10px">Monitoring...</span></div>
+<!-- RIGHT CONSOLE -->
+<div id="right">
+  <div class="console-title">Command Intel</div>
+  <div class="policy-box">
+    <div class="policy-label">Active Policy</div>
+    <div class="policy-val" id="ri-policy">--</div>
   </div>
+  <div class="policy-box">
+    <div class="policy-label">Last Decision</div>
+    <div class="policy-val" id="ri-last-decision" style="font-size:10px;color:#b0b8c0">--</div>
+  </div>
+  <div class="console-title" style="margin-top:6px">Rival Threats</div>
+  <div id="ri-rivals" style="margin-bottom:8px"><span style="color:var(--dim);font-size:10px">Scanning...</span></div>
+  <div class="console-title">Live Events</div>
+  <div id="ri-events"><span style="color:var(--dim);font-size:10px">Monitoring...</span></div>
+</div>
 
-  <!-- COMMAND DECK -->
-  <div id="commands">
-    <div id="cmd-buttons" style="display:flex;gap:14px;flex-wrap:wrap;justify-content:center"></div>
-  </div>
+<!-- COMMAND DECK -->
+<div id="commands">
+  <div id="cmd-buttons" style="display:flex;gap:14px;flex-wrap:wrap;justify-content:center"></div>
+</div>
 
-  <!-- BOTTOM COMMS TICKER -->
-  <div id="bottom">
-    <span id="comms-label">COMMS</span>
-    <div id="comms-ticker"></div>
-  </div>
+<!-- BOTTOM COMMS TICKER -->
+<div id="bottom">
+  <span id="comms-label">COMMS</span>
+  <div id="comms-ticker"></div>
+</div>
 </div>
 
 <script>
@@ -338,9 +434,11 @@ const API = '/api';
 let currentEvent = null;
 let gameState = null;
 let consciousness = null;
+let rivalsData = null;
 let stars = [];
 let canvas, ctx, W, H;
 let tick = 0;
+let currentAlert = 'green';
 
 const METRIC_LABELS = {
   credits:'Credits', fuel:'Fuel', shields:'Shields', hull:'Hull',
@@ -350,6 +448,129 @@ const METRIC_LABELS = {
   rights_protection:'Rights', emergency_powers:'Emergency',
   active_policy:'Policy'
 };
+
+// Domain → transition animation mapping
+const DOMAIN_TRANSITIONS = {
+  'diplomacy': 'anim-diplomacy',
+  'diplomatic': 'anim-diplomacy',
+  'governance': 'anim-governance',
+  'government': 'anim-governance',
+  'political': 'anim-governance',
+  'military': 'anim-hostile',
+  'defense': 'anim-hostile',
+  'war': 'anim-hostile',
+  'hostile': 'anim-hostile',
+  'combat': 'anim-hostile',
+  'economy': 'anim-economy',
+  'economic': 'anim-economy',
+  'trade': 'anim-economy',
+  'anomaly': 'anim-anomaly',
+  'exploration': 'anim-anomaly',
+  'science': 'anim-anomaly',
+  'research': 'anim-anomaly',
+  'operations': 'anim-economy',
+  'intelligence': 'anim-diplomacy',
+  'culture': 'anim-diplomacy',
+  'preservation': 'anim-anomaly',
+};
+
+// === ALERT STATE ENGINE ===
+function computeAlertState(s, event) {
+  // CONSTITUTIONAL CRISIS: highest priority
+  // Triggered by: high constitutional_risk event, or constitutional_integrity critically low, or rights severely degraded
+  const isConstitutionalCrisisEvent = event && (
+    (event.constitutional_risk === 'high' || event.constitutional_risk === 'critical') ||
+    (event.rights_at_stake && event.rights_at_stake.length >= 2) ||
+    (event.domain && (event.domain.toLowerCase().includes('governance') || event.domain.toLowerCase().includes('constitution')))
+  );
+  if (isConstitutionalCrisisEvent ||
+      (s.constitutional_integrity !== undefined && s.constitutional_integrity < 25) ||
+      (s.rights_protection !== undefined && s.rights_protection < 20)) {
+    return 'crisis';
+  }
+
+  // RED ALERT: extreme threat or immediate danger
+  // Triggered by: hostile event image, very high emergency powers, critical hull/fuel, very low stability+trust
+  const isHostileEvent = event && (
+    event.image === 'alert' ||
+    (event.domain && (event.domain.toLowerCase().includes('military') || event.domain.toLowerCase().includes('defense') || event.domain.toLowerCase().includes('war') || event.domain.toLowerCase().includes('hostile')))
+  );
+  if (isHostileEvent ||
+      (s.emergency_powers > 60) ||
+      (s.hull < 30) ||
+      (s.fuel < 20) ||
+      (s.federation_stability < 20) ||
+      (s.public_trust < 20)) {
+    return 'red';
+  }
+
+  // YELLOW ALERT: elevated risk
+  // Triggered by: moderate emergency powers, morale/stability concern, significant rival activity
+  const rivalMap = rivalsData && rivalsData.rivals && (rivalsData.rivals.rivals || rivalsData.rivals);
+  const hasElevatedRivals = rivalMap &&
+    Object.values(rivalMap).some(r => typeof r === 'object' && r !== null && r.relationships && r.relationships.player === 'hostile' && r.power > 0.6);
+  if ((s.emergency_powers > 25) ||
+      (s.crew_morale < 40) ||
+      (s.federation_stability < 40) ||
+      (s.public_trust < 40) ||
+      (s.constitutional_integrity < 50) ||
+      (s.rights_protection < 50) ||
+      hasElevatedRivals) {
+    return 'yellow';
+  }
+
+  // GREEN ALERT: normal operation
+  return 'green';
+}
+
+function setAlertState(level) {
+  if (level === currentAlert) return;
+  currentAlert = level;
+
+  // Bridge container glow
+  const bridge = document.getElementById('bridge');
+  bridge.className = `alert-${level}`;
+
+  // Top ribbon border
+  const top = document.getElementById('top');
+  top.className = `alert-border-${level}`;
+
+  // Viewscreen alert overlay
+  const vsAlert = document.getElementById('vs-alert');
+  vsAlert.className = level;
+
+  // Alert indicator label
+  const indicator = document.getElementById('alert-indicator');
+  const labels = { green: 'GREEN ALERT', yellow: 'YELLOW ALERT', red: 'RED ALERT', crisis: 'CONSTITUTIONAL CRISIS' };
+  indicator.textContent = labels[level] || 'GREEN ALERT';
+  indicator.className = level;
+
+  // Comms notification for state changes
+  addComms(labels[level]);
+}
+
+// === VIEWSCREEN TRANSITIONS ===
+function playEventTransition(domain) {
+  const trans = document.getElementById('vs-transition');
+  // Remove any existing animation class
+  trans.className = '';
+  trans.style.opacity = '0';
+  // Force reflow
+  void trans.offsetHeight;
+
+  // Determine animation class from domain
+  const domainKey = (domain || '').toLowerCase();
+  let animClass = 'anim-diplomacy'; // default
+  for (const [key, cls] of Object.entries(DOMAIN_TRANSITIONS)) {
+    if (domainKey.includes(key)) {
+      animClass = cls;
+      break;
+    }
+  }
+
+  trans.style.opacity = '1';
+  trans.className = animClass;
+}
 
 // === STARFIELD ===
 function initStarfield() {
@@ -384,15 +605,20 @@ function drawStarfield() {
   ctx.fillStyle = '#040810';
   ctx.fillRect(0, 0, W, H);
 
-  // Subtle nebula glow
+  // Subtle nebula glow — tinted by alert state
+  const nebulaColor = currentAlert === 'red' ? '255,23,68' :
+                      currentAlert === 'crisis' ? '179,136,255' :
+                      currentAlert === 'yellow' ? '255,158,28' : '79,195,247';
+  const nebulaAlpha = currentAlert === 'red' ? 0.04 : currentAlert === 'crisis' ? 0.03 : 0.02;
+
   const nebulaGrad = ctx.createRadialGradient(W*0.3, H*0.4, 0, W*0.3, H*0.4, W*0.5);
-  nebulaGrad.addColorStop(0, 'rgba(79,195,247,0.02)');
+  nebulaGrad.addColorStop(0, `rgba(${nebulaColor},${nebulaAlpha})`);
   nebulaGrad.addColorStop(1, 'transparent');
   ctx.fillStyle = nebulaGrad;
   ctx.fillRect(0, 0, W, H);
 
   const nebulaGrad2 = ctx.createRadialGradient(W*0.7, H*0.6, 0, W*0.7, H*0.6, W*0.4);
-  nebulaGrad2.addColorStop(0, 'rgba(179,136,255,0.015)');
+  nebulaGrad2.addColorStop(0, `rgba(${nebulaColor},${nebulaAlpha * 0.7})`);
   nebulaGrad2.addColorStop(1, 'transparent');
   ctx.fillStyle = nebulaGrad2;
   ctx.fillRect(0, 0, W, H);
@@ -410,7 +636,8 @@ function drawStarfield() {
   }
 
   // Grid lines (subtle tactical overlay)
-  ctx.strokeStyle = 'rgba(79,195,247,0.03)';
+  const gridAlpha = currentAlert === 'red' ? 0.06 : currentAlert === 'crisis' ? 0.05 : 0.03;
+  ctx.strokeStyle = `rgba(${nebulaColor},${gridAlpha})`;
   ctx.lineWidth = 0.5;
   for (let x = 0; x < W; x += 80) {
     ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H); ctx.stroke();
@@ -430,6 +657,9 @@ async function fetchState() {
     updateTopRibbon(gameState);
     updateLeftConsole(gameState);
     updateRightConsole(gameState);
+    // Recompute alert from state (no event context for background refresh)
+    const alertLevel = computeAlertState(gameState, currentEvent);
+    setAlertState(alertLevel);
   } catch(e) { console.error('State fetch failed', e); }
 }
 
@@ -454,7 +684,13 @@ async function fetchRivals() {
   try {
     const resp = await fetch(`${API}/rivals`);
     const data = await resp.json();
+    rivalsData = data;
     updateRivals(data);
+    // Recompute alert with fresh rival data
+    if (gameState) {
+      const alertLevel = computeAlertState(gameState, currentEvent);
+      setAlertState(alertLevel);
+    }
   } catch(e) { console.error('Rivals fetch failed', e); }
 }
 
@@ -479,6 +715,11 @@ async function makeChoice(choiceId) {
     updateTopRibbon(gameState);
     updateLeftConsole(gameState);
     updateRightConsole(gameState);
+
+    // Recompute alert after choice — event context removed
+    currentEvent = null;
+    const alertLevel = computeAlertState(gameState, null);
+    setAlertState(alertLevel);
 
     // Update comms
     if (data.outcome) addComms(data.outcome);
@@ -510,15 +751,6 @@ function updateTopRibbon(s) {
   setTopBar('threat', s.emergency_powers, 100);
   setTopBar('integrity', s.constitutional_integrity, 100);
   setTopBar('rights', s.rights_protection, 100);
-
-  // Alert state
-  const alert = document.getElementById('vs-alert');
-  alert.className = '';
-  if (s.emergency_powers > 60 || s.hull < 30 || s.fuel < 20) {
-    alert.className = 'red';
-  } else if (s.public_trust < 40 || s.federation_stability < 40) {
-    alert.className = 'yellow';
-  }
 }
 
 function setTopBar(name, val, max) {
@@ -584,14 +816,49 @@ function updateRightConsole(s) {
 
 function updateRivals(data) {
   const el = document.getElementById('ri-rivals');
-  if (!data.rivals || data.rivals.length === 0) {
+  if (!data || !data.rivals) {
     el.innerHTML = '<span style="color:var(--dim);font-size:10px">No hostile contacts</span>';
     return;
   }
-  el.innerHTML = data.rivals.slice(0, 5).map(r => {
-    const rel = r.relationships?.player || 'neutral';
-    const color = rel === 'hostile' ? 'var(--red)' : rel === 'friendly' ? 'var(--green)' : 'var(--amber)';
-    return `<div class="rival-entry" style="border-left-color:${color}"><span class="rival-name" style="color:${color}">${r.name || r.id}</span><br><span style="color:var(--dim);font-size:9px">${(r.action || 'unknown').toUpperCase()}</span></div>`;
+
+  // The /rivals endpoint returns { rivals: { success, total_rivals, rivals: { rival_id: { ... } } } }
+  // Navigate to the actual rival map at data.rivals.rivals
+  const rivalMap = data.rivals.rivals || data.rivals;
+  let rivalList = [];
+
+  if (typeof rivalMap === 'object' && !Array.isArray(rivalMap)) {
+    // Could be { rival_id: { name, power, ... } } or { success: true, rival_id: { ... } }
+    // Filter out non-rival metadata keys
+    const metaKeys = ['success','total_rivals','active_rivals','aggregate_threat','threat_level'];
+    rivalList = Object.entries(rivalMap)
+      .filter(([k, v]) => typeof v === 'object' && v !== null && !metaKeys.includes(k) && v.success !== false)
+      .map(([id, r]) => ({ id, ...r }));
+  } else if (Array.isArray(rivalMap)) {
+    rivalList = rivalMap;
+  }
+
+  if (rivalList.length === 0) {
+    el.innerHTML = '<span style="color:var(--dim);font-size:10px">No hostile contacts</span>';
+    return;
+  }
+
+  // Sort by power descending, show top 3
+  rivalList.sort((a, b) => (b.power || 0) - (a.power || 0));
+  const top3 = rivalList.slice(0, 3);
+
+  el.innerHTML = top3.map(r => {
+    const name = r.name || r.id || 'Unknown';
+    const power = r.power !== undefined ? Math.round(r.power * 100) : '?';
+    const aggression = r.aggression !== undefined ? Math.round(r.aggression * 100) : '?';
+    const rel = (r.relationships && r.relationships.player) || 'neutral';
+    const borderColor = rel === 'hostile' ? 'var(--red)' : rel === 'friendly' ? 'var(--green)' : 'var(--amber)';
+    const nameColor = borderColor;
+    const personality = r.personality || 'unknown';
+
+    return `<div class="rival-entry" style="border-left-color:${borderColor};background:${rel === 'hostile' ? 'var(--red-dim)' : rel === 'friendly' ? 'rgba(105,240,174,0.05)' : 'rgba(255,158,28,0.05)'}">
+      <span class="rival-name" style="color:${nameColor}">${name.toUpperCase()}</span>
+      <div class="rival-threat">PWR ${power}% · AGG ${aggression}% · ${personality.toUpperCase()}</div>
+    </div>`;
   }).join('');
 }
 
@@ -629,6 +896,13 @@ function loadEvent(event) {
   if (event.pressure) metaParts.push(`<span>PRESSURE:</span> ${event.pressure}`);
   document.getElementById('vs-meta').innerHTML = metaParts.join(' &nbsp;·&nbsp; ');
 
+  // Play viewscreen transition based on event domain
+  playEventTransition(domain);
+
+  // Compute and set alert state with event context
+  const alertLevel = computeAlertState(gameState || {}, event);
+  setAlertState(alertLevel);
+
   // Render command buttons
   const cmdEl = document.getElementById('cmd-buttons');
   cmdEl.innerHTML = '';
@@ -649,9 +923,12 @@ function loadEvent(event) {
 function showOutcome(data) {
   document.getElementById('vs-event').style.display = 'none';
 
-  // Flash effect
+  // Flash effect — color based on alert state
   const flash = document.getElementById('vs-flash');
-  const flashColor = data.game_over ? 'rgba(255,23,68,0.3)' : 'rgba(79,195,247,0.15)';
+  const flashColor = data.game_over ? 'rgba(255,23,68,0.3)' :
+                      currentAlert === 'crisis' ? 'rgba(179,136,255,0.2)' :
+                      currentAlert === 'red' ? 'rgba(255,23,68,0.2)' :
+                      'rgba(79,195,247,0.15)';
   flash.style.background = flashColor;
   flash.style.animation = 'none';
   flash.offsetHeight; // reflow
@@ -773,6 +1050,8 @@ function init() {
     fetchConsciousness();
   }, 10000);
   setInterval(fetchMapEvents, 15000);
+  // Refresh rivals every 20s
+  setInterval(fetchRivals, 20000);
 }
 
 init();
