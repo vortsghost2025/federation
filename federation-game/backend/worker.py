@@ -55,7 +55,7 @@ def send_notification(title, body):
     """Send a notification via Apprise API."""
     try:
         resp = requests.post(
-            f"{APPRISE_URL}/notify",
+            f"{APPRISE_URL}/notify/game-events",
             json={"title": title, "body": body},
             timeout=5,
         )
