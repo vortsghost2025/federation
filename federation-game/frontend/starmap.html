@@ -1,0 +1,648 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Federation Star Map</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#0a0a1a;color:#e0e0e0;font-family:'Courier New',monospace;overflow:hidden;height:100vh;width:100vw}
+#starmap{position:absolute;top:0;left:0;width:100%;height:100%}
+
+/* World state bar */
+#worldbar{position:fixed;top:0;left:0;right:320px;height:48px;background:rgba(10,10,26,0.92);border-bottom:1px solid rgba(79,195,247,0.3);display:flex;align-items:center;padding:0 16px;gap:20px;z-index:10;font-size:13px}
+.wb-item{display:flex;align-items:center;gap:6px}
+.wb-label{color:#78909c;font-size:11px;text-transform:uppercase;letter-spacing:1px}
+.wb-bar{width:80px;height:8px;background:rgba(255,255,255,0.08);border-radius:4px;overflow:hidden}
+.wb-fill{height:100%;border-radius:4px;transition:width 1s ease}
+.wb-val{font-size:12px;min-width:28px;text-align:right}
+#tick-indicator{margin-left:auto;display:flex;align-items:center;gap:8px}
+#tick-dot{width:8px;height:8px;border-radius:50%;background:#4caf50;box-shadow:0 0 6px #4caf50}
+#tick-dot.stopped{background:#f44336;box-shadow:0 0 6px #f44336}
+#tick-label{font-size:11px;color:#78909c}
+
+/* Event sidebar */
+#sidebar{position:fixed;top:0;right:0;width:320px;height:100vh;background:rgba(10,10,26,0.95);border-left:1px solid rgba(79,195,247,0.2);overflow-y:auto;z-index:10;padding:56px 12px 12px 12px;font-size:12px}
+#sidebar::-webkit-scrollbar{width:4px}
+#sidebar::-webkit-scrollbar-thumb{background:rgba(79,195,247,0.3);border-radius:2px}
+#sidebar h2{color:#4fc3f7;font-size:14px;margin:8px 0 8px 0;letter-spacing:2px;text-transform:uppercase;border-bottom:1px solid rgba(79,195,247,0.2);padding-bottom:6px}
+.ev-item{padding:6px 8px;margin-bottom:4px;border-left:2px solid #333;border-radius:0 3px 3px 0;background:rgba(255,255,255,0.02);transition:border-color 0.3s}
+.ev-item:hover{border-left-color:#4fc3f7;background:rgba(79,195,247,0.05)}
+.ev-char{color:#4fc3f7;font-weight:bold;font-size:11px}
+.ev-type{color:#78909c;font-size:10px;margin-left:6px;text-transform:uppercase}
+.ev-desc{color:#b0b0b0;font-size:11px;margin-top:2px;line-height:1.3}
+.ev-mood{display:inline-block;width:6px;height:6px;border-radius:50%;margin-right:4px;vertical-align:middle}
+
+/* NPC detail panel */
+#detail{position:fixed;bottom:12px;left:12px;width:360px;max-height:260px;background:rgba(10,10,26,0.95);border:1px solid rgba(79,195,247,0.3);border-radius:8px;padding:14px;z-index:20;display:none;overflow-y:auto}
+#detail.show{display:block}
+#detail-name{color:#ffd700;font-size:16px;font-weight:bold;margin-bottom:2px}
+#detail-cat{color:#78909c;font-size:11px;text-transform:uppercase;letter-spacing:1px;margin-bottom:8px}
+#detail-row{display:flex;gap:8px;margin-bottom:4px;font-size:12px}
+#detail-row .dl{color:#78909c;min-width:80px}
+#detail-row .dv{color:#e0e0e0}
+#detail-thought{color:#ab47bc;font-style:italic;font-size:11px;margin-top:6px;line-height:1.4;padding:4px 6px;background:rgba(171,71,188,0.08);border-radius:4px}
+
+/* Faction legend */
+#faction-legend{position:fixed;bottom:12px;right:332px;background:rgba(10,10,26,0.92);border:1px solid rgba(79,195,247,0.2);border-radius:6px;padding:8px 12px;z-index:10;font-size:11px;display:none}
+#faction-legend.show{display:block}
+.fl-row{display:flex;align-items:center;gap:6px;margin-bottom:2px}
+.fl-dot{width:8px;height:8px;border-radius:50%}
+.fl-name{color:#b0b0b0}
+
+/* Zoom controls */
+#zoom-ctrl{position:fixed;bottom:12px;left:50%;transform:translateX(-50%);display:flex;gap:4px;z-index:10}
+#zoom-ctrl button{width:36px;height:36px;background:rgba(10,10,26,0.9);border:1px solid rgba(79,195,247,0.3);color:#4fc3f7;border-radius:6px;font-size:18px;cursor:pointer;transition:background 0.2s}
+#zoom-ctrl button:hover{background:rgba(79,195,247,0.15)}
+#search-box{position:fixed;top:52px;left:12px;z-index:10}
+#search-input{background:rgba(10,10,26,0.9);border:1px solid rgba(79,195,247,0.3);color:#e0e0e0;padding:6px 10px;border-radius:6px;font-size:12px;font-family:'Courier New',monospace;width:180px;outline:none}
+#search-input:focus{border-color:#4fc3f7;box-shadow:0 0 8px rgba(79,195,247,0.2)}
+</style>
+</head>
+<body>
+
+<canvas id="starmap"></canvas>
+
+<!-- World state bar -->
+<div id="worldbar">
+  <div class="wb-item"><span class="wb-label">Tension</span><div class="wb-bar"><div class="wb-fill" id="wb-tension" style="background:#ef5350"></div></div><span class="wb-val" id="wv-tension">0</span></div>
+  <div class="wb-item"><span class="wb-label">Stability</span><div class="wb-bar"><div class="wb-fill" id="wb-stability" style="background:#66bb6a"></div></div><span class="wb-val" id="wv-stability">0</span></div>
+  <div class="wb-item"><span class="wb-label">Morale</span><div class="wb-bar"><div class="wb-fill" id="wb-morale" style="background:#ffd700"></div></div><span class="wb-val" id="wv-morale">0</span></div>
+  <div class="wb-item"><span class="wb-label">Threat</span><div class="wb-bar"><div class="wb-fill" id="wb-threat" style="background:#f44336"></div></div><span class="wb-val" id="wv-threat">0</span></div>
+  <div class="wb-item"><span class="wb-label">Anomaly</span><div class="wb-bar"><div class="wb-fill" id="wb-anomaly" style="background:#ab47bc"></div></div><span class="wb-val" id="wv-anomaly">0</span></div>
+  <div id="tick-indicator"><div id="tick-dot"></div><span id="tick-label">TICK 0</span></div>
+</div>
+
+<!-- Event sidebar -->
+<div id="sidebar">
+  <h2>Live Events</h2>
+  <div id="event-list"></div>
+</div>
+
+<!-- NPC detail panel -->
+<div id="detail">
+  <div id="detail-name"></div>
+  <div id="detail-cat"></div>
+  <div id="detail-rows"></div>
+  <div id="detail-thought"></div>
+</div>
+
+<!-- Faction legend -->
+<div id="faction-legend"></div>
+
+<!-- Search -->
+<div id="search-box"><input id="search-input" type="text" placeholder="Search NPC..."></div>
+
+<!-- Zoom controls -->
+<div id="zoom-ctrl">
+  <button id="zoom-in" title="Zoom in">+</button>
+  <button id="zoom-out" title="Zoom out">-</button>
+  <button id="zoom-reset" title="Reset view">R</button>
+</div>
+
+<script>
+const API = '/api/map/data';
+const POLL_MS = 5000;
+
+// --- State ---
+let mapData = null;
+let nodes = [];       // {id, name, x, y, radius, color, npc, vx, vy, category, faction}
+let stars = [];       // background stars
+let zoom = 1;
+let panX = 0, panY = 0;
+let dragging = false, dragStartX, dragStartY, panStartX, panStartY;
+let hoveredNode = null;
+let selectedNode = null;
+let canvas, ctx;
+let W, H;
+let sidebarW = 320;
+let lastUpdate = 0;
+
+// Faction layout angles (8 factions in a circle)
+const FACTION_ORDER = [
+  'research_division', 'military_command', 'diplomatic_corps',
+  'consciousness_collective', 'cultural_ministry', 'economic_council',
+  'exploration_initiative', 'preservation_society'
+];
+
+function init() {
+  canvas = document.getElementById('starmap');
+  ctx = canvas.getContext('2d');
+  resize();
+  window.addEventListener('resize', resize);
+  canvas.addEventListener('mousemove', onMouseMove);
+  canvas.addEventListener('mousedown', onMouseDown);
+  canvas.addEventListener('mouseup', onMouseUp);
+  canvas.addEventListener('wheel', onWheel);
+  canvas.addEventListener('click', onClick);
+  canvas.addEventListener('dblclick', onDblClick);
+  document.getElementById('zoom-in').addEventListener('click', () => { zoom = Math.min(4, zoom * 1.3); });
+  document.getElementById('zoom-out').addEventListener('click', () => { zoom = Math.max(0.3, zoom / 1.3); });
+  document.getElementById('zoom-reset').addEventListener('click', () => { zoom = 1; panX = 0; panY = 0; });
+  document.getElementById('search-input').addEventListener('input', onSearch);
+
+  // Generate background stars
+  for (let i = 0; i < 400; i++) {
+    stars.push({
+      x: Math.random() * 3000 - 500,
+      y: Math.random() * 2000 - 200,
+      r: Math.random() * 1.5 + 0.3,
+      brightness: Math.random() * 0.6 + 0.2,
+      twinkleSpeed: Math.random() * 0.003 + 0.001,
+      twinklePhase: Math.random() * Math.PI * 2
+    });
+  }
+
+  fetchData();
+  setInterval(fetchData, POLL_MS);
+  requestAnimationFrame(draw);
+}
+
+function resize() {
+  W = window.innerWidth - sidebarW;
+  H = window.innerHeight;
+  canvas.width = W * devicePixelRatio;
+  canvas.height = H * devicePixelRatio;
+  canvas.style.width = W + 'px';
+  canvas.style.height = H + 'px';
+  ctx.setTransform(devicePixelRatio, 0, 0, devicePixelRatio, 0, 0);
+}
+
+// --- Data fetch ---
+async function fetchData() {
+  try {
+    const resp = await fetch(API);
+    if (!resp.ok) return;
+    mapData = await resp.json();
+    lastUpdate = Date.now();
+    buildNodes();
+    updateUI();
+  } catch(e) {
+    console.error('Map data fetch failed', e);
+  }
+}
+
+// --- Build node positions ---
+function buildNodes() {
+  if (!mapData) return;
+  const npcs = mapData.npcs || [];
+  const factions = mapData.factions || {};
+  const now = Date.now() / 1000;
+  const cx = W / 2;
+  const cy = H / 2;
+  const factionRadius = Math.min(W, H) * 0.32;
+
+  // Group NPCs by faction (from affiliation) or category
+  const factionGroups = {};
+  FACTION_ORDER.forEach(f => factionGroups[f] = []);
+  const rivalGroup = [];
+  const neutralGroup = [];
+  const enigmaGroup = [];
+  const companionGroup = [];
+  const unknownGroup = [];
+
+  for (const npc of npcs) {
+    const aff = npc.affiliation;
+    if (aff && factionGroups[aff]) {
+      factionGroups[aff].push(npc);
+    } else if (npc.category === 'rival') {
+      rivalGroup.push(npc);
+    } else if (npc.category === 'neutral') {
+      neutralGroup.push(npc);
+    } else if (npc.category === 'enigma') {
+      enigmaGroup.push(npc);
+    } else if (npc.category === 'companion') {
+      companionGroup.push(npc);
+    } else {
+      unknownGroup.push(npc);
+    }
+  }
+
+  nodes = [];
+
+  // Place faction NPCs in clusters
+  FACTION_ORDER.forEach((fid, i) => {
+    const angle = (i / FACTION_ORDER.length) * Math.PI * 2 - Math.PI / 2;
+    const fcx = cx + Math.cos(angle) * factionRadius;
+    const fcy = cy + Math.sin(angle) * factionRadius;
+    const group = factionGroups[fid];
+    const spread = Math.max(40, group.length * 12);
+
+    group.forEach((npc, j) => {
+      const subAngle = (j / group.length) * Math.PI * 2;
+      const subR = spread * (0.3 + Math.random() * 0.7);
+      const x = fcx + Math.cos(subAngle) * subR;
+      const y = fcy + Math.sin(subAngle) * subR;
+      const age = npc.last_active ? (now - npc.last_active) : 9999;
+      const activity = Math.max(0.2, 1 - age / 3600);
+      const radius = 5 + activity * 8;
+
+      nodes.push({
+        id: npc.id, name: npc.name || npc.id, x, y, radius, 
+        color: npc.mood_color || '#9e9e9e',
+        npc, category: npc.category || 'unknown', faction: fid,
+        activity, age
+      });
+    });
+  });
+
+  // Place rivals in outer hostile zone
+  const rivalAngle = -Math.PI * 0.15;
+  const rivalDist = factionRadius * 1.35;
+  rivalGroup.forEach((npc, j) => {
+    const spread = Math.max(30, rivalGroup.length * 10);
+    const a = rivalAngle + (j - rivalGroup.length/2) * 0.2;
+    const r = rivalDist + (Math.random() - 0.5) * spread;
+    nodes.push({
+      id: npc.id, name: npc.name || npc.id,
+      x: cx + Math.cos(a) * r, y: cy + Math.sin(a) * r,
+      radius: 7, color: npc.mood_color || '#ef5350',
+      npc, category: 'rival', faction: null,
+      activity: 0.5, age: 999
+    });
+  });
+
+  // Place neutrals scattered
+  neutralGroup.forEach((npc, j) => {
+    const a = Math.random() * Math.PI * 2;
+    const r = factionRadius * (0.6 + Math.random() * 0.6);
+    nodes.push({
+      id: npc.id, name: npc.name || npc.id,
+      x: cx + Math.cos(a) * r, y: cy + Math.sin(a) * r,
+      radius: 4, color: npc.mood_color || '#78909c',
+      npc, category: 'neutral', faction: null,
+      activity: 0.3, age: 999
+    });
+  });
+
+  // Place enigmas in scattered locations
+  enigmaGroup.forEach((npc, j) => {
+    const a = Math.random() * Math.PI * 2;
+    const r = factionRadius * (0.8 + Math.random() * 0.5);
+    nodes.push({
+      id: npc.id, name: npc.name || npc.id,
+      x: cx + Math.cos(a) * r, y: cy + Math.sin(a) * r,
+      radius: 5, color: npc.mood_color || '#ab47bc',
+      npc, category: 'enigma', faction: null,
+      activity: 0.4, age: 999
+    });
+  });
+
+  // Place companions near center
+  companionGroup.forEach((npc, j) => {
+    const a = (j / companionGroup.length) * Math.PI * 2;
+    const r = 40 + Math.random() * 60;
+    nodes.push({
+      id: npc.id, name: npc.name || npc.id,
+      x: cx + Math.cos(a) * r, y: cy + Math.sin(a) * r,
+      radius: 6, color: npc.mood_color || '#ffd700',
+      npc, category: 'companion', faction: null,
+      activity: 0.7, age: 999
+    });
+  });
+
+  // Unknowns at center-ish
+  unknownGroup.forEach((npc, j) => {
+    const a = Math.random() * Math.PI * 2;
+    const r = Math.random() * 80;
+    nodes.push({
+      id: npc.id, name: npc.name || npc.id,
+      x: cx + Math.cos(a) * r, y: cy + Math.sin(a) * r,
+      radius: 4, color: '#9e9e9e',
+      npc, category: 'unknown', faction: null,
+      activity: 0.2, age: 999
+    });
+  });
+}
+
+// --- Update UI panels ---
+function updateUI() {
+  if (!mapData) return;
+  const ws = mapData.world_state || {};
+  const worker = mapData.worker || {};
+
+  // World state bars
+  setBar('tension', ws.tension_level, 100, '#ef5350');
+  setBar('stability', ws.stability, 100, '#66bb6a');
+  setBar('morale', ws.morale, 100, '#ffd700');
+  setBar('threat', ws.threat_level, 100, '#f44336');
+  setBar('anomaly', ws.anomaly_activity, 100, '#ab47bc');
+
+  // Tick indicator
+  const tickCount = worker.tick_count || 0;
+  const status = worker.status || 'unknown';
+  const dot = document.getElementById('tick-dot');
+  dot.className = status === 'running' ? '' : 'stopped';
+  document.getElementById('tick-label').textContent = `TICK ${tickCount} · ${status.toUpperCase()}`;
+
+  // Events sidebar
+  const events = (mapData.events || []).slice(0, 30);
+  const el = document.getElementById('event-list');
+  let html = '';
+  for (const ev of events) {
+    const moodColor = ev.mood ? (mapData.npcs.find(n => n.mood === ev.mood)?.mood_color || '#9e9e9e') : '#9e9e9e';
+    html += `<div class="ev-item">
+      <span class="ev-mood" style="background:${moodColor}"></span>
+      <span class="ev-char">${ev.char_name || 'Unknown'}</span>
+      <span class="ev-type">${ev.action_type || ''}</span>
+      <div class="ev-desc">${ev.description || ''}</div>
+    </div>`;
+  }
+  el.innerHTML = html;
+
+  // Faction legend
+  const fl = document.getElementById('faction-legend');
+  const factions = mapData.factions || {};
+  let fhtml = '';
+  for (const [fid, fdata] of Object.entries(factions)) {
+    fhtml += `<div class="fl-row"><div class="fl-dot" style="background:${fdata.color}"></div><span class="fl-name">${fdata.display_name || fid}</span></div>`;
+  }
+  fl.innerHTML = fhtml;
+  fl.classList.add('show');
+}
+
+function setBar(name, val, max, color) {
+  const pct = Math.min(100, Math.max(0, ((val || 0) / max) * 100));
+  const fill = document.getElementById('wb-' + name);
+  const vl = document.getElementById('wv-' + name);
+  if (fill) fill.style.width = pct + '%';
+  if (vl) vl.textContent = val || 0;
+}
+
+// --- Drawing ---
+function draw() {
+  const t = performance.now();
+  ctx.clearRect(0, 0, W, H);
+
+  // Dark space background
+  ctx.fillStyle = '#0a0a1a';
+  ctx.fillRect(0, 0, W, H);
+
+  ctx.save();
+  ctx.translate(panX, panY);
+  ctx.scale(zoom, zoom);
+
+  // Background stars
+  for (const s of stars) {
+    const twinkle = 0.5 + 0.5 * Math.sin(t * s.twinkleSpeed + s.twinklePhase);
+    const alpha = s.brightness * twinkle;
+    ctx.beginPath();
+    ctx.arc(s.x, s.y, s.r, 0, Math.PI * 2);
+    ctx.fillStyle = `rgba(200,220,255,${alpha})`;
+    ctx.fill();
+  }
+
+  // Faction zone circles (subtle)
+  if (mapData && mapData.factions) {
+    const cx = W / 2, cy = H / 2;
+    const factionRadius = Math.min(W, H) * 0.32;
+    FACTION_ORDER.forEach((fid, i) => {
+      const angle = (i / FACTION_ORDER.length) * Math.PI * 2 - Math.PI / 2;
+      const fcx = cx + Math.cos(angle) * factionRadius;
+      const fcy = cy + Math.sin(angle) * factionRadius;
+      const fdata = mapData.factions[fid];
+      const color = fdata ? fdata.color : '#333';
+      ctx.beginPath();
+      ctx.arc(fcx, fcy, 60, 0, Math.PI * 2);
+      ctx.strokeStyle = color + '33';
+      ctx.lineWidth = 1;
+      ctx.stroke();
+      ctx.fillStyle = color + '0a';
+      ctx.fill();
+
+      // Faction label
+      ctx.fillStyle = color + '88';
+      ctx.font = '9px Courier New';
+      ctx.textAlign = 'center';
+      ctx.fillText((fdata ? fdata.display_name : fid).toUpperCase(), fcx, fcy + 75);
+    });
+  }
+
+  // Relationship lines
+  if (mapData) {
+    const nodeMap = {};
+    nodes.forEach(n => nodeMap[n.id] = n);
+
+    for (const node of nodes) {
+      const rels = node.npc.relationships || {};
+      for (const [otherId, score] of Object.entries(rels)) {
+        const other = nodeMap[otherId];
+        if (!other) continue;
+        if (node.id > otherId) continue; // draw each line once
+
+        const strength = Math.abs(score) / 100;
+        if (strength < 0.1) continue;
+        const isPositive = score > 50;
+        const lineColor = isPositive ? `rgba(102,187,106,${strength * 0.4})` : `rgba(239,83,80,${strength * 0.4})`;
+
+        ctx.beginPath();
+        ctx.moveTo(node.x, node.y);
+        ctx.lineTo(other.x, other.y);
+        ctx.strokeStyle = lineColor;
+        ctx.lineWidth = Math.max(0.5, strength * 2);
+        ctx.stroke();
+      }
+    }
+  }
+
+  // NPC nodes
+  const pulse = Math.sin(t * 0.003) * 0.3 + 0.7;
+  for (const node of nodes) {
+    const isHovered = hoveredNode === node;
+    const isSelected = selectedNode === node;
+    const r = node.radius * (isHovered ? 1.4 : 1);
+
+    // Glow
+    const glowR = r * 3;
+    const glow = ctx.createRadialGradient(node.x, node.y, r * 0.5, node.x, node.y, glowR);
+    glow.addColorStop(0, node.color + '44');
+    glow.addColorStop(1, node.color + '00');
+    ctx.beginPath();
+    ctx.arc(node.x, node.y, glowR, 0, Math.PI * 2);
+    ctx.fillStyle = glow;
+    ctx.fill();
+
+    // Activity pulse ring
+    if (node.activity > 0.5) {
+      ctx.beginPath();
+      ctx.arc(node.x, node.y, r + 4 + pulse * 3, 0, Math.PI * 2);
+      ctx.strokeStyle = node.color + '44';
+      ctx.lineWidth = 1;
+      ctx.stroke();
+    }
+
+    // Main node
+    ctx.beginPath();
+    ctx.arc(node.x, node.y, r, 0, Math.PI * 2);
+    const grad = ctx.createRadialGradient(node.x - r*0.3, node.y - r*0.3, 0, node.x, node.y, r);
+    grad.addColorStop(0, lighten(node.color, 40));
+    grad.addColorStop(1, node.color);
+    ctx.fillStyle = grad;
+    ctx.fill();
+
+    // Category ring
+    if (node.category === 'rival') {
+      ctx.strokeStyle = '#ef5350';
+      ctx.lineWidth = 2;
+      ctx.stroke();
+    } else if (node.category === 'companion') {
+      ctx.strokeStyle = '#ffd700';
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
+    } else if (isSelected) {
+      ctx.strokeStyle = '#4fc3f7';
+      ctx.lineWidth = 2;
+      ctx.stroke();
+    }
+
+    // Name label (only at reasonable zoom or hovered)
+    if (isHovered || isSelected || zoom > 1.2) {
+      ctx.fillStyle = isHovered ? '#ffffff' : '#b0b0b0';
+      ctx.font = `${isHovered ? '12' : '10'}px Courier New`;
+      ctx.textAlign = 'center';
+      ctx.fillText(node.name, node.x, node.y + r + 14);
+    }
+  }
+
+  // Center marker (player/federation core)
+  const cx = W / 2, cy = H / 2;
+  ctx.beginPath();
+  ctx.arc(cx, cy, 3, 0, Math.PI * 2);
+  ctx.fillStyle = '#4fc3f7';
+  ctx.fill();
+  ctx.beginPath();
+  ctx.arc(cx, cy, 12 + pulse * 4, 0, Math.PI * 2);
+  ctx.strokeStyle = 'rgba(79,195,247,0.2)';
+  ctx.lineWidth = 1;
+  ctx.stroke();
+
+  ctx.restore();
+
+  requestAnimationFrame(draw);
+}
+
+function lighten(hex, amt) {
+  let c = hex.replace('#', '');
+  if (c.length === 3) c = c[0]+c[0]+c[1]+c[1]+c[2]+c[2];
+  const num = parseInt(c, 16);
+  let r = Math.min(255, ((num >> 16) & 0xff) + amt);
+  let g = Math.min(255, ((num >> 8) & 0xff) + amt);
+  let b = Math.min(255, (num & 0xff) + amt);
+  return `rgb(${r},${g},${b})`;
+}
+
+// --- Interaction ---
+function screenToWorld(sx, sy) {
+  return { x: (sx - panX) / zoom, y: (sy - panY) / zoom };
+}
+
+function getNodeAt(sx, sy) {
+  const {x, y} = screenToWorld(sx, sy);
+  for (let i = nodes.length - 1; i >= 0; i--) {
+    const n = nodes[i];
+    const dx = x - n.x, dy = y - n.y;
+    if (dx*dx + dy*dy < (n.radius + 4) * (n.radius + 4)) return n;
+  }
+  return null;
+}
+
+function onMouseMove(e) {
+  const rect = canvas.getBoundingClientRect();
+  const mx = e.clientX - rect.left;
+  const my = e.clientY - rect.top;
+
+  if (dragging) {
+    panX = panStartX + (e.clientX - dragStartX);
+    panY = panStartY + (e.clientY - dragStartY);
+    return;
+  }
+
+  const node = getNodeAt(mx, my);
+  hoveredNode = node;
+  canvas.style.cursor = node ? 'pointer' : 'grab';
+}
+
+function onMouseDown(e) {
+  const rect = canvas.getBoundingClientRect();
+  const mx = e.clientX - rect.left;
+  const my = e.clientY - rect.top;
+  const node = getNodeAt(mx, my);
+  if (!node) {
+    dragging = true;
+    dragStartX = e.clientX;
+    dragStartY = e.clientY;
+    panStartX = panX;
+    panStartY = panY;
+    canvas.style.cursor = 'grabbing';
+  }
+}
+
+function onMouseUp(e) {
+  dragging = false;
+  canvas.style.cursor = hoveredNode ? 'pointer' : 'grab';
+}
+
+function onWheel(e) {
+  e.preventDefault();
+  const delta = e.deltaY > 0 ? 0.9 : 1.1;
+  zoom = Math.max(0.3, Math.min(4, zoom * delta));
+}
+
+function onClick(e) {
+  const rect = canvas.getBoundingClientRect();
+  const mx = e.clientX - rect.left;
+  const my = e.clientY - rect.top;
+  const node = getNodeAt(mx, my);
+  selectedNode = node;
+  showDetail(node);
+}
+
+function onDblClick(e) {
+  const rect = canvas.getBoundingClientRect();
+  const mx = e.clientX - rect.left;
+  const my = e.clientY - rect.top;
+  const node = getNodeAt(mx, my);
+  if (node) {
+    // Center on node
+    panX = W/2 - node.x * zoom;
+    panY = H/2 - node.y * zoom;
+    zoom = 2;
+  }
+}
+
+function showDetail(node) {
+  const panel = document.getElementById('detail');
+  if (!node) { panel.classList.remove('show'); return; }
+
+  panel.classList.add('show');
+  document.getElementById('detail-name').textContent = node.name;
+  document.getElementById('detail-cat').textContent = node.category.replace('_', ' ').toUpperCase() + (node.faction ? ' · ' + node.faction.replace('_', ' ').toUpperCase() : '');
+
+  const npc = node.npc;
+  let rows = '';
+  if (npc.mood) rows += `<div id="detail-row"><span class="dl">Mood</span><span class="dv" style="color:${node.color}">${npc.mood}</span></div>`;
+  if (npc.goal) rows += `<div id="detail-row"><span class="dl">Goal</span><span class="dv">${npc.goal}</span></div>`;
+  if (npc.latest_decision) rows += `<div id="detail-row"><span class="dl">Decision</span><span class="dv">${npc.latest_decision}</span></div>`;
+  if (npc.latest_action) rows += `<div id="detail-row"><span class="dl">Action</span><span class="dv">${npc.latest_action}</span></div>`;
+  if (npc.action_type) rows += `<div id="detail-row"><span class="dl">Type</span><span class="dv">${npc.action_type}</span></div>`;
+  document.getElementById('detail-rows').innerHTML = rows;
+  document.getElementById('detail-thought').textContent = npc.latest_thought || '';
+}
+
+function onSearch(e) {
+  const q = e.target.value.toLowerCase().trim();
+  if (!q) { selectedNode = null; showDetail(null); return; }
+  const found = nodes.find(n => n.name.toLowerCase().includes(q) || n.id.toLowerCase().includes(q));
+  if (found) {
+    selectedNode = found;
+    showDetail(found);
+    panX = W/2 - found.x * zoom;
+    panY = H/2 - found.y * zoom;
+  }
+}
+
+// --- Start ---
+init();
+</script>
+</body>
+</html>

@@ -139,7 +139,7 @@ services:
     image: caronc/apprise:latest
     restart: unless-stopped
     environment:
-    - APPRISE_STATEFUL_MODE=simple
+      - APPRISE_STATEFUL_MODE=simple
     volumes:
     - apprise_data:/config
     networks:
