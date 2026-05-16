@@ -2,142 +2,160 @@ services:
   reverse-proxy:
     image: traefik:latest
     command:
-      - "--api.insecure=true"
-      - "--providers.docker=true"
-      - "--providers.docker.exposedbydefault=false"
-      - "--entrypoints.web.address=:80"
-      - "--entrypoints.websecure.address=:443"
-      - "--certificatesresolvers.letsencrypt.acme.email=sean@deliberatefederation.cloud"
-      - "--certificatesresolvers.letsencrypt.acme.storage=/letsencrypt/acme.json"
-      - "--certificatesresolvers.letsencrypt.acme.httpChallenge.entrypoint=web"
+    - --api.insecure=true
+    - --providers.docker=true
+    - --providers.docker.exposedbydefault=false
+    - --entrypoints.web.address=:80
+    - --entrypoints.websecure.address=:443
+    - --certificatesresolvers.letsencrypt.acme.email=sean@deliberatefederation.cloud
+    - --certificatesresolvers.letsencrypt.acme.storage=/letsencrypt/acme.json
+    - --certificatesresolvers.letsencrypt.acme.httpChallenge.entrypoint=web
     ports:
-      - "80:80"
-      - "443:443"
-      - "8080:8080"
+    - 80:80
+    - 443:443
+    - 8080:8080
     volumes:
-      - "/var/run/docker.sock:/var/run/docker.sock:ro"
-      - "./letsencrypt:/letsencrypt"
+    - /var/run/docker.sock:/var/run/docker.sock:ro
+    - ./letsencrypt:/letsencrypt
     networks:
-      - federation-game_default
+    - federation-game_default
     restart: unless-stopped
   backend:
     build: /var/lib/docker/volumes/agent-zero-qcyl_agent-zero-data/_data/projects/project_1/federation-game/backend
-    command: ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "3"]
+    command:
+    - uvicorn
+    - main:app
+    - --host
+    - 0.0.0.0
+    - --port
+    - '8000'
+    - --workers
+    - '3'
     restart: unless-stopped
     env_file:
-      - .env
+    - .env
     volumes:
-      - /var/lib/docker/volumes/agent-zero-qcyl_agent-zero-data/_data/projects/project_1/federation-game/backend:/app:ro
+    - /var/lib/docker/volumes/agent-zero-qcyl_agent-zero-data/_data/projects/project_1/federation-game/backend:/app:ro
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/healthz')"]
+      test:
+      - CMD
+      - python
+      - -c
+      - import urllib.request; urllib.request.urlopen('http://localhost:8000/healthz')
       interval: 15s
       timeout: 5s
       retries: 3
       start_period: 10s
     depends_on:
-      - postgres
-      - redis
+    - postgres
+    - redis
     networks:
-      - federation-game_default
+    - federation-game_default
   frontend:
     build: /var/lib/docker/volumes/agent-zero-qcyl_agent-zero-data/_data/projects/project_1/federation-game/frontend
     restart: unless-stopped
     volumes:
-      - /var/lib/docker/volumes/agent-zero-qcyl_agent-zero-data/_data/projects/project_1/public_html:/usr/share/nginx/html/command-deck:ro
+    - /var/lib/docker/volumes/agent-zero-qcyl_agent-zero-data/_data/projects/project_1/public_html:/usr/share/nginx/html/command-deck:ro
     labels:
-      - traefik.enable=true
-      - traefik.http.routers.federation-game.rule=Host(`federation-game.deliberatefederation.cloud`)
-      - traefik.http.routers.federation-game.entrypoints=websecure
-      - traefik.http.routers.federation-game.tls.certresolver=letsencrypt
-      - traefik.http.routers.federation-game.service=federation-game-svc
-      - traefik.http.services.federation-game-svc.loadbalancer.server.port=80
-      - traefik.http.routers.federation-game-http.rule=Host(`federation-game.deliberatefederation.cloud`)
-      - traefik.http.routers.federation-game-http.entrypoints=web
-      - traefik.http.routers.federation-game-http.service=federation-game-http-svc
-      - traefik.http.services.federation-game-http-svc.loadbalancer.server.port=80
+    - traefik.enable=true
+    - traefik.http.routers.federation-game.rule=Host(`federation-game.deliberatefederation.cloud`)
+    - traefik.http.routers.federation-game.entrypoints=websecure
+    - traefik.http.routers.federation-game.tls.certresolver=letsencrypt
+    - traefik.http.routers.federation-game.service=federation-game-svc
+    - traefik.http.services.federation-game-svc.loadbalancer.server.port=80
+    - traefik.http.routers.federation-game-http.rule=Host(`federation-game.deliberatefederation.cloud`)
+    - traefik.http.routers.federation-game-http.entrypoints=web
+    - traefik.http.routers.federation-game-http.service=federation-game-http-svc
+    - traefik.http.services.federation-game-http-svc.loadbalancer.server.port=80
     depends_on:
-      - backend
+    - backend
     networks:
-      - federation-game_default
+    - federation-game_default
   worker:
     build: /var/lib/docker/volumes/agent-zero-qcyl_agent-zero-data/_data/projects/project_1/federation-game/backend
     command: python -u worker.py
     restart: unless-stopped
     env_file:
-      - .env
+    - .env
     healthcheck:
-      test: ["CMD", "python", "-c", "import os; open('/proc/1/cmdline').read()"]
+      test:
+      - CMD
+      - python
+      - -c
+      - import os; open('/proc/1/cmdline').read()
       interval: 30s
       timeout: 5s
       retries: 3
       start_period: 10s
     depends_on:
-      - redis
+    - redis
     networks:
-      - federation-game_default
+    - federation-game_default
   postgres:
     image: postgres:15-alpine
     restart: unless-stopped
     env_file:
-      - .env
+    - .env
     volumes:
-      - postgres_data:/var/lib/postgresql/data
+    - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U federation"]
+      test:
+      - CMD-SHELL
+      - pg_isready -U federation
       interval: 10s
       timeout: 5s
       retries: 5
       start_period: 10s
     networks:
-      - federation-game_default
+    - federation-game_default
   redis:
     image: redis:7-alpine
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test:
+      - CMD
+      - redis-cli
+      - ping
       interval: 10s
       timeout: 5s
       retries: 3
       start_period: 5s
     networks:
-      - federation-game_default
+    - federation-game_default
   adminer:
     image: adminer:latest
     restart: unless-stopped
     depends_on:
-      - postgres
+    - postgres
     networks:
-      - federation-game_default
+    - federation-game_default
     labels:
-      - traefik.enable=true
-      - traefik.http.routers.adminer.rule=Host(`federation-game.deliberatefederation.cloud`) && PathPrefix(`/adminer`)
-      - traefik.http.routers.adminer.entrypoints=websecure
-      - traefik.http.routers.adminer.tls.certresolver=letsencrypt
-      - traefik.http.services.adminer-svc.loadbalancer.server.port=8080
-      - traefik.http.middlewares.adminer-stripprefix.stripprefix.prefixes=/adminer
-  - traefik.http.routers.adminer.middlewares=adminer-stripprefix
-
+    - traefik.enable=true
+    - traefik.http.routers.adminer.rule=Host(`adminer.federation-game.deliberatefederation.cloud`)
+    - traefik.http.routers.adminer.entrypoints=websecure
+    - traefik.http.routers.adminer.tls.certresolver=letsencrypt
+    - traefik.http.services.adminer-svc.loadbalancer.server.port=8080
   apprise:
     image: caronc/apprise:latest
     restart: unless-stopped
     environment:
-      - APPRISE_STATEFUL_MODE=simple
+    - APPRISE_STATEFUL_MODE=simple
     volumes:
-      - apprise_data:/config
+    - apprise_data:/config
     networks:
-      - federation-game_default
+    - federation-game_default
     labels:
-      - traefik.enable=true
-      - traefik.http.routers.apprise.rule=Host(`federation-game.deliberatefederation.cloud`) && PathPrefix(`/apprise`)
-      - traefik.http.routers.apprise.entrypoints=websecure
-      - traefik.http.routers.apprise.tls.certresolver=letsencrypt
-      - traefik.http.services.apprise-svc.loadbalancer.server.port=8000
-      - traefik.http.middlewares.apprise-stripprefix.stripprefix.prefixes=/apprise
-      - traefik.http.routers.apprise.middlewares=apprise-stripprefix
-
+    - traefik.enable=true
+    - traefik.http.routers.apprise.rule=Host(`federation-game.deliberatefederation.cloud`)
+      && PathPrefix(`/apprise`)
+    - traefik.http.routers.apprise.entrypoints=websecure
+    - traefik.http.routers.apprise.tls.certresolver=letsencrypt
+    - traefik.http.services.apprise-svc.loadbalancer.server.port=8000
+    - traefik.http.middlewares.apprise-stripprefix.stripprefix.prefixes=/apprise
+    - traefik.http.routers.apprise.middlewares=apprise-stripprefix
 networks:
   federation-game_default:
     driver: bridge
 volumes:
-  postgres_data:
-  apprise_data:
+  postgres_data: null
+  apprise_data: null
