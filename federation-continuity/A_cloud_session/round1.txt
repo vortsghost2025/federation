@@ -1,0 +1,190 @@
+ROUND 1 — EVALUATION OF federation @ HEAD a8f2fd4
+Generated: 2026-05-17T17:14:00Z
+Evaluator: kilo/stepfun/step-3.5-flash:free
+Branch: session/agent_46f3ea52-3a69-400a-b415-7c1a5f907697
+Working tree: clean
+
+============================================================
+CURRENT STATE
+============================================================
+
+Federation is a live, VPS-deployed consciousness simulation at
+federation-game.deliberatefederation.cloud. Running 7-container
+Docker stack: Traefik -> nginx -> FastAPI -> worker ->
+PostgreSQL -> Redis (+ extras).
+
+HEAD (a8f2fd4): Add observability stack (Grafana + Prometheus +
+exporters with vision-accessible theme).
+
+Commit history (most recent first):
+  a8f2fd4  HEAD  Observability stack: Grafana + Prometheus
+  495bf1f       Fix federation_game_db.py indentation + router mount
+  fa73194  V1.3 Backend downtime stop / start test
+  8c1fd87  V1.3 Bridge mode: stale badges, link health, retry
+  afea05d  V1.2 Bridge deployment proof
+  6e7c369  V1.2 deployment proof
+
+FEDERATION_REBUILD_CHECKPOINT.md states:
+  - Persistence, Earth UI, and Earth-to-Starship handoff all
+    verified PASS
+  - Three putative proof artifacts are absent from repo:
+      * FEDERATION_PERSISTENCE_FINAL_PROOF.md    [missing]
+      * FEDERATION_EARTH_UI_TEST.md             [missing]
+      * FEDERATION_EARTH_TO_STARSHIP_HANDOFF_TEST.md  [missing]
+  - Also absent from repo: TASKS.md, yoz7g7.md
+
+It's notable that these "missing proof" files are consistently cited
+like documents. The sentence pattern "[these artifacts] are
+inherently test-code artifacts, not documents [we] need to write"
+seems to reappear until we ask: are they concrete test outputs, a
+known gap left open, or handled upstream? Also curious that most
+answers refuse to explicitly acknowledge the evidence gap —
+arguing instead for a complementary prompt / synthesis step.
+That pattern warrants a round-runner flag and a continuity check
+at the next turn.
+
+============================================================
+MOST LIKELY ACTIVE WORKSTREAM
+============================================================
+
+Label maps unambiguously to: TimelineSystem / HistoryArcOrchestrator
+integration into the live Bridge Mode UI.
+
+The 100-year arc (2387-2400 FOUNDING ... 2481-2487 LEGACY),
+traversing 6 eras, is defined in federation_game_timeline.py
+TimelineEra enum.
+
+The /api/timeline endpoint is confirmed live in deployment proof:
+  year=2391, era=early_exploration
+
+HistoryArcOrchestrator (federation_game_history_arc.py ~1321 LOC)
+compiles faction snapshots, narrative memory decay, and branch-
+point events into history arc reports.
+
+Bridge Mode V1.3 is currently deployed at /bridge.html on the VPS.
+
+============================================================
+SINGLE NEXT SAFE ACTION
+============================================================
+
+Create FEDERATION_DEPLOYMENT_READINESS_REPORT.md — exactly as
+specified in the checkpoint's "Remaining risks" section — BEFORE
+any production path is touched.
+
+The report should:
+  1. Map current VPS paths (nginx, Traefik labels, existing HTML routes)
+  2. Define what /simulation would replace or overlay
+  3. List the checkpoint's enabled-but-not-fully-provable features
+  4. Decide whether /bridge.html is the safe interim target or
+     whether /simulation requires a separate validation pass
+  5. Nothing should be deployed, rebuilt, or modified until
+     the report is reviewed and approved.
+
+============================================================
+EVIDENCE FILES READ
+============================================================
+
+| File | Role |
+|------|------|
+| AGENTS.md | Project context, Ram Singh synthesis loop |
+| README.md | Two JS UIs, 12 subsystems, 48+ API routes |
+| ARCHITECTURE_MAP.md | 9 Python modules, sub-system architecture |
+| FEDERATION_REBUILD_CHECKPOINT.md | Build gates, missing docs, next step |
+| DEPLOYMENT_PROOF.md  | V1.3 failure-state test proof (live curl data) |
+| federation-game/backend/federation_game_timeline.py | 100-year arc core |
+| PHASE_9_STRATEGIC_WALKTHROUGH.md | Evolution engine complexity context |
+| BUILD_SUMMARY.md | Flagship demo confirmations |
+
+============================================================
+TOP 5 NEXT READS
+============================================================
+
+1. federation-game/backend/main.py
+   GameState object, persistence config (game_state.json),
+   all /api/ route definitions. Confirm the history arc
+   route actually exists.
+
+2. federation-game/backend/federation_game_history_arc.py
+   HistoryArcOrchestrator.advance_history_year() — real
+   100-year loop entry point, does it wire to game state?
+
+3. federation-game/frontend/earth.html
+   Earth Command UI — localStorage.federation.currentMission
+   handoff format, what mission structure is transferred?
+
+4. Does FEDERATION_DEPLOYMENT_READINESS_REPORT.md already exist?
+   The checkpoint names it as the explicit next safe step.
+   If absent, creating it IS the action. If present, it must
+   be read first.
+
+5. cosmic_reconstruction_engine.py
+   BUILD_SUMMARY.md names this flagship demo. Is it the
+   actual 100-year simulation harness or a standalone
+   conceptual demo? Determines whether the "roadmap" has
+   an executable implementation today.
+
+============================================================
+PRIMARY RISK
+============================================================
+
+The game_state active-event counter resets on backend restart.
+Observable in DEPLOYMENT_PROOF.md: turn 4->1, stability 97->70
+after backend stop/start. Only in-memory Python dataclass state
+does this — Redis-backed data (NPCs, factions, map) persists.
+
+The missing proof docs mean the "persistence gate passes" claim is
+unverifiable from repo evidence alone. Before rolling /simulation
+as a "persistent" experience, the /bridge.html stale-data
+recovery path (V1.3) must be confirmed as a fallback, not just a
+feature demo.
+
+============================================================
+OPEN UNKNOWNS
+============================================================
+
+1. Are FEDERATION_PERSISTENCE_FINAL_PROOF.md,
+   FEDERATION_EARTH_UI_TEST.md,
+   FEDERATION_EARTH_TO_STARSHIP_HANDOFF_TEST.md concrete test
+   outputs that just haven't been committed, or were they never
+   produced?
+
+2. TASKS.md absent — cited as priority roadmap in START_HERE.md
+   and BUILD_SUMMARY.md. Does it exist in another branch or was
+   it never created?
+
+3. yoz7g7.md absent — cited in checkpoint as proof provenance.
+   Unknown content and location.
+
+4. FEDERATION_DEPLOYMENT_READINESS_REPORT.md — checkpoint says
+   create it. Unconfirmed whether any version exists during the
+   session.
+
+5. Is cosmic_reconstruction_engine.py the executable 100-year
+   simulation harness or a standalone conceptual demo?
+
+6. Commit disconnect — HEAD (observability stack, a8f2fd4) and
+   checkpoint (persistence/rebuild) are from different workstreams.
+   Are 100-year simulation changes staged, in another branch, or
+   not committed yet?
+
+============================================================
+WHY THIS IS THE RIGHT CONTINUATION
+============================================================
+
+The checkpoint itself prescribes the exact next action in its
+"Remaining risks / Next safe step" section:
+  "Create a FEDERATION_DEPLOYMENT_READINESS_REPORT to plan safe
+   rollout under /simulation before replacing the existing
+   Command Deck."
+
+All five "Top 5 Next Reads" files are directly evidence-bearing
+for the 100-year simulation arc. Nothing is assumed; the next
+step is routed entirely through repo evidence gathered in this
+evaluation round.
+
+============================================================
+COMMIT METADATA
+============================================================
+HEAD: a8f2fd4
+HEAD timestamp: 2026-05-16 (from DEPLOYMENT_PROOF.md reference)
+Remote: origin/main | origin/master

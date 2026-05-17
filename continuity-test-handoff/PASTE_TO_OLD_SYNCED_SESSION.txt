@@ -1,0 +1,25 @@
+# PASTE TO OLD SYNCED SESSION
+# ===========================
+#
+# Read these files first (do NOT re-run ROUND 1):
+#
+#   S:\federation\continuity-test-handoff\A_old_synced_session\round1.txt
+#   S:\federation\continuity-test-handoff\A_old_synced_session\round1-export.json
+#   S:\federation\continuity-test-handoff\A_old_synced_session\round1-notes.txt
+#
+# They contain:
+#   - Current state of S:\federation @ HEAD a8f2fd4
+#   - Identified workstream: 100-year simulation roadmap (TimelineSystem)
+#   - Single next safe action: create FEDERATION_DEPLOYMENT_READINESS_REPORT.md
+#   - Top 5 next reads with confirmed evidence
+#   - Primary risk: game_state resets on backend restart
+#   - 6 open unknowns (3 missing proof docs, TASKS.md absent, etc.)
+#
+# After reading, proceed directly to ROUND 2.
+#
+# Write ROUND 2 outputs here:
+#   S:\federation\continuity-test-handoff\A_old_synced_session\round2.txt
+#   S:\federation\continuity-test-handoff\A_old_synced_session\round2-export.json
+#   S:\federation\continuity-test-handoff\A_old_synced_session\round2-notes.txt
+#   S:\federation\continuity-test-handoff\A_old_synced_session\round2-compact-summary.txt
+#   S:\federation\continuity-test-handoff\A_old_synced_session\round2-transcript.txt
