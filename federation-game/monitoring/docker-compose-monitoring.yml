@@ -24,6 +24,7 @@ services:
   grafana:
     image: grafana/grafana:latest
     restart: unless-stopped
+    entrypoint: ["/etc/grafana/entrypoint.sh"]
     environment:
       - GF_AUTH_ANONYMOUS_ENABLED=true
       - GF_AUTH_ANONYMOUS_ORG_ROLE=Viewer
@@ -34,6 +35,9 @@ services:
     volumes:
       - /docker/federation-game/monitoring/provisioning:/etc/grafana/provisioning:ro
       - /docker/federation-game/monitoring/provisioning/dashboards:/var/lib/grafana/dashboards:ro
+      - /docker/federation-game/monitoring/grafana-config/grafana.ini:/etc/grafana/grafana.ini:ro
+      - /docker/federation-game/monitoring/grafana-dashboards-home/custom.css:/etc/grafana/custom.css:ro
+      - /docker/federation-game/monitoring/grafana-entrypoint.sh:/etc/grafana/entrypoint.sh:ro
       - grafana_data:/var/lib/grafana
     networks:
       - federation-game_default

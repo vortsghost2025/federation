@@ -169,6 +169,20 @@ html,body{height:100%;overflow:hidden;background:#040810;color:var(--white);font
 #lh-label{font-family:'Orbitron',sans-serif;font-size:8px;letter-spacing:1px;color:var(--dim);transition:color 0.5s}
 #lh-label.ok{color:var(--green)}#lh-label.warn{color:var(--amber)}#lh-label.crit{color:var(--red)}
 
+/* Audio toggle in top ribbon */
+#audio-toggle{
+  background:none;border:1px solid var(--panel-border);border-radius:3px;
+  color:var(--cyan);font-size:14px;cursor:pointer;padding:2px 8px;
+  display:flex;align-items:center;justify-content:center;
+  transition:color 0.2s,border-color 0.2s,opacity 0.2s;
+  margin-left:4px;height:24px;line-height:1;
+}
+#audio-toggle:hover{border-color:var(--cyan);box-shadow:0 0 8px rgba(79,195,247,0.2)}
+#audio-toggle.muted{color:var(--dim);border-color:rgba(79,195,247,0.08);position:relative}
+#audio-toggle.muted:hover{border-color:var(--dim)}
+#audio-toggle.muted::after{content:'';position:absolute;left:3px;right:3px;top:50%;height:2px;background:var(--red);transform:rotate(-35deg);opacity:0.7}
+#audio-toggle:focus-visible{outline:2px solid var(--cyan);outline-offset:2px}
+
 /* === CENTER VIEWSCREEN === */
 #viewscreen{grid-area:viewscreen;position:relative;overflow:hidden;background:#040810}
 #vs-canvas{position:absolute;top:0;left:0;width:100%;height:100%}
@@ -407,6 +421,7 @@ html,body{height:100%;overflow:hidden;background:#040810;color:var(--white);font
   <div class="top-metric"><span class="tm-label">Integrity</span><div class="tm-bar"><div class="tm-fill" id="bar-integrity" style="background:var(--violet)"></div></div><span class="tm-val" id="val-integrity">0</span></div>
   <div class="top-metric"><span class="tm-label">Rights</span><div class="tm-bar"><div class="tm-fill" id="bar-rights" style="background:var(--cyan)"></div></div><span class="tm-val" id="val-rights">0</span></div>
 <div id="link-health"><div id="lh-dot" class="ok"></div><span id="lh-label" class="ok">LINK OK</span></div>
+<button id="audio-toggle" title="Toggle audio" aria-label="Toggle audio on/off">&#9835;</button>
 <nav class="top-nav">
   <a href="/bridge.html" class="active">Bridge</a>
   <a href="/starmap.html">Star Map</a>
@@ -547,6 +562,8 @@ let currentAlert = 'green';
 let audioCtx = null;
 let bridgeHum = null;
 let humGain = null;
+let isMuted = localStorage.getItem('federation-muted') === 'true';
+let savedHumLevel = 0.05;
 
 // ============ FETCH HEALTH TRACKER ============
 const fetchHealth = {};
@@ -793,7 +810,7 @@ function initAudio() {
 }
 
 function playTone(freq, duration, vol, type) {
-  if (!audioCtx) return;
+  if (!audioCtx || isMuted) return;
   try {
     const osc = audioCtx.createOscillator();
     const gain = audioCtx.createGain();
@@ -814,7 +831,7 @@ function playChoiceSound() {
 }
 
 function playAlertTone(level) {
-  if (!audioCtx) return;
+  if (!audioCtx || isMuted) return;
   if (level === 'red') {
     playTone(440, 0.3, 0.1, 'sawtooth');
     setTimeout(() => playTone(440, 0.3, 0.1, 'sawtooth'), 350);
@@ -852,11 +869,29 @@ function playEventSound(domain) {
 function setHumLevel(level) {
   if (!humGain) return;
   const v = level === 'crisis' ? 0.12 : level === 'red' ? 0.10 : level === 'yellow' ? 0.07 : 0.05;
-  humGain.gain.setTargetAtTime(v, audioCtx.currentTime, 1);
+  savedHumLevel = v;
+  humGain.gain.setTargetAtTime(isMuted ? 0 : v, audioCtx.currentTime, 1);
   if (bridgeHum) {
     const freq = level === 'crisis' ? 60 : level === 'red' ? 58 : 55;
     bridgeHum.osc1.frequency.setTargetAtTime(freq, audioCtx.currentTime, 0.5);
     bridgeHum.osc2.frequency.setTargetAtTime(freq + 0.5, audioCtx.currentTime, 0.5);
+  }
+}
+
+function toggleMute() {
+  isMuted = !isMuted;
+  localStorage.setItem('federation-muted', isMuted);
+  const btn = document.getElementById('audio-toggle');
+  if (isMuted) {
+    btn.classList.add('muted');
+    btn.innerHTML = '&#9835;'; // music note with line through — we use CSS for that
+    btn.setAttribute('aria-label', 'Audio muted — click to unmute');
+    if (humGain) humGain.gain.setTargetAtTime(0, audioCtx.currentTime, 0.1);
+  } else {
+    btn.classList.remove('muted');
+    btn.innerHTML = '&#9835;';
+    btn.setAttribute('aria-label', 'Audio on — click to mute');
+    if (humGain) humGain.gain.setTargetAtTime(savedHumLevel, audioCtx.currentTime, 0.3);
   }
 }
 
@@ -1241,8 +1276,15 @@ document.getElementById('npc-modal').addEventListener('click', function(e) {
 
 // ============ KEYBOARD SHORTCUTS ============
 document.addEventListener('keydown', function(e) {
-  // Init audio on first key press (browser autoplay policy)
-  if (!audioCtx) initAudio();
+// Init audio on first key press (browser autoplay policy)
+if (!audioCtx) initAudio();
+
+// M for Mute toggle
+if (e.key === 'm' || e.key === 'M') {
+  toggleMute();
+  e.preventDefault();
+  return;
+}
 
   // Number keys 1-5 for choice buttons
   if (e.key >= '1' && e.key <= '5') {
@@ -1743,8 +1785,24 @@ function init() {
   // Audio is initialized on first user interaction (click or keypress) to comply with autoplay policy
   document.addEventListener('click', function audioInit() {
     if (!audioCtx) initAudio();
+    // Apply mute state if user had it muted from last session
+    if (isMuted && humGain) humGain.gain.setTargetAtTime(0, audioCtx.currentTime, 0.05);
     document.removeEventListener('click', audioInit);
   }, { once: true });
+
+  // Audio toggle button
+  const audioBtn = document.getElementById('audio-toggle');
+  if (isMuted) {
+    audioBtn.classList.add('muted');
+    audioBtn.setAttribute('aria-label', 'Audio muted — click to unmute');
+  } else {
+    audioBtn.setAttribute('aria-label', 'Audio on — click to mute');
+  }
+  audioBtn.addEventListener('click', function(e) {
+    e.stopPropagation();
+    if (!audioCtx) initAudio();
+    toggleMute();
+  });
 
   fetchState().then(() => {
     fetchEvent();

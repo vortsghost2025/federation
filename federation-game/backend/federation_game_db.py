@@ -114,7 +114,7 @@ class DatabaseManager:
                 old = (
                     session.query(GameSnapshot)
                     .order_by(GameSnapshot.id.desc())
-                    .offset(10)
+                    .offset(50)
                     .all()
                 )
                 for row in old:
@@ -136,13 +136,15 @@ class DatabaseManager:
 
         try:
             with self._SessionLocal() as session:
+                # Prefer decision/reset/auto snapshots over manual (periodic) ones
                 row = (
                     session.query(GameSnapshot)
-                    .filter(GameSnapshot.is_current == True)
+                    .filter(GameSnapshot.snapshot_type != "manual")
                     .order_by(GameSnapshot.id.desc())
                     .first()
                 )
                 if row is None:
+                    # Fallback to the most recent snapshot of any type
                     row = (
                         session.query(GameSnapshot)
                         .order_by(GameSnapshot.id.desc())

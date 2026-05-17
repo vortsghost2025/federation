@@ -30,8 +30,6 @@ services:
       - 0.0.0.0
       - --port
       - '8000'
-      - --workers
-      - '3'
     restart: unless-stopped
     env_file:
       - .env
@@ -42,7 +40,7 @@ services:
         - CMD
         - python
         - -c
-        - import urllib.request; urllib.request.urlopen('http://localhost:8000/healthz')
+        - "import urllib.request; urllib.request.urlopen('http://localhost:8000/healthz')"
       interval: 15s
       timeout: 5s
       retries: 3
@@ -60,12 +58,12 @@ services:
       - /docker/federation-game/public_html:/usr/share/nginx/html:ro
     labels:
       - traefik.enable=true
-      - traefik.http.routers.federation-game.rule=Host(`federation-game.deliberatefederation.cloud`)
+      - "traefik.http.routers.federation-game.rule=Host(`federation-game.deliberatefederation.cloud`)"
       - traefik.http.routers.federation-game.entrypoints=websecure
       - traefik.http.routers.federation-game.tls.certresolver=letsencrypt
       - traefik.http.routers.federation-game.service=federation-game-svc
       - traefik.http.services.federation-game-svc.loadbalancer.server.port=80
-      - traefik.http.routers.federation-game-http.rule=Host(`federation-game.deliberatefederation.cloud`)
+      - "traefik.http.routers.federation-game-http.rule=Host(`federation-game.deliberatefederation.cloud`)"
       - traefik.http.routers.federation-game-http.entrypoints=web
       - traefik.http.routers.federation-game-http.service=federation-game-http-svc
       - traefik.http.services.federation-game-http-svc.loadbalancer.server.port=80
@@ -80,12 +78,14 @@ services:
     restart: unless-stopped
     env_file:
       - .env
+    environment:
+      - "NOTIFICATION_URLS=tgram://8908125951:AAEME7W8jlkh99AYIxM8IoIw_MlDznhajis/7312791490/,mailtos://seandavidramsingh:wotgjvdunpobkcqy@smtp.gmail.com/seandavidramsingh@gmail.com?mode=starttls"
     healthcheck:
       test:
         - CMD
         - python
         - -c
-        - import os; open('/proc/1/cmdline').read()
+        - "import os; open('/proc/1/cmdline').read()"
       interval: 30s
       timeout: 5s
       retries: 3
@@ -137,7 +137,7 @@ services:
       - fed-net
     labels:
       - traefik.enable=true
-      - traefik.http.routers.adminer.rule=Host(`adminer.federation-game.deliberatefederation.cloud`)
+      - "traefik.http.routers.adminer.rule=Host(`adminer.federation-game.deliberatefederation.cloud`)"
       - traefik.http.routers.adminer.entrypoints=websecure
       - traefik.http.routers.adminer.tls.certresolver=letsencrypt
       - traefik.http.services.adminer-svc.loadbalancer.server.port=8080
@@ -147,17 +147,19 @@ services:
     restart: unless-stopped
     environment:
       - APPRISE_STATEFUL_MODE=simple
+      - APPRISE_WORKER_COUNT=1
+      - APPRISE_CONFIG=/config/game-events.cfg
     volumes:
       - apprise_data:/config
     networks:
       - fed-net
     labels:
       - traefik.enable=true
-      - traefik.http.routers.apprise.rule=Host(`federation-game.deliberatefederation.cloud`) && PathPrefix(`/apprise`)
+      - "traefik.http.routers.apprise.rule=Host(`federation-game.deliberatefederation.cloud`) && PathPrefix(`/apprise`)"
       - traefik.http.routers.apprise.entrypoints=websecure
       - traefik.http.routers.apprise.tls.certresolver=letsencrypt
       - traefik.http.services.apprise-svc.loadbalancer.server.port=8000
-      - traefik.http.middlewares.apprise-stripprefix.stripprefix.prefixes=/apprise
+      - "traefik.http.middlewares.apprise-stripprefix.stripprefix.prefixes=/apprise"
       - traefik.http.routers.apprise.middlewares=apprise-stripprefix
 
   # === OBSERVABILITY STACK ===
@@ -203,13 +205,13 @@ services:
       - fed-net
     labels:
       - traefik.enable=true
-      - traefik.http.routers.grafana.rule=Host(`federation-game.deliberatefederation.cloud`) && PathPrefix(`/grafana`)
+      - "traefik.http.routers.grafana.rule=Host(`federation-game.deliberatefederation.cloud`) && PathPrefix(`/grafana`)"
       - traefik.http.routers.grafana.entrypoints=websecure
       - traefik.http.routers.grafana.tls.certresolver=letsencrypt
       - traefik.http.routers.grafana.priority=100
       - traefik.http.routers.grafana.service=grafana-svc
       - traefik.http.services.grafana-svc.loadbalancer.server.port=3000
-      - traefik.http.routers.grafana-http.rule=Host(`federation-game.deliberatefederation.cloud`) && PathPrefix(`/grafana`)
+      - "traefik.http.routers.grafana-http.rule=Host(`federation-game.deliberatefederation.cloud`) && PathPrefix(`/grafana`)"
       - traefik.http.routers.grafana-http.entrypoints=web
       - traefik.http.routers.grafana-http.priority=100
       - traefik.http.routers.grafana-http.service=grafana-http-svc
