@@ -57,7 +57,7 @@ services:
     build: /docker/federation-game/frontend
     restart: unless-stopped
     volumes:
-      - /docker/federation-game/public_html:/usr/share/nginx/html/command-deck:ro
+      - /docker/federation-game/public_html:/usr/share/nginx/html:ro
     labels:
       - traefik.enable=true
       - traefik.http.routers.federation-game.rule=Host(`federation-game.deliberatefederation.cloud`)
@@ -182,10 +182,12 @@ services:
   grafana:
     image: grafana/grafana:latest
     restart: unless-stopped
+    entrypoint: ["/etc/grafana/entrypoint.sh"]
     environment:
       - GF_AUTH_ANONYMOUS_ENABLED=true
       - GF_AUTH_ANONYMOUS_ORG_ROLE=Viewer
-      - GF_AUTH_DISABLE_LOGIN_FORM=true
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=federation2025
       - GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH=/var/lib/grafana/dashboards/federation-overview.json
       - GF_USERS_DEFAULT_THEME=dark
       - GF_SERVER_ROOT_URL=https://federation-game.deliberatefederation.cloud/grafana
@@ -194,7 +196,8 @@ services:
       - /docker/federation-game/monitoring/provisioning:/etc/grafana/provisioning:ro
       - /docker/federation-game/monitoring/provisioning/dashboards:/var/lib/grafana/dashboards:ro
       - /docker/federation-game/monitoring/grafana-config/grafana.ini:/etc/grafana/grafana.ini:ro
-      - /docker/federation-game/monitoring/grafana-dashboards-home/custom.css:/usr/share/grafana/public/css/custom.css:ro
+      - /docker/federation-game/monitoring/grafana-dashboards-home/custom.css:/etc/grafana/custom.css:ro
+      - /docker/federation-game/monitoring/grafana-entrypoint.sh:/etc/grafana/entrypoint.sh:ro
       - grafana_data:/var/lib/grafana
     networks:
       - fed-net

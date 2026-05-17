@@ -1,78 +1,254 @@
-/* Federation Vision-Accessible Theme Override */
-/* Large fonts for partially sighted user */
+/* ============================================================
+   Federation Vision-Accessible Theme Override — Grafana v13
+   Large fonts + high-contrast borders for partially sighted user
 
-/* Global font scale */
+   SELECTOR STRATEGY:
+   - Emotion CSS labels: [class*="label-name"] matches hashed classes
+   - data-testid: official Grafana e2e selectors (stable across versions)
+   - SVG text: gauges render values as SVG, not HTML
+   - !important: required to override Grafana's inline styles on stat values
+   ============================================================ */
+
+/* --- Global base font scale --- */
 body {
   font-size: 18px !important;
 }
 
-/* Panel titles */
-.panel-title {
-  font-size: 20px !important;
+/* --- Panel titles (emotion label "panel-title", rendered as <h2>) --- */
+[class*="panel-title"] > h2,
+[class*="panel-title"] h2,
+[data-testid^="Panel header"] [class*="panel-title"] {
+  font-size: 22px !important;
   font-weight: 700 !important;
   letter-spacing: 0.5px !important;
+  color: #f0f0f0 !important;
 }
 
-/* Dashboard title */
-.dashboard-title {
+/* --- Panel header container — high contrast border --- */
+[data-testid="panel-header-container"],
+[data-testid="header-container"] {
+  border-bottom: 2px solid rgba(255, 255, 255, 0.25) !important;
+}
+
+/* --- Panel containers — high contrast border all around --- */
+section[class*="panel-container"],
+[class*="panel-container"] {
+  border: 2px solid rgba(255, 255, 255, 0.20) !important;
+  border-radius: 4px !important;
+}
+
+/* Light mode panel borders */
+body.theme-light section[class*="panel-container"],
+body.theme-light [class*="panel-container"] {
+  border: 2px solid rgba(0, 0, 0, 0.25) !important;
+}
+
+/* --- Dashboard title --- */
+[data-testid="Dashboard navigation"] h1,
+[data-testid="Dashboard navigation"] [class*="dashboard"] h1,
+[class*="dashboard-title"] {
   font-size: 28px !important;
   font-weight: 800 !important;
   letter-spacing: 1px !important;
 }
 
-/* Stat panel values */
-.stat-panel-value {
+/* --- Stat / Big Value panel values (inline styles — need !important) --- */
+/* Targets the value container inside BigValue layouts */
+[class*="big-value"] [class*="value"] > div,
+[class*="big-value"] [class*="value-"] div,
+[class*="BigValue"] div[style*="font-size"],
+[data-testid="panel content"] [class*="big-value"] div[style*="font-size"] {
+  font-size: 36px !important;
+  font-weight: 700 !important;
+  line-height: 1.2 !important;
+  color: #e0e0f0 !important;
+}
+
+/* Stat value text spans (FormattedValueDisplay uses inline font-size) */
+[class*="formatted-value-display"] span,
+[class*="formatted-value"] span[style*="font-size"] {
   font-size: 36px !important;
   font-weight: 700 !important;
 }
 
-/* Gauge labels */
-.gauge-label {
+/* --- Stat panel titles (smaller than values but still enlarged) --- */
+[class*="big-value"] [class*="title"],
+[class*="big-value"] [class*="title-"] {
   font-size: 18px !important;
+  font-weight: 600 !important;
 }
 
-/* Legend text */
-.legend-item {
+/* --- Gauge panel values (SVG text elements) --- */
+[data-testid="gauge container"] svg text,
+[data-testid="gauge container"] svg text[class*="value"],
+[data-testid="gauge track"] + text {
+  font-size: 28px !important;
+  fill: #e0e0f0 !important;
+}
+
+/* Gauge name/label below value */
+[data-testid="gauge container"] svg text[class*="name"],
+[data-testid="gauge container"] svg text:last-of-type {
+  font-size: 16px !important;
+  fill: #c0c0d0 !important;
+}
+
+/* --- Bar gauge values --- */
+[data-testid="Bar gauge value"] {
+  font-size: 20px !important;
+  font-weight: 700 !important;
+}
+
+/* --- Sidebar menu items --- */
+[data-testid="Sidebar container"] a,
+[data-testid="Sidebar container"] [class*="sidemenu"] a,
+[data-testid="navigation mega-menu"] a,
+[data-testid="Nav menu item"] {
   font-size: 16px !important;
 }
 
-/* Axis labels */
-.axis-label {
+/* --- Time picker --- */
+[data-testid="TimePicker Open Button"],
+[data-testid="TimePicker Open Button"] span,
+[data-testid="TimePicker Overlay Content"] span,
+[data-testid="Time Range from field"],
+[data-testid="Time Range to field"] {
+  font-size: 16px !important;
+}
+
+/* Time picker apply button */
+[data-testid="TimePicker submit button"] {
+  font-size: 16px !important;
+  font-weight: 600 !important;
+}
+
+/* --- Refresh picker --- */
+[data-testid="RefreshPicker run button"],
+[data-testid="RefreshPicker interval button"] {
+  font-size: 16px !important;
+}
+
+/* --- Variable dropdowns / template variables --- */
+[data-testid="Dashboard submenu"] a,
+[data-testid="template variable"] a,
+[data-testid="variable-link-wrapper"],
+[data-testid="Variable options"] span,
+[data-testid="variable-option"] {
+  font-size: 16px !important;
+}
+
+/* Variable dropdown select container */
+[data-testid="Select container"] input,
+[data-testid="Select container"] span {
+  font-size: 16px !important;
+}
+
+/* --- Dashboard controls bar --- */
+[data-testid="dashboard controls"] button,
+[data-testid="dashboard controls"] span {
+  font-size: 16px !important;
+}
+
+/* --- VizLayout legend text --- */
+[data-testid="viz-layout-legend"] span,
+[data-testid="viz-layout-legend"] td {
   font-size: 15px !important;
 }
 
-/* Tooltip text */
-.graph-tooltip {
+/* --- Tooltip text (graph/panel tooltips) --- */
+[class*="graph-tooltip"] span,
+[class*="tooltip"] span,
+[class*="GraphTooltip"] span {
+  font-size: 15px !important;
+}
+
+/* --- Tab labels --- */
+[class*="tab-link"],
+[role="tab"] {
   font-size: 16px !important;
 }
 
-/* Sidebar menu items */
-.sidebar-menu-item {
+/* --- Table text --- */
+[class*="table-"] td,
+[class*="table-"] th,
+[data-testid="table"] td,
+[data-testid="table"] th {
+  font-size: 15px !important;
+}
+
+/* --- Select / dropdown options (used everywhere) --- */
+[data-testid="Select option"] {
+  font-size: 15px !important;
+}
+
+/* --- Card headings (dashboard list, etc.) --- */
+[data-testid="Card heading"] {
+  font-size: 18px !important;
+  font-weight: 600 !important;
+}
+
+/* --- Sidebar dock toggle --- */
+[data-testid="sidebar-dock-toggle"] {
   font-size: 16px !important;
 }
 
-/* Time picker */
-.time-picker {
-  font-size: 16px !important;
+/* --- General button text enlargement --- */
+button span {
+  font-size: 15px !important;
 }
 
-/* Tab labels */
-.tab-link {
-  font-size: 16px !important;
+/* --- High-contrast: boost border visibility on inputs --- */
+input,
+select,
+textarea {
+  border: 2px solid rgba(255, 255, 255, 0.30) !important;
 }
 
-/* Variable dropdown values */
-.variable-value-link {
-  font-size: 16px !important;
+body.theme-light input,
+body.theme-light select,
+body.theme-light textarea {
+  border: 2px solid rgba(0, 0, 0, 0.30) !important;
 }
 
-/* High contrast: boost text contrast on dark bg */
-.panel-container {
-  border: 1px solid rgba(255, 255, 255, 0.15) !important;
+/* --- High-contrast: panel content separator --- */
+[data-testid="panel content"] {
+  border-top: 1px solid rgba(255, 255, 255, 0.12) !important;
 }
 
-/* Make stat values extra large and bright */
-[data-testid="data-viz-panel"] .stat-value {
-  font-size: 32px !important;
-  color: #e0e0e0 !important;
+body.theme-light [data-testid="panel content"] {
+  border-top: 1px solid rgba(0, 0, 0, 0.12) !important;
+}
+
+/* --- VizLayout container borders --- */
+[data-testid="viz-layout"] {
+  border: 1px solid rgba(255, 255, 255, 0.10) !important;
+  border-radius: 4px !important;
+}
+
+body.theme-light [data-testid="viz-layout"] {
+  border: 1px solid rgba(0, 0, 0, 0.10) !important;
+}
+
+/* --- Scrollbar enlargement for easier grab --- */
+::-webkit-scrollbar {
+  width: 14px !important;
+  height: 14px !important;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.30) !important;
+  border-radius: 7px !important;
+}
+
+body.theme-light ::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.30) !important;
+}
+
+/* --- Focus rings for keyboard nav (accessibility) --- */
+a:focus-visible,
+button:focus-visible,
+input:focus-visible,
+select:focus-visible {
+  outline: 3px solid #6e9fff !important;
+  outline-offset: 2px !important;
 }
