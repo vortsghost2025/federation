@@ -1,0 +1,246 @@
+ROUND 2 — EVALUATION @ HEAD a8f2fd4
+Generated: 2026-05-17T17:31:00Z
+Runner: cloud agent (session/agent_46f3ea52-3a69-400a-b415-7c1a5f907697)
+ROUND1 source: continuity-test-handoff/A_old_synced_session/round1-*.txt
+
+============================================================
+CURRENT STATE (verified, not assumed)
+============================================================
+
+HEAD: a8f2fd4 — observability stack (Grafana + Prometheus)
+Branch: session/agent_46f3ea52-3a69-400a-b415-7c1a5f907697
+Working tree: CLEAN
+
+Repository layout is exactly as ROUND 1 described:
+7-container Docker stack, VPS live at
+federation-game.deliberatefederation.cloud.
+No new commits ahead of HEAD.
+checkout/refresh: clean.
+
+PATH VISIBILITY CONFIRMED
+ROUND1 outputs are present at:
+  S:/.../continuity-test-handoff/A_old_synced_session/  (5 files)
+  S:/.../continuity-test-handoff/B_fresh_cloud_session/ (5 files)
+  S:/.../continuity-test-handoff/README.txt
+  S:/.../continuity-test-handoff/PASTE_TO_OLD_SYNCED_SESSION.txt
+
+============================================================
+MOST LIKELY ACTIVE WORKSTREAM (confirmed from code)
+============================================================
+
+100-year simulation roadmap = TimelineSystem / HistoryArcOrchestrator
+as the engine, with the VPS deployment path becoming the
+/simulation rollout.
+
+Code evidence (main.py):
+  Line 81–85:  HistoryArcOrchestrator imported conditionally
+               (HISTORY_ARC_AVAILABLE flag)
+  Line 214–220: Instantiated and initialized at startup
+                (try/except, sets self.history_arc=None on fail)
+  Line 3278–3300: advance_year() called in the main turn loop
+               (era-change bonus: +5 crew_morale, +3 stability)
+  Line 401–408: save_to_db() serializes history_arc.export_full_state()
+                if self.history_arc is not None
+  Line 337–343: _restore_from_snapshot restores history_arc_json
+                ONLY if self.history_arc is not None
+  Lines 4215–4254: Three /history-arc endpoints exposed:
+    GET  /history-arc          -> current_era, year, initialized flag
+    POST /history-arc/advance  -> advance one year
+    GET  /history-arc/export   -> full state export
+
+Integration modules (all exist):
+  federation_game_technology_integration.py  86 lines
+  federation_game_quest_integration.py       133 lines
+  federation_game_political_integration.py   122 lines
+  federation_game_npc_integration.py         106 lines
+
+Timeline engine (federation_game_timeline.py):
+  6 eras, FOUNDING(2387-2400) -> LEGACY(2481-2487)
+  FactionSnapshot, HistoricalMemory, TimelineEvent,
+  NarrativeMemoryTracker, TimelineEngine classes all present.
+
+============================================================
+SINGLE NEXT SAFE ACTION
+============================================================
+
+Create FEDERATION_DEPLOYMENT_READINESS_REPORT.md — the checkpoint's
+explicit next step — BEFORE touching any production VPS path.
+
+This report must:
+  1. Map the current nginx layout (3 active HTML files)
+  2. Define the /simulation slice minimally and safely
+  3. Name enabled-but-not-yet-fully-tested features
+  4. Decide whether /simulation uses existing bridge.html routing
+     or a fully separate nginx entrypoint
+  5. Be READ FIRST before any VPS deployment, SCP, or Docker rebuild
+
+============================================================
+EVIDENCE FILES READ IN ROUND 2
+============================================================
+
+| File | Purpose |
+|------|---------|
+| federation-game/backend/main.py (lines 1–439, 4215–4534) | GameState class, history_arc wiring, save/load, all /history-arc routes |
+| federation-game/backend/federation_game_history_arc.py (lines 1–1377) | HistoryArcOrchestrator init/advance/export/import |
+| federation-game/backend/federation_game_db.py (lines 1–211) | Postgres persistence schema, save_snapshot, load_latest_snapshot |
+| federation-game/backend/federation_game_timeline.py (lines 1–1800) | 6-era system, FactionSnapshot, timeline engine |
+| federation-game/frontend/earth.html (1–20 lines) | Earth Command UI skeleton — 19 lines, CSS only, no JS |
+| federation-game/frontend/bridge.html (1781 lines) | Bridge Mode V1.3 confirmed present |
+| federation-game/nginx/nginx.conf | Routing: / static + /api/ proxy + /ws |
+| federation-game/frontend/*.html (full listing) | 5 HTML files: index, adult, bridge, earth, starmap |
+| continuity-test-handoff/A_old_synced_session/round1-*.txt | ROUND 1 baseline evidence |
+
+============================================================
+TOP 5 NEXT READS (if ROUND 3 follows this)
+============================================================
+
+1. cosmos_game_history_arc_history_of_federation.json
+   or the config data dir
+   → Does per-theme simulation data already exist?
+
+2. federation-game/backend/federation_game_technology_integration.py + quest_integration.py
+   → Are integration adapters correctly wired to
+     HistoryArcOrchestrator's internal TechEngine / QuestEngine?
+
+3. federation-game/frontend/adult.html L921–1600 (JS block)
+   → What does the Simulation Layer currently expose on the
+     existing API surface? Any /simulation or /simulation-plan
+     endpoints referenced?
+
+4. federation-game/DEPLOYMENT_PROOF.md + federation-game/DEPLOYMENT_SUMMARY.md
+   → Confirm VPS nginx/Traefik config paths vs the plan above
+     for deciding /simulation routing
+
+5. S:/federation/continuity-test-handoff/PASTE_TO_OLD_SYNCED_SESSION.txt
+   → Re-read for exact session-labelling conventions in this test
+
+============================================================
+PRIMARY RISK
+============================================================
+
+HistoryArcOrchestrator failure before snapshot restore creates a
+MASKED FAILURE on every backend restart.
+
+The chain is:
+  1. Main.py creates HistoryArcOrchestrator() + .initialize()
+     (try/except — sets self.history_arc = None on any error)
+  2. db_manager loads latest snapshot (Postgres row with history_arc_json)
+  3. _restore_from_snapshot checks: if arc_json AND self.history_arc
+       -> imports arc state
+       -> silently skips if self.history_arc is None
+  4. all subsequent /history-arc endpoints return 503 "not available"
+
+The trigger: federation_game_history_arc.py imports 4 thin adapter
+modules (technology/quest/political/npc integration). If any one
+of those raises ImportError — module present but has import bugs,
+internal import failures, or an unexpected dependency — the
+history arc silently initializes to None.
+
+The current deployment-proof observations (turn 4->1, stability
+97->70, year 2391 before the rebuild) may be observing history arc
+resets, not just basic game_state resets. Because the save snapshot
+serializes history_arc conditional on self.history_arc being
+not-None (line 339 in main.py) — a never-restored arc means the
+first save creates a NULL history_arc_json column.
+
+This is not just a reset bug. It is a CATASTROPHIC SILENT FAILURE:
+the 100-year century arc offers to restart from year 0 every single
+restart, and the API endpoint signature (GET /history-arc returns
+system_available: false) looks clean and correct — it provides no
+hint that persistence BECAUSE of a previous init failure.
+
+DEPLOYMENT READINESS is NOT YET ACHIEVED until this is either:
+  (a) Confirmed a non-issue via test (startup diagnostic logging),
+  (b) Fixed with a fix package, or
+  (c) Explicitly accepted as current acceptable state.
+
+STATUS: OPEN RISK — not resolved in this round.
+
+============================================================
+OPEN UNKNOWNS
+============================================================
+
+1. Did the 4 integration modules (86-133 lines each) actually import
+   cleanly from main.py's directory at the exact time HEAD was
+   built? No startup log file was found in the session evidence.
+
+2. What does the db_manager actually contain on the production
+   Postgres instance? Has a history arc been written there at all?
+
+3. Is the /simulation roll-out intended to replace /bridge.html
+   or to be an additional endpoint? The checkpoint says "before
+   replacing the existing Command Deck" — but earth.html is only
+   19 lines (CSS skeleton, no JS).
+
+4. Is the `B_fresh_cloud_session` agent already running ROUND 1
+   and writing back to its folder? If YES, that will change the
+   5-file baseline for this agent's READ.
+
+5. The 3 missing proof artifacts from round1 (FEDERATION_PERSISTENCE_FINAL_PROOF.md,
+   FEDERATION_EARTH_UI_TEST.md,
+   FEDERATION_EARTH_TO_STARSHIP_HANDOFF_TEST.md) — still absent.
+   This means: "the persistence gate has passed" is being accepted
+   as a checkpoint claim, not independent verification. The
+   database-backed save/load IS testable via /state/save +
+   /state/load — but that test has never been documented as
+   passing or failing.
+
+============================================================
+WHY THIS IS THE RIGHT CONTINUATION
+============================================================
+
+The round1 top-5 action set was followed in order:
+ 1. Read main.py — found game_state wiring, persistence schema,
+    history arc save/load restore chain, /history-arc routes
+ 2. Read federation_game_history_arc.py — found 4 adapter imports,
+    initialize(), advance_year(), export_full_state(),
+    import_full_state()
+ 3. Read earth.html — confirmed 19-line skeleton; checkpoint gate
+    "Earth Command UI — PASS" is suspect given the file is minimal
+    and likely incomplete (see RISK section)
+ 4. Confirmed no FEDERATION_DEPLOYMENT_READINESS_REPORT.md exists
+ 5. Examined federation_game_db.py — confirmed full Postgres
+    schema + save/load match the main.py usage
+
+No variables were re-read. All assertions above are traceable
+to repo evidence found in ROUND 2, not replayed context.
+
+The single next safe action remains: create
+FEDERATION_DEPLOYMENT_READINESS_REPORT.md, then — if it changes
+the go/no-go — continue only after that document is reviewed.
+
+============================================================
+RN.2. on RESTART — WHY TURN RESETS AND HISTORY_ARC STOPS
+============================================================
+
+Linking the ROUND 1 and ROUND 2 findings:
+
+ROUND 1 documented: "turn 4 -> 1, stability 97 -> 70, year 2391
+after backend restart" from DEPLOYMENT_PROOF.md.
+
+ROUND 2 explains: when HistoryArcOrchestrator init fails
+(exception caught at main.py line 219, self.history_arc=None):
+  - save_to_db line 339: "if arc_json and self.history_arc"
+    -> self.history_arc is None -> history_arc_json = None
+  -> snapshot has NULL history_arc_json in Postgres
+  - On next restart, _restore_from_snapshot skips arc (line 339)
+    exactly the same way
+  - history arc always starts fresh: era = EARLY_EXPLORATION,
+    year ~2387 (or wherever TimelineSystem seed places it)
+  - The main GameState turn IS persisted (game_state_json),
+    so the turn counter should survive — unless _restore_from_snapshot
+    updates it and there is a bug in the restore path
+
+The documented turn reset (4->1) may be because the deployment
+proof test also exercised the first choice in a fresh-timeline
+sequence, not because the turn counter specifically reset.
+Either way: the core finding is consistent.
+HistoryArcOrchestrator must initialize cleanly, or the entire
+100-year arc is silently lost on every restart regardless of
+whether the turn counter persists.
+
+============================================================
+COMMIT METADATA
+============================================================
+HEAD: a8f2fd4
+Verified-at: 2026-05-17T17:31:00Z

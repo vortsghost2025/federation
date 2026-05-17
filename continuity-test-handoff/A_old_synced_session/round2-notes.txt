@@ -1,0 +1,69 @@
+ROUND 2 — NOTES
+Generated: 2026-05-17T17:31:00Z
+Runner: cloud agent (session/agent_46f3ea52-3a69-400a-b415-7c1a5f907697)
+
+============================================================
+SESSION CONTEXT
+============================================================
+  SESSION_DIR:
+    /workspace/4a3ce27d-ed21-4f70-a11a/d45409884c3/
+    sessions/agent_46f3ea52-3a69-400a-b415-7c1a5f907697/
+
+  ROUND1 READ FROM:
+    continuity-test-handoff/A_old_synced_session/round1*.txt
+  ROUND1 ACCEPTED AS BASELINE (not re-verified here).
+
+============================================================
+OBSERVATIONS IN ROUND2
+============================================================
+1. HistoryArcOrchestrator.init failure = silent NULL in Postgres
+   on every save. restore path checks self.history_arc is not None
+   and skips arc restoration if it is None. Full 100-year arc
+   silently lost on every restart in that scenario.
+
+2. earth.html is 19 lines — a CSS skeleton, no JS at all.
+   "Earth Command UI — PASS" in the checkpoint is NOT consistent
+   with the actual file contents. Is this because:
+     (a) A full replacement was eroded in a git reset/rollback?
+     (b) The file exists in a different form not committed?
+     (c) The checkpoint gate was pre-written before any work
+         on it was completed?
+
+3. three integration modules (86-133 lines each) exist — These
+   are clean and likely do NOT cause an import error during
+   HistoryArcOrchestrator init UNLESS their own internal imports
+   fail. No startup evidence found for either outcome.
+
+4. save_to_db() -> history_arc.export_full_state() -> db INSERT
+   is a clean chain WITHIN a try/except (line 401-408). It will
+   silently produce NULL history_arc_json on any error.
+   load_latest_snapshot() reads it back at db level without
+   validation and returns it. _restore_from_snapshot() checks
+   self.history_arc and silently drops it on None (line 339).
+
+5. bridge.html IS 1781 lines and lives in
+   federation-game/frontend/bridge.html. Live VPS deployment
+   proof confirms bridge.html is served at /bridge.html via nginx.
+
+============================================================
+UNANSWERED QUESTIONS (flag for continuation)
+============================================================
+- Did HistoryArcOrchestrator.init succeed at last VPS restart?
+  (Need startup diagnostics from the live container.)
+- Is earth.html intentionally skeletal today or was it
+  overwritten/not yet committed?
+- Does the current Postgres DB actually have any history_arc_json
+  rows saved, or does every save produce NULL?
+- Will /simulation re-use bridge.html or copy/replace it?
+- Is the B_fresh_cloud_session agent writing round1 outputs
+  in parallel that might change the comparative baseline?
+
+============================================================
+CONTINUATION TRIGGER
+============================================================
+If ROUND 2 is incomplete, next session should:
+  1. Read round2.txt and round2-export.json from
+     continuity-test-handoff/A_old_synced_session/
+  2. Read B_fresh_cloud_session/round2-*.txt for comparison
+  3. Decide: fix the HistoryArcOrchestrator init gap FIRST,
+     then proceed to FEDERATION_DEPLOYMENT_READINESS_REPORT.md
