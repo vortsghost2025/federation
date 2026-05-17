@@ -2,7 +2,7 @@
 """
 Federation Game Worker — Autonomous tick engine with Apprise notifications.
 Runs game ticks every 60s, captures significant events, and broadcasts
-notifications via Apprise API.
+notifications via Apprise Python library (direct, no API container).
 """
 
 import os
@@ -12,14 +12,21 @@ import json
 import logging
 import signal
 
+import apprise
 import redis
 import requests
 
 # ── Configuration ──────────────────────────────────────────
 TICK_INTERVAL = int(os.getenv("TICK_INTERVAL", "60"))
 BACKEND_URL = os.getenv("BACKEND_URL", "http://backend:8000")
-REDIS_URL = os.getenv("REDIS_URL", "redis://redis:6432/0")
-APPRISE_URL = os.getenv("APPRISE_URL", "http://apprise:8000")
+REDIS_URL = os.getenv("REDIS_URL", "redis://redis:6379/0")
+# Notification URLs — comma-separated, plain format (library handles encoding)
+NOTIFICATION_URLS = os.getenv(
+    "NOTIFICATION_URLS",
+    "tgram://8908125951:AAEME7W8jlkh99AYIxM8IoIw_MlDznhajis/7312791490/"
+    ",mailtos://seandavidramsingh:wotgjvdunpobkcqy@smtp.gmail.com/"
+    "seandavidramsingh@gmail.com?mode=starttls",
+)
 
 # ── Logging ────────────────────────────────────────────────
 logging.basicConfig(
@@ -48,23 +55,53 @@ signal.signal(signal.SIGTERM, handle_signal)
 signal.signal(signal.SIGINT, handle_signal)
 
 
-# ── Apprise Notification ───────────────────────────────────
+# ── Apprise Notification (direct library — no API container needed) ────
+
+# Global Apprise instance — created once at startup, reused for every tick
+_apprise_instance = None
+
+
+def init_apprise():
+    """Initialize the Apprise instance with configured notification URLs.
+    Called once at startup. Returns the instance for reuse."""
+    global _apprise_instance
+    _apprise_instance = apprise.Apprise()
+    urls = [u.strip() for u in NOTIFICATION_URLS.split(",") if u.strip()]
+    added = 0
+    for url in urls:
+        try:
+            if _apprise_instance.add(url):
+                added += 1
+                # Log a redacted version (hide credentials)
+                safe = url.split("://")[0] + "://***"
+                log.info(f"  Notification target added: {safe}")
+            else:
+                log.warning(
+                    f"  Failed to add notification URL: {url.split('://')[0]}://***"
+                )
+        except Exception as e:
+            log.warning(f"  Error adding notification URL: {e}")
+    log.info(f"Apprise initialized: {added}/{len(urls)} targets configured")
+    return _apprise_instance
 
 
 def send_notification(title, body):
-    """Send a notification via Apprise API."""
+    """Send a notification via Apprise library directly.
+    Uses the global instance created at startup."""
+    global _apprise_instance
+    if _apprise_instance is None:
+        log.warning("Apprise not initialized — attempting lazy init")
+        init_apprise()
     try:
-        resp = requests.post(
-            f"{APPRISE_URL}/notify/game-events",
-            json={"title": title, "body": body},
-            timeout=5,
-        )
-        if resp.status_code in (200, 204):
+        result = _apprise_instance.notify(title=title, body=body)
+        if result:
             log.info(f"Notification sent: {title}")
         else:
-            log.warning(f"Notification failed: {resp.status_code} {resp.text[:100]}")
+            log.warning(
+                f"Notification delivery failed (some targets may be unreachable): {title}"
+            )
     except Exception as e:
-        log.warning(f"Apprise unreachable: {e}")
+        log.warning(f"Notification error: {e}")
 
 
 def check_significant_events(history_data, political_data):
@@ -320,10 +357,9 @@ def health_check():
 
 def main():
     log.info("═══ Federation Worker Starting ═══")
-    log.info(f"  Backend: {BACKEND_URL}")
-    log.info(f"  Redis: {REDIS_URL}")
-    log.info(f"  Apprise: {APPRISE_URL}")
-    log.info(f"  Tick interval: {TICK_INTERVAL}s")
+    log.info(f" Backend: {BACKEND_URL}")
+    log.info(f" Redis: {REDIS_URL}")
+    log.info(f" Tick interval: {TICK_INTERVAL}s")
 
     for attempt in range(30):
         try:
@@ -335,6 +371,9 @@ def main():
             pass
         log.info(f"Waiting for backend... (attempt {attempt + 1}/30)")
         time.sleep(2)
+
+    # Initialize Apprise notification targets (direct library — no API container)
+    init_apprise()
 
     while running:
         try:

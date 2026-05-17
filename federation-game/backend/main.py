@@ -289,6 +289,16 @@ class GameState:
 
     def _restore_from_snapshot(self, snapshot: Dict[str, Any]) -> None:
         try:
+            gs_json = snapshot.get("game_state_json")
+            if gs_json:
+                gs_data = json.loads(gs_json)
+                for key, value in gs_data.items():
+                    if hasattr(self, key):
+                        setattr(self, key, value)
+        except Exception as e:
+            print(f"Warning: game_state restore failed: {e}")
+
+        try:
             fed_json = snapshot.get("federation_state_json")
             if fed_json and self.game_state_v2:
                 fed_data = json.loads(fed_json)
@@ -417,7 +427,23 @@ class GameState:
         state_hash = None
         try:
             raw = json.dumps(
-                {"turn": self.turn, "stability": self.federation_stability},
+                {
+                    "turn": self.turn,
+                    "credits": self.credits,
+                    "fuel": self.fuel,
+                    "shields": self.shields,
+                    "hull": self.hull,
+                    "crew_morale": self.crew_morale,
+                    "federation_stability": self.federation_stability,
+                    "public_trust": self.public_trust,
+                    "council_support": self.council_support,
+                    "constitutional_integrity": self.constitutional_integrity,
+                    "rights_protection": self.rights_protection,
+                    "emergency_powers": self.emergency_powers,
+                    "active_policy": self.active_policy,
+                    "discovered_sectors": self.discovered_sectors,
+                    "allies": self.allies,
+                },
                 sort_keys=True,
             )
             state_hash = hashlib.sha256(raw.encode()).hexdigest()[:16]
@@ -3385,6 +3411,11 @@ async def make_choice(choice_id: str):
     }
     game_state.last_decision = decision_record
     game_state.decision_ledger.append(decision_record)
+    # Persist state after every player decision
+    try:
+        game_state.save_to_db(snapshot_type="decision")
+    except Exception:
+        pass
 
     return {
         "outcome": choice["outcome"],
@@ -3503,6 +3534,11 @@ async def join_faction(faction_id: str):
 async def reset_game():
     global game_state
     game_state = GameState()
+    # Save the fresh state so a restart doesn't restore stale data
+    try:
+        game_state.save_to_db(snapshot_type="reset")
+    except Exception:
+        pass
     return {"message": "Game reset", "state": await get_state()}
 
 
@@ -4476,7 +4512,7 @@ async def websocket_endpoint(websocket: WebSocket):
 @app.post("/state/save")
 async def state_save():
     try:
-        success = game_state.save_to_db(snapshot_type="manual")
+        success = game_state.save_to_db(snapshot_type="auto")
         if success:
             return {
                 "status": "saved",
