@@ -1,0 +1,78 @@
+/* Federation Vision-Accessible Theme Override */
+/* Large fonts for partially sighted user */
+
+/* Global font scale */
+body {
+  font-size: 18px !important;
+}
+
+/* Panel titles */
+.panel-title {
+  font-size: 20px !important;
+  font-weight: 700 !important;
+  letter-spacing: 0.5px !important;
+}
+
+/* Dashboard title */
+.dashboard-title {
+  font-size: 28px !important;
+  font-weight: 800 !important;
+  letter-spacing: 1px !important;
+}
+
+/* Stat panel values */
+.stat-panel-value {
+  font-size: 36px !important;
+  font-weight: 700 !important;
+}
+
+/* Gauge labels */
+.gauge-label {
+  font-size: 18px !important;
+}
+
+/* Legend text */
+.legend-item {
+  font-size: 16px !important;
+}
+
+/* Axis labels */
+.axis-label {
+  font-size: 15px !important;
+}
+
+/* Tooltip text */
+.graph-tooltip {
+  font-size: 16px !important;
+}
+
+/* Sidebar menu items */
+.sidebar-menu-item {
+  font-size: 16px !important;
+}
+
+/* Time picker */
+.time-picker {
+  font-size: 16px !important;
+}
+
+/* Tab labels */
+.tab-link {
+  font-size: 16px !important;
+}
+
+/* Variable dropdown values */
+.variable-value-link {
+  font-size: 16px !important;
+}
+
+/* High contrast: boost text contrast on dark bg */
+.panel-container {
+  border: 1px solid rgba(255, 255, 255, 0.15) !important;
+}
+
+/* Make stat values extra large and bright */
+[data-testid="data-viz-panel"] .stat-value {
+  font-size: 32px !important;
+  color: #e0e0e0 !important;
+}

@@ -1,0 +1,120 @@
+version: "3.8"
+
+# Add to existing docker-compose.yml under services:
+# Copy these services into the main docker-compose.yml
+
+services:
+  prometheus:
+    image: prom/prometheus:latest
+    restart: unless-stopped
+    volumes:
+      - /docker/federation-game/monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.retention.time=7d'
+      - '--storage.tsdb.retention.size=512MB'
+    networks:
+      - federation-game_default
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+
+  grafana:
+    image: grafana/grafana:latest
+    restart: unless-stopped
+    environment:
+      - GF_AUTH_ANONYMOUS_ENABLED=true
+      - GF_AUTH_ANONYMOUS_ORG_ROLE=Viewer
+      - GF_AUTH_DISABLE_LOGIN_FORM=true
+      - GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH=/var/lib/grafana/dashboards/federation-overview.json
+      - GF_USERS_DEFAULT_THEME=dark
+      - GF_SERVER_ROOT_URL=https://grafana.federation-game.deliberatefederation.cloud
+    volumes:
+      - /docker/federation-game/monitoring/provisioning:/etc/grafana/provisioning:ro
+      - /docker/federation-game/monitoring/provisioning/dashboards:/var/lib/grafana/dashboards:ro
+      - grafana_data:/var/lib/grafana
+    networks:
+      - federation-game_default
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.grafana.rule=Host(`grafana.federation-game.deliberatefederation.cloud`)
+      - traefik.http.routers.grafana.entrypoints=websecure
+      - traefik.http.routers.grafana.tls.certresolver=letsencrypt
+      - traefik.http.services.grafana-svc.loadbalancer.server.port=3000
+      - traefik.http.routers.grafana-http.rule=Host(`grafana.federation-game.deliberatefederation.cloud`)
+      - traefik.http.routers.grafana-http.entrypoints=web
+      - traefik.http.routers.grafana-http.service=grafana-http-svc
+      - traefik.http.services.grafana-http-svc.loadbalancer.server.port=3000
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+
+  node-exporter:
+    image: prom/node-exporter:latest
+    restart: unless-stopped
+    pid: host
+    volumes:
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /:/rootfs:ro
+    command:
+      - '--path.procfs=/host/proc'
+      - '--path.sysfs=/host/sys'
+      - '--path.rootfs=/rootfs'
+      - '--no-collector.filesystem.mount-points-exclude=^/(sys|proc|dev|etc|var/(run|lib/docker))$$'
+    networks:
+      - federation-game_default
+    deploy:
+      resources:
+        limits:
+          memory: 32M
+
+  redis-exporter:
+    image: oliver006/redis_exporter:alpine
+    restart: unless-stopped
+    environment:
+      - REDIS_ADDR=redis:6379
+    networks:
+      - federation-game_default
+    deploy:
+      resources:
+        limits:
+          memory: 32M
+
+  postgres-exporter:
+    image: prometheuscommunity/postgres-exporter:latest
+    restart: unless-stopped
+    environment:
+      - DATA_SOURCE_NAME=postgresql://federation:federation_pwd@postgres:5432/federation_game?sslmode=disable
+    networks:
+      - federation-game_default
+    deploy:
+      resources:
+        limits:
+          memory: 32M
+
+  cadvisor:
+    image: gcr.io/cadvisor/cadvisor:latest
+    restart: unless-stopped
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:ro
+      - /sys:/sys:ro
+      - /var/lib/docker/:/var/lib/docker:ro
+      - /dev/disk/:/dev/disk:ro
+    devices:
+      - /dev/kmsg
+    privileged: true
+    networks:
+      - federation-game_default
+    deploy:
+      resources:
+        limits:
+          memory: 64M
+
+volumes:
+  prometheus_data:
+  grafana_data:
