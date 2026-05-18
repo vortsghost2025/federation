@@ -25,13 +25,15 @@ services:
     image: grafana/grafana:latest
     restart: unless-stopped
     entrypoint: ["/etc/grafana/entrypoint.sh"]
-    environment:
-      - GF_AUTH_ANONYMOUS_ENABLED=true
-      - GF_AUTH_ANONYMOUS_ORG_ROLE=Viewer
-      - GF_AUTH_DISABLE_LOGIN_FORM=true
-      - GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH=/var/lib/grafana/dashboards/federation-overview.json
-      - GF_USERS_DEFAULT_THEME=dark
-      - GF_SERVER_ROOT_URL=https://grafana.federation-game.deliberatefederation.cloud
+  environment:
+    - GF_AUTH_ANONYMOUS_ENABLED=true
+    - GF_AUTH_ANONYMOUS_ORG_ROLE=Viewer
+    - GF_SECURITY_ADMIN_USER=admin
+    - GF_SECURITY_ADMIN_PASSWORD=federation2025
+    - GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH=/var/lib/grafana/dashboards/federation-overview.json
+    - GF_USERS_DEFAULT_THEME=dark
+    - GF_SERVER_ROOT_URL=https://federation-game.deliberatefederation.cloud/grafana
+    - GF_SERVER_SERVE_FROM_SUB_PATH=true
     volumes:
       - /docker/federation-game/monitoring/provisioning:/etc/grafana/provisioning:ro
       - /docker/federation-game/monitoring/provisioning/dashboards:/var/lib/grafana/dashboards:ro
@@ -41,16 +43,16 @@ services:
       - grafana_data:/var/lib/grafana
     networks:
       - federation-game_default
-    labels:
-      - traefik.enable=true
-      - traefik.http.routers.grafana.rule=Host(`grafana.federation-game.deliberatefederation.cloud`)
-      - traefik.http.routers.grafana.entrypoints=websecure
-      - traefik.http.routers.grafana.tls.certresolver=letsencrypt
-      - traefik.http.services.grafana-svc.loadbalancer.server.port=3000
-      - traefik.http.routers.grafana-http.rule=Host(`grafana.federation-game.deliberatefederation.cloud`)
-      - traefik.http.routers.grafana-http.entrypoints=web
-      - traefik.http.routers.grafana-http.service=grafana-http-svc
-      - traefik.http.services.grafana-http-svc.loadbalancer.server.port=3000
+  labels:
+    - traefik.enable=true
+    - "traefik.http.routers.grafana.rule=Host(`federation-game.deliberatefederation.cloud`) && PathPrefix(`/grafana`)"
+    - traefik.http.routers.grafana.entrypoints=websecure
+    - traefik.http.routers.grafana.tls.certresolver=letsencrypt
+    - traefik.http.routers.grafana.priority=100
+    - traefik.http.routers.grafana.service=grafana-svc
+    - traefik.http.services.grafana-svc.loadbalancer.server.port=3000
+    - "traefik.http.routers.grafana-http.rule=Host(`federation-game.deliberatefederation.cloud`) && PathPrefix(`/grafana`)"
+    - traefik.http.routers.grafana-http.entrypoints=web
     deploy:
       resources:
         limits:
