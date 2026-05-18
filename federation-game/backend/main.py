@@ -287,77 +287,72 @@ class GameState:
             }
         )
 
-    def _restore_from_snapshot(self, snapshot: Dict[str, Any]) -> None:
-        try:
-            gs_json = snapshot.get("game_state_json")
-            if gs_json:
-                gs_data = json.loads(gs_json)
-                for key, value in gs_data.items():
-                    if hasattr(self, key):
-                        setattr(self, key, value)
-        except Exception as e:
-            print(f"Warning: game_state restore failed: {e}")
+        def _restore_from_snapshot(self, snapshot: Dict[str, Any]) -> None:
+            try:
+                gs_json = snapshot.get("game_state_json")
+                if gs_json:
+                    gs_data = json.loads(gs_json)
+                    for key, value in gs_data.items():
+                        if hasattr(self, key):
+                            setattr(self, key, value)
+            except Exception as e:
+                print(f"Warning: game_state restore failed: {e}")
 
-        try:
-            fed_json = snapshot.get("federation_state_json")
-            if fed_json and self.game_state_v2:
-                fed_data = json.loads(fed_json)
-                federation_data = fed_data.get("federation", {})
-                fed = self.game_state_v2.federation
-                fed.morale = federation_data.get("morale", 0.5)
-                fed.identity_strength = federation_data.get("identity_strength", 0.3)
-                fed.stability = federation_data.get("stability", 0.6)
-                fed.technological_level = federation_data.get(
-                    "technological_level", 0.2
-                )
-                fed.military_power = federation_data.get("military_power", 0.3)
-                fed.treasury = federation_data.get("treasury", 1000)
-                fed.population = federation_data.get("population", 10000)
-                fed.territory_size = federation_data.get("territory_size", 100.0)
-                last_updated_str = federation_data.get("last_updated")
-                if last_updated_str:
-                    try:
+            try:
+                fed_json = snapshot.get("federation_state_json")
+                if fed_json and self.game_state_v2:
+                    fed_data = json.loads(fed_json)
+                    federation_data = fed_data.get("federation", {})
+                    fed = self.game_state_v2.federation
+                    fed.morale = federation_data.get("morale", 0.5)
+                    fed.identity_strength = federation_data.get("identity_strength", 0.3)
+                    fed.stability = federation_data.get("stability", 0.6)
+                    fed.technological_level = federation_data.get(
+                        "technological_level", 0.2
+                    )
+                    fed.military_power = federation_data.get("military_power", 0.3)
+                    fed.treasury = federation_data.get("treasury", 1000)
+                    fed.population = federation_data.get("population", 10000)
+                    fed.territory_size = federation_data.get("territory_size", 100.0)
+                    _lu = federation_data.get("last_updated")
+                    if _lu:
                         from datetime import datetime as _dt
+                        fed.last_updated = _dt.fromisoformat(_lu)
+                    subsystems_data = fed_data.get("subsystems", {})
+                    self.game_state_v2._restore_subsystems(subsystems_data)
+                    stats_data = fed_data.get("statistics", {})
+                    if stats_data:
+                        stats = self.game_state_v2.statistics
+                        for key, val in stats_data.items():
+                            if hasattr(stats, key):
+                                setattr(stats, key, val)
+                    self.game_state_v2.technology_data = fed_data.get("technology_data", {})
+                    self.game_state_v2.quest_data = fed_data.get("quest_data", {})
+                    self.game_state_v2.npc_data = fed_data.get("npc_data", {})
+                    self.game_state_v2.political_data = fed_data.get("political_data", {})
+                    phase_str = fed_data.get("game_phase", "genesis")
+                    try:
+                        from federation_game_state import GamePhase
+                        self.game_state_v2.game_phase = GamePhase(phase_str)
+                    except Exception:
+                        print(f"Warning: could not set game_phase to '{phase_str}'")
+            except Exception as e:
+                print(f"Warning: federation_state restore failed: {e}")
 
-                        fed.last_updated = _dt.fromisoformat(last_updated_str)
-                    except (ValueError, TypeError):
-                        pass
-                subsystems_data = fed_data.get("subsystems", {})
-                self.game_state_v2._restore_subsystems(subsystems_data)
-                stats_data = fed_data.get("statistics", {})
-                if stats_data:
-                    stats = self.game_state_v2.statistics
-                    for key, val in stats_data.items():
-                        if hasattr(stats, key):
-                            setattr(stats, key, val)
-                self.game_state_v2.technology_data = fed_data.get("technology_data", {})
-                self.game_state_v2.quest_data = fed_data.get("quest_data", {})
-                self.game_state_v2.npc_data = fed_data.get("npc_data", {})
-                self.game_state_v2.political_data = fed_data.get("political_data", {})
-                phase_str = fed_data.get("game_phase", "genesis")
-                try:
-                    from federation_game_state import GamePhase
+            try:
+                arc_json = snapshot.get("history_arc_json")
+                if arc_json and self.history_arc:
+                    arc_data = json.loads(arc_json)
+                    self.history_arc.import_full_state(arc_data)
+            except Exception as e:
+                print(f"Warning: history_arc restore failed: {e}")
 
-                    self.game_state_v2.game_phase = GamePhase(phase_str)
-                except Exception:
-                    pass
-        except Exception as e:
-            print(f"Warning: federation_state restore failed: {e}")
-
-        try:
-            arc_json = snapshot.get("history_arc_json")
-            if arc_json and self.history_arc:
-                arc_data = json.loads(arc_json)
-                self.history_arc.import_full_state(arc_data)
-        except Exception as e:
-            print(f"Warning: history_arc restore failed: {e}")
-
-        try:
-            log_json = snapshot.get("turn_log_json")
-            if log_json:
-                self.log = json.loads(log_json)
-        except Exception as e:
-            print(f"Warning: turn_log restore failed: {e}")
+            try:
+                log_json = snapshot.get("turn_log_json")
+                if log_json:
+                    self.log = json.loads(log_json)
+            except Exception as e:
+                print(f"Warning: turn_log restore failed: {e}")
 
     def save_to_db(self, snapshot_type: str = "auto") -> bool:
         try:

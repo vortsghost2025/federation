@@ -21,12 +21,7 @@ TICK_INTERVAL = int(os.getenv("TICK_INTERVAL", "60"))
 BACKEND_URL = os.getenv("BACKEND_URL", "http://backend:8000")
 REDIS_URL = os.getenv("REDIS_URL", "redis://redis:6379/0")
 # Notification URLs — comma-separated, plain format (library handles encoding)
-NOTIFICATION_URLS = os.getenv(
-    "NOTIFICATION_URLS",
-    "tgram://8908125951:AAEME7W8jlkh99AYIxM8IoIw_MlDznhajis/7312791490/"
-    ",mailtos://seandavidramsingh:wotgjvdunpobkcqy@smtp.gmail.com/"
-    "seandavidramsingh@gmail.com?mode=starttls",
-)
+NOTIFICATION_URLS = os.getenv("NOTIFICATION_URLS", "")
 
 # ── Logging ────────────────────────────────────────────────
 logging.basicConfig(
@@ -59,6 +54,12 @@ signal.signal(signal.SIGINT, handle_signal)
 
 # Global Apprise instance — created once at startup, reused for every tick
 _apprise_instance = None
+_notification_health = {
+    "consecutive_failures": 0,
+    "last_success": 0,
+    "last_failure": 0,
+    "notifications_degraded": False,
+}
 
 
 def init_apprise():
@@ -87,21 +88,37 @@ def init_apprise():
 
 def send_notification(title, body):
     """Send a notification via Apprise library directly.
-    Uses the global instance created at startup."""
+    Uses the global instance created at startup.
+    Retries up to 3 times with 5/15/30s backoff on failure."""
     global _apprise_instance
     if _apprise_instance is None:
         log.warning("Apprise not initialized — attempting lazy init")
         init_apprise()
-    try:
-        result = _apprise_instance.notify(title=title, body=body)
-        if result:
-            log.info(f"Notification sent: {title}")
-        else:
-            log.warning(
-                f"Notification delivery failed (some targets may be unreachable): {title}"
-            )
-    except Exception as e:
-        log.warning(f"Notification error: {e}")
+    if not _apprise_instance:
+        log.error("Cannot send notification — Apprise not configured")
+        return
+    backoff = [5, 15, 30]
+    for attempt in range(3):
+        try:
+            result = _apprise_instance.notify(title=title, body=body)
+            if result:
+                log.info(f"Notification sent: {title}")
+                _notification_health["consecutive_failures"] = 0
+                _notification_health["last_success"] = time.time()
+                return
+            else:
+                log.warning(
+                    f"Notification delivery failed (attempt {attempt + 1}/3): {title}"
+                )
+        except Exception as e:
+            log.warning(f"Notification error (attempt {attempt + 1}/3): {e}")
+        if attempt < 2:
+            wait = backoff[attempt]
+            log.info(f"Retrying notification in {wait}s...")
+            time.sleep(wait)
+    _notification_health["consecutive_failures"] += 1
+    _notification_health["last_failure"] = time.time()
+    log.error(f"Notification failed after 3 attempts: {title}")
 
 
 def check_significant_events(history_data, political_data):
@@ -347,6 +364,24 @@ def health_check():
             requests.get(f"{BACKEND_URL}/healthz", timeout=3).status_code == 200
         )
         redis_ok = r.ping()
+        # Track notification degradation
+        nh = _notification_health
+        nh["notifications_degraded"] = nh["consecutive_failures"] >= 3
+        if nh["notifications_degraded"]:
+            log.warning(
+                f"Notifications degraded: {nh['consecutive_failures']} consecutive failures"
+            )
+        # Store health in Redis for external monitoring
+        try:
+            r.hset(
+                "worker:status",
+                mapping={
+                    "notifications_degraded": str(int(nh["notifications_degraded"])),
+                    "notification_failures": str(nh["consecutive_failures"]),
+                },
+            )
+        except Exception:
+            pass
         return backend_ok and redis_ok
     except Exception:
         return False

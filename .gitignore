@@ -108,3 +108,19 @@ encode_worker.ps1
 worker_b64_oneline.txt
 worker_b64.txt
 dc_b64.txt
+
+# Base64 manifests (bulk transfer pipeline)
+*_b64.txt
+backend_manifest_b64.txt
+compose_b64.txt
+
+# PowerShell bulk encode/decode scripts (local only)
+bulk_encode_b64.ps1
+encode_compose_b64.ps1
+decode_manifest.py
+
+# VPS compose backup
+vps-compose-backup.yml
+
+# Worker image with embedded credentials — never commit
+federation-game/backend/worker_b64.txt
