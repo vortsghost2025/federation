@@ -259,6 +259,15 @@ def build_notification(game_events, npc_events):
 # ── Tick Engine ────────────────────────────────────────────
 
 
+def _safe_json(resp, name):
+    """Parse JSON from a response, returning None on failure."""
+    try:
+        return resp.json()
+    except Exception:
+        log.debug(f"Worker callback response parsing failed for {name}")
+        return None
+
+
 def run_tick():
     """Execute one game tick: advance NPC, political, and
     history-arc systems."""
@@ -271,6 +280,7 @@ def run_tick():
 
     endpoints = [
         ("/npcs/advance-turn", "NPC system"),
+        ("/simulation/tick", "NPC autonomy"),
         ("/political/process-turn", "Political engine"),
         ("/history-arc/advance", "History arc"),
     ]
@@ -284,16 +294,13 @@ def run_tick():
             )
             status = resp.status_code
             log.info(f"  {name}: {status}")
-
             if status == 200:
-                try:
-                    data = resp.json()
+                data = _safe_json(resp, name)
+                if data is not None:
                     if path == "/history-arc/advance":
                         history_data = data
                     elif path == "/political/process-turn":
                         political_data = data.get("details") or []
-                except Exception:
-                    pass
             elif status >= 400:
                 log.warning(f"  {name} error {status}: {resp.text[:100]}")
 
@@ -371,18 +378,20 @@ def health_check():
             log.warning(
                 f"Notifications degraded: {nh['consecutive_failures']} consecutive failures"
             )
-        # Store health in Redis for external monitoring
-        try:
-            r.hset(
-                "worker:status",
-                mapping={
-                    "notifications_degraded": str(int(nh["notifications_degraded"])),
-                    "notification_failures": str(nh["consecutive_failures"]),
-                },
-            )
-        except Exception:
-            pass
-        return backend_ok and redis_ok
+            # Store health in Redis for external monitoring
+            try:
+                r.hset(
+                    "worker:status",
+                    mapping={
+                        "notifications_degraded": str(
+                            int(nh["notifications_degraded"])
+                        ),
+                        "notification_failures": str(nh["consecutive_failures"]),
+                    },
+                )
+            except Exception:
+                log.warning("Failed to report notification health metrics")
+            return backend_ok and redis_ok
     except Exception:
         return False
 
@@ -403,7 +412,7 @@ def main():
                 log.info("Backend is ready")
                 break
         except Exception:
-            pass
+            pass  # Expected: backend not yet available, retry on next iteration
         log.info(f"Waiting for backend... (attempt {attempt + 1}/30)")
         time.sleep(2)
 
