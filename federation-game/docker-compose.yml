@@ -142,26 +142,6 @@ services:
       - traefik.http.routers.adminer.tls.certresolver=letsencrypt
       - traefik.http.services.adminer-svc.loadbalancer.server.port=8080
 
-  apprise:
-    image: caronc/apprise:latest
-    restart: unless-stopped
-    environment:
-      - APPRISE_STATEFUL_MODE=simple
-      - APPRISE_WORKER_COUNT=1
-      - APPRISE_CONFIG=/config/game-events.cfg
-    volumes:
-      - apprise_data:/config
-    networks:
-      - fed-net
-    labels:
-      - traefik.enable=true
-      - "traefik.http.routers.apprise.rule=Host(`federation-game.deliberatefederation.cloud`) && PathPrefix(`/apprise`)"
-      - traefik.http.routers.apprise.entrypoints=websecure
-      - traefik.http.routers.apprise.tls.certresolver=letsencrypt
-      - traefik.http.services.apprise-svc.loadbalancer.server.port=8000
-      - "traefik.http.middlewares.apprise-stripprefix.stripprefix.prefixes=/apprise"
-      - traefik.http.routers.apprise.middlewares=apprise-stripprefix
-
   # === OBSERVABILITY STACK ===
 
   prometheus:
@@ -291,6 +271,5 @@ networks:
 
 volumes:
   postgres_data:
-  apprise_data:
   prometheus_data:
   grafana_data:
