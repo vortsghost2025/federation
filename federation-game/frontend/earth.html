@@ -1,20 +1,826 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>FEDERATION EARTH COMMAND</title>
-    <style>
-        body{margin:0;padding:0;font-family:Arial,Helvetica,sans-serif;background:#222;color:#fff;}
-        .top{background:#005f5f;padding:20px;text-align:center;font-size:24px;font-weight:bold;}
-        .grid{display:grid;grid-template-columns:1fr 2fr 1fr;gap:10px;padding:10px;height:calc(100vh-80px);}
-        .panel{background:#333;padding:10px;border-radius:5px;overflow:auto;}
-        .heading{font-size:18px;font-weight:bold;margin-bottom:5px;background:#004040;padding:5px;color:#fff;border-radius:3px;}
-        .stat{display:flex;justify-content:space-between;margin:5px 0;color:#bbb;}
-        .stat span{color:#fff;}
-        .preview{background:#111;padding:10px;border-radius:5px;margin-top:10px;overflow:auto;height:200px;font-family:Monaco,monospace;}
-        .btn{padding:8px 12px;background:#005f5f;border:none;border-radius:3px;color:#fff;margin:4px;cursor:pointer;}
-        .btn:hover{background:#007f7f;}
-        .actions{display:flex;flex-direction:column;align-items:center;gap:6px;}
-        .log{background:#111;padding:10px;border-radius:5px;margin-top:10px;overflow:auto;height:120px;font-family:Monaco,monospace;}
-        @media(max-width:1200px){.grid{grid-template-columns:1fr;}.panel{height:auto;}}
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Federation Earth Command</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Share+Tech+Mono&display=swap');
+:root{
+  --amber:#ff9e1c;--amber-dim:#ff9e1c44;
+  --cyan:#4fc3f7;--cyan-dim:#4fc3f722;
+  --violet:#b388ff;
+  --red:#ff1744;--red-dim:#ff174422;
+  --green:#69f0ae;
+  --white:#e8e8e8;--dim:#607080;
+  --panel-bg:rgba(8,12,20,0.92);
+  --panel-border:rgba(79,195,247,0.18);
+  --glow-cyan:0 0 12px rgba(79,195,247,0.3);
+  --glow-amber:0 0 12px rgba(255,158,28,0.3);
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{height:100%;overflow:hidden;background:#040810;color:var(--white);font-family:'Share Tech Mono',monospace}
+
+/* === LAYOUT === */
+#earth{
+  display:grid;
+  grid-template-rows:44px 1fr 36px;
+  grid-template-columns:260px 1fr 260px;
+  grid-template-areas:
+    "top top top"
+    "left center right"
+    "bottom bottom bottom";
+  height:100vh;gap:1px;
+}
+
+/* === TOP RIBBON === */
+#top{grid-area:top;display:flex;align-items:center;gap:0;background:var(--panel-bg);border-bottom:1px solid var(--panel-border);padding:0 8px;font-size:11px;z-index:5}
+.page-title{color:var(--amber);font-family:'Orbitron',sans-serif;font-weight:700;font-size:13px;letter-spacing:2px;padding:0 12px 0 8px;white-space:nowrap}
+.top-era{color:var(--cyan);font-family:'Orbitron',sans-serif;font-size:13px;padding-right:16px;border-right:1px solid var(--panel-border);margin-right:8px;white-space:nowrap}
+.top-metric{display:flex;align-items:center;gap:4px;padding:0 10px;border-right:1px solid rgba(79,195,247,0.08);height:100%}
+.top-metric:last-of-type{border-right:none}
+.tm-label{color:var(--dim);font-size:9px;text-transform:uppercase;letter-spacing:1.5px}
+.tm-val{font-family:'Orbitron',sans-serif;font-size:12px;min-width:24px;text-align:right}
+.tm-bar{width:60px;height:5px;background:rgba(255,255,255,0.06);border-radius:3px;overflow:hidden}
+.tm-fill{height:100%;border-radius:3px;transition:width 0.8s ease}
+.top-nav{margin-left:auto;display:flex;gap:2px}
+.top-nav a{color:var(--dim);font-size:10px;text-decoration:none;padding:6px 10px;letter-spacing:1px;text-transform:uppercase;transition:color 0.2s}
+.top-nav a:hover,.top-nav a.active{color:var(--cyan)}
+
+#link-health{display:flex;align-items:center;gap:4px;margin:0 6px}
+#lh-dot{width:7px;height:7px;border-radius:50%;transition:background 0.5s}
+#lh-dot.ok{background:var(--green)}#lh-dot.warn{background:var(--amber)}#lh-dot.crit{background:var(--red)}
+#lh-label{font-family:'Orbitron',sans-serif;font-size:8px;letter-spacing:1px;color:var(--dim);transition:color 0.5s}
+#lh-label.ok{color:var(--green)}#lh-label.warn{color:var(--amber)}#lh-label.crit{color:var(--red)}
+
+#audio-toggle{
+  background:none;border:1px solid var(--panel-border);border-radius:3px;
+  color:var(--cyan);font-size:14px;cursor:pointer;padding:2px 8px;
+  display:flex;align-items:center;justify-content:center;
+  transition:color 0.2s,border-color 0.2s,opacity 0.2s;
+  margin-left:4px;height:24px;line-height:1;
+}
+#audio-toggle:hover{border-color:var(--cyan);box-shadow:0 0 8px rgba(79,195,247,0.2)}
+#audio-toggle.muted{color:var(--dim);border-color:rgba(79,195,247,0.08);position:relative}
+#audio-toggle.muted:hover{border-color:var(--dim)}
+#audio-toggle.muted::after{content:'';position:absolute;left:3px;right:3px;top:50%;height:2px;background:var(--red);transform:rotate(-35deg);opacity:0.7}
+#audio-toggle:focus-visible{outline:2px solid var(--cyan);outline-offset:2px}
+
+/* === SIDE PANELS === */
+#left,#right{background:var(--panel-bg);padding:10px;overflow-y:auto;display:flex;flex-direction:column;gap:6px}
+#left{grid-area:left;border-right:1px solid var(--panel-border)}
+#right{grid-area:right;border-left:1px solid var(--panel-border)}
+#left::-webkit-scrollbar,#right::-webkit-scrollbar{width:3px}
+#left::-webkit-scrollbar-thumb,#right::-webkit-scrollbar-thumb{background:var(--cyan-dim);border-radius:2px}
+
+.console-title{
+  font-family:'Orbitron',sans-serif;font-size:10px;font-weight:700;
+  letter-spacing:2px;color:var(--cyan);padding:4px 0;
+  border-bottom:1px solid var(--panel-border);margin-bottom:4px;
+  text-transform:uppercase;
+}
+
+/* === STAT ROWS === */
+.stat-row{display:flex;justify-content:space-between;align-items:center;padding:3px 0}
+.stat-label{color:var(--dim);font-size:11px;letter-spacing:0.5px}
+.stat-val{font-family:'Orbitron',sans-serif;font-size:12px;text-align:right}
+.stat-bar{width:100%;height:4px;background:rgba(255,255,255,0.06);border-radius:2px;overflow:hidden;margin:2px 0 4px}
+.stat-fill{height:100%;border-radius:2px;transition:width 0.8s ease}
+
+/* === CENTER AREA === */
+#center{grid-area:center;display:flex;flex-direction:column;overflow:hidden;background:#040810;position:relative}
+
+/* World visualization canvas */
+#world-canvas{position:absolute;top:0;left:0;width:100%;height:100%;opacity:0.6}
+
+/* Overlay grid on top of canvas */
+#center-overlay{
+  position:relative;z-index:2;
+  display:grid;
+  grid-template-rows:auto 1fr auto;
+  height:100%;padding:10px;gap:8px;
+}
+
+/* World condition cards */
+.condition-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:6px}
+.cond-card{
+  background:var(--panel-bg);border:1px solid var(--panel-border);border-radius:4px;
+  padding:8px 10px;display:flex;flex-direction:column;gap:2px;
+}
+.cond-label{font-size:9px;color:var(--dim);text-transform:uppercase;letter-spacing:1px;font-family:'Orbitron',sans-serif}
+.cond-value{font-family:'Orbitron',sans-serif;font-size:18px;font-weight:700;letter-spacing:1px}
+.cond-bar{width:100%;height:3px;background:rgba(255,255,255,0.06);border-radius:2px;overflow:hidden}
+.cond-fill{height:100%;border-radius:2px;transition:width 0.8s ease}
+
+/* Faction mini-bars */
+.faction-row{display:flex;align-items:center;gap:6px;padding:3px 0;border-bottom:1px solid rgba(79,195,247,0.06)}
+.faction-name{font-size:10px;color:var(--dim);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.faction-bar{width:50px;height:3px;background:rgba(255,255,255,0.06);border-radius:2px;overflow:hidden}
+.faction-fill{height:100%;border-radius:2px;transition:width 0.8s ease}
+.faction-val{font-family:'Orbitron',sans-serif;font-size:9px;min-width:20px;text-align:right}
+
+/* Quest log entries */
+.quest-entry{
+  padding:4px 6px;margin:2px 0;border-left:2px solid var(--cyan);
+  background:rgba(79,195,247,0.04);font-size:10px;line-height:1.3;
+}
+.quest-entry .q-title{color:var(--cyan);font-weight:bold}
+.quest-entry .q-status{color:var(--dim);font-size:9px}
+
+/* Political action */
+.pol-row{display:flex;justify-content:space-between;align-items:center;padding:3px 0;font-size:10px}
+.pol-label{color:var(--dim)}
+.pol-val{font-family:'Orbitron',sans-serif;font-size:11px}
+
+/* Consciousness mini */
+.cc-row{display:flex;align-items:center;gap:4px;padding:2px 0}
+.cc-label{color:var(--dim);font-size:9px;width:70px;letter-spacing:0.5px}
+.cc-bar{flex:1;height:3px;background:rgba(255,255,255,0.06);border-radius:2px;overflow:hidden}
+.cc-fill{height:100%;border-radius:2px;transition:width 0.8s ease}
+.cc-val{font-family:'Orbitron',sans-serif;font-size:9px;min-width:26px;text-align:right}
+
+/* Era timeline bar */
+#era-bar{
+  display:flex;align-items:center;gap:8px;padding:6px 10px;
+  background:var(--panel-bg);border:1px solid var(--panel-border);border-radius:4px;
+}
+#era-bar .era-label{font-family:'Orbitron',sans-serif;font-size:10px;color:var(--amber);letter-spacing:1px}
+#era-bar .era-year{font-family:'Orbitron',sans-serif;font-size:12px;color:var(--cyan)}
+
+/* Action buttons */
+.action-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:4px}
+.action-btn{
+  background:rgba(79,195,247,0.06);border:1px solid var(--panel-border);border-radius:3px;
+  color:var(--cyan);font-family:'Share Tech Mono',monospace;font-size:10px;
+  padding:6px 8px;cursor:pointer;text-transform:uppercase;letter-spacing:1px;
+  transition:all 0.2s;text-align:center;
+}
+.action-btn:hover{background:rgba(79,195,247,0.12);border-color:var(--cyan);box-shadow:var(--glow-cyan)}
+.action-btn:active{transform:scale(0.97)}
+.action-btn.warn{color:var(--amber);border-color:rgba(255,158,28,0.3)}
+.action-btn.warn:hover{background:rgba(255,158,28,0.1);border-color:var(--amber);box-shadow:var(--glow-amber)}
+.action-btn.danger{color:var(--red);border-color:rgba(255,23,68,0.3)}
+.action-btn.danger:hover{background:rgba(255,23,68,0.1);border-color:var(--red)}
+
+/* === BOTTOM COMMS TICKER === */
+#bottom{grid-area:bottom;background:var(--panel-bg);border-top:1px solid var(--panel-border);display:flex;align-items:center;padding:0 10px;overflow:hidden;font-size:10px}
+#comms-label{color:var(--amber);font-family:'Orbitron',sans-serif;font-size:8px;letter-spacing:2px;margin-right:10px;white-space:nowrap}
+#comms-ticker{color:var(--dim);white-space:nowrap;overflow:hidden;flex:1}
+.comms-msg{display:inline;margin-right:30px}
+.comms-msg::before{content:'► ';color:var(--cyan)}
+
+/* Scanline overlay on center */
+#scanlines{
+  position:absolute;top:0;left:0;width:100%;height:100%;
+  pointer-events:none;z-index:1;
+  background:repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,0,0,0.03) 2px,rgba(0,0,0,0.03) 4px);
+}
+
+/* Vignette */
+#vignette{
+  position:absolute;top:0;left:0;width:100%;height:100%;
+  pointer-events:none;z-index:1;
+  background:radial-gradient(ellipse at center,transparent 60%,rgba(4,8,16,0.7) 100%);
+}
+
+/* Loading state */
+.loading{color:var(--dim);font-family:'Orbitron',sans-serif;font-size:11px;letter-spacing:2px;animation:blink 1.5s ease infinite}
+@keyframes blink{0%,100%{opacity:0.4}50%{opacity:1}}
+
+/* Toast notification */
+#toast{
+  position:fixed;bottom:50px;left:50%;transform:translateX(-50%);
+  background:var(--panel-bg);border:1px solid var(--cyan);border-radius:4px;
+  padding:8px 16px;font-size:11px;color:var(--cyan);z-index:100;
+  opacity:0;transition:opacity 0.3s;pointer-events:none;
+  box-shadow:var(--glow-cyan);
+}
+#toast.show{opacity:1}
+
+/* === MOBILE === */
+@media(max-width:1100px){
+  #earth{
+    grid-template-columns:1fr;
+    grid-template-rows:44px 1fr 36px;
+    grid-template-areas:"top" "center" "bottom";
+  }
+  #left,#right{display:none}
+}
+</style>
+</head>
+<body>
+
+<div id="earth">
+<!-- TOP RIBBON -->
+<div id="top">
+  <span class="page-title">EARTH CMD</span>
+  <span class="top-era" id="top-era">--</span>
+  <div class="top-metric"><span class="tm-label">Trust</span><div class="tm-bar"><div class="tm-fill" id="bar-trust" style="background:var(--cyan)"></div></div><span class="tm-val" id="val-trust">0</span></div>
+  <div class="top-metric"><span class="tm-label">Stability</span><div class="tm-bar"><div class="tm-fill" id="bar-stability" style="background:var(--green)"></div></div><span class="tm-val" id="val-stability">0</span></div>
+  <div class="top-metric"><span class="tm-label">Integrity</span><div class="tm-bar"><div class="tm-fill" id="bar-integrity" style="background:var(--violet)"></div></div><span class="tm-val" id="val-integrity">0</span></div>
+  <div class="top-metric"><span class="tm-label">Rights</span><div class="tm-bar"><div class="tm-fill" id="bar-rights" style="background:var(--cyan)"></div></div><span class="tm-val" id="val-rights">0</span></div>
+  <div id="link-health"><div id="lh-dot" class="ok"></div><span id="lh-label" class="ok">LINK OK</span></div>
+  <button id="audio-toggle" title="Toggle audio" aria-label="Toggle audio on/off">&#9835;</button>
+  <nav class="top-nav">
+    <a href="/bridge.html">Bridge</a>
+    <a href="/starmap.html">Star Map</a>
+    <a href="/">Simulator</a>
+    <a href="/adult.html">Control</a>
+    <a href="/earth.html" class="active">Earth</a>
+  </nav>
+</div>
+
+<!-- LEFT PANEL: Governance -->
+<div id="left">
+  <div class="console-title">Governance</div>
+  <div class="stat-row"><span class="stat-label">Public Trust</span><span class="stat-val" id="sv-trust" style="color:var(--cyan)">0</span></div>
+  <div class="stat-bar"><div class="stat-fill" id="sbar-trust" style="background:var(--cyan);width:0%"></div></div>
+  <div class="stat-row"><span class="stat-label">Council Support</span><span class="stat-val" id="sv-council" style="color:var(--green)">0</span></div>
+  <div class="stat-bar"><div class="stat-fill" id="sbar-council" style="background:var(--green);width:0%"></div></div>
+  <div class="stat-row"><span class="stat-label">Constitutional Integrity</span><span class="stat-val" id="sv-integrity" style="color:var(--violet)">0</span></div>
+  <div class="stat-bar"><div class="stat-fill" id="sbar-integrity" style="background:var(--violet);width:0%"></div></div>
+  <div class="stat-row"><span class="stat-label">Rights Protection</span><span class="stat-val" id="sv-rights" style="color:var(--cyan)">0</span></div>
+  <div class="stat-bar"><div class="stat-fill" id="sbar-rights" style="background:var(--cyan);width:0%"></div></div>
+  <div class="stat-row"><span class="stat-label">Emergency Powers</span><span class="stat-val" id="sv-emergency" style="color:var(--amber)">0</span></div>
+  <div class="stat-bar"><div class="stat-fill" id="sbar-emergency" style="background:var(--amber);width:0%"></div></div>
+  <div class="stat-row"><span class="stat-label">Active Policy</span><span class="stat-val" id="sv-policy" style="color:var(--dim);font-size:10px">None</span></div>
+
+  <div class="console-title" style="margin-top:8px">Political Engine</div>
+  <div id="political-panel">
+    <div class="pol-row"><span class="pol-label">Status</span><span class="pol-val" id="pol-status" style="color:var(--dim)">--</span></div>
+    <div class="pol-row"><span class="pol-label">Laws Processed</span><span class="pol-val" id="pol-laws" style="color:var(--cyan)">--</span></div>
+  </div>
+
+  <div class="console-title" style="margin-top:8px">Factions</div>
+  <div id="faction-panel" style="font-size:10px">
+    <div class="loading">SCANNING...</div>
+  </div>
+
+  <div class="console-title" style="margin-top:8px">Consciousness</div>
+  <div id="cc-panel">
+    <div class="cc-row"><span class="cc-label">Coherence</span><div class="cc-bar"><div class="cc-fill" id="cc-coherence" style="background:var(--violet)"></div></div><span class="cc-val" id="ccv-coherence">--</span></div>
+    <div class="cc-row"><span class="cc-label">Stability</span><div class="cc-bar"><div class="cc-fill" id="cc-stability" style="background:var(--cyan)"></div></div><span class="cc-val" id="ccv-stability">--</span></div>
+    <div class="cc-row"><span class="cc-label">Awakeness</span><div class="cc-bar"><div class="cc-fill" id="cc-awakeness" style="background:var(--green)"></div></div><span class="cc-val" id="ccv-awakeness">--</span></div>
+    <div class="cc-row"><span class="cc-label">Anxiety</span><div class="cc-bar"><div class="cc-fill" id="cc-anxiety" style="background:var(--red)"></div></div><span class="cc-val" id="ccv-anxiety">--</span></div>
+    <div class="cc-row"><span class="cc-label">Diplomacy</span><div class="cc-bar"><div class="cc-fill" id="cc-diplomacy" style="background:var(--amber)"></div></div><span class="cc-val" id="ccv-diplomacy">--</span></div>
+  </div>
+</div>
+
+<!-- CENTER: World Conditions + Earth Visualization -->
+<div id="center">
+  <canvas id="world-canvas"></canvas>
+  <div id="scanlines"></div>
+  <div id="vignette"></div>
+  <div id="center-overlay">
+    <!-- Era / History bar -->
+    <div id="era-bar">
+      <span class="era-label" id="era-name">-- ERA</span>
+      <span class="era-year" id="era-year">YEAR --</span>
+      <span style="flex:1"></span>
+      <span style="font-size:9px;color:var(--dim)" id="era-status">--</span>
+    </div>
+
+    <!-- World Conditions -->
+    <div>
+      <div class="console-title" style="border-bottom:none;padding:0;margin:0">World Conditions</div>
+      <div class="condition-grid" id="condition-grid">
+        <div class="cond-card"><span class="cond-label">Tension</span><span class="cond-value" id="cv-tension" style="color:var(--red)">--</span><div class="cond-bar"><div class="cond-fill" id="cf-tension" style="background:var(--red)"></div></div></div>
+        <div class="cond-card"><span class="cond-label">Stability</span><span class="cond-value" id="cv-stability" style="color:var(--green)">--</span><div class="cond-bar"><div class="cond-fill" id="cf-stability" style="background:var(--green)"></div></div></div>
+        <div class="cond-card"><span class="cond-label">Morale</span><span class="cond-value" id="cv-morale" style="color:var(--amber)">--</span><div class="cond-bar"><div class="cond-fill" id="cf-morale" style="background:var(--amber)"></div></div></div>
+        <div class="cond-card"><span class="cond-label">Threat</span><span class="cond-value" id="cv-threat" style="color:var(--red)">--</span><div class="cond-bar"><div class="cond-fill" id="cf-threat" style="background:var(--red)"></div></div></div>
+        <div class="cond-card"><span class="cond-label">Anomaly</span><span class="cond-value" id="cv-anomaly" style="color:var(--violet)">--</span><div class="cond-bar"><div class="cond-fill" id="cf-anomaly" style="background:var(--violet)"></div></div></div>
+        <div class="cond-card"><span class="cond-label">Federation</span><span class="cond-value" id="cv-fed" style="color:var(--cyan)">--</span><div class="cond-bar"><div class="cond-fill" id="cf-fed" style="background:var(--cyan)"></div></div></div>
+      </div>
+    </div>
+
+    <!-- Action Buttons -->
+    <div>
+      <div class="action-grid">
+        <button class="action-btn" onclick="processPoliticalTurn()">Process Political Year</button>
+        <button class="action-btn" onclick="advanceHistoryArc()">Advance Timeline</button>
+        <button class="action-btn warn" onclick="saveState()">Save Snapshot</button>
+        <button class="action-btn" onclick="loadState()">Load State</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- RIGHT PANEL: Quests + Events -->
+<div id="right">
+  <div class="console-title">Active Quests</div>
+  <div id="quest-panel" style="max-height:200px;overflow-y:auto">
+    <div class="loading">SCANNING...</div>
+  </div>
+
+  <div class="console-title" style="margin-top:8px">Recent Events</div>
+  <div id="events-panel" style="max-height:200px;overflow-y:auto;font-size:10px">
+    <div class="loading">SCANNING...</div>
+  </div>
+
+  <div class="console-title" style="margin-top:8px">Technologies</div>
+  <div id="tech-panel" style="max-height:180px;overflow-y:auto">
+    <div class="loading">SCANNING...</div>
+  </div>
+
+  <div class="console-title" style="margin-top:8px">Governance Log</div>
+  <div id="governance-log" style="max-height:150px;overflow-y:auto;font-size:10px;color:var(--dim)">
+    <div class="loading">AWAITING DATA</div>
+  </div>
+</div>
+
+<!-- BOTTOM COMMS -->
+<div id="bottom">
+  <span id="comms-label">COMMS</span>
+  <span id="comms-ticker"><span class="loading">ESTABLISHING LINK...</span></span>
+</div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+// ── Configuration ──
+const API = window.location.origin;
+const POLL_INTERVAL = 10000;
+let commsMessages = [];
+let audioCtx = null;
+let isMuted = localStorage.getItem('federation-muted') === 'true';
+
+// ── Fetch Helpers ──
+const fetchHealth = { ok: 0, fail: 0, lastOk: 0, lastFail: 0 };
+
+async function apiFetch(path, opts = {}) {
+  try {
+    const r = await fetch(API + path, { ...opts, headers: { 'Accept': 'application/json', ...(opts.headers || {}) } });
+    if (!r.ok) throw new Error(r.status);
+    fetchHealth.ok++;
+    fetchHealth.lastOk = Date.now();
+    return await r.json();
+  } catch (e) {
+    fetchHealth.fail++;
+    fetchHealth.lastFail = Date.now();
+    updateLinkHealth();
+    return null;
+  }
+}
+
+function updateLinkHealth() {
+  const dot = document.getElementById('lh-dot');
+  const label = document.getElementById('lh-label');
+  const recent = fetchHealth.ok + fetchHealth.fail > 0;
+  const failRate = recent ? fetchHealth.fail / (fetchHealth.ok + fetchHealth.fail) : 0;
+  if (failRate > 0.5) { dot.className = 'crit'; label.className = 'crit'; label.textContent = 'LINK CRIT'; }
+  else if (failRate > 0.2) { dot.className = 'warn'; label.className = 'warn'; label.textContent = 'LINK WARN'; }
+  else { dot.className = 'ok'; label.className = 'ok'; label.textContent = 'LINK OK'; }
+}
+
+// ── Toast ──
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2500);
+}
+
+// ── Audio ──
+function initAudio() {
+  if (audioCtx) return;
+  try { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); } catch(e) {}
+}
+function playTone(freq, dur, vol, type) {
+  if (!audioCtx || isMuted) return;
+  try {
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    osc.type = type || 'sine';
+    osc.frequency.value = freq;
+    gain.gain.setValueAtTime(vol || 0.05, audioCtx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + dur);
+    osc.connect(gain).connect(audioCtx.destination);
+    osc.start(); osc.stop(audioCtx.currentTime + dur);
+  } catch(e) {}
+}
+function toggleMute() {
+  isMuted = !isMuted;
+  localStorage.setItem('federation-muted', isMuted);
+  const btn = document.getElementById('audio-toggle');
+  if (isMuted) { btn.classList.add('muted'); btn.setAttribute('aria-label', 'Audio muted — click to unmute'); }
+  else { btn.classList.remove('muted'); btn.setAttribute('aria-label', 'Audio on — click to mute'); }
+  showToast(isMuted ? 'Audio muted' : 'Audio enabled');
+}
+
+// ── World Canvas (Earth visualization) ──
+let canvas, ctx, particles = [];
+const WORLD_PARTICLES = 80;
+
+function initCanvas() {
+  canvas = document.getElementById('world-canvas');
+  ctx = canvas.getContext('2d');
+  resizeCanvas();
+  window.addEventListener('resize', resizeCanvas);
+  for (let i = 0; i < WORLD_PARTICLES; i++) {
+    particles.push({
+      x: Math.random(), y: Math.random(),
+      vx: (Math.random() - 0.5) * 0.0003,
+      vy: (Math.random() - 0.5) * 0.0003,
+      size: Math.random() * 2 + 0.5,
+      alpha: Math.random() * 0.4 + 0.1
+    });
+  }
+  animateCanvas();
+}
+
+function resizeCanvas() {
+  if (!canvas) return;
+  canvas.width = canvas.offsetWidth;
+  canvas.height = canvas.offsetHeight;
+}
+
+function animateCanvas() {
+  if (!ctx || !canvas) return;
+  const w = canvas.width, h = canvas.height;
+  ctx.clearRect(0, 0, w, h);
+
+  // Draw subtle grid
+  ctx.strokeStyle = 'rgba(79,195,247,0.03)';
+  ctx.lineWidth = 1;
+  const gridSize = 60;
+  for (let x = 0; x < w; x += gridSize) { ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, h); ctx.stroke(); }
+  for (let y = 0; y < h; y += gridSize) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(w, y); ctx.stroke(); }
+
+  // Draw Earth glow (center)
+  const cx = w / 2, cy = h / 2;
+  const r = Math.min(w, h) * 0.25;
+  const grd = ctx.createRadialGradient(cx, cy, 0, cx, cy, r);
+  grd.addColorStop(0, 'rgba(79,195,247,0.08)');
+  grd.addColorStop(0.5, 'rgba(79,195,247,0.03)');
+  grd.addColorStop(1, 'rgba(79,195,247,0)');
+  ctx.fillStyle = grd;
+  ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.fill();
+
+  // Inner ring
+  ctx.strokeStyle = 'rgba(79,195,247,0.1)';
+  ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.arc(cx, cy, r * 0.6, 0, Math.PI * 2); ctx.stroke();
+
+  // Outer ring
+  ctx.strokeStyle = 'rgba(79,195,247,0.06)';
+  ctx.beginPath(); ctx.arc(cx, cy, r * 0.9, 0, Math.PI * 2); ctx.stroke();
+
+  // Orbiting dots
+  const t = Date.now() * 0.001;
+  for (let i = 0; i < 3; i++) {
+    const angle = t * (0.2 + i * 0.15) + i * 2.1;
+    const orbitR = r * (0.5 + i * 0.15);
+    const dx = cx + Math.cos(angle) * orbitR;
+    const dy = cy + Math.sin(angle) * orbitR;
+    ctx.fillStyle = `rgba(79,195,247,${0.3 + i * 0.15})`;
+    ctx.beginPath(); ctx.arc(dx, dy, 2, 0, Math.PI * 2); ctx.fill();
+  }
+
+  // Particles
+  for (const p of particles) {
+    p.x += p.vx; p.y += p.vy;
+    if (p.x < 0) p.x = 1; if (p.x > 1) p.x = 0;
+    if (p.y < 0) p.y = 1; if (p.y > 1) p.y = 0;
+    ctx.fillStyle = `rgba(79,195,247,${p.alpha})`;
+    ctx.beginPath(); ctx.arc(p.x * w, p.y * h, p.size, 0, Math.PI * 2); ctx.fill();
+  }
+
+  requestAnimationFrame(animateCanvas);
+}
+
+// ── Data Fetching ──
+async function fetchState() {
+  const data = await apiFetch('/state');
+  if (!data) return;
+  // Top ribbon
+  setBar('bar-trust', 'val-trust', data.public_trust, 100);
+  setBar('bar-stability', 'val-stability', data.federation_stability, 100);
+  setBar('bar-integrity', 'val-integrity', data.constitutional_integrity, 100);
+  setBar('bar-rights', 'val-rights', data.rights_protection, 100);
+  // Left governance
+  setStat('sv-trust', 'sbar-trust', data.public_trust, 100);
+  setStat('sv-council', 'sbar-council', data.council_support, 100);
+  setStat('sv-integrity', 'sbar-integrity', data.constitutional_integrity, 100);
+  setStat('sv-rights', 'sbar-rights', data.rights_protection, 100);
+  setStat('sv-emergency', 'sbar-emergency', data.emergency_powers, 100);
+  document.getElementById('sv-policy').textContent = data.active_policy || 'None';
+  // Era
+  if (data.governance_status) document.getElementById('top-era').textContent = data.governance_status.toUpperCase();
+  // Condition: federation from state
+  setCondCard('cv-fed', 'cf-fed', data.federation_stability, 100);
+  // Comms
+  if (data.last_decision) addComms(`Decision: ${data.last_decision}`);
+  if (data.proposal_history && data.proposal_history.length) {
+    const latest = data.proposal_history[data.proposal_history.length - 1];
+    addComms(`Proposal: ${latest.policy || latest.type || 'new'}`);
+  }
+  return data;
+}
+
+async function fetchWorldState() {
+  const data = await apiFetch('/world/state');
+  if (!data || !data.state) return;
+  const s = data.state;
+  if (s.tension_level !== undefined) setCondCard('cv-tension', 'cf-tension', s.tension_level, 100);
+  if (s.stability !== undefined) setCondCard('cv-stability', 'cf-stability', s.stability, 100);
+  if (s.morale !== undefined) setCondCard('cv-morale', 'cf-morale', s.morale, 100);
+  if (s.threat_level !== undefined) setCondCard('cv-threat', 'cf-threat', s.threat_level, 100);
+  if (s.anomaly_activity !== undefined) setCondCard('cv-anomaly', 'cf-anomaly', s.anomaly_activity, 100);
+  return data;
+}
+
+async function fetchWorldConditions() {
+  const data = await apiFetch('/world/conditions');
+  if (!data || !data.conditions) return data;
+  // conditions is an array of {id, label, description, current, min, max}
+  // We already show the main 5 from /world/state — this provides extras if any
+  return data;
+}
+
+async function fetchPolitical() {
+  const data = await apiFetch('/political');
+  if (!data) return;
+  document.getElementById('pol-status').textContent = data.system_available ? 'Online' : 'Offline';
+  document.getElementById('pol-status').style.color = data.system_available ? 'var(--green)' : 'var(--dim)';
+  if (data.status) {
+    document.getElementById('pol-laws').textContent = data.status.laws_processed ?? data.status.total_laws ?? '--';
+  }
+  return data;
+}
+
+async function fetchFactions() {
+  const data = await apiFetch('/factions');
+  if (!data || !data.factions) return;
+  const panel = document.getElementById('faction-panel');
+  let html = '';
+  for (const f of data.factions) {
+    const inf = Math.min(100, Math.max(0, f.influence || f.power || 50));
+    const color = inf > 70 ? 'var(--amber)' : inf > 40 ? 'var(--cyan)' : 'var(--dim)';
+    html += `<div class="faction-row">
+      <span class="faction-name" title="${f.name}">${f.name}</span>
+      <div class="faction-bar"><div class="faction-fill" style="background:${color};width:${inf}%"></div></div>
+      <span class="faction-val" style="color:${color}">${inf}</span>
+    </div>`;
+  }
+  panel.innerHTML = html || '<div style="color:var(--dim);font-size:10px">No faction data</div>';
+  return data;
+}
+
+async function fetchConsciousness() {
+  const data = await apiFetch('/consciousness');
+  if (!data || !data.system_available) return;
+  setCC('cc-coherence', 'ccv-coherence', data.morale ?? data.coherence, 100);
+  setCC('cc-stability', 'ccv-stability', data.stability ?? data.identity, 100);
+  setCC('cc-awakeness', 'ccv-awakeness', data.confidence ?? data.awakeness, 100);
+  setCC('cc-anxiety', 'ccv-anxiety', data.anxiety, 100);
+  setCC('cc-diplomacy', 'ccv-diplomacy', data.diplomacy_tendency, 100);
+  return data;
+}
+
+async function fetchHistoryArc() {
+  const data = await apiFetch('/history-arc');
+  if (!data) return;
+  document.getElementById('era-name').textContent = (data.current_era || '--').toUpperCase() + ' ERA';
+  document.getElementById('era-year').textContent = 'YEAR ' + (data.year ?? '--');
+  document.getElementById('era-status').textContent = data.initialized ? 'ACTIVE' : 'DORMANT';
+  document.getElementById('era-status').style.color = data.initialized ? 'var(--green)' : 'var(--dim)';
+  if (data.current_era) document.getElementById('top-era').textContent = data.current_era.toUpperCase();
+  return data;
+}
+
+async function fetchQuests() {
+  const data = await apiFetch('/quests');
+  if (!data) return;
+  const panel = document.getElementById('quest-panel');
+  let html = '';
+  // Active quests
+  if (data.active && data.active.length) {
+    for (const q of data.active.slice(0, 5)) {
+      html += `<div class="quest-entry"><span class="q-title">${q.name || q.title || q.id}</span> <span class="q-status">ACTIVE</span></div>`;
+    }
+  }
+  // Available quests
+  if (data.available && data.available.length) {
+    for (const q of data.available.slice(0, 3)) {
+      html += `<div class="quest-entry" style="border-left-color:var(--amber)"><span class="q-title">${q.name || q.title || q.id}</span> <span class="q-status">AVAILABLE</span></div>`;
+    }
+  }
+  if (!html) html = '<div style="color:var(--dim);font-size:10px">No active quests</div>';
+  panel.innerHTML = html;
+  return data;
+}
+
+async function fetchMapData() {
+  const data = await apiFetch('/map/data');
+  if (!data) return;
+  // Extract recent events for the events panel
+  const events = data.events || [];
+  const panel = document.getElementById('events-panel');
+  if (events.length) {
+    let html = '';
+    for (const e of events.slice(0, 8)) {
+      const domain = e.domain || e.category || '';
+      const color = domain.includes('rival') || domain.includes('hostile') ? 'var(--red)' :
+                    domain.includes('constitutional') ? 'var(--violet)' :
+                    domain.includes('consciousness') ? 'var(--green)' : 'var(--dim)';
+      html += `<div style="padding:2px 0;border-bottom:1px solid rgba(79,195,247,0.04)"><span style="color:${color};font-size:9px">${domain.toUpperCase()}</span> <span>${e.title || e.description?.substring(0,40) || 'Event'}</span></div>`;
+    }
+    panel.innerHTML = html;
+  } else {
+    panel.innerHTML = '<div style="color:var(--dim);font-size:10px">No recent events</div>';
+  }
+  // Use world_state from map if available
+  if (data.world_state) {
+    const ws = data.world_state;
+    if (ws.tension_level !== undefined) setCondCard('cv-tension', 'cf-tension', ws.tension_level, 100);
+    if (ws.stability !== undefined) setCondCard('cv-stability', 'cf-stability', ws.stability, 100);
+    if (ws.morale !== undefined) setCondCard('cv-morale', 'cf-morale', ws.morale, 100);
+    if (ws.threat_level !== undefined) setCondCard('cv-threat', 'cf-threat', ws.threat_level, 100);
+    if (ws.anomaly_activity !== undefined) setCondCard('cv-anomaly', 'cf-anomaly', ws.anomaly_activity, 100);
+  }
+  return data;
+}
+
+async function fetchTechnology() {
+  const data = await apiFetch('/technology');
+  if (!data) return;
+  const panel = document.getElementById('tech-panel');
+  let html = '';
+  if (data.completed && data.completed.length) {
+    html += `<div style="color:var(--green);font-size:9px;letter-spacing:1px;font-family:'Orbitron',sans-serif;margin-bottom:4px">COMPLETED (${data.completed.length})</div>`;
+    for (const t of data.completed.slice(0, 4)) {
+      html += `<div style="font-size:10px;color:var(--dim);padding:1px 0">✓ ${t.name || t.id}</div>`;
+    }
+  }
+  if (data.available && data.available.length) {
+    html += `<div style="color:var(--cyan);font-size:9px;letter-spacing:1px;font-family:'Orbitron',sans-serif;margin:4px 0">AVAILABLE (${data.available.length})</div>`;
+    for (const t of data.available.slice(0, 4)) {
+      html += `<div style="font-size:10px;color:var(--dim);padding:1px 0">○ ${t.name || t.id} <span style="color:var(--amber)">T${t.tier || '?'}</span></div>`;
+    }
+  }
+  if (!html) html = '<div style="color:var(--dim);font-size:10px">No technology data</div>';
+  panel.innerHTML = html;
+  return data;
+}
+
+// ── UI Helpers ──
+function setBar(barId, valId, value, max) {
+  const v = Math.max(0, Math.min(max, value || 0));
+  const pct = (v / max * 100).toFixed(0);
+  const bar = document.getElementById(barId);
+  const val = document.getElementById(valId);
+  if (bar) bar.style.width = pct + '%';
+  if (val) val.textContent = Math.round(v);
+}
+
+function setStat(valId, barId, value, max) {
+  const v = Math.max(0, Math.min(max, value || 0));
+  const pct = (v / max * 100).toFixed(0);
+  const val = document.getElementById(valId);
+  const bar = document.getElementById(barId);
+  if (val) val.textContent = Math.round(v);
+  if (bar) bar.style.width = pct + '%';
+}
+
+function setCondCard(valId, fillId, value, max) {
+  const v = Math.max(0, Math.min(max, value || 0));
+  const pct = (v / max * 100).toFixed(0);
+  const val = document.getElementById(valId);
+  const fill = document.getElementById(fillId);
+  if (val) val.textContent = Math.round(v);
+  if (fill) fill.style.width = pct + '%';
+}
+
+function setCC(fillId, valId, value, max) {
+  const v = Math.max(0, Math.min(max, value || 0));
+  const pct = (v / max * 100).toFixed(0);
+  const fill = document.getElementById(fillId);
+  const val = document.getElementById(valId);
+  if (fill) fill.style.width = pct + '%';
+  if (val) val.textContent = Math.round(v);
+}
+
+function addComms(msg) {
+  commsMessages.push(msg);
+  if (commsMessages.length > 20) commsMessages.shift();
+  const ticker = document.getElementById('comms-ticker');
+  ticker.innerHTML = commsMessages.map(m => `<span class="comms-msg">${m}</span>`).join('');
+}
+
+// ── Action Handlers ──
+async function processPoliticalTurn() {
+  playTone(600, 0.15, 0.05);
+  showToast('Processing political year...');
+  const data = await apiFetch('/political/process-turn', { method: 'POST' });
+  if (data) {
+    showToast('Political year processed');
+    addComms('Political year processed');
+    fetchPolitical(); fetchState();
+  } else {
+    showToast('Political process failed');
+  }
+}
+
+async function advanceHistoryArc() {
+  playTone(500, 0.15, 0.05);
+  showToast('Advancing timeline...');
+  const data = await apiFetch('/history-arc/advance', { method: 'POST' });
+  if (data) {
+    showToast('Timeline advanced');
+    addComms('Timeline advanced');
+    fetchHistoryArc(); fetchState();
+  } else {
+    showToast('Timeline advance failed');
+  }
+}
+
+async function saveState() {
+  playTone(700, 0.1, 0.05);
+  showToast('Saving snapshot...');
+  const data = await apiFetch('/state/save', { method: 'POST' });
+  if (data && data.status === 'saved') {
+    showToast('State saved');
+    addComms('State snapshot saved');
+  } else {
+    showToast('Save failed');
+  }
+}
+
+async function loadState() {
+  playTone(400, 0.1, 0.05);
+  showToast('Loading state...');
+  const data = await apiFetch('/state/load');
+  if (data) {
+    showToast('State loaded');
+    addComms('State restored from snapshot');
+    fetchState(); fetchWorldState(); fetchHistoryArc(); fetchConsciousness();
+  } else {
+    showToast('Load failed');
+  }
+}
+
+// ── Main Init ──
+async function init() {
+  initCanvas();
+  // Initial data fetch (parallel)
+  await Promise.all([
+    fetchState(),
+    fetchWorldState(),
+    fetchPolitical(),
+    fetchFactions(),
+    fetchConsciousness(),
+    fetchHistoryArc(),
+    fetchQuests(),
+    fetchMapData(),
+    fetchTechnology(),
+  ]);
+  addComms('Earth Command online — all systems nominal');
+
+  // Polling loop
+  setInterval(async () => {
+    await Promise.all([
+      fetchState(),
+      fetchWorldState(),
+      fetchPolitical(),
+      fetchFactions(),
+      fetchConsciousness(),
+      fetchHistoryArc(),
+      fetchQuests(),
+      fetchMapData(),
+      fetchTechnology(),
+    ]);
+  }, POLL_INTERVAL);
+}
+
+// Audio init on first interaction
+document.addEventListener('click', function audioInit() {
+  if (!audioCtx) initAudio();
+  if (isMuted && audioCtx) { /* state already saved */ }
+  document.removeEventListener('click', audioInit);
+}, { once: true });
+
+// Audio toggle button
+const audioBtn = document.getElementById('audio-toggle');
+if (isMuted) { audioBtn.classList.add('muted'); audioBtn.setAttribute('aria-label', 'Audio muted — click to unmute'); }
+audioBtn.addEventListener('click', function(e) {
+  e.stopPropagation();
+  if (!audioCtx) initAudio();
+  toggleMute();
+});
+
+// Keyboard shortcuts
+document.addEventListener('keydown', function(e) {
+  if (!audioCtx) initAudio();
+  if (e.key === 'm' || e.key === 'M') { toggleMute(); e.preventDefault(); return; }
+  if (e.key === 'p' || e.key === 'P') { processPoliticalTurn(); e.preventDefault(); return; }
+  if (e.key === 't' || e.key === 'T') { advanceHistoryArc(); e.preventDefault(); return; }
+  if (e.key === 's' || e.key === 'S') { saveState(); e.preventDefault(); return; }
+  if (e.key === 'l' || e.key === 'L') { loadState(); e.preventDefault(); return; }
+});
+
+// Start
+init();
+</script>
+</body>
+</html>
