@@ -279,11 +279,11 @@ def run_tick():
     political_data = []
 
     endpoints = [
-        ("/npcs/advance-turn", "NPC system", 30),
-        ("/simulation/tick", "NPC autonomy", 30),
-        ("/political/process-turn", "Political engine", 15),
-        ("/history-arc/advance", "History arc", 15),
-        ("/simulation/autonomous/tick", "Autonomous simulation", 60),
+        ("/npcs/advance-turn", "NPC system", 60),
+        ("/simulation/tick", "NPC autonomy", 45),
+        ("/political/process-turn", "Political engine", 30),
+        ("/history-arc/advance", "History arc", 30),
+        ("/simulation/autonomous/tick", "Autonomous simulation", 120),
     ]
 
     for path, name, timeout_s in endpoints:

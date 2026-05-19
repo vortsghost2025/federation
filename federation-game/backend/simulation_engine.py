@@ -359,8 +359,8 @@ def execute_npc_decisions(tick_decisions: List[Dict]) -> Dict:
                     results["events_generated"].append(interaction_event)
 
             elif category == "react_to_events":
-                threat_rise = rng.uniform(0.06, 0.3)
-                morale_hit = rng.uniform(0.02, 0.1)
+                threat_rise = rng.uniform(0.01, 0.05)
+                morale_hit = rng.uniform(0.01, 0.04)
                 world["threat_level"] = _clamp(world["threat_level"] + threat_rise)
                 world["morale"] = _clamp(world["morale"] - morale_hit)
                 effect["changes"] = {
@@ -431,8 +431,8 @@ def execute_npc_decisions(tick_decisions: List[Dict]) -> Dict:
                     "anomaly_activity": anomaly_rise,
                 }
 
-            _store_effect(r, effect, ts)
-            results["effects_applied"] += 1
+                _store_effect(r, effect, ts)
+                results["effects_applied"] += 1
 
         except Exception as exc:
             logger.error(

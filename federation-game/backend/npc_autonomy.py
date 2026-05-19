@@ -1288,10 +1288,10 @@ WORLD_CONDITIONS = {
         "label": "Threat Level",
         "description": "Active threats to station safety and security",
         "high_bias": {
-            "react_to_events": 1.7,
-            "confront_rival": 1.4,
-            "help_ally": 1.3,
+            "rest": 1.6,
+            "help_ally": 1.5,
             "investigate": 1.4,
+            "advance_goal": 1.2,
         },
         "low_bias": {"explore": 1.4, "socialize": 1.3, "self_improve": 1.2},
     },
