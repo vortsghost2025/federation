@@ -7,6 +7,7 @@ import json
 import random
 import hashlib
 import asyncio
+import logging
 from datetime import datetime
 from typing import Optional, Dict, List, Any
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException
@@ -98,6 +99,36 @@ try:
 except ImportError:
     CONSOLE_ENGINE_AVAILABLE = False
 
+try:
+    from simulation_engine import (
+        autonomous_tick,
+        bridge_world_state_to_game_state,
+    )
+
+    SIMULATION_ENGINE_AVAILABLE = True
+except ImportError:
+    SIMULATION_ENGINE_AVAILABLE = False
+
+try:
+    from faction_ai import run_all_factions, resolve_pending_items
+
+    FACTION_AI_AVAILABLE = True
+except ImportError:
+    FACTION_AI_AVAILABLE = False
+
+try:
+    from event_cascade import (
+        process_cascade,
+        process_faction_cascade,
+        get_cascade_summary,
+    )
+
+    EVENT_CASCADE_AVAILABLE = True
+except ImportError:
+    EVENT_CASCADE_AVAILABLE = False
+
+
+logger = logging.getLogger(__name__)
 app = FastAPI(title="Federation Game API", version="1.0.0")
 from auth_endpoints import router as auth_router
 from map_endpoints import router as map_router
@@ -257,7 +288,9 @@ class GameState:
             try:
                 self.rival_simulator.initialize_rivals()
             except Exception:
-                pass
+                logger.warning(
+                    "Rival simulator initialization failed; continuing without rivals"
+                )
 
         # Update engine_systems with new subsystems
         self.engine_systems.update(
@@ -305,7 +338,9 @@ class GameState:
                     federation_data = fed_data.get("federation", {})
                     fed = self.game_state_v2.federation
                     fed.morale = federation_data.get("morale", 0.5)
-                    fed.identity_strength = federation_data.get("identity_strength", 0.3)
+                    fed.identity_strength = federation_data.get(
+                        "identity_strength", 0.3
+                    )
                     fed.stability = federation_data.get("stability", 0.6)
                     fed.technological_level = federation_data.get(
                         "technological_level", 0.2
@@ -317,6 +352,7 @@ class GameState:
                     _lu = federation_data.get("last_updated")
                     if _lu:
                         from datetime import datetime as _dt
+
                         fed.last_updated = _dt.fromisoformat(_lu)
                     subsystems_data = fed_data.get("subsystems", {})
                     self.game_state_v2._restore_subsystems(subsystems_data)
@@ -326,13 +362,18 @@ class GameState:
                         for key, val in stats_data.items():
                             if hasattr(stats, key):
                                 setattr(stats, key, val)
-                    self.game_state_v2.technology_data = fed_data.get("technology_data", {})
+                    self.game_state_v2.technology_data = fed_data.get(
+                        "technology_data", {}
+                    )
                     self.game_state_v2.quest_data = fed_data.get("quest_data", {})
                     self.game_state_v2.npc_data = fed_data.get("npc_data", {})
-                    self.game_state_v2.political_data = fed_data.get("political_data", {})
+                    self.game_state_v2.political_data = fed_data.get(
+                        "political_data", {}
+                    )
                     phase_str = fed_data.get("game_phase", "genesis")
                     try:
                         from federation_game_state import GamePhase
+
                         self.game_state_v2.game_phase = GamePhase(phase_str)
                     except Exception:
                         print(f"Warning: could not set game_phase to '{phase_str}'")
@@ -443,7 +484,9 @@ class GameState:
             )
             state_hash = hashlib.sha256(raw.encode()).hexdigest()[:16]
         except Exception:
-            pass
+            logger.warning(
+                "State hash computation failed; snapshot will proceed without hash"
+            )
 
         return db_manager.save_snapshot(
             game_state_json=game_state_json,
@@ -2839,7 +2882,9 @@ async def get_random_event():
             elif turn > 15 and turn % 5 == 0:
                 candidates.append(("consciousness", 1.0))
         except Exception:
-            pass
+            logger.warning(
+                "Consciousness sheet evaluation failed during event candidate selection"
+            )
 
     if turn >= 8:
         candidates.append(("quest", 1.0 + difficulty_weight * 0.5))
@@ -3127,9 +3172,9 @@ async def make_choice(choice_id: str):
                 threat = game_state.rival_simulator.simulation_state.aggregate_threat
                 game_state.engine_systems["rival_simulator"]["threat_level"] = threat
             except Exception:
-                pass
+                logger.debug("Rival threat level unavailable; skipping threat sync")
         except Exception:
-            pass
+            logger.warning("Rival simulator processing failed during turn")
 
     # Update consciousness sheet with deeper tracking
     if game_state.consciousness_sheet:
@@ -3206,7 +3251,9 @@ async def make_choice(choice_id: str):
                 1.0 - cs.anxiety
             )
         except Exception:
-            pass
+            logger.warning(
+                "Consciousness sheet engine sync failed during turn processing"
+            )
 
     # Process political engine turn and apply law effects
     political_effects = {}
@@ -3294,7 +3341,7 @@ async def make_choice(choice_id: str):
                                 )
                                 political_effects[law_name] = "stability_boost"
         except Exception:
-            pass
+            logger.warning("Political engine law processing failed")
 
     # Advance history arc alongside main timeline
     history_arc_result = {}
@@ -3318,7 +3365,7 @@ async def make_choice(choice_id: str):
                     history_arc_result["era_changed"] = True
                     history_arc_result["new_era"] = new_era
         except Exception:
-            pass
+            logger.warning("History arc advancement failed")
 
     # Narrative memory recording
     game_state.timeline.record_narrative(
@@ -3410,7 +3457,7 @@ async def make_choice(choice_id: str):
     try:
         game_state.save_to_db(snapshot_type="decision")
     except Exception:
-        pass
+        logger.warning("Failed to persist decision snapshot to DB")
 
     return {
         "outcome": choice["outcome"],
@@ -3533,7 +3580,9 @@ async def reset_game():
     try:
         game_state.save_to_db(snapshot_type="reset")
     except Exception:
-        pass
+        logger.warning(
+            "Failed to persist reset snapshot to DB; reset will still take effect in memory"
+        )
     return {"message": "Game reset", "state": await get_state()}
 
 
@@ -3887,11 +3936,11 @@ async def simulation_tick_endpoint():
             if goal_action:
                 goal_actions += 1
         except Exception:
-            pass
+            logger.debug("NPC goal action evaluation failed for character")
     try:
         game_state.save_to_db(snapshot_type="auto")
     except Exception:
-        pass
+        logger.warning("Auto-save snapshot after NPC processing failed")
     return {
         "status": "completed",
         "thoughts_generated": len(results.get("thoughts", [])),
@@ -3903,6 +3952,417 @@ async def simulation_tick_endpoint():
         "errors": len(results.get("errors", [])),
         "details": results,
     }
+
+
+@app.post("/simulation/autonomous/tick")
+async def autonomous_simulation_tick():
+    """Autonomous simulation tick: cross-pollination of all subsystems.
+
+    Runs after the base simulation_tick to:
+      1. Wire faction context into NPC decisions
+      2. Execute NPC decisions with concrete world effects
+      3. Bridge world state → game_state_v2
+      4. Run faction AI for all 8 factions
+      5. Resolve pending laws/treaties/research
+      6. Process event cascades
+      7. Apply game state deltas
+    """
+    import redis as _redis
+
+    _r = _redis.Redis.from_url(
+        os.environ.get("REDIS_URL", "redis://redis:6379/0"),
+        decode_responses=True,
+    )
+
+    # Build NPC list (same pattern as /simulation/tick)
+    npc_list = []
+    for char_id, character in game_state.npc_system.characters.items():
+        npc_list.append(
+            {
+                "id": char_id,
+                "char_id": char_id,
+                "name": character.name,
+                "archetype": character.personality_type.value,
+                "affiliation": character.affiliation,
+                "title": character.title,
+                "description": getattr(character, "description", ""),
+            }
+        )
+
+    # Collect tick decisions from Redis
+    tick_decisions = []
+    for npc in npc_list:
+        cid = npc["char_id"]
+        try:
+            raw = _r.zrange(f"npc_decisions:{cid}", 0, -1)
+            for item in raw:
+                try:
+                    tick_decisions.append(json.loads(item))
+                except (json.JSONDecodeError, TypeError):
+                    pass
+        except Exception:
+            pass
+
+    result = {
+        "status": "completed",
+        "npcs_processed": len(npc_list),
+        "tick_decisions_collected": len(tick_decisions),
+        "autonomous_tick": {},
+        "faction_ai": {},
+        "pending_resolved": {},
+        "npc_cascade": {},
+        "faction_cascade": {},
+        "cascade_summary": {},
+        "game_state_deltas": {},
+        "errors": [],
+    }
+
+    # Step 1: Autonomous tick (cross-pollination engine)
+    if SIMULATION_ENGINE_AVAILABLE:
+        try:
+            result["autonomous_tick"] = autonomous_tick(npc_list, tick_decisions)
+        except Exception as e:
+            logger.error("Autonomous tick failed: %s", e)
+            result["autonomous_tick"] = {"error": str(e)}
+            result["errors"].append(f"autonomous_tick: {e}")
+
+    # Step 2: Faction AI
+    faction_actions_list = []
+    if FACTION_AI_AVAILABLE:
+        try:
+            faction_result = run_all_factions(npc_list)
+            result["faction_ai"] = faction_result
+
+            # Collect faction actions for cascade processing
+            for fid, fdata in faction_result.get("factions", {}).items():
+                actions = fdata.get("actions", fdata.get("results", []))
+                if isinstance(actions, list):
+                    for a in actions:
+                        if isinstance(a, dict):
+                            a["faction_id"] = fid
+                            faction_actions_list.append(a)
+        except Exception as e:
+            logger.error("Faction AI failed: %s", e)
+            result["faction_ai"] = {"error": str(e)}
+            result["errors"].append(f"faction_ai: {e}")
+
+        try:
+            result["pending_resolved"] = resolve_pending_items()
+        except Exception as e:
+            logger.error("Resolve pending items failed: %s", e)
+            result["pending_resolved"] = {"error": str(e)}
+            result["errors"].append(f"resolve_pending: {e}")
+
+    # Step 3: Event cascade
+    if EVENT_CASCADE_AVAILABLE:
+        try:
+            result["npc_cascade"] = process_cascade(npc_list)
+        except Exception as e:
+            logger.error("NPC cascade failed: %s", e)
+            result["npc_cascade"] = {"error": str(e)}
+            result["errors"].append(f"npc_cascade: {e}")
+
+        try:
+            result["faction_cascade"] = process_faction_cascade(
+                faction_actions_list, npc_list
+            )
+        except Exception as e:
+            logger.error("Faction cascade failed: %s", e)
+            result["faction_cascade"] = {"error": str(e)}
+            result["errors"].append(f"faction_cascade: {e}")
+
+        try:
+            result["cascade_summary"] = get_cascade_summary()
+        except Exception as e:
+            logger.error("Cascade summary failed: %s", e)
+            result["cascade_summary"] = {"error": str(e)}
+            result["errors"].append(f"cascade_summary: {e}")
+
+    # Step 4: Apply game state deltas from simulation engine
+    if SIMULATION_ENGINE_AVAILABLE and game_state.game_state_v2:
+        try:
+            bridge_result = bridge_world_state_to_game_state()
+            deltas = bridge_result.get("deltas", {})
+            result["game_state_deltas"] = deltas
+            fed = game_state.game_state_v2.federation
+
+            # Apply each delta with clamping
+            if "federation.morale" in deltas:
+                fed.morale = max(
+                    0.0, min(1.0, fed.morale + deltas["federation.morale"])
+                )
+            if "federation.stability" in deltas:
+                fed.stability = max(
+                    0.0, min(1.0, fed.stability + deltas["federation.stability"])
+                )
+            if "federation.technological_level" in deltas:
+                fed.technological_level = max(
+                    0.0,
+                    min(
+                        1.0,
+                        fed.technological_level
+                        + deltas["federation.technological_level"],
+                    ),
+                )
+            if "federation.military_power" in deltas:
+                fed.military_power = max(
+                    0.0,
+                    min(1.0, fed.military_power + deltas["federation.military_power"]),
+                )
+            if "federation.treasury" in deltas:
+                fed.treasury = max(0, fed.treasury + deltas["federation.treasury"])
+        except Exception as e:
+            logger.error("Game state bridge failed: %s", e)
+            result["game_state_deltas"] = {"error": str(e)}
+            result["errors"].append(f"game_state_bridge: {e}")
+
+    try:
+        game_state.save_to_db(snapshot_type="auto")
+    except Exception:
+        logger.warning("Auto-save after autonomous tick failed")
+
+    return result
+
+
+# ============================================================================
+# SIMULATION OBSERVER ENDPOINTS
+# ============================================================================
+
+
+@app.get("/simulation/status")
+async def simulation_status():
+    """Read-only view of the autonomous simulation's current state."""
+    import redis as _redis
+
+    _r = _redis.Redis.from_url(
+        os.environ.get("REDIS_URL", "redis://redis:6379/0"),
+        decode_responses=True,
+    )
+    result = {
+        "world_state": {},
+        "faction_dynamics": {},
+        "cascade_summary": {},
+        "recent_events": [],
+        "npc_activity_summary": {},
+        "pending_items": {},
+    }
+
+    # World state
+    try:
+        result["world_state"] = get_world_state()
+    except Exception:
+        pass
+
+    # Faction dynamics
+    try:
+        result["faction_dynamics"] = get_faction_dynamics()
+    except Exception:
+        pass
+
+    # Cascade summary
+    if EVENT_CASCADE_AVAILABLE:
+        try:
+            result["cascade_summary"] = get_cascade_summary()
+        except Exception:
+            pass
+
+    # Recent world events (last 20)
+    try:
+        result["recent_events"] = get_world_events(limit=20)
+    except Exception:
+        pass
+
+    # NPC activity summary (mood distribution, decision counts)
+    try:
+        npc_list = []
+        for char_id, character in game_state.npc_system.characters.items():
+            npc_list.append(
+                {
+                    "id": char_id,
+                    "char_id": char_id,
+                    "name": character.name,
+                    "affiliation": character.affiliation,
+                }
+            )
+        mood_counts = {}
+        decision_counts = {}
+        for npc in npc_list:
+            cid = npc["char_id"]
+            mood = _r.get(f"npc_mood:{cid}") or "unknown"
+            mood_counts[mood] = mood_counts.get(mood, 0) + 1
+            dec_count = _r.zcard(f"npc_decisions:{cid}") or 0
+            decision_counts[cid] = dec_count
+        result["npc_activity_summary"] = {
+            "total_npcs": len(npc_list),
+            "mood_distribution": mood_counts,
+            "total_decisions": sum(decision_counts.values()),
+        }
+    except Exception:
+        pass
+
+    # Pending items (laws, treaties, research from simulation engine)
+    try:
+        result["pending_items"] = {
+            "laws": _r.llen("pending_laws") or 0,
+            "treaties": _r.llen("pending_treaties") or 0,
+            "research": _r.llen("pending_research") or 0,
+            "faction_laws": len(_r.zrange("faction_laws_passed", 0, -1)),
+            "active_treaties": len(_r.hgetall("faction_treaties_active")),
+        }
+    except Exception:
+        pass
+
+    # Simulation engine last tick
+    try:
+        last_tick = _r.get("sim_last_tick")
+        result["last_tick_timestamp"] = last_tick
+        tick_log = _r.zrevrange("sim_tick_log", 0, 0)
+        if tick_log:
+            result["last_tick_result"] = json.loads(tick_log[0])
+    except Exception:
+        pass
+
+    # Faction AI last tick
+    try:
+        faction_ai_data = _r.hgetall("faction_ai:last_tick")
+        result["faction_ai_last_tick"] = faction_ai_data
+    except Exception:
+        pass
+
+    # Cascade temperature
+    try:
+        temp = _r.get("cascade_temperature")
+        result["cascade_temperature"] = float(temp) if temp else 0.0
+    except Exception:
+        result["cascade_temperature"] = 0.0
+
+    return result
+
+
+@app.get("/simulation/factions")
+async def simulation_factions():
+    """Detailed faction AI status for the simulation observer."""
+    import redis as _redis
+
+    _r = _redis.Redis.from_url(
+        os.environ.get("REDIS_URL", "redis://redis:6379/0"),
+        decode_responses=True,
+    )
+    result = {}
+    for fid in KNOWN_FACTIONS:
+        faction_data = {
+            "id": fid,
+            "name": FACTION_DISPLAY.get(fid, fid),
+            "dynamics": {},
+            "stances": {},
+            "recent_actions": [],
+            "power": 0.0,
+        }
+        try:
+            faction_data["dynamics"] = get_faction_detail(fid)
+        except Exception:
+            pass
+        try:
+            faction_data["stances"] = get_faction_stances(fid)
+        except Exception:
+            pass
+        try:
+            actions_raw = _r.zrevrange(f"faction_actions:{fid}", 0, 4)
+            faction_data["recent_actions"] = [json.loads(a) for a in actions_raw]
+        except Exception:
+            pass
+        try:
+            power_raw = _r.get(f"faction_power:{fid}")
+            faction_data["power"] = float(power_raw) if power_raw else 0.0
+        except Exception:
+            pass
+        result[fid] = faction_data
+    return result
+
+
+@app.get("/simulation/npcs/activity")
+async def simulation_npcs_activity():
+    """NPC activity feed for the simulation observer."""
+    import redis as _redis
+
+    _r = _redis.Redis.from_url(
+        os.environ.get("REDIS_URL", "redis://redis:6379/0"),
+        decode_responses=True,
+    )
+    npcs = []
+    for char_id, character in game_state.npc_system.characters.items():
+        npc_data = {
+            "char_id": char_id,
+            "name": character.name,
+            "affiliation": character.affiliation,
+            "archetype": character.personality_type.value,
+            "mood": "unknown",
+            "recent_thoughts": [],
+            "recent_decisions": [],
+            "recent_actions": [],
+            "corruption_level": 0.0,
+            "rumor_level": 0.0,
+            "status": "active",
+        }
+        try:
+            npc_data["mood"] = _r.get(f"npc_mood:{char_id}") or "unknown"
+        except Exception:
+            pass
+        try:
+            thoughts_raw = _r.zrevrange(f"npc_thoughts:{char_id}", 0, 2)
+            npc_data["recent_thoughts"] = [json.loads(t) for t in thoughts_raw]
+        except Exception:
+            pass
+        try:
+            decisions_raw = _r.zrevrange(f"npc_decisions:{char_id}", 0, 2)
+            npc_data["recent_decisions"] = [json.loads(d) for d in decisions_raw]
+        except Exception:
+            pass
+        try:
+            actions_raw = _r.zrevrange(f"npc_actions:{char_id}", 0, 2)
+            npc_data["recent_actions"] = [json.loads(a) for a in actions_raw]
+        except Exception:
+            pass
+        try:
+            state = _r.hgetall(f"npc_state:{char_id}")
+            npc_data["corruption_level"] = float(state.get("corruption_level", 0))
+            npc_data["rumor_level"] = float(state.get("rumor_level", 0))
+            npc_data["status"] = state.get("status", "active")
+        except Exception:
+            pass
+        npcs.append(npc_data)
+    return {"npcs": npcs, "count": len(npcs)}
+
+
+@app.get("/simulation/events")
+async def simulation_events(limit: int = 50):
+    """World events and cascade events for the simulation observer."""
+    import redis as _redis
+
+    _r = _redis.Redis.from_url(
+        os.environ.get("REDIS_URL", "redis://redis:6379/0"),
+        decode_responses=True,
+    )
+    result = {
+        "world_events": [],
+        "cascade_events": [],
+        "broadcast_events": [],
+    }
+    try:
+        result["world_events"] = get_world_events(limit=limit)
+    except Exception:
+        pass
+    try:
+        cascade_raw = _r.zrevrange("cascade_reactions", 0, limit - 1)
+        result["cascade_events"] = [json.loads(c) for c in cascade_raw]
+    except Exception:
+        pass
+    try:
+        broadcast_raw = _r.zrevrange("npc_broadcast_events", 0, min(limit, 20) - 1)
+        result["broadcast_events"] = [json.loads(b) for b in broadcast_raw]
+    except Exception:
+        pass
+    return result
 
 
 # ============================================================================
@@ -3962,7 +4422,7 @@ async def get_quests(faction: Optional[str] = None):
         try:
             faction_filter = FactionAffiliation(faction)
         except ValueError:
-            pass
+            logger.info(f"Ignoring unrecognized faction filter: {faction}")
     available = qs.get_available_quests(faction_filter=faction_filter)
     active = qs.get_active_quests()
     completed = qs.get_completed_quests()
@@ -4074,7 +4534,9 @@ async def get_technology(philsophy: Optional[str] = None):
             phil = ResearchPhilosophy(philsophy)
             available = [t for t in available if t.philosophy == phil]
         except ValueError:
-            pass
+            logger.info(
+                f"Ignoring unrecognized research philosophy filter: {philosophy}"
+            )
     return {
         "available": [
             {
@@ -4382,8 +4844,10 @@ class ConnectionManager:
         for connection in self.active_connections:
             try:
                 await connection.send_json(message)
-            except:
-                pass
+            except Exception:
+                logger.debug(
+                    "WebSocket broadcast failed for a connection; likely disconnected"
+                )
 
 
 # ============================================================================
