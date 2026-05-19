@@ -1360,7 +1360,9 @@ def get_world_condition(condition):
     r = _get_redis()
     val = r.hget(WORLD_STATE_KEY, condition)
     if val is not None:
-        return int(val)
+        return int(
+            float(val)
+        )  # float() first handles decimal strings from simulation_engine
     return WORLD_CONDITIONS[condition]["default"]
 
 
@@ -1703,6 +1705,18 @@ def _score_decision_option(
         score *= 1.3
     if category == "react_to_events" and broadcast_event_count > 0:
         score *= 1.0 + min(broadcast_event_count * 0.1, 0.5)
+    # Apply cascade decision bias from event_cascade reactions
+    try:
+        _bias_r = _get_redis()
+        _bias_raw = _bias_r.get(f"npc_decision_bias:{char_id}")
+        if _bias_raw:
+            _bias_data = json.loads(_bias_raw)
+            _bias_val = _bias_data.get(category, 1.0)
+            if _bias_val and _bias_val != 1.0:
+                score *= _bias_val
+    except Exception:
+        pass  # bias is optional — never break decision scoring
+
     score *= _world_state_decision_modifier(category)
     score += random.uniform(-0.1, 0.1)
     return max(0.1, score)

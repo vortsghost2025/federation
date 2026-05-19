@@ -41,15 +41,19 @@ services:
         - python
         - -c
         - "import urllib.request; urllib.request.urlopen('http://localhost:8000/healthz')"
-      interval: 15s
-      timeout: 5s
-      retries: 3
-      start_period: 10s
-    depends_on:
-      - postgres
-      - redis
-    networks:
-      - fed-net
+  interval: 60s
+  timeout: 10s
+  retries: 3
+  start_period: 10s
+  depends_on:
+  - postgres
+  - redis
+  networks:
+  - fed-net
+  deploy:
+    resources:
+      limits:
+        cpus: "1.0"
 
   frontend:
     build: /docker/federation-game/frontend
@@ -248,21 +252,25 @@ services:
   cadvisor:
     image: gcr.io/cadvisor/cadvisor:latest
     restart: unless-stopped
+    command:
+      - "--docker_only"
+      - "--store_container_labels=false"
+      - "--housekeeping_interval=30s"
+      - "--global_housekeeping_interval=60s"
+      - "--enable_metrics=cpu,memory"
     volumes:
       - /:/rootfs:ro
       - /var/run:/var/run:ro
       - /sys:/sys:ro
       - /var/lib/docker/:/var/lib/docker:ro
       - /dev/disk/:/dev/disk:ro
-    devices:
-      - /dev/kmsg
-    privileged: true
     networks:
       - fed-net
     deploy:
       resources:
         limits:
-          memory: 128M
+          memory: 256M
+          cpus: "0.50"
 
 networks:
   fed-net:

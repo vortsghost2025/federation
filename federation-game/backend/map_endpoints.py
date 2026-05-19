@@ -131,10 +131,10 @@ async def get_map_data():
         for k, v in stored.items():
             if k.startswith("_"):
                 continue
-            try:
-                result["world_state"][k] = int(v)
-            except (ValueError, TypeError):
-                result["world_state"][k] = v
+        try:
+            result["world_state"][k] = int(float(v))
+        except (ValueError, TypeError):
+            result["world_state"][k] = v
     except Exception:
         logger.debug(f"Unexpected error parsing world_state key '{k}'; skipped")
 

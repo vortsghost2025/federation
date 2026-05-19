@@ -133,8 +133,10 @@ def _read_world_state(r: redis.Redis) -> Dict[str, float]:
 def _write_world_state(r: redis.Redis, state: Dict[str, float]) -> None:
     pipe = r.pipeline()
     for key, value in state.items():
-        pipe.hset("world_state", key, str(round(value, 2)))
-    pipe.set("world_state_updated", str(int(time.time())))
+        # Store as int string for compatibility with npc_autonomy readers
+        # which use int(val) and int(float(val)) — decimals cause ValueError
+        pipe.hset("world_state", key, str(int(round(value))))
+    pipe.set("world_state_updated", str(int(time.time())), ex=86400 * 30)
     pipe.execute()
 
 
@@ -453,11 +455,21 @@ def execute_npc_decisions(tick_decisions: List[Dict]) -> Dict:
         logger.error("Error writing world state: %s", exc)
         results["errors"].append(str(exc))
 
+    # Fix: faction_power must be CUMULATIVE — read existing, add delta, write back
+    # (previously was overwriting with raw delta, destroying accumulated power)
     pipe = r.pipeline()
     for faction, delta in faction_power_delta.items():
         if faction and faction != "independent":
             key = f"faction_power:{faction}"
-            pipe.set(key, str(round(delta, 2)), ex=FACTION_METRIC_TTL)
+            current = 0.0
+            try:
+                existing = r.get(key)
+                if existing is not None:
+                    current = float(existing)
+            except (ValueError, TypeError):
+                pass
+            new_total = round(current + delta, 2)
+            pipe.set(key, str(new_total), ex=FACTION_METRIC_TTL)
             results["faction_updates"][key] = delta
     for faction, delta in faction_stability_delta.items():
         if faction and faction != "independent":
@@ -978,6 +990,19 @@ def autonomous_tick(npc_list: List[Dict], tick_decisions: List[Dict]) -> Dict:
     r = _get_redis()
     tick_start = time.time()
     tick_ts = int(tick_start)
+
+    # Ensure world_state hash exists — seed with defaults if empty
+    try:
+        existing = r.hgetall("world_state")
+        if not existing:
+            seed_pipe = r.pipeline()
+            for key, val in WORLD_DEFAULTS.items():
+                seed_pipe.hset("world_state", key, str(int(val)))
+            seed_pipe.set("world_state_updated", str(tick_ts), ex=86400 * 30)
+            seed_pipe.execute()
+            logger.info("Seeded world_state hash with defaults (was empty)")
+    except Exception as exc:
+        logger.warning("World state seed check failed: %s", exc)
 
     result = {
         "tick_ts": tick_ts,

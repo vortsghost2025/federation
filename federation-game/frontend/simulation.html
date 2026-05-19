@@ -1,0 +1,777 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Federation — Simulation Observer</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🟢</text></svg>">
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+<style>
+:root {
+  --amber: #FF9800;
+  --amber-dim: rgba(255,152,0,0.15);
+  --cyan: #00BCD4;
+  --cyan-dim: rgba(0,188,212,0.12);
+  --violet: #9C27B0;
+  --red: #F44336;
+  --red-dim: rgba(244,67,54,0.12);
+  --green: #4CAF50;
+  --green-dim: rgba(76,175,80,0.12);
+  --white: #e0e0e0;
+  --dim: #607080;
+  --panel-bg: rgba(8,12,20,0.94);
+  --panel-border: rgba(0,188,212,0.15);
+  --glow-cyan: 0 0 10px rgba(0,188,212,0.25);
+  --glow-amber: 0 0 10px rgba(255,152,0,0.25);
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{height:100%;overflow:hidden;background:#040810;color:var(--white);font-family:'Share Tech Mono',monospace;font-size:18px}
+
+#app{
+  display:grid;
+  grid-template-rows:72px 1fr 64px;
+  grid-template-columns:30% 40% 30%;
+  grid-template-areas:
+    "top top top"
+    "left center right"
+    "bottom bottom bottom";
+  height:100vh;gap:1px;
+  background:radial-gradient(ellipse at 50% 30%,rgba(0,188,212,0.03) 0%,transparent 60%);
+}
+
+.panel{background:var(--panel-bg);overflow-y:auto;scrollbar-width:thin;scrollbar-color:rgba(0,188,212,0.2) transparent}
+.panel::-webkit-scrollbar{width:4px}
+.panel::-webkit-scrollbar-thumb{background:rgba(0,188,212,0.2);border-radius:2px)}
+
+#top{grid-area:top;display:flex;align-items:center;gap:0;background:var(--panel-bg);border-bottom:1px solid var(--panel-border);padding:0 12px;z-index:5;flex-wrap:nowrap;overflow-x:auto}
+
+#left{grid-area:left;border-right:1px solid var(--panel-border);padding:12px}
+#center{grid-area:center;padding:12px;position:relative}
+#right{grid-area:right;border-left:1px solid var(--panel-border);padding:12px}
+#bottom{grid-area:bottom;display:flex;align-items:center;gap:16px;background:var(--panel-bg);border-top:1px solid var(--panel-border);padding:0 16px;overflow-x:auto}
+
+.top-title{font-family:'Orbitron',sans-serif;font-weight:700;font-size:20px;color:var(--cyan);letter-spacing:3px;padding-right:20px;border-right:1px solid var(--panel-border);margin-right:12px;white-space:nowrap;text-shadow:var(--glow-cyan)}
+.top-tick{display:flex;align-items:center;gap:6px;padding:0 12px;border-right:1px solid rgba(0,188,212,0.08);margin-right:8px;white-space:nowrap}
+.top-tick-label{color:var(--dim);font-size:11px;text-transform:uppercase;letter-spacing:1.5px}
+.top-tick-val{font-family:'Orbitron',sans-serif;font-size:18px;color:var(--amber);min-width:50px;text-align:right}
+
+.top-metric{display:flex;flex-direction:column;align-items:center;gap:2px;padding:4px 10px;border-right:1px solid rgba(0,188,212,0.06);min-width:90px}
+.top-metric:last-of-type{border-right:none}
+.tm-label{color:var(--dim);font-size:10px;text-transform:uppercase;letter-spacing:1.5px}
+.tm-val{font-family:'Orbitron',sans-serif;font-size:16px;min-width:28px;text-align:center}
+.tm-bar{width:80px;height:8px;background:rgba(255,255,255,0.06);border-radius:4px;overflow:hidden}
+.tm-fill{height:100%;border-radius:4px;transition:width 0.8s ease,background 0.5s ease}
+
+.cascade-gauge{display:flex;flex-direction:column;align-items:center;gap:2px;padding:0 16px;border-left:1px solid var(--panel-border);margin-left:8px;min-width:120px}
+.cascade-label{color:var(--dim);font-size:10px;text-transform:uppercase;letter-spacing:1.5px}
+.cascade-bar{width:120px;height:14px;background:rgba(255,255,255,0.06);border-radius:7px;overflow:hidden;position:relative;border:1px solid rgba(255,255,255,0.08)}
+.cascade-fill{height:100%;border-radius:7px;transition:width 0.8s ease,background 0.5s ease;position:relative}
+.cascade-fill::after{content:'';position:absolute;inset:0;background:linear-gradient(180deg,rgba(255,255,255,0.15) 0%,transparent 50%);border-radius:7px}
+.cascade-pct{font-family:'Orbitron',sans-serif;font-size:16px;min-width:40px;text-align:center}
+.time-since{display:flex;align-items:center;gap:6px;padding:0 12px;border-left:1px solid var(--panel-border);margin-left:8px;white-space:nowrap}
+.time-since-label{color:var(--dim);font-size:10px;text-transform:uppercase;letter-spacing:1.5px}
+.time-since-val{font-family:'Orbitron',sans-serif;font-size:16px;color:var(--cyan)}
+
+.top-nav{margin-left:auto;display:flex;gap:4px;flex-shrink:0}
+.top-nav a{color:var(--dim);font-size:12px;text-decoration:none;padding:8px 12px;letter-spacing:1px;text-transform:uppercase;transition:color 0.2s;border-radius:4px}
+.top-nav a:hover,.top-nav a.active{color:var(--cyan);background:var(--cyan-dim)}
+
+.section-title{font-family:'Orbitron',sans-serif;font-weight:700;font-size:14px;letter-spacing:2px;text-transform:uppercase;padding-bottom:8px;margin-bottom:10px;border-bottom:1px solid var(--panel-border)}
+.section-title.amber{color:var(--amber)}
+.section-title.cyan{color:var(--cyan)}
+.section-title.violet{color:var(--violet)}
+
+.faction-card{background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.06);border-radius:8px;padding:10px 12px;margin-bottom:8px;cursor:pointer;transition:border-color 0.3s,background 0.3s,box-shadow 0.3s}
+.faction-card:hover{background:rgba(255,255,255,0.05);border-color:rgba(0,188,212,0.2)}
+.faction-card.active{box-shadow:0 0 12px rgba(0,188,212,0.15);border-color:rgba(0,188,212,0.35)}
+.faction-header{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.faction-name{font-family:'Orbitron',sans-serif;font-size:16px;font-weight:700;letter-spacing:1px}
+.faction-power{font-family:'Orbitron',sans-serif;font-size:18px;font-weight:900}
+.faction-sub{display:flex;align-items:center;gap:8px;margin-top:6px;font-size:13px}
+.faction-cohesion-label{color:var(--dim);font-size:11px;text-transform:uppercase;letter-spacing:1px}
+.faction-cohesion-bar{flex:1;height:8px;background:rgba(255,255,255,0.06);border-radius:4px;overflow:hidden}
+.faction-cohesion-fill{height:100%;border-radius:4px;transition:width 0.8s ease}
+.faction-action{color:var(--dim);font-size:13px;margin-top:4px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.faction-stances{display:flex;gap:4px;margin-top:6px;flex-wrap:wrap}
+.stance-dot{width:12px;height:12px;border-radius:50%;border:1px solid rgba(255,255,255,0.1);transition:transform 0.2s,box-shadow 0.2s}
+.stance-dot:hover{transform:scale(1.5);box-shadow:0 0 6px currentColor}
+.stance-dot.ally{background:var(--green);border-color:var(--green)}
+.stance-dot.neutral{background:#FFC107;border-color:#FFC107}
+.stance-dot.enemy{background:var(--red);border-color:var(--red)}
+.faction-detail{max-height:0;overflow:hidden;transition:max-height 0.4s ease,opacity 0.3s ease;opacity:0}
+.faction-card.active .faction-detail{max-height:600px;opacity:1}
+.detail-stances{margin-top:8px;font-size:13px}
+.detail-stance-row{display:flex;align-items:center;gap:8px;padding:2px 0}
+.detail-stance-name{color:var(--dim);min-width:140px}
+.detail-stance-val{font-weight:700;text-transform:uppercase;font-size:12px;letter-spacing:1px}
+.detail-action-history{margin-top:8px;font-size:12px;color:var(--dim)}
+.detail-action-item{padding:3px 0;border-bottom:1px solid rgba(255,255,255,0.03)}
+
+.event-feed{display:flex;flex-direction:column;gap:4px}
+.event-entry{display:flex;gap:10px;padding:8px 10px;border-radius:6px;border-left:3px solid transparent;background:rgba(255,255,255,0.02);transition:opacity 0.3s;font-size:14px;animation:fadeSlideIn 0.4s ease}
+@keyframes fadeSlideIn{from{opacity:0;transform:translateY(-8px)}to{opacity:1;transform:translateY(0)}}
+.event-entry.world{border-left-color:var(--cyan)}
+.event-entry.cascade{border-left-color:var(--violet)}
+.event-entry.faction-action{border-left-color:var(--amber)}
+.event-entry.broadcast{border-left-color:var(--red)}
+.event-time{color:var(--dim);font-size:11px;white-space:nowrap;min-width:55px;padding-top:2px}
+.event-source{font-size:10px;text-transform:uppercase;letter-spacing:1px;padding:2px 6px;border-radius:3px;white-space:nowrap;align-self:flex-start}
+.event-source.world{color:var(--cyan);background:var(--cyan-dim)}
+.event-source.cascade{color:var(--violet);background:rgba(156,39,176,0.12)}
+.event-source.faction{color:var(--amber);background:var(--amber-dim)}
+.event-source.broadcast{color:var(--red);background:var(--red-dim)}
+.event-body{flex:1;line-height:1.4}
+.event-cascade-depth{font-family:'Orbitron',sans-serif;font-size:11px;color:var(--violet);margin-left:4px}
+
+.npc-grid{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.npc-card{background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.06);border-radius:6px;padding:8px 10px;cursor:pointer;transition:border-color 0.3s,background 0.3s}
+.npc-card:hover{background:rgba(255,255,255,0.05);border-color:rgba(0,188,212,0.2)}
+.npc-card.active{border-color:rgba(0,188,212,0.4);box-shadow:0 0 8px rgba(0,188,212,0.1)}
+.npc-name{font-family:'Orbitron',sans-serif;font-size:14px;font-weight:700;letter-spacing:0.5px;margin-bottom:4px}
+.npc-badges{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+.npc-mood{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;padding:1px 6px;border-radius:3px}
+.npc-decision{font-size:11px;color:var(--dim)}
+.npc-affil{width:10px;height:10px;border-radius:50%;flex-shrink:0}
+.npc-detail{max-height:0;overflow:hidden;transition:max-height 0.4s ease,opacity 0.3s;opacity:0}
+.npc-card.active .npc-detail{max-height:400px;opacity:1;margin-top:8px;padding-top:8px;border-top:1px solid rgba(255,255,255,0.06)}
+.npc-detail-section{margin-bottom:6px}
+.npc-detail-label{font-size:11px;color:var(--dim);text-transform:uppercase;letter-spacing:1px;margin-bottom:2px}
+.npc-detail-val{font-size:13px;line-height:1.4}
+.npc-thought{font-size:12px;color:var(--dim);padding:2px 0;border-bottom:1px solid rgba(255,255,255,0.03);font-style:italic}
+.npc-rel{display:inline-block;font-size:11px;padding:1px 5px;margin:1px;border-radius:3px;background:rgba(255,255,255,0.04)}
+
+.bottom-era{font-family:'Orbitron',sans-serif;font-weight:700;font-size:18px;color:var(--amber);white-space:nowrap;text-shadow:var(--glow-amber)}
+.bottom-progress{flex:1;display:flex;align-items:center;gap:10px;min-width:200px}
+.bottom-progress-label{font-size:11px;color:var(--dim);text-transform:uppercase;letter-spacing:1px;white-space:nowrap}
+.bottom-progress-bar{flex:1;height:12px;background:rgba(255,255,255,0.06);border-radius:6px;overflow:hidden;border:1px solid rgba(255,255,255,0.06)}
+.bottom-progress-fill{height:100%;border-radius:6px;background:linear-gradient(90deg,var(--cyan),var(--amber));transition:width 1s ease;position:relative}
+.bottom-progress-fill::after{content:'';position:absolute;inset:0;background:linear-gradient(180deg,rgba(255,255,255,0.15) 0%,transparent 50%);border-radius:6px}
+.bottom-progress-pct{font-family:'Orbitron',sans-serif;font-size:16px;color:var(--cyan);min-width:50px}
+.bottom-triggers{display:flex;gap:6px;flex-wrap:nowrap;overflow-x:auto}
+.bottom-trigger{font-size:11px;padding:3px 8px;border-radius:4px;background:rgba(156,39,176,0.1);border:1px solid rgba(156,39,176,0.2);color:var(--violet);white-space:nowrap}
+.bottom-pending{font-size:13px;color:var(--dim);white-space:nowrap;border-left:1px solid var(--panel-border);padding-left:16px;margin-left:8px}
+.bottom-pending strong{color:var(--amber);font-family:'Orbitron',sans-serif;font-size:16px}
+
+.signal-lost{position:absolute;inset:0;background:rgba(4,8,16,0.85);display:flex;align-items:center;justify-content:center;z-index:10;opacity:0;pointer-events:none;transition:opacity 0.5s ease}
+.signal-lost.visible{opacity:1;pointer-events:auto}
+.signal-lost-text{font-family:'Orbitron',sans-serif;font-size:28px;color:var(--red);letter-spacing:4px;text-transform:uppercase;animation:signalBlink 1.5s ease infinite;text-shadow:0 0 20px rgba(244,67,54,0.5)}
+@keyframes signalBlink{0%,100%{opacity:0.6}50%{opacity:1}}
+
+.loading-pulse{animation:loadPulse 1.2s ease infinite}
+@keyframes loadPulse{0%,100%{opacity:0.4}50%{opacity:1}}
+
+.starfield{position:fixed;inset:0;z-index:-1;overflow:hidden}
+.star{position:absolute;background:#fff;border-radius:50%;animation:twinkle var(--dur) ease infinite var(--delay)}
+@keyframes twinkle{0%,100%{opacity:0.2}50%{opacity:0.8}}
+</style>
+</head>
+<body>
+
+<div class="starfield" id="starfield"></div>
+
+<div id="app">
+  <header id="top">
+    <div class="top-title">SIMULATION OBSERVER</div>
+    <div class="top-tick">
+      <span class="top-tick-label">Tick</span>
+      <span class="top-tick-val" id="tick-count">&mdash;</span>
+    </div>
+    <div class="top-metric">
+      <span class="tm-label">Tension</span>
+      <span class="tm-val" id="val-tension">&mdash;</span>
+      <div class="tm-bar"><div class="tm-fill" id="bar-tension" style="width:0;background:var(--red)"></div></div>
+    </div>
+    <div class="top-metric">
+      <span class="tm-label">Resources</span>
+      <span class="tm-val" id="val-resources">&mdash;</span>
+      <div class="tm-bar"><div class="tm-fill" id="bar-resources" style="width:0;background:var(--green)"></div></div>
+    </div>
+    <div class="top-metric">
+      <span class="tm-label">Threat</span>
+      <span class="tm-val" id="val-threat">&mdash;</span>
+      <div class="tm-bar"><div class="tm-fill" id="bar-threat" style="width:0;background:var(--red)"></div></div>
+    </div>
+    <div class="top-metric">
+      <span class="tm-label">Stability</span>
+      <span class="tm-val" id="val-stability">&mdash;</span>
+      <div class="tm-bar"><div class="tm-fill" id="bar-stability" style="width:0;background:var(--cyan)"></div></div>
+    </div>
+    <div class="top-metric">
+      <span class="tm-label">Morale</span>
+      <span class="tm-val" id="val-morale">&mdash;</span>
+      <div class="tm-bar"><div class="tm-fill" id="bar-morale" style="width:0;background:var(--amber)"></div></div>
+    </div>
+    <div class="top-metric">
+      <span class="tm-label">Anomaly</span>
+      <span class="tm-val" id="val-anomaly">&mdash;</span>
+      <div class="tm-bar"><div class="tm-fill" id="bar-anomaly" style="width:0;background:var(--violet)"></div></div>
+    </div>
+    <div class="cascade-gauge">
+      <span class="cascade-label">Cascade Temp</span>
+      <div class="cascade-bar"><div class="cascade-fill" id="cascade-fill" style="width:0;background:var(--green)"></div></div>
+      <span class="cascade-pct" id="cascade-pct">0%</span>
+    </div>
+    <div class="time-since">
+      <span class="time-since-label">Last Tick</span>
+      <span class="time-since-val" id="time-since">&mdash;</span>
+    </div>
+    <nav class="top-nav">
+      <a href="bridge.html">Bridge</a>
+      <a href="starmap.html">Starmap</a>
+      <a href="simulation.html" class="active">Sim</a>
+    </nav>
+  </header>
+
+  <section id="left" class="panel">
+    <div class="section-title amber">Faction Standings</div>
+    <div id="faction-list"></div>
+  </section>
+
+  <section id="center" class="panel">
+    <div class="section-title cyan">World Events Feed</div>
+    <div class="event-feed" id="event-feed"></div>
+    <div class="signal-lost" id="signal-lost-center">
+      <span class="signal-lost-text">SIGNAL LOST</span>
+    </div>
+  </section>
+
+  <section id="right" class="panel">
+    <div class="section-title violet">NPC Activity</div>
+    <div class="npc-grid" id="npc-grid"></div>
+  </section>
+
+  <footer id="bottom">
+    <div class="bottom-era" id="era-name">&mdash;</div>
+    <div class="bottom-progress">
+      <span class="bottom-progress-label">Next Era</span>
+      <div class="bottom-progress-bar"><div class="bottom-progress-fill" id="era-fill" style="width:0"></div></div>
+      <span class="bottom-progress-pct" id="era-pct">0%</span>
+    </div>
+    <div class="bottom-triggers" id="era-triggers"></div>
+    <div class="bottom-pending" id="pending-items">Pending: <strong>&mdash;</strong></div>
+  </footer>
+</div>
+
+<script>
+const FACTION_COLORS = {
+  military_command: '#F44336',
+  research_division: '#2196F3',
+  diplomatic_corps: '#4CAF50',
+  cultural_ministry: '#9C27B0',
+  economic_council: '#FF9800',
+  exploration_initiative: '#00BCD4',
+  consciousness_collective: '#E91E63',
+  preservation_society: '#8BC34A',
+};
+
+const FACTION_DISPLAY = {
+  military_command: 'Military Command',
+  research_division: 'Research Division',
+  diplomatic_corps: 'Diplomatic Corps',
+  cultural_ministry: 'Cultural Ministry',
+  economic_council: 'Economic Council',
+  exploration_initiative: 'Exploration Initiative',
+  consciousness_collective: 'Consciousness Collective',
+  preservation_society: 'Preservation Society',
+};
+
+const MOOD_COLORS = {
+  satisfied:'#4CAF50',inspired:'#66BB6A',serene:'#81C784',peaceful:'#A5D6A7',
+  hopeful:'#4CAF50',excited:'#66BB6A',confident:'#4CAF50',enlightened:'#66BB6A',
+  adventurous:'#81C784',determined:'#4CAF50',resolute:'#66BB6A',steadfast:'#4CAF50',
+  patient:'#81C784',valiant:'#4CAF50',free:'#66BB6A',
+  frustrated:'#F44336',aggressive:'#D32F2F',suspicious:'#FF9800',anxious:'#FF9800',
+  alarmed:'#F44336',worried:'#FF9800',unsettled:'#FF9800',weary:'#FF9800',
+  melancholic:'#9C27B0',paranoid:'#F44336',burdened:'#FF9800',
+  contemplative:'#00BCD4',thoughtful:'#00BCD4',curious:'#00BCD4',
+  distracted:'#78909C',reserved:'#78909C',
+};
+
+const METRIC_COLORS = {
+  tension:'#F44336',resources:'#4CAF50',threat:'#F44336',
+  stability:'#00BCD4',morale:'#FF9800',anomaly:'#9C27B0'
+};
+
+let lastData = { status:null, factions:null, npcs:null, events:null };
+let fetchErrorCount = 0;
+let lastTickTime = null;
+let expandedFaction = null;
+let expandedNpc = null;
+
+function generateStarfield() {
+  const sf = document.getElementById('starfield');
+  for (let i = 0; i < 80; i++) {
+    const s = document.createElement('div');
+    s.className = 'star';
+    const size = Math.random() * 2 + 1;
+    s.style.cssText = 'width:' + size + 'px;height:' + size + 'px;left:' + (Math.random()*100) + '%;top:' + (Math.random()*100) + '%;--dur:' + (2+Math.random()*4) + 's;--delay:' + (Math.random()*3) + 's;opacity:' + (0.2+Math.random()*0.5);
+    sf.appendChild(s);
+  }
+}
+
+function formatTime(seconds) {
+  if (seconds == null || isNaN(seconds)) return '\u2014';
+  if (seconds < 60) return Math.floor(seconds) + 's';
+  if (seconds < 3600) return Math.floor(seconds/60) + 'm ' + Math.floor(seconds%60) + 's';
+  return Math.floor(seconds/3600) + 'h ' + Math.floor((seconds%3600)/60) + 'm';
+}
+
+function stanceToClass(stance) {
+  if (!stance) return 'neutral';
+  var s = String(stance).toLowerCase();
+  if (s === 'ally' || s === 'allied' || s === 'friendly') return 'ally';
+  if (s === 'enemy' || s === 'hostile' || s === 'adversarial') return 'enemy';
+  return 'neutral';
+}
+
+function moodColorOf(mood) {
+  if (!mood) return '#78909C';
+  return MOOD_COLORS[String(mood).toLowerCase()] || '#78909C';
+}
+
+function cascadeColor(pct) {
+  if (pct < 30) return '#4CAF50';
+  if (pct < 60) return '#FF9800';
+  if (pct < 85) return '#F44336';
+  return '#E91E63';
+}
+
+function esc(s) {
+  if (s == null) return '';
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
+
+async function apiFetch(endpoint) {
+  try {
+    var r = await fetch('/api' + endpoint, { headers: { 'Accept': 'application/json' } });
+    if (!r.ok) throw new Error(r.status);
+    return await r.json();
+  } catch (e) {
+    return null;
+  }
+}
+
+function updateTopRibbon(status) {
+  if (!status) return;
+  var ws = status.world_state || status.worldState || status;
+  var tick = ws.tick_count != null ? ws.tick_count : (ws.tickCount != null ? ws.tickCount : (ws.tick != null ? ws.tick : '\u2014'));
+  document.getElementById('tick-count').textContent = tick;
+
+  var metrics = ['tension','resources','threat','stability','morale','anomaly'];
+  for (var i = 0; i < metrics.length; i++) {
+    var m = metrics[i];
+    var v = ws[m] != null ? ws[m] : 0;
+    var valEl = document.getElementById('val-' + m);
+    var barEl = document.getElementById('bar-' + m);
+    if (typeof v === 'number') {
+      valEl.textContent = Math.round(v);
+      barEl.style.width = clamp(v, 0, 100) + '%';
+    } else {
+      valEl.textContent = v;
+    }
+    barEl.style.background = METRIC_COLORS[m] || 'var(--cyan)';
+  }
+
+  var cascade = status.cascade_summary || status.cascadeSummary || {};
+  var temp = cascade.temperature != null ? cascade.temperature : (cascade.cascade_temperature != null ? cascade.cascade_temperature : 0);
+  var cascadePct = clamp(typeof temp === 'number' ? temp : 0, 0, 100);
+  var cf = document.getElementById('cascade-fill');
+  cf.style.width = cascadePct + '%';
+  cf.style.background = cascadeColor(cascadePct);
+  var cpEl = document.getElementById('cascade-pct');
+  cpEl.textContent = Math.round(cascadePct) + '%';
+  cpEl.style.color = cascadeColor(cascadePct);
+
+  lastTickTime = Date.now();
+}
+
+function updateTimeSince() {
+  if (!lastTickTime) return;
+  var elapsed = (Date.now() - lastTickTime) / 1000;
+  document.getElementById('time-since').textContent = formatTime(elapsed);
+}
+
+function renderFactions(factions) {
+  if (!factions) return;
+  var list = document.getElementById('faction-list');
+  var keys = Object.keys(factions);
+  var needsRebuild = list.children.length !== keys.length || list.dataset.keySig !== keys.join('|');
+
+  if (needsRebuild) {
+    list.dataset.keySig = keys.join('|');
+    list.innerHTML = '';
+    for (var fi = 0; fi < keys.length; fi++) {
+      (function(fk) {
+        var f = factions[fk];
+        var color = FACTION_COLORS[fk] || '#78909C';
+        var display = FACTION_DISPLAY[fk] || fk.replace(/_/g, ' ');
+        var card = document.createElement('div');
+        card.className = 'faction-card';
+        card.dataset.faction = fk;
+
+        var stancesHtml = '';
+        for (var si = 0; si < keys.length; si++) {
+          var otherK = keys[si];
+          if (otherK === fk) continue;
+          var stance = f.stances ? f.stances[otherK] : (f.stance_toward ? f.stance_toward[otherK] : null);
+          var sc = stanceToClass(stance);
+          var dotColor = sc === 'ally' ? '#4CAF50' : (sc === 'enemy' ? '#F44336' : '#FFC107');
+          stancesHtml += '<div class="stance-dot ' + sc + '" title="' + esc(FACTION_DISPLAY[otherK] || otherK) + ': ' + esc(stance || 'neutral') + '" style="color:' + dotColor + '"></div>';
+        }
+
+        card.innerHTML =
+          '<div class="faction-header">' +
+            '<span class="faction-name" style="color:' + color + '">' + esc(display) + '</span>' +
+            '<span class="faction-power" style="color:' + color + '" data-field="power">\u2014</span>' +
+          '</div>' +
+          '<div class="faction-sub">' +
+            '<span class="faction-cohesion-label">Cohesion</span>' +
+            '<div class="faction-cohesion-bar"><div class="faction-cohesion-fill" data-field="cohesion-fill" style="width:0"></div></div>' +
+          '</div>' +
+          '<div class="faction-action" data-field="action">No recent action</div>' +
+          '<div class="faction-stances">' + stancesHtml + '</div>' +
+          '<div class="faction-detail">' +
+            '<div class="detail-stances" data-field="detail-stances"></div>' +
+            '<div class="detail-action-history" data-field="detail-history"></div>' +
+          '</div>';
+
+        card.addEventListener('click', function() {
+          var wasActive = card.classList.contains('active');
+          list.querySelectorAll('.faction-card').forEach(function(c) { c.classList.remove('active'); });
+          if (!wasActive) {
+            card.classList.add('active');
+            expandedFaction = fk;
+          } else {
+            expandedFaction = null;
+          }
+          fillFactionDetail(fk, factions);
+        });
+
+        list.appendChild(card);
+      })(keys[fi]);
+    }
+  }
+
+  for (var ui = 0; ui < keys.length; ui++) {
+    var uk = keys[ui];
+    var uf = factions[uk];
+    var ucard = list.querySelector('[data-faction="' + uk + '"]');
+    if (!ucard) continue;
+
+    var cohesionVal = uf.cohesion != null ? uf.cohesion : (uf.cohesion_level != null ? uf.cohesion_level : 50);
+    var cohesionPct = clamp(cohesionVal, 0, 100);
+    var cohesionColor = cohesionPct > 60 ? '#4CAF50' : (cohesionPct > 30 ? '#FF9800' : '#F44336');
+    var cFill = ucard.querySelector('[data-field="cohesion-fill"]');
+    if (cFill) { cFill.style.width = cohesionPct + '%'; cFill.style.background = cohesionColor; }
+
+    var pwr = ucard.querySelector('[data-field="power"]');
+    if (pwr) pwr.textContent = uf.power != null ? uf.power : (uf.power_level != null ? uf.power_level : '\u2014');
+
+    var act = ucard.querySelector('[data-field="action"]');
+    if (act) act.textContent = uf.recent_action || uf.lastAction || uf.recentAction || 'No recent action';
+
+    if (expandedFaction === uk) fillFactionDetail(uk, factions);
+  }
+}
+
+function fillFactionDetail(fk, factions) {
+  var f = factions[fk];
+  if (!f) return;
+  var keys = Object.keys(factions);
+  var card = document.querySelector('[data-faction="' + fk + '"]');
+  if (!card) return;
+
+  var dsEl = card.querySelector('[data-field="detail-stances"]');
+  if (dsEl) {
+    var html = '<div style="font-size:12px;color:var(--dim);margin-bottom:4px;text-transform:uppercase;letter-spacing:1px">Stances</div>';
+    for (var i = 0; i < keys.length; i++) {
+      var otherK = keys[i];
+      if (otherK === fk) continue;
+      var stance = f.stances ? f.stances[otherK] : (f.stance_toward ? f.stance_toward[otherK] : null);
+      var sc = stanceToClass(stance);
+      var scColor = sc === 'ally' ? '#4CAF50' : (sc === 'enemy' ? '#F44336' : '#FFC107');
+      html += '<div class="detail-stance-row"><span class="detail-stance-name">' + esc(FACTION_DISPLAY[otherK] || otherK) + '</span><span class="detail-stance-val" style="color:' + scColor + '">' + esc(stance || 'neutral') + '</span></div>';
+    }
+    dsEl.innerHTML = html;
+  }
+
+  var dhEl = card.querySelector('[data-field="detail-history"]');
+  if (dhEl) {
+    var history = f.action_history || f.actionHistory || [];
+    var hhtml = '<div style="font-size:12px;color:var(--dim);margin-bottom:4px;text-transform:uppercase;letter-spacing:1px">Recent Actions</div>';
+    if (!history.length) {
+      hhtml += '<div style="font-size:12px;color:var(--dim)">No history available</div>';
+    } else {
+      for (var h = 0; h < Math.min(history.length, 8); h++) {
+        var a = history[h];
+        hhtml += '<div class="detail-action-item">' + esc(typeof a === 'string' ? a : (a.description || a.action || JSON.stringify(a))) + '</div>';
+      }
+    }
+    dhEl.innerHTML = hhtml;
+  }
+}
+
+function renderEvents(events) {
+  if (!events || !Array.isArray(events)) return;
+  var feed = document.getElementById('event-feed');
+
+  for (var i = 0; i < Math.min(events.length, 60); i++) {
+    var ev = events[i];
+    var id = 'ev-' + (ev.id || i);
+    var el = document.getElementById(id);
+    if (!el) {
+      el = document.createElement('div');
+      el.id = id;
+      feed.insertBefore(el, feed.firstChild);
+    }
+
+    var typeClass = 'world';
+    var sourceLabel = 'SYSTEM';
+    var sourceClass = 'world';
+    var evType = (ev.type || ev.event_type || '').toLowerCase();
+    var evSource = (ev.source || ev.source_type || '').toLowerCase();
+
+    if (evType === 'cascade' || ev.cascade) {
+      typeClass = 'cascade'; sourceLabel = 'CASCADE'; sourceClass = 'cascade';
+    } else if (evSource === 'faction' || evType === 'faction_action' || ev.faction_id) {
+      typeClass = 'faction-action'; sourceLabel = 'FACTION'; sourceClass = 'faction';
+    } else if (evType === 'broadcast' || ev.broadcast || evSource === 'npc') {
+      typeClass = 'broadcast'; sourceLabel = 'BROADCAST'; sourceClass = 'broadcast';
+    }
+    if (evSource === 'faction') { typeClass = 'faction-action'; sourceLabel = 'FACTION'; sourceClass = 'faction'; }
+    else if (evSource === 'cascade') { typeClass = 'cascade'; sourceLabel = 'CASCADE'; sourceClass = 'cascade'; }
+    else if (evSource === 'broadcast') { typeClass = 'broadcast'; sourceLabel = 'BROADCAST'; sourceClass = 'broadcast'; }
+
+    var ts = ev.timestamp || ev.tick || ev.time || '';
+    var desc = ev.description || ev.message || ev.text || ev.event || JSON.stringify(ev);
+    var cascadeDepth = ev.cascade_depth || ev.depth || ev.cascadeDepth;
+    var cascadeHtml = cascadeDepth && typeClass === 'cascade'
+      ? '<span class="event-cascade-depth">D' + esc(String(cascadeDepth)) + '</span>' : '';
+
+    var factionBorder = ev.faction_id && FACTION_COLORS[ev.faction_id]
+      ? 'border-left-color:' + FACTION_COLORS[ev.faction_id] : '';
+
+    el.className = 'event-entry ' + typeClass;
+    el.style.cssText = factionBorder;
+    el.innerHTML =
+      '<span class="event-time">' + esc(String(ts)) + '</span>' +
+      '<span class="event-source ' + sourceClass + '">' + esc(sourceLabel) + '</span>' +
+      '<span class="event-body">' + esc(desc) + cascadeHtml + '</span>';
+  }
+
+  if (feed.children.length > 80) {
+    while (feed.children.length > 80) feed.removeChild(feed.lastChild);
+  }
+}
+
+function renderNpcs(npcs) {
+  if (!npcs) return;
+  var grid = document.getElementById('npc-grid');
+  var list = Array.isArray(npcs) ? npcs : Object.values(npcs);
+  var needsRebuild = grid.children.length !== list.length || grid.dataset.count !== String(list.length);
+
+  if (needsRebuild) {
+    grid.dataset.count = String(list.length);
+    grid.innerHTML = '';
+    for (var ni = 0; ni < list.length; ni++) {
+      (function(npc, idx) {
+        var card = document.createElement('div');
+        card.className = 'npc-card';
+        card.dataset.npcId = npc.id || npc.name || idx;
+
+        var mc = moodColorOf(npc.mood);
+        var factionKey = npc.faction || npc.affiliation || npc.faction_id || '';
+        var affilColor = FACTION_COLORS[factionKey] || '#78909C';
+
+        card.innerHTML =
+          '<div class="npc-name">' + esc(npc.name || 'Unknown') + '</div>' +
+          '<div class="npc-badges">' +
+            '<span class="npc-mood" style="color:' + mc + ';background:' + mc + '18" data-field="mood">' + esc(npc.mood || '\u2014') + '</span>' +
+            '<span class="npc-decision" data-field="decision">' + esc(npc.last_decision_category || npc.lastDecision || npc.decision_category || '\u2014') + '</span>' +
+            '<span class="npc-affil" style="background:' + affilColor + '" data-field="affil"></span>' +
+          '</div>' +
+          '<div class="npc-detail">' +
+            '<div class="npc-detail-section"><div class="npc-detail-label">Recent Thoughts</div><div class="npc-detail-val" data-field="thoughts"></div></div>' +
+            '<div class="npc-detail-section"><div class="npc-detail-label">Recent Decisions</div><div class="npc-detail-val" data-field="decisions"></div></div>' +
+            '<div class="npc-detail-section"><div class="npc-detail-label">Corruption / Rumor</div><div class="npc-detail-val" data-field="corruption"></div></div>' +
+            '<div class="npc-detail-section"><div class="npc-detail-label">Relationships</div><div class="npc-detail-val" data-field="relationships"></div></div>' +
+          '</div>';
+
+        card.addEventListener('click', function() {
+          var wasActive = card.classList.contains('active');
+          grid.querySelectorAll('.npc-card').forEach(function(c) { c.classList.remove('active'); });
+          if (!wasActive) {
+            card.classList.add('active');
+            expandedNpc = npc.id || npc.name || idx;
+          } else {
+            expandedNpc = null;
+          }
+        });
+
+        grid.appendChild(card);
+      })(list[ni], ni);
+    }
+  }
+
+  for (var ui = 0; ui < list.length; ui++) {
+    var npc = list[ui];
+    var nId = npc.id || npc.name || ui;
+    var ncard = grid.querySelector('[data-npc-id="' + nId + '"]');
+    if (!ncard) continue;
+
+    var mc2 = moodColorOf(npc.mood);
+    var moodEl = ncard.querySelector('[data-field="mood"]');
+    if (moodEl) { moodEl.textContent = npc.mood || '\u2014'; moodEl.style.color = mc2; moodEl.style.background = mc2 + '18'; }
+    var decEl = ncard.querySelector('[data-field="decision"]');
+    if (decEl) decEl.textContent = npc.last_decision_category || npc.lastDecision || npc.decision_category || '\u2014';
+    var affilEl = ncard.querySelector('[data-field="affil"]');
+    var fk2 = npc.faction || npc.affiliation || npc.faction_id || '';
+    if (affilEl) affilEl.style.background = FACTION_COLORS[fk2] || '#78909C';
+
+    if (expandedNpc === nId) {
+      var thoughts = npc.recent_thoughts || npc.thoughts || npc.recentThoughts || [];
+      var thoughtsEl = ncard.querySelector('[data-field="thoughts"]');
+      if (thoughtsEl) {
+        if (Array.isArray(thoughts) && thoughts.length) {
+          var thtml = '';
+          for (var t = 0; t < Math.min(thoughts.length, 4); t++) {
+            var th = thoughts[t];
+            thtml += '<div class="npc-thought">' + esc(typeof th === 'string' ? th : (th.text || th.thought || JSON.stringify(th))) + '</div>';
+          }
+          thoughtsEl.innerHTML = thtml;
+        } else {
+          thoughtsEl.textContent = 'None available';
+        }
+      }
+
+      var decisions = npc.recent_decisions || npc.decisions || npc.recentDecisions || [];
+      var decDetailEl = ncard.querySelector('[data-field="decisions"]');
+      if (decDetailEl) {
+        if (Array.isArray(decisions) && decisions.length) {
+          var dhtml = '';
+          for (var d = 0; d < Math.min(decisions.length, 4); d++) {
+            var dc = decisions[d];
+            dhtml += '<div class="npc-thought">' + esc(typeof dc === 'string' ? dc : (dc.description || dc.decision || JSON.stringify(dc))) + '</div>';
+          }
+          decDetailEl.innerHTML = dhtml;
+        } else {
+          decDetailEl.textContent = 'None available';
+        }
+      }
+
+      var corrEl = ncard.querySelector('[data-field="corruption"]');
+      if (corrEl) {
+        var corr = npc.corruption != null ? npc.corruption : (npc.corruption_level != null ? npc.corruption_level : 0);
+        var rum = npc.rumor != null ? npc.rumor : (npc.rumor_level != null ? npc.rumor_level : 0);
+        corrEl.innerHTML = '<span style="color:var(--red)">' + Math.round(corr) + '%</span> / <span style="color:var(--amber)">' + Math.round(rum) + '%</span>';
+      }
+
+      var relEl = ncard.querySelector('[data-field="relationships"]');
+      if (relEl) {
+        var rels = npc.relationships || npc.relations || {};
+        var rkeys = Object.keys(rels);
+        if (rkeys.length) {
+          var rhtml = '';
+          for (var ri = 0; ri < Math.min(rkeys.length, 8); ri++) {
+            var rk = rkeys[ri];
+            var rv = rels[rk];
+            var rval = typeof rv === 'number' ? rv : (rv.score != null ? rv.score : (rv.value != null ? rv.value : (rv.trust != null ? rv.trust : 0)));
+            var rvc = rval > 50 ? '#4CAF50' : (rval > 20 ? '#FFC107' : '#F44336');
+            rhtml += '<span class="npc-rel" style="border-left:2px solid ' + rvc + '">' + esc(rk) + ': ' + Math.round(rval) + '</span>';
+          }
+          relEl.innerHTML = rhtml;
+        } else {
+          relEl.textContent = 'None available';
+        }
+      }
+    }
+  }
+}
+
+function renderBottom(status) {
+  if (!status) return;
+  var era = status.current_era || status.era || status.currentEra || {};
+  var eraName = era.name || era.era_name || era.label || status.era_name || 'Unknown Era';
+  document.getElementById('era-name').textContent = eraName;
+
+  var progress = era.progress != null ? era.progress : (era.progress_pct != null ? era.progress_pct : (era.progressPercent != null ? era.progressPercent : 0));
+  var eraPct = clamp(progress, 0, 100);
+  document.getElementById('era-fill').style.width = eraPct + '%';
+  document.getElementById('era-pct').textContent = Math.round(eraPct) + '%';
+
+  var triggers = era.recent_triggers || era.triggers || status.era_triggers || [];
+  var trigEl = document.getElementById('era-triggers');
+  if (Array.isArray(triggers) && triggers.length) {
+    var thtml = '';
+    for (var t = 0; t < Math.min(triggers.length, 5); t++) {
+      var tr = triggers[t];
+      thtml += '<span class="bottom-trigger">' + esc(typeof tr === 'string' ? tr : (tr.name || tr.description || JSON.stringify(tr))) + '</span>';
+    }
+    trigEl.innerHTML = thtml;
+  } else {
+    trigEl.innerHTML = '';
+  }
+
+  var pending = status.pending_items || status.pendingItems || {};
+  var total = 0;
+  var pKeys = Object.keys(pending);
+  for (var p = 0; p < pKeys.length; p++) {
+    var pv = pending[pKeys[p]];
+    total += typeof pv === 'number' ? pv : (Array.isArray(pv) ? pv.length : 0);
+  }
+  document.getElementById('pending-items').innerHTML = 'Pending: <strong>' + total + '</strong>';
+}
+
+function showSignalLost(show) {
+  document.getElementById('signal-lost-center').classList.toggle('visible', show);
+}
+
+async function refresh() {
+  var loadingEls = document.querySelectorAll('.section-title');
+  for (var l = 0; l < loadingEls.length; l++) loadingEls[l].classList.add('loading-pulse');
+
+  var results = await Promise.all([
+    apiFetch('/simulation/status'),
+    apiFetch('/simulation/factions'),
+    apiFetch('/simulation/npcs/activity'),
+    apiFetch('/simulation/events'),
+  ]);
+
+  var status = results[0], factions = results[1], npcs = results[2], events = results[3];
+
+  for (var l2 = 0; l2 < loadingEls.length; l2++) loadingEls[l2].classList.remove('loading-pulse');
+
+  var anyOk = status || factions || npcs || events;
+
+  if (!anyOk) {
+    fetchErrorCount++;
+    if (fetchErrorCount >= 3) showSignalLost(true);
+  } else {
+    fetchErrorCount = 0;
+    showSignalLost(false);
+    if (status) lastData.status = status;
+    if (factions) lastData.factions = factions;
+    if (npcs) lastData.npcs = npcs;
+    if (events) lastData.events = events;
+  }
+
+  if (lastData.status) updateTopRibbon(lastData.status);
+  if (lastData.factions) renderFactions(lastData.factions);
+  if (lastData.events) renderEvents(lastData.events);
+  if (lastData.npcs) renderNpcs(lastData.npcs);
+  if (lastData.status) renderBottom(lastData.status);
+}
+
+function init() {
+  generateStarfield();
+  refresh();
+  setInterval(refresh, 10000);
+  setInterval(updateTimeSince, 1000);
+}
+
+document.addEventListener('DOMContentLoaded', init);
+</script>
+</body>
+</html>
