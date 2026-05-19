@@ -59,6 +59,9 @@ from federation_game_state import (
     VictoryType,
     GameStatistics,
 )
+import logging
+
+logger = logging.getLogger(__name__)
 from federation_game_events import (
     EventType as EventEngineType,
     EventSeverity,
@@ -143,6 +146,7 @@ OBSERVER_FACTION_MAP: Dict[str, Tuple[ObserverRole, QCIdeologyType]] = {
 # HISTORY ARC REPORT DATACLASS
 # ============================================================================
 
+
 @dataclass
 class HistoryArcReport:
     """Summary report of the 100-year history arc simulation."""
@@ -176,12 +180,16 @@ class HistoryArcReport:
             "era_summaries": self.era_summaries,
             "dominant_quantum_state": self.dominant_quantum_state,
             "simulation_complete": self.simulation_complete,
-            "narrative_patterns": self.consciousness.detect_narrative_patterns(self._collect_event_data_for_patterns()) if hasattr(self.consciousness, "detect_narrative_patterns") else [],
-        "technology_summary": self.technology_summary,
-        "quest_summary": self.quest_summary,
+            "narrative_patterns": self.consciousness.detect_narrative_patterns(
+                self._collect_event_data_for_patterns()
+            )
+            if hasattr(self.consciousness, "detect_narrative_patterns")
+            else [],
+            "technology_summary": self.technology_summary,
+            "quest_summary": self.quest_summary,
             "political_summary": self.political_summary,
-        "npc_summary": self.npc_summary,
-        "rival_summary": self.rival_summary,
+            "npc_summary": self.npc_summary,
+            "rival_summary": self.rival_summary,
         }
 
     def display(self) -> str:
@@ -238,14 +246,22 @@ class HistoryArcReport:
             lines.append("  TECHNOLOGY PROGRESSION")
             lines.append("-" * 72)
             summary = self.technology_summary
-            lines.append(f"  Techs Completed:       {summary.get('techs_completed', 0)}")
-            lines.append(f"  Max Tier Reached:      Tier {summary.get('max_tier_reached', 0)}")
-            if summary.get('eras'):
+            lines.append(
+                f"  Techs Completed:       {summary.get('techs_completed', 0)}"
+            )
+            lines.append(
+                f"  Max Tier Reached:      Tier {summary.get('max_tier_reached', 0)}"
+            )
+            if summary.get("eras"):
                 lines.append(f"  Eras Covered:          {', '.join(summary['eras'])}")
-            if summary.get('philosophies_explored'):
-                lines.append(f"  Philosophies:          {', '.join(summary['philosophies_explored'])}")
-            lines.append(f"  Current Tech Level:    {summary.get('tech_level', 0.2):.3f} / 1.0")
-            research_points = summary.get('research_points_available', 0)
+            if summary.get("philosophies_explored"):
+                lines.append(
+                    f"  Philosophies:          {', '.join(summary['philosophies_explored'])}"
+                )
+            lines.append(
+                f"  Current Tech Level:    {summary.get('tech_level', 0.2):.3f} / 1.0"
+            )
+            research_points = summary.get("research_points_available", 0)
             lines.append(f"  Research Points Bank:  {research_points:,.0f}")
         # Quests summary
         if self.quest_summary:
@@ -254,10 +270,14 @@ class HistoryArcReport:
             lines.append("  QUEST ACTIVITY")
             lines.append("-" * 72)
             qsummary = self.quest_summary
-            lines.append(f"  Quests Completed:      {qsummary.get('quests_completed', 0)}")
-            if qsummary.get('completed_ids'):
-                lines.append(f"  Completed Quest IDs:   {', '.join(qsummary['completed_ids'][:5])}")
-            total_avail = qsummary.get('total_quests_available', 0)
+            lines.append(
+                f"  Quests Completed:      {qsummary.get('quests_completed', 0)}"
+            )
+            if qsummary.get("completed_ids"):
+                lines.append(
+                    f"  Completed Quest IDs:   {', '.join(qsummary['completed_ids'][:5])}"
+                )
+            total_avail = qsummary.get("total_quests_available", 0)
             lines.append(f"  Total Quests Available: {total_avail}")
         # NPC advisor summary
         if self.npc_summary:
@@ -266,9 +286,11 @@ class HistoryArcReport:
             lines.append("  NPC ADVISORS")
             lines.append("-" * 72)
             nsummary = self.npc_summary
-            lines.append(f"  Total Advisors:        {nsummary.get('total_advisors', 0)}")
+            lines.append(
+                f"  Total Advisors:        {nsummary.get('total_advisors', 0)}"
+            )
             # Show per-faction counts
-            faction_counts = nsummary.get('faction_counts', {})
+            faction_counts = nsummary.get("faction_counts", {})
             if faction_counts:
                 for fid, cnt in sorted(faction_counts.items()):
                     lines.append(f"    {fid}: {cnt} advisor(s)")
@@ -283,11 +305,13 @@ class HistoryArcReport:
             lines.append("-" * 72)
             psum = self.political_summary
             lines.append(f" Laws Passed: {psum.get('laws_passed_count', 0)}")
-            if psum.get('recent_laws'):
+            if psum.get("recent_laws"):
                 lines.append(" Recent Enactments:")
-                for law in psum['recent_laws'][:3]:
-                    lines.append(f" - {law['law_name']} ({law['law_id']}): {law['description']}")
-                    for k, v in law.get('effects', {}).items():
+                for law in psum["recent_laws"][:3]:
+                    lines.append(
+                        f" - {law['law_name']} ({law['law_id']}): {law['description']}"
+                    )
+                    for k, v in law.get("effects", {}).items():
                         lines.append(f" {k}: {v:+.2f}")
         if coherence_vals:
             avg_coh = sum(coherence_vals) / len(coherence_vals)
@@ -297,7 +321,9 @@ class HistoryArcReport:
             lines.append("-" * 72)
             lines.append("  COHERENCE TRAJECTORY")
             lines.append("-" * 72)
-            lines.append(f"  Average: {avg_coh:.3f}  Min: {min_coh:.3f}  Max: {max_coh:.3f}")
+            lines.append(
+                f"  Average: {avg_coh:.3f}  Min: {min_coh:.3f}  Max: {max_coh:.3f}"
+            )
 
         lines.append("")
         lines.append("=" * 72)
@@ -326,6 +352,7 @@ class HistoryArcReport:
 # ============================================================================
 # HISTORY ARC ORCHESTRATOR
 # ============================================================================
+
 
 class HistoryArcOrchestrator:
     """Master orchestrator that wires together Timeline, Consciousness,
@@ -387,7 +414,11 @@ class HistoryArcOrchestrator:
         observers_registered = 0
         for faction_id, (role, qc_ideology) in self.OBSERVER_FACTION_MAP.items():
             faction_obj = self.faction_system.factions.get(faction_id)
-            faction_name = faction_obj.name if faction_obj else faction_id.replace("_", " ").title()
+            faction_name = (
+                faction_obj.name
+                if faction_obj
+                else faction_id.replace("_", " ").title()
+            )
             reg_result = self.consciousness.register_observer(
                 faction_id=faction_id,
                 default_role=role,
@@ -406,7 +437,9 @@ class HistoryArcOrchestrator:
         self._initialized = True
         # Initialize technology engine
         if ENABLE_TECHNOLOGY_TREE:
-            self.technology = TechnologyEngine(treasury=self.game_state.federation.treasury)
+            self.technology = TechnologyEngine(
+                treasury=self.game_state.federation.treasury
+            )
         # Initialize quest engine
         if ENABLE_QUEST_SYSTEM:
             self.quest_engine = QuestEngine()
@@ -417,11 +450,14 @@ class HistoryArcOrchestrator:
             self.npc_engine.initialize()
         # Initialize political engine
         if ENABLE_POLITICAL_SYSTEM:
-            self.political_engine = PoliticalEngine(FACTION_IDS, self.game_state.federation)
+            self.political_engine = PoliticalEngine(
+                FACTION_IDS, self.game_state.federation
+            )
             self.political_engine.initialize()
         # Initialize rival simulator
         try:
             from federation_game_rival_simulator import RivalFederationSimulator
+
             self.rival_simulator = RivalFederationSimulator()
             init_result = self.rival_simulator.initialize_rivals()
             if self.consciousness and init_result.get("success"):
@@ -429,12 +465,13 @@ class HistoryArcOrchestrator:
                     try:
                         self.consciousness.register_observer(**obs)
                     except Exception:
-                        pass
+                        logger.debug("Rival observer registration failed; skipped")
         except ImportError:
             self.rival_simulator = None
         # Initialize Chaosbringer consciousness
         try:
             from uss_chaosbringer_consciousness import FederationConsciousnessEngine
+
             self.chaosbringer = FederationConsciousnessEngine(
                 qc_engine=self.consciousness,
                 rival_simulator=self.rival_simulator,
@@ -528,15 +565,21 @@ class HistoryArcOrchestrator:
                 collapse_result = self.consciousness.collapse_superposition(
                     event_id, primary_branch_key
                 )
-                self.choice_ledger.append({
-                    "event_id": event_id,
-                    "year": year,
-                    "branch_chosen": primary_branch_key,
-                    "collapsed_narrative": collapse_result.get("collapsed_narrative", ""),
-                    "lost_possibilities": collapse_result.get("lost_possibilities", []),
-                    "auto_collapsed": True,
-                    "timestamp": datetime.now().isoformat(),
-                })
+                self.choice_ledger.append(
+                    {
+                        "event_id": event_id,
+                        "year": year,
+                        "branch_chosen": primary_branch_key,
+                        "collapsed_narrative": collapse_result.get(
+                            "collapsed_narrative", ""
+                        ),
+                        "lost_possibilities": collapse_result.get(
+                            "lost_possibilities", []
+                        ),
+                        "auto_collapsed": True,
+                        "timestamp": datetime.now().isoformat(),
+                    }
+                )
 
             event_data_out = {
                 "event_id": event_id,
@@ -555,38 +598,62 @@ class HistoryArcOrchestrator:
 
         # Process technology research
         if self.technology:
-            completed = self.technology.process_year(year, self.game_state.federation.treasury)
+            completed = self.technology.process_year(
+                year, self.game_state.federation.treasury
+            )
             if completed:
                 for tech_id in completed:
-                    self.choice_ledger.append({"year": year, "type": "technology_completion", "tech_id": tech_id})
+                    self.choice_ledger.append(
+                        {
+                            "year": year,
+                            "type": "technology_completion",
+                            "tech_id": tech_id,
+                        }
+                    )
             # Apply technology level to federation state
-            self.game_state.federation.technological_level = self.technology.technological_level
+            self.game_state.federation.technological_level = (
+                self.technology.technological_level
+            )
 
         # Process quest system for this year
         if self.quest_engine:
             rewards_list = self.quest_engine.process_year(year, self.game_state)
             if rewards_list:
-                self.quest_engine.apply_rewards(rewards_list, self.game_state.federation)
+                self.quest_engine.apply_rewards(
+                    rewards_list, self.game_state.federation
+                )
                 for reward_info in rewards_list:
-                    self.choice_ledger.append({
-                        "year": year,
-                        "type": "quest_completion",
-                        "quest_id": reward_info.get('quest_id'),
-                        "quest_title": reward_info.get('quest_title'),
-                        "rewards_applied": reward_info.get('rewards')
-                    })
+                    self.choice_ledger.append(
+                        {
+                            "year": year,
+                            "type": "quest_completion",
+                            "quest_id": reward_info.get("quest_id"),
+                            "quest_title": reward_info.get("quest_title"),
+                            "rewards_applied": reward_info.get("rewards"),
+                        }
+                    )
         # Process NPC system for this year
         if self.npc_engine:
             modifiers = self.npc_engine.process_year(year, self.game_state)
             if modifiers:
-                if 'morale_delta' in modifiers:
-                    self.game_state.federation.morale = max(0.0, min(1.0,
-                        self.game_state.federation.morale + modifiers['morale_delta']
-                    ))
-            if 'identity_delta' in modifiers:
-                self.game_state.federation.identity_strength = max(0.0, min(1.0,
-                    self.game_state.federation.identity_strength + modifiers['identity_delta']
-                ))
+                if "morale_delta" in modifiers:
+                    self.game_state.federation.morale = max(
+                        0.0,
+                        min(
+                            1.0,
+                            self.game_state.federation.morale
+                            + modifiers["morale_delta"],
+                        ),
+                    )
+            if "identity_delta" in modifiers:
+                self.game_state.federation.identity_strength = max(
+                    0.0,
+                    min(
+                        1.0,
+                        self.game_state.federation.identity_strength
+                        + modifiers["identity_delta"],
+                    ),
+                )
 
         # Rival simulator
         rival_actions = {}
@@ -599,20 +666,21 @@ class HistoryArcOrchestrator:
         if self.chaosbringer:
             chaosbringer_report = self.chaosbringer.process_year(year)
 
-
         # Process political system
         if self.political_engine:
             laws = self.political_engine.process_year(year, self.game_state.federation)
             if laws:
                 self.game_state.political_data = self.political_engine.summary
                 for law in laws:
-                    self.choice_ledger.append({
-                        "year": year,
-                        "type": "law_passed",
-                        "law_id": law["law_id"],
-                        "law_name": law["law_name"],
-                        "effects": law["effects"]
-                    })
+                    self.choice_ledger.append(
+                        {
+                            "year": year,
+                            "type": "law_passed",
+                            "law_id": law["law_id"],
+                            "law_name": law["law_name"],
+                            "effects": law["effects"],
+                        }
+                    )
         return {
             "success": True,
             "year": year,
@@ -620,8 +688,12 @@ class HistoryArcOrchestrator:
             "era_changed": era_changed,
             "event": event_data_out,
             "quantum_interpretation": quantum_interpretation,
-            "coherence": coherence_result.get("coherence", 1.0) if coherence_result else 1.0,
-            "quantum_state": coherence_result.get("quantum_state", "collapsed") if coherence_result else "collapsed",
+            "coherence": coherence_result.get("coherence", 1.0)
+            if coherence_result
+            else 1.0,
+            "quantum_state": coherence_result.get("quantum_state", "collapsed")
+            if coherence_result
+            else "collapsed",
             "average_stability": year_record.get("average_stability", 0.5),
             "rival_actions": rival_actions,
             "chaosbringer_report": chaosbringer_report,
@@ -780,18 +852,22 @@ class HistoryArcOrchestrator:
             "technology": self.technology.summary if self.technology else None,
             "quest_engine": self.quest_engine.summary if self.quest_engine else None,
             "npc_engine": self.npc_engine.summary if self.npc_engine else None,
-            "political_engine": self.political_engine.summary if self.political_engine else None,
-            "rival_summary": self.rival_simulator.get_threat_assessment() if self.rival_simulator else None,
-            "chaosbringer_status": self.chaosbringer.get_bridge_status() if self.chaosbringer else None,
+            "political_engine": self.political_engine.summary
+            if self.political_engine
+            else None,
+            "rival_summary": self.rival_simulator.get_threat_assessment()
+            if self.rival_simulator
+            else None,
+            "chaosbringer_status": self.chaosbringer.get_bridge_status()
+            if self.chaosbringer
+            else None,
         }
 
     # ====================================================================
     # RESOLVE BRANCH POINT (Manual)
     # ====================================================================
 
-    def resolve_branch_point(
-        self, event_id: str, branch_key: str
-    ) -> Dict[str, Any]:
+    def resolve_branch_point(self, event_id: str, branch_key: str) -> Dict[str, Any]:
         """Manually resolve a branch-point event instead of auto-collapse.
 
         Args:
@@ -830,7 +906,9 @@ class HistoryArcOrchestrator:
             "event_id": event_id,
             "branch_chosen": branch_key,
             "collapsed_narrative": collapse_result.get("collapsed_narrative", ""),
-            "lost_possibilities_created": len(collapse_result.get("lost_possibilities", [])),
+            "lost_possibilities_created": len(
+                collapse_result.get("lost_possibilities", [])
+            ),
             "ledger_entry": ledger_entry,
         }
 
@@ -842,11 +920,19 @@ class HistoryArcOrchestrator:
         state = {
             "timeline": self.timeline.export_timeline(),
             "consciousness": self.consciousness.get_quantum_status(),
-            "faction_states": {fid: self.faction_system.get_faction_status(fid) for fid in FACTION_IDS},
-            "narrative_patterns": self.consciousness.detect_narrative_patterns(self._collect_event_data_for_patterns()) if hasattr(self.consciousness, "detect_narrative_patterns") else [],
-            "statistics": asdict(self.game_state.statistics) if self.game_state.statistics else {},
+            "faction_states": {
+                fid: self.faction_system.get_faction_status(fid) for fid in FACTION_IDS
+            },
+            "narrative_patterns": self.consciousness.detect_narrative_patterns(
+                self._collect_event_data_for_patterns()
+            )
+            if hasattr(self.consciousness, "detect_narrative_patterns")
+            else [],
+            "statistics": asdict(self.game_state.statistics)
+            if self.game_state.statistics
+            else {},
             "current_era": self.current_era.value if self.current_era else None,
-        "choice_ledger": self.choice_ledger,
+            "choice_ledger": self.choice_ledger,
             "coherence_trajectory": dict(self.consciousness.coherence_history),
             "game_state": self.game_state.get_game_summary() if self.game_state else {},
         }
@@ -856,7 +942,9 @@ class HistoryArcOrchestrator:
         except Exception:
             state["technology"] = {}
         try:
-            state["quest_engine"] = self.quest_engine.summary if self.quest_engine else {}
+            state["quest_engine"] = (
+                self.quest_engine.summary if self.quest_engine else {}
+            )
         except Exception:
             state["quest_engine"] = {}
         try:
@@ -864,7 +952,9 @@ class HistoryArcOrchestrator:
         except Exception:
             state["npc_engine"] = {}
         try:
-            state["political_engine"] = self.political_engine.summary if self.political_engine else {}
+            state["political_engine"] = (
+                self.political_engine.summary if self.political_engine else {}
+            )
         except Exception:
             state["political_engine"] = {}
         return state
@@ -905,9 +995,13 @@ class HistoryArcOrchestrator:
                 fid = obs_data.get("faction_id", "")
                 if not fid:
                     continue
-                role = ObserverRole(obs_data.get("role", obs_data.get("default_role", "interpreter")))
+                role = ObserverRole(
+                    obs_data.get("role", obs_data.get("default_role", "interpreter"))
+                )
                 ideology_str = obs_data.get("ideology", "diplomatic")
-                ideology = _FACTION_IDEOLOGY_TO_QC.get(ideology_str, QCIdeologyType.DIPLOMATIC)
+                ideology = _FACTION_IDEOLOGY_TO_QC.get(
+                    ideology_str, QCIdeologyType.DIPLOMATIC
+                )
                 observer = ObserverProfile(
                     faction_id=fid,
                     faction_name=obs_data.get("faction_name", fid),
@@ -921,9 +1015,13 @@ class HistoryArcOrchestrator:
                 restored_observers += 1
         elif isinstance(raw_observers, dict):
             for fid, obs_data in raw_observers.items():
-                role = ObserverRole(obs_data.get("default_role", obs_data.get("role", "interpreter")))
+                role = ObserverRole(
+                    obs_data.get("default_role", obs_data.get("role", "interpreter"))
+                )
                 ideology_str = obs_data.get("ideology", "diplomatic")
-                ideology = _FACTION_IDEOLOGY_TO_QC.get(ideology_str, QCIdeologyType.DIPLOMATIC)
+                ideology = _FACTION_IDEOLOGY_TO_QC.get(
+                    ideology_str, QCIdeologyType.DIPLOMATIC
+                )
                 observer = ObserverProfile(
                     faction_id=obs_data.get("faction_id", fid),
                     faction_name=obs_data.get("faction_name", fid),
@@ -948,12 +1046,16 @@ class HistoryArcOrchestrator:
                     interpretation_id=i_data.get("interpretation_id", ""),
                     event_id=i_data.get("event_id", event_id),
                     observer_faction_id=i_data.get("observer_faction_id", ""),
-                    observer_role=ObserverRole(i_data.get("observer_role", "interpreter")),
+                    observer_role=ObserverRole(
+                        i_data.get("observer_role", "interpreter")
+                    ),
                     narrative=i_data.get("narrative", ""),
                     emotional_resonance=i_data.get("emotional_resonance", 0.0),
                     ideological_spin=i_data.get("ideological_spin", 0.0),
                     confidence=i_data.get("confidence", 0.5),
-                    quantum_state=QuantumState(i_data.get("quantum_state", "collapsed")),
+                    quantum_state=QuantumState(
+                        i_data.get("quantum_state", "collapsed")
+                    ),
                 )
                 parsed_interps.append(interp)
                 restored_interpretations += 1
@@ -978,14 +1080,20 @@ class HistoryArcOrchestrator:
                 self.consciousness.lost_possibilities.append(lp)
         # If lost_raw is an integer count or empty list, we keep the existing
         # lost_possibilities (already cleared above) — no action needed
-        results["lost_possibilities_restored"] = len(self.consciousness.lost_possibilities)
+        results["lost_possibilities_restored"] = len(
+            self.consciousness.lost_possibilities
+        )
 
         # Restore coherence history (export uses top-level "coherence_trajectory" key)
-        coh_data = data.get("coherence_trajectory") or data.get("consciousness", {}).get("coherence_history", {})
+        coh_data = data.get("coherence_trajectory") or data.get(
+            "consciousness", {}
+        ).get("coherence_history", {})
         self.consciousness.coherence_history = {
             int(y): float(c) for y, c in coh_data.items()
         }
-        results["coherence_readings_restored"] = len(self.consciousness.coherence_history)
+        results["coherence_readings_restored"] = len(
+            self.consciousness.coherence_history
+        )
 
         # Restore event cache
         cache_data = data.get("consciousness", {}).get("event_cache", {})
@@ -1009,25 +1117,50 @@ class HistoryArcOrchestrator:
             try:
                 self.rival_simulator.import_state(data["rival_simulator"])
             except Exception:
-                pass
+                logger.warning(
+                    "Rival simulator state import failed during full state restore"
+                )
         # Chaosbringer state
         if "chaosbringer" in data and self.chaosbringer:
             try:
                 self.chaosbringer.import_state(data["chaosbringer"])
             except Exception:
-                pass
+                logger.warning(
+                    "Chaosbringer state import failed during full state restore"
+                )
         # Restore game state core metrics from export
-        gs_data = data.get("game_state", {}).get("game_summary", {}).get("federation_core", {})
+        gs_data = (
+            data.get("game_state", {})
+            .get("game_summary", {})
+            .get("federation_core", {})
+        )
         if gs_data:
             try:
-                self.game_state.federation.morale = gs_data.get("morale", self.game_state.federation.morale)
-                self.game_state.federation.identity_strength = gs_data.get("identity_strength", self.game_state.federation.identity_strength)
-                self.game_state.federation.stability = gs_data.get("stability", self.game_state.federation.stability)
-                self.game_state.federation.technological_level = gs_data.get("technological_level", self.game_state.federation.technological_level)
-                self.game_state.federation.military_power = gs_data.get("military_power", self.game_state.federation.military_power)
-                self.game_state.federation.treasury = gs_data.get("treasury", self.game_state.federation.treasury)
-                self.game_state.federation.population = gs_data.get("population", self.game_state.federation.population)
-                self.game_state.federation.territory_size = gs_data.get("territory_size", self.game_state.federation.territory_size)
+                self.game_state.federation.morale = gs_data.get(
+                    "morale", self.game_state.federation.morale
+                )
+                self.game_state.federation.identity_strength = gs_data.get(
+                    "identity_strength", self.game_state.federation.identity_strength
+                )
+                self.game_state.federation.stability = gs_data.get(
+                    "stability", self.game_state.federation.stability
+                )
+                self.game_state.federation.technological_level = gs_data.get(
+                    "technological_level",
+                    self.game_state.federation.technological_level,
+                )
+                self.game_state.federation.military_power = gs_data.get(
+                    "military_power", self.game_state.federation.military_power
+                )
+                self.game_state.federation.treasury = gs_data.get(
+                    "treasury", self.game_state.federation.treasury
+                )
+                self.game_state.federation.population = gs_data.get(
+                    "population", self.game_state.federation.population
+                )
+                self.game_state.federation.territory_size = gs_data.get(
+                    "territory_size", self.game_state.federation.territory_size
+                )
                 results["game_state_restored"] = True
             except Exception:
                 results["game_state_restored"] = False
@@ -1079,7 +1212,9 @@ class HistoryArcOrchestrator:
         """
         faction_id = self._identify_primary_faction(event_dict)
         ideology_str = FACTION_IDEOLOGY_MAP.get(faction_id, "diplomatic")
-        qc_ideology = _FACTION_IDEOLOGY_TO_QC.get(ideology_str, QCIdeologyType.DIPLOMATIC)
+        qc_ideology = _FACTION_IDEOLOGY_TO_QC.get(
+            ideology_str, QCIdeologyType.DIPLOMATIC
+        )
 
         # Determine ideological alignment from observer ideology match
         ideology_alignment = 0.5
@@ -1144,9 +1279,7 @@ class HistoryArcOrchestrator:
             return 0.8
         return 0.3
 
-    def _identify_primary_faction(
-        self, event_dict: Dict[str, Any]
-    ) -> str:
+    def _identify_primary_faction(self, event_dict: Dict[str, Any]) -> str:
         """Identify the faction most affected by this event (highest memory drift)."""
         memory_drift = event_dict.get("memory_drift", {})
         if not memory_drift:
@@ -1214,16 +1347,36 @@ class HistoryArcOrchestrator:
         # Blend current game state with new averages (gradual sync)
         blend = 0.1
         self.game_state.federation.stability = max(
-            0.0, min(1.0, self.game_state.federation.stability * (1 - blend) + avg_stability * blend)
+            0.0,
+            min(
+                1.0,
+                self.game_state.federation.stability * (1 - blend)
+                + avg_stability * blend,
+            ),
         )
         self.game_state.federation.morale = max(
-            0.0, min(1.0, self.game_state.federation.morale * (1 - blend) + avg_reputation * blend)
+            0.0,
+            min(
+                1.0,
+                self.game_state.federation.morale * (1 - blend)
+                + avg_reputation * blend,
+            ),
         )
         self.game_state.federation.military_power = max(
-            0.0, min(1.0, self.game_state.federation.military_power * (1 - blend) + avg_power * blend)
+            0.0,
+            min(
+                1.0,
+                self.game_state.federation.military_power * (1 - blend)
+                + avg_power * blend,
+            ),
         )
         self.game_state.federation.identity_strength = max(
-            0.0, min(1.0, self.game_state.federation.identity_strength * (1 - blend) + avg_influence * blend)
+            0.0,
+            min(
+                1.0,
+                self.game_state.federation.identity_strength * (1 - blend)
+                + avg_influence * blend,
+            ),
         )
 
         # Update game phase based on timeline year
@@ -1301,6 +1454,7 @@ class HistoryArcOrchestrator:
 # CONVENIENCE / DEMO
 # ============================================================================
 
+
 def run_history_arc_simulation(
     start_year: int = 2387, end_year: int = 2487
 ) -> HistoryArcReport:
@@ -1350,7 +1504,9 @@ def run_history_arc_demo() -> None:
     print(f"\n[4] Final status:")
     status = orchestrator.get_status()
     print(f"  Timeline year: {status['timeline']['current_year']}")
-    print(f"  Total interpretations: {status['consciousness']['total_interpretations']}")
+    print(
+        f"  Total interpretations: {status['consciousness']['total_interpretations']}"
+    )
     print(f"  Avg coherence: {status['consciousness']['coherence']:.3f}")
     print(f"  Choice ledger entries: {status['choice_ledger_count']}")
 
@@ -1361,8 +1517,12 @@ def run_history_arc_demo() -> None:
     print("\n[5] Export/import test...")
     exported = orchestrator.export_full_state()
     print(f"  Export keys: {list(exported.keys())}")
-    print(f"  Timeline events in export: {len(exported.get('timeline', {}).get('event_history', []))}")
-    print(f"  Consciousness observers in export: {len(exported.get('consciousness', {}).get('observers', {}))}")
+    print(
+        f"  Timeline events in export: {len(exported.get('timeline', {}).get('event_history', []))}"
+    )
+    print(
+        f"  Consciousness observers in export: {len(exported.get('consciousness', {}).get('observers', {}))}"
+    )
 
     orchestrator2 = HistoryArcOrchestrator()
     import_result = orchestrator2.import_full_state(exported)

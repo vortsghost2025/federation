@@ -14,6 +14,7 @@ import json
 
 class EventType(Enum):
     """All possible event type classifications"""
+
     DIPLOMATIC_CRISIS = "diplomatic_crisis"
     DREAM_DESTABILIZATION = "dream_destabilization"
     RIVAL_MOVE = "rival_move"
@@ -30,6 +31,7 @@ class EventType(Enum):
 
 class EventSeverity(Enum):
     """Event severity levels"""
+
     MINOR = 1
     MODERATE = 2
     MAJOR = 3
@@ -38,6 +40,7 @@ class EventSeverity(Enum):
 
 class EffectType(Enum):
     """Types of effects events can trigger"""
+
     DIPLOMACY_IMPACT = "diplomacy_impact"
     CONSCIOUSNESS_IMPACT = "consciousness_impact"
     RIVAL_IMPACT = "rival_impact"
@@ -51,6 +54,7 @@ class EffectType(Enum):
 @dataclass
 class GameEffect:
     """Represents an effect that an event can trigger"""
+
     effect_type: EffectType
     target: str  # subsystem or entity name
     magnitude: float  # -1.0 to 1.0
@@ -59,17 +63,18 @@ class GameEffect:
 
     def to_dict(self) -> Dict[str, Any]:
         return {
-            'effect_type': self.effect_type.value,
-            'target': self.target,
-            'magnitude': self.magnitude,
-            'duration': self.duration,
-            'description': self.description
+            "effect_type": self.effect_type.value,
+            "target": self.target,
+            "magnitude": self.magnitude,
+            "duration": self.duration,
+            "description": self.description,
         }
 
 
 @dataclass
 class GameChoice:
     """Represents a choice a player can make in response to an event"""
+
     id: str
     text: str
     consequences: List[GameEffect]
@@ -79,18 +84,19 @@ class GameChoice:
 
     def to_dict(self) -> Dict[str, Any]:
         return {
-            'id': self.id,
-            'text': self.text,
-            'risk_level': self.risk_level,
-            'reward_level': self.reward_level,
-            'consequences': [e.to_dict() for e in self.consequences],
-            'requirements': self.requirements
+            "id": self.id,
+            "text": self.text,
+            "risk_level": self.risk_level,
+            "reward_level": self.reward_level,
+            "consequences": [e.to_dict() for e in self.consequences],
+            "requirements": self.requirements,
         }
 
 
 @dataclass
 class GameEvent:
     """Core event dataclass for THE FEDERATION GAME"""
+
     id: str = field(default_factory=lambda: str(uuid.uuid4()))
     name: str = ""
     event_type: EventType = EventType.DIPLOMATIC_CRISIS
@@ -116,16 +122,16 @@ class GameEvent:
     def to_dict(self) -> Dict[str, Any]:
         """Serialize event to dictionary"""
         return {
-            'id': self.id,
-            'name': self.name,
-            'event_type': self.event_type.value,
-            'severity': self.severity.name,
-            'description': self.description,
-            'long_description': self.long_description,
-            'effects': [e.to_dict() for e in self.effects],
-            'choices': [c.to_dict() for c in self.choices],
-            'created_at': datetime.fromtimestamp(self.created_at).isoformat(),
-            'metadata': self.metadata
+            "id": self.id,
+            "name": self.name,
+            "event_type": self.event_type.value,
+            "severity": self.severity.name,
+            "description": self.description,
+            "long_description": self.long_description,
+            "effects": [e.to_dict() for e in self.effects],
+            "choices": [c.to_dict() for c in self.choices],
+            "created_at": datetime.fromtimestamp(self.created_at).isoformat(),
+            "metadata": self.metadata,
         }
 
 
@@ -135,12 +141,31 @@ class EventGenerator:
     def __init__(self, subsystems: Optional[Dict[str, Any]] = None):
         self.subsystems = subsystems or {}
         self.faction_names = [
-            "Arcturian Alliance", "Sirius Collective", "Vega Directorate",
-            "Andromeda Syndicate", "Betelgeuse Empire", "Polaris Federation",
-            "Rigel Corporatocracy", "Altair Council", "Deneb State"
+            "Arcturian Alliance",
+            "Sirius Collective",
+            "Vega Directorate",
+            "Andromeda Syndicate",
+            "Betelgeuse Empire",
+            "Polaris Federation",
+            "Rigel Corporatocracy",
+            "Altair Council",
+            "Deneb State",
         ]
-        self.resource_types = ["dilithium", "tachyon", "exotic_matter", "consciousness_energy", "temporal_flux"]
-        self.prophecy_themes = ["transcendence", "unity", "conflict", "transformation", "revelation", "extinction"]
+        self.resource_types = [
+            "dilithium",
+            "tachyon",
+            "exotic_matter",
+            "consciousness_energy",
+            "temporal_flux",
+        ]
+        self.prophecy_themes = [
+            "transcendence",
+            "unity",
+            "conflict",
+            "transformation",
+            "revelation",
+            "extinction",
+        ]
 
     def generate_random_event(self) -> GameEvent:
         """Generate a random event of any type"""
@@ -180,53 +205,95 @@ class EventGenerator:
             severity=severity,
             description=f"{faction1} has issued ultimatum to {faction2} over territorial disputes.",
             long_description=f"Tensions have escalated dramatically between {faction1} and {faction2}. "
-                           f"A critical treaty is at stake, and the Federation's mediation is required. "
-                           f"Failure could lead to armed conflict.",
+            f"A critical treaty is at stake, and the Federation's mediation is required. "
+            f"Failure could lead to armed conflict.",
             required_subsystems=["diplomacy", "intelligence"],
-            metadata={"faction1": faction1, "faction2": faction2, "crisis_type": "territorial"}
+            metadata={
+                "faction1": faction1,
+                "faction2": faction2,
+                "crisis_type": "territorial",
+            },
         )
 
         # Add effects
-        event.effects.append(GameEffect(
-            effect_type=EffectType.DIPLOMACY_IMPACT,
-            target="federation_stability",
-            magnitude=-0.3 * severity.value,
-            duration=300,
-            description=f"Federation diplomatic relations strained due to {faction1}-{faction2} tension"
-        ))
+        event.effects.append(
+            GameEffect(
+                effect_type=EffectType.DIPLOMACY_IMPACT,
+                target="federation_stability",
+                magnitude=-0.3 * severity.value,
+                duration=300,
+                description=f"Federation diplomatic relations strained due to {faction1}-{faction2} tension",
+            )
+        )
 
         # Add choices
-        event.choices.append(GameChoice(
-            id="mediate",
-            text="Send mediators to negotiate peace",
-            consequences=[
-                GameEffect(EffectType.DIPLOMACY_IMPACT, "federation_influence", 0.2, 300, "Improved influence through successful mediation"),
-                GameEffect(EffectType.RESOURCE_IMPACT, "time_investment", -0.3, 60, "Significant time investment required")
-            ],
-            risk_level=0.3,
-            reward_level=0.7
-        ))
+        event.choices.append(
+            GameChoice(
+                id="mediate",
+                text="Send mediators to negotiate peace",
+                consequences=[
+                    GameEffect(
+                        EffectType.DIPLOMACY_IMPACT,
+                        "federation_influence",
+                        0.2,
+                        300,
+                        "Improved influence through successful mediation",
+                    ),
+                    GameEffect(
+                        EffectType.RESOURCE_IMPACT,
+                        "time_investment",
+                        -0.3,
+                        60,
+                        "Significant time investment required",
+                    ),
+                ],
+                risk_level=0.3,
+                reward_level=0.7,
+            )
+        )
 
-        event.choices.append(GameChoice(
-            id="support_faction1",
-            text=f"Support {faction1}'s position",
-            consequences=[
-                GameEffect(EffectType.DIPLOMACY_IMPACT, faction1, 0.5, 600, f"Allied with {faction1}"),
-                GameEffect(EffectType.DIPLOMACY_IMPACT, faction2, -0.6, 600, f"Antagonized {faction2}")
-            ],
-            risk_level=0.8,
-            reward_level=0.6
-        ))
+        event.choices.append(
+            GameChoice(
+                id="support_faction1",
+                text=f"Support {faction1}'s position",
+                consequences=[
+                    GameEffect(
+                        EffectType.DIPLOMACY_IMPACT,
+                        faction1,
+                        0.5,
+                        600,
+                        f"Allied with {faction1}",
+                    ),
+                    GameEffect(
+                        EffectType.DIPLOMACY_IMPACT,
+                        faction2,
+                        -0.6,
+                        600,
+                        f"Antagonized {faction2}",
+                    ),
+                ],
+                risk_level=0.8,
+                reward_level=0.6,
+            )
+        )
 
-        event.choices.append(GameChoice(
-            id="remain_neutral",
-            text="Remain neutral and observe",
-            consequences=[
-                GameEffect(EffectType.STABILITY_IMPACT, "federation", -0.1, 200, "Inaction perceived as weakness")
-            ],
-            risk_level=0.2,
-            reward_level=0.2
-        ))
+        event.choices.append(
+            GameChoice(
+                id="remain_neutral",
+                text="Remain neutral and observe",
+                consequences=[
+                    GameEffect(
+                        EffectType.STABILITY_IMPACT,
+                        "federation",
+                        -0.1,
+                        200,
+                        "Inaction perceived as weakness",
+                    )
+                ],
+                risk_level=0.2,
+                reward_level=0.2,
+            )
+        )
 
         return event
 
@@ -241,48 +308,88 @@ class EventGenerator:
             severity=severity,
             description=f"Dreamscape anomalies detected in {num_worlds} parallel realities.",
             long_description=f"The boundary between dream and reality is collapsing across multiple timelines. "
-                           f"Consciousness networks report cascading instabilities. Reality coherence is degrading. "
-                           f"Immediate intervention required to prevent dreamscape collapse.",
+            f"Consciousness networks report cascading instabilities. Reality coherence is degrading. "
+            f"Immediate intervention required to prevent dreamscape collapse.",
             required_subsystems=["consciousness", "reality_engine"],
-            metadata={"affected_realities": num_worlds, "coherence_loss_percent": severity.value * 25}
+            metadata={
+                "affected_realities": num_worlds,
+                "coherence_loss_percent": severity.value * 25,
+            },
         )
 
-        event.effects.append(GameEffect(
-            effect_type=EffectType.CONSCIOUSNESS_IMPACT,
-            target="reality_coherence",
-            magnitude=-0.4 * severity.value,
-            duration=180,
-            description="Reality stability compromised across multiple timelines"
-        ))
+        event.effects.append(
+            GameEffect(
+                effect_type=EffectType.CONSCIOUSNESS_IMPACT,
+                target="reality_coherence",
+                magnitude=-0.4 * severity.value,
+                duration=180,
+                description="Reality stability compromised across multiple timelines",
+            )
+        )
 
-        event.choices.append(GameChoice(
-            id="emergency_stabilization",
-            text="Activate emergency reality stabilization protocols",
-            consequences=[
-                GameEffect(EffectType.CONSCIOUSNESS_IMPACT, "reality_coherence", 0.3, 300, "Emergency stabilization partial success"),
-                GameEffect(EffectType.RESOURCE_IMPACT, "energy_reserves", -0.5, 600, "Massive energy expenditure")
-            ],
-            risk_level=0.4,
-            reward_level=0.8
-        ))
+        event.choices.append(
+            GameChoice(
+                id="emergency_stabilization",
+                text="Activate emergency reality stabilization protocols",
+                consequences=[
+                    GameEffect(
+                        EffectType.CONSCIOUSNESS_IMPACT,
+                        "reality_coherence",
+                        0.3,
+                        300,
+                        "Emergency stabilization partial success",
+                    ),
+                    GameEffect(
+                        EffectType.RESOURCE_IMPACT,
+                        "energy_reserves",
+                        -0.5,
+                        600,
+                        "Massive energy expenditure",
+                    ),
+                ],
+                risk_level=0.4,
+                reward_level=0.8,
+            )
+        )
 
-        event.choices.append(GameChoice(
-            id="allow_drift",
-            text="Allow realities to drift apart (minimize losses)",
-            consequences=[
-                GameEffect(EffectType.CONSCIOUSNESS_IMPACT, "reality_coherence", -0.15, 600, "Permanent reality divergence"),
-                GameEffect(EffectType.DIPLOMACY_IMPACT, "separated_factions", -0.3, 999999, "Permanent diplomatic isolation")
-            ],
-            risk_level=0.9,
-            reward_level=0.1
-        ))
+        event.choices.append(
+            GameChoice(
+                id="allow_drift",
+                text="Allow realities to drift apart (minimize losses)",
+                consequences=[
+                    GameEffect(
+                        EffectType.CONSCIOUSNESS_IMPACT,
+                        "reality_coherence",
+                        -0.15,
+                        600,
+                        "Permanent reality divergence",
+                    ),
+                    GameEffect(
+                        EffectType.DIPLOMACY_IMPACT,
+                        "separated_factions",
+                        -0.3,
+                        999999,
+                        "Permanent diplomatic isolation",
+                    ),
+                ],
+                risk_level=0.9,
+                reward_level=0.1,
+            )
+        )
 
         return event
 
     def generate_rival_move(self) -> GameEvent:
         """Generate a competitive move by a rival faction"""
         rival = random.choice(self.faction_names)
-        move_type = random.choice(["territory_expansion", "technology_theft", "alliance_poaching", "economic_sabotage"])
+        move_type = random.choice(
+            [
+                "territory_expansion",
+                "technology_theft",
+                "alliance_poaching",
+                "economic_sabotage",
+            ]
+        )
         severity = random.choice(list(EventSeverity))
 
         event = GameEvent(
@@ -292,38 +399,68 @@ class EventGenerator:
             description=f"{rival} has made an aggressive competitive move.",
             long_description=self._describe_rival_move(rival, move_type),
             required_subsystems=["intelligence", "strategy"],
-            metadata={"rival": rival, "move_type": move_type}
+            metadata={"rival": rival, "move_type": move_type},
         )
 
-        event.effects.append(GameEffect(
-            effect_type=EffectType.RIVAL_IMPACT,
-            target=f"{rival}_influence",
-            magnitude=0.3 * severity.value,
-            duration=600,
-            description=f"{rival} gaining strategic advantage"
-        ))
+        event.effects.append(
+            GameEffect(
+                effect_type=EffectType.RIVAL_IMPACT,
+                target=f"{rival}_influence",
+                magnitude=0.3 * severity.value,
+                duration=600,
+                description=f"{rival} gaining strategic advantage",
+            )
+        )
 
-        event.choices.append(GameChoice(
-            id="counter_move",
-            text="Execute counter-strategy",
-            consequences=[
-                GameEffect(EffectType.RIVAL_IMPACT, "competitive_position", 0.2, 400, "Regained positional advantage"),
-                GameEffect(EffectType.RESOURCE_IMPACT, "strategic_resources", -0.25, 300, "Resources invested in counter-move")
-            ],
-            risk_level=0.5,
-            reward_level=0.6
-        ))
+        event.choices.append(
+            GameChoice(
+                id="counter_move",
+                text="Execute counter-strategy",
+                consequences=[
+                    GameEffect(
+                        EffectType.RIVAL_IMPACT,
+                        "competitive_position",
+                        0.2,
+                        400,
+                        "Regained positional advantage",
+                    ),
+                    GameEffect(
+                        EffectType.RESOURCE_IMPACT,
+                        "strategic_resources",
+                        -0.25,
+                        300,
+                        "Resources invested in counter-move",
+                    ),
+                ],
+                risk_level=0.5,
+                reward_level=0.6,
+            )
+        )
 
-        event.choices.append(GameChoice(
-            id="form_coalition",
-            text="Form coalition against rival",
-            consequences=[
-                GameEffect(EffectType.DIPLOMACY_IMPACT, "allied_influence", 0.4, 900, "Strong coalition formed"),
-                GameEffect(EffectType.RIVAL_IMPACT, rival, -0.5, 900, f"{rival} isolated and weakened")
-            ],
-            risk_level=0.3,
-            reward_level=0.8
-        ))
+        event.choices.append(
+            GameChoice(
+                id="form_coalition",
+                text="Form coalition against rival",
+                consequences=[
+                    GameEffect(
+                        EffectType.DIPLOMACY_IMPACT,
+                        "allied_influence",
+                        0.4,
+                        900,
+                        "Strong coalition formed",
+                    ),
+                    GameEffect(
+                        EffectType.RIVAL_IMPACT,
+                        rival,
+                        -0.5,
+                        900,
+                        f"{rival} isolated and weakened",
+                    ),
+                ],
+                risk_level=0.3,
+                reward_level=0.8,
+            )
+        )
 
         return event
 
@@ -338,41 +475,71 @@ class EventGenerator:
             severity=severity,
             description=f"Ancient prophecies speak of the coming {theme}.",
             long_description=f"Seers across the Federation report synchronized visions of {theme}. "
-                           f"These prophecies have proven accurate historically. "
-                           f"The Federation must prepare for the prophesied transformation.",
+            f"These prophecies have proven accurate historically. "
+            f"The Federation must prepare for the prophesied transformation.",
             required_subsystems=["prophecy_engine", "consciousness"],
-            metadata={"theme": theme, "prophecy_accuracy": random.uniform(0.7, 1.0)}
+            metadata={"theme": theme, "prophecy_accuracy": random.uniform(0.7, 1.0)},
         )
 
-        event.effects.append(GameEffect(
-            effect_type=EffectType.PARADOX_IMPACT,
-            target="timeline_probability",
-            magnitude=random.choice([-1, 1]) * 0.3,
-            duration=9999,
-            description=f"Timeline influenced by prophecy of {theme}"
-        ))
+        event.effects.append(
+            GameEffect(
+                effect_type=EffectType.PARADOX_IMPACT,
+                target="timeline_probability",
+                magnitude=random.choice([-1, 1]) * 0.3,
+                duration=9999,
+                description=f"Timeline influenced by prophecy of {theme}",
+            )
+        )
 
-        event.choices.append(GameChoice(
-            id="embrace_prophecy",
-            text="Embrace and fulfill the prophecy",
-            consequences=[
-                GameEffect(EffectType.CULTURE_IMPACT, "federation_culture", 0.5, 1800, "Culture unified by shared destiny"),
-                GameEffect(EffectType.CONSCIOUSNESS_IMPACT, "collective_will", 0.4, 1800, "Collective consciousness strengthened")
-            ],
-            risk_level=0.6,
-            reward_level=0.9
-        ))
+        event.choices.append(
+            GameChoice(
+                id="embrace_prophecy",
+                text="Embrace and fulfill the prophecy",
+                consequences=[
+                    GameEffect(
+                        EffectType.CULTURE_IMPACT,
+                        "federation_culture",
+                        0.5,
+                        1800,
+                        "Culture unified by shared destiny",
+                    ),
+                    GameEffect(
+                        EffectType.CONSCIOUSNESS_IMPACT,
+                        "collective_will",
+                        0.4,
+                        1800,
+                        "Collective consciousness strengthened",
+                    ),
+                ],
+                risk_level=0.6,
+                reward_level=0.9,
+            )
+        )
 
-        event.choices.append(GameChoice(
-            id="fight_prophecy",
-            text="Resist and fight against the prophecy",
-            consequences=[
-                GameEffect(EffectType.PARADOX_IMPACT, "paradox_manifestation", 0.7, 600, "Temporal paradoxes multiply"),
-                GameEffect(EffectType.STABILITY_IMPACT, "federation", -0.4, 600, "Timeline instability increases")
-            ],
-            risk_level=0.9,
-            reward_level=0.2
-        ))
+        event.choices.append(
+            GameChoice(
+                id="fight_prophecy",
+                text="Resist and fight against the prophecy",
+                consequences=[
+                    GameEffect(
+                        EffectType.PARADOX_IMPACT,
+                        "paradox_manifestation",
+                        0.7,
+                        600,
+                        "Temporal paradoxes multiply",
+                    ),
+                    GameEffect(
+                        EffectType.STABILITY_IMPACT,
+                        "federation",
+                        -0.4,
+                        600,
+                        "Timeline instability increases",
+                    ),
+                ],
+                risk_level=0.9,
+                reward_level=0.2,
+            )
+        )
 
         return event
 
@@ -388,36 +555,65 @@ class EventGenerator:
             severity=severity,
             description=f"Supply of {resource} has {'drastically declined' if is_scarcity else 'surged'}.",
             long_description=f"Markets are reacting to the {resource} {'shortage' if is_scarcity else 'glut'}. "
-                           f"Trade routes are being disrupted. Production is {'halting' if is_scarcity else 'accelerating'}.",
+            f"Trade routes are being disrupted. Production is {'halting' if is_scarcity else 'accelerating'}.",
             required_subsystems=["economy", "logistics"],
-            metadata={"resource": resource, "is_scarcity": is_scarcity, "impact_magnitude": severity.value}
+            metadata={
+                "resource": resource,
+                "is_scarcity": is_scarcity,
+                "impact_magnitude": severity.value,
+            },
         )
 
         impact_dir = -1 if is_scarcity else 1
-        event.effects.append(GameEffect(
-            effect_type=EffectType.RESOURCE_IMPACT,
-            target=f"{resource}_availability",
-            magnitude=impact_dir * 0.5 * severity.value,
-            duration=600,
-            description=f"{resource} {'shortage' if is_scarcity else 'surplus'} affecting economy"
-        ))
+        event.effects.append(
+            GameEffect(
+                effect_type=EffectType.RESOURCE_IMPACT,
+                target=f"{resource}_availability",
+                magnitude=impact_dir * 0.5 * severity.value,
+                duration=600,
+                description=f"{resource} {'shortage' if is_scarcity else 'surplus'} affecting economy",
+            )
+        )
 
-        event.choices.append(GameChoice(
-            id="strategic_reserves",
-            text="Activate strategic reserves" if is_scarcity else "Establish price controls",
-            consequences=[
-                GameEffect(EffectType.RESOURCE_IMPACT, "economic_stability", 0.2 if is_scarcity else -0.1, 400, "Economic stabilization"),
-                GameEffect(EffectType.RESOURCE_IMPACT, "long_term_capacity", -0.1 if is_scarcity else 0.2, 1200, "Capacity adjustment")
-            ],
-            risk_level=0.4,
-            reward_level=0.6
-        ))
+        event.choices.append(
+            GameChoice(
+                id="strategic_reserves",
+                text="Activate strategic reserves"
+                if is_scarcity
+                else "Establish price controls",
+                consequences=[
+                    GameEffect(
+                        EffectType.RESOURCE_IMPACT,
+                        "economic_stability",
+                        0.2 if is_scarcity else -0.1,
+                        400,
+                        "Economic stabilization",
+                    ),
+                    GameEffect(
+                        EffectType.RESOURCE_IMPACT,
+                        "long_term_capacity",
+                        -0.1 if is_scarcity else 0.2,
+                        1200,
+                        "Capacity adjustment",
+                    ),
+                ],
+                risk_level=0.4,
+                reward_level=0.6,
+            )
+        )
 
         return event
 
     def generate_cultural_shift(self) -> GameEvent:
         """Generate a cultural transformation event"""
-        shift_type = random.choice(["art_renaissance", "philosophical_revolution", "values_inversion", "generational_gap"])
+        shift_type = random.choice(
+            [
+                "art_renaissance",
+                "philosophical_revolution",
+                "values_inversion",
+                "generational_gap",
+            ]
+        )
         severity = random.choice(list(EventSeverity))
 
         event = GameEvent(
@@ -426,30 +622,49 @@ class EventGenerator:
             severity=severity,
             description=f"A major cultural transformation is sweeping across the Federation.",
             long_description=f"Sociologists report unprecedented {shift_type.replace('_', ' ')} across multiple species. "
-                           f"Traditional values are being questioned. New art forms are emerging. "
-                           f"Society is fundamentally realigning.",
+            f"Traditional values are being questioned. New art forms are emerging. "
+            f"Society is fundamentally realigning.",
             required_subsystems=["culture", "sociology"],
-            metadata={"shift_type": shift_type, "affected_populations": random.randint(5, 15)}
+            metadata={
+                "shift_type": shift_type,
+                "affected_populations": random.randint(5, 15),
+            },
         )
 
-        event.effects.append(GameEffect(
-            effect_type=EffectType.CULTURE_IMPACT,
-            target="cultural_unity",
-            magnitude=random.choice([-1, 1]) * 0.4,
-            duration=1200,
-            description=f"Cultural paradigm shift: {shift_type}"
-        ))
+        event.effects.append(
+            GameEffect(
+                effect_type=EffectType.CULTURE_IMPACT,
+                target="cultural_unity",
+                magnitude=random.choice([-1, 1]) * 0.4,
+                duration=1200,
+                description=f"Cultural paradigm shift: {shift_type}",
+            )
+        )
 
-        event.choices.append(GameChoice(
-            id="embrace_shift",
-            text="Support and accelerate the cultural shift",
-            consequences=[
-                GameEffect(EffectType.CULTURE_IMPACT, "innovation", 0.6, 1200, "Innovation surge"),
-                GameEffect(EffectType.STABILITY_IMPACT, "traditional_elements", -0.3, 1200, "Traditional power bases eroded")
-            ],
-            risk_level=0.6,
-            reward_level=0.8
-        ))
+        event.choices.append(
+            GameChoice(
+                id="embrace_shift",
+                text="Support and accelerate the cultural shift",
+                consequences=[
+                    GameEffect(
+                        EffectType.CULTURE_IMPACT,
+                        "innovation",
+                        0.6,
+                        1200,
+                        "Innovation surge",
+                    ),
+                    GameEffect(
+                        EffectType.STABILITY_IMPACT,
+                        "traditional_elements",
+                        -0.3,
+                        1200,
+                        "Traditional power bases eroded",
+                    ),
+                ],
+                risk_level=0.6,
+                reward_level=0.8,
+            )
+        )
 
         return event
 
@@ -463,30 +678,53 @@ class EventGenerator:
             severity=severity,
             description="A paradox has become reality. Causality is breaking down.",
             long_description="Reality itself is fracturing. Multiple timelines are attempting to exist simultaneously. "
-                           "Paradoxes that should be impossible are manifesting physically. "
-                           "The Federation's physicists are baffled. Reality coherence is at critical levels.",
-            required_subsystems=["paradox_engine", "reality_stabilization", "consciousness"],
-            metadata={"paradox_severity": severity.value, "timeline_conflicts": random.randint(2, 5)}
+            "Paradoxes that should be impossible are manifesting physically. "
+            "The Federation's physicists are baffled. Reality coherence is at critical levels.",
+            required_subsystems=[
+                "paradox_engine",
+                "reality_stabilization",
+                "consciousness",
+            ],
+            metadata={
+                "paradox_severity": severity.value,
+                "timeline_conflicts": random.randint(2, 5),
+            },
         )
 
-        event.effects.append(GameEffect(
-            effect_type=EffectType.PARADOX_IMPACT,
-            target="reality_stability",
-            magnitude=-0.6 * severity.value,
-            duration=400,
-            description="Paradox distorting timeline stability"
-        ))
+        event.effects.append(
+            GameEffect(
+                effect_type=EffectType.PARADOX_IMPACT,
+                target="reality_stability",
+                magnitude=-0.6 * severity.value,
+                duration=400,
+                description="Paradox distorting timeline stability",
+            )
+        )
 
-        event.choices.append(GameChoice(
-            id="resolve_paradox",
-            text="Initiate paradox resolution sequence",
-            consequences=[
-                GameEffect(EffectType.PARADOX_IMPACT, "timeline_conflicts", -0.8, 200, "Paradox resolved through timeline merging"),
-                GameEffect(EffectType.CONSCIOUSNESS_IMPACT, "memory_anomalies", 0.3, 300, "Some citizens lose memories of erased timeline")
-            ],
-            risk_level=0.7,
-            reward_level=0.7
-        ))
+        event.choices.append(
+            GameChoice(
+                id="resolve_paradox",
+                text="Initiate paradox resolution sequence",
+                consequences=[
+                    GameEffect(
+                        EffectType.PARADOX_IMPACT,
+                        "timeline_conflicts",
+                        -0.8,
+                        200,
+                        "Paradox resolved through timeline merging",
+                    ),
+                    GameEffect(
+                        EffectType.CONSCIOUSNESS_IMPACT,
+                        "memory_anomalies",
+                        0.3,
+                        300,
+                        "Some citizens lose memories of erased timeline",
+                    ),
+                ],
+                risk_level=0.7,
+                reward_level=0.7,
+            )
+        )
 
         return event
 
@@ -501,41 +739,71 @@ class EventGenerator:
             severity=severity,
             description=f"An entirely new civilization has been encountered: {alien_race}.",
             long_description=f"{alien_race} has emerged in Federation space. "
-                           f"Their intentions are unknown. Their technology appears comparable or superior. "
-                           f"Diplomatic protocols are being activated. This moment will define Federation history.",
+            f"Their intentions are unknown. Their technology appears comparable or superior. "
+            f"Diplomatic protocols are being activated. This moment will define Federation history.",
             required_subsystems=["diplomacy", "first_contact", "intelligence"],
-            metadata={"alien_race": alien_race, "threat_level": random.uniform(0, 1)}
+            metadata={"alien_race": alien_race, "threat_level": random.uniform(0, 1)},
         )
 
-        event.effects.append(GameEffect(
-            effect_type=EffectType.DIPLOMACY_IMPACT,
-            target="first_contact_protocols",
-            magnitude=1.0,
-            duration=900,
-            description=f"First contact situation with {alien_race}"
-        ))
+        event.effects.append(
+            GameEffect(
+                effect_type=EffectType.DIPLOMACY_IMPACT,
+                target="first_contact_protocols",
+                magnitude=1.0,
+                duration=900,
+                description=f"First contact situation with {alien_race}",
+            )
+        )
 
-        event.choices.append(GameChoice(
-            id="friendly_approach",
-            text="Extend a peaceful greeting",
-            consequences=[
-                GameEffect(EffectType.DIPLOMACY_IMPACT, f"{alien_race}_relations", 0.3, 1200, "Peaceful contact established"),
-                GameEffect(EffectType.CULTURE_IMPACT, "fed_diversity", 0.5, 1800, "Federation enriched by new perspectives")
-            ],
-            risk_level=0.3,
-            reward_level=0.8
-        ))
+        event.choices.append(
+            GameChoice(
+                id="friendly_approach",
+                text="Extend a peaceful greeting",
+                consequences=[
+                    GameEffect(
+                        EffectType.DIPLOMACY_IMPACT,
+                        f"{alien_race}_relations",
+                        0.3,
+                        1200,
+                        "Peaceful contact established",
+                    ),
+                    GameEffect(
+                        EffectType.CULTURE_IMPACT,
+                        "fed_diversity",
+                        0.5,
+                        1800,
+                        "Federation enriched by new perspectives",
+                    ),
+                ],
+                risk_level=0.3,
+                reward_level=0.8,
+            )
+        )
 
-        event.choices.append(GameChoice(
-            id="defensive_stance",
-            text="Adopt defensive military posture",
-            consequences=[
-                GameEffect(EffectType.DIPLOMACY_IMPACT, f"{alien_race}_trust", -0.5, 900, "First contact complicated by military tension"),
-                GameEffect(EffectType.STABILITY_IMPACT, "federation", -0.2, 600, "Federation enters heightened alert")
-            ],
-            risk_level=0.7,
-            reward_level=0.2
-        ))
+        event.choices.append(
+            GameChoice(
+                id="defensive_stance",
+                text="Adopt defensive military posture",
+                consequences=[
+                    GameEffect(
+                        EffectType.DIPLOMACY_IMPACT,
+                        f"{alien_race}_trust",
+                        -0.5,
+                        900,
+                        "First contact complicated by military tension",
+                    ),
+                    GameEffect(
+                        EffectType.STABILITY_IMPACT,
+                        "federation",
+                        -0.2,
+                        600,
+                        "Federation enters heightened alert",
+                    ),
+                ],
+                risk_level=0.7,
+                reward_level=0.2,
+            )
+        )
 
         return event
 
@@ -546,9 +814,11 @@ class EventGenerator:
             "territory_expansion": f"{rival} has suddenly claimed three previously neutral systems.",
             "technology_theft": f"{rival} has stolen advanced technology blueprints from Federation archives.",
             "alliance_poaching": f"{rival} is aggressively recruiting Federation allies to their banner.",
-            "economic_sabotage": f"{rival} has infiltrated trade networks and disrupted commerce."
+            "economic_sabotage": f"{rival} has infiltrated trade networks and disrupted commerce.",
         }
-        return descriptions.get(move_type, f"{rival} has made a strategic competitive move.")
+        return descriptions.get(
+            move_type, f"{rival} has made a strategic competitive move."
+        )
 
 
 class EventSystem:
@@ -558,10 +828,16 @@ class EventSystem:
         self.generator = event_generator or EventGenerator()
         self.active_events: Dict[str, GameEvent] = {}
         self.event_log: List[Dict[str, Any]] = []
-        self.event_chains: Dict[str, List[str]] = {}  # event_id -> list of chained event ids
-        self.subsystem_callbacks: Dict[str, List[Callable]] = {}  # subsystem_name -> list of callbacks
+        self.event_chains: Dict[
+            str, List[str]
+        ] = {}  # event_id -> list of chained event ids
+        self.subsystem_callbacks: Dict[
+            str, List[Callable]
+        ] = {}  # subsystem_name -> list of callbacks
         self.event_history_max = 1000
-        self.choice_history: Dict[str, Dict[str, Any]] = {}  # event_id -> choice details
+        self.choice_history: Dict[
+            str, Dict[str, Any]
+        ] = {}  # event_id -> choice details
 
     def register_subsystem_callback(self, subsystem: str, callback: Callable) -> None:
         """Register a callback for a subsystem to handle events"""
@@ -592,7 +868,9 @@ class EventSystem:
             for _ in range(random.randint(1, 3)):
                 chain_event = self.generator.generate_random_event()
                 chain_event.metadata["parent_event"] = parent_event_id
-                chain_event.chain_probability *= 0.6  # Reduce chain probability for deeper chains
+                chain_event.chain_probability *= (
+                    0.6  # Reduce chain probability for deeper chains
+                )
 
                 self.active_events[chain_event.id] = chain_event
                 chained_events.append(chain_event)
@@ -626,7 +904,7 @@ class EventSystem:
         # Check if choice requirements are met
         if chosen_choice.requirements:
             for req_key, req_val in chosen_choice.requirements.items():
-                # Placeholder: check against game state
+                # TODO: Implement requirement validation against game state
                 pass
 
         # Apply consequences
@@ -640,7 +918,7 @@ class EventSystem:
             "choice_id": choice_id,
             "choice_text": chosen_choice.text,
             "consequences": [e.to_dict() for e in chosen_choice.consequences],
-            "timestamp": time.time()
+            "timestamp": time.time(),
         }
 
         # Trigger cascade if applicable
@@ -651,7 +929,7 @@ class EventSystem:
             "choice": chosen_choice.text,
             "consequences": consequences_applied,
             "chained_events": len(chained),
-            "chained_event_ids": [e.id for e in chained]
+            "chained_event_ids": [e.id for e in chained],
         }
 
     def resolve_event(self, event_id: str) -> Dict[str, Any]:
@@ -674,13 +952,13 @@ class EventSystem:
             "event": event.to_dict(),
             "player_choice": self.choice_history.get(event_id),
             "chained_from": event.metadata.get("parent_event"),
-            "resolved_at": datetime.utcnow().isoformat()
+            "resolved_at": datetime.utcnow().isoformat(),
         }
         self.event_log.append(event_record)
 
         # Maintain history size
         if len(self.event_log) > self.event_history_max:
-            self.event_log = self.event_log[-self.event_history_max:]
+            self.event_log = self.event_log[-self.event_history_max :]
 
         # Remove from active
         del self.active_events[event_id]
@@ -689,19 +967,25 @@ class EventSystem:
             "success": True,
             "event_id": event_id,
             "event_name": event.name,
-            "resolved_at": event_record["resolved_at"]
+            "resolved_at": event_record["resolved_at"],
         }
 
-    def get_event_log(self, limit: int = 50, event_type: Optional[EventType] = None) -> List[Dict[str, Any]]:
+    def get_event_log(
+        self, limit: int = 50, event_type: Optional[EventType] = None
+    ) -> List[Dict[str, Any]]:
         """Get event history with optional filtering"""
         filtered_log = self.event_log
 
         if event_type:
-            filtered_log = [e for e in filtered_log if e["event"]["event_type"] == event_type.value]
+            filtered_log = [
+                e for e in filtered_log if e["event"]["event_type"] == event_type.value
+            ]
 
         return filtered_log[-limit:]
 
-    def get_active_events(self, severity: Optional[EventSeverity] = None) -> List[GameEvent]:
+    def get_active_events(
+        self, severity: Optional[EventSeverity] = None
+    ) -> List[GameEvent]:
         """Get currently active events, optionally filtered by severity"""
         events = list(self.active_events.values())
 
@@ -726,7 +1010,7 @@ class EventSystem:
             "target": effect.target,
             "magnitude": effect.magnitude,
             "applied": True,
-            "timestamp": time.time()
+            "timestamp": time.time(),
         }
 
     def _notify_subsystems(self, event: GameEvent) -> None:
@@ -748,7 +1032,7 @@ class EventSystem:
             "event_type": event.event_type.value,
             "name": event.name,
             "severity": event.severity.name,
-            "timestamp": datetime.utcnow().isoformat()
+            "timestamp": datetime.utcnow().isoformat(),
         }
         self.event_log.append(log_entry)
 
@@ -757,22 +1041,36 @@ class EventSystem:
         return {
             "total_events_created": len(self.event_log),
             "active_events": len(self.active_events),
-            "critical_events": len([e for e in self.active_events.values() if e.severity == EventSeverity.CRITICAL]),
+            "critical_events": len(
+                [
+                    e
+                    for e in self.active_events.values()
+                    if e.severity == EventSeverity.CRITICAL
+                ]
+            ),
             "events_by_type": self._count_by_type(),
             "events_by_severity": self._count_by_severity(),
-            "active_chains": len(self.event_chains)
+            "active_chains": len(self.event_chains),
         }
 
     def _count_by_type(self) -> Dict[str, int]:
         """Count events by type"""
         counts = {}
-        for event in list(self.active_events.values()) + [e.get("event") for e in self.event_log if isinstance(e, dict) and "event" in e]:
+        for event in list(self.active_events.values()) + [
+            e.get("event")
+            for e in self.event_log
+            if isinstance(e, dict) and "event" in e
+        ]:
             if event:
                 if isinstance(event, dict):
                     if "event_type" in event:
-                        counts[event["event_type"]] = counts.get(event["event_type"], 0) + 1
+                        counts[event["event_type"]] = (
+                            counts.get(event["event_type"], 0) + 1
+                        )
                 elif isinstance(event, GameEvent):
-                    counts[event.event_type.value] = counts.get(event.event_type.value, 0) + 1
+                    counts[event.event_type.value] = (
+                        counts.get(event.event_type.value, 0) + 1
+                    )
         return counts
 
     def _count_by_severity(self) -> Dict[str, int]:
@@ -790,7 +1088,7 @@ class EventSystem:
             "event_chains": self.event_chains,
             "choice_history": self.choice_history,
             "statistics": self.get_event_statistics(),
-            "exported_at": datetime.utcnow().isoformat()
+            "exported_at": datetime.utcnow().isoformat(),
         }
 
 
@@ -801,8 +1099,16 @@ def create_event_system() -> EventSystem:
     system = EventSystem(generator)
 
     # Pre-register some common subsystems
-    for subsystem in ["diplomacy", "consciousness", "intelligence", "economy", "culture"]:
-        system.register_subsystem_callback(subsystem, lambda e, s=subsystem: None)  # Default no-op
+    for subsystem in [
+        "diplomacy",
+        "consciousness",
+        "intelligence",
+        "economy",
+        "culture",
+    ]:
+        system.register_subsystem_callback(
+            subsystem, lambda e, s=subsystem: None
+        )  # Default no-op
 
     return system
 
@@ -818,7 +1124,7 @@ if __name__ == "__main__":
 
     for i in range(3):
         event = event_system.generate_random_event()
-        print(f"\n[Event {i+1}] {event.name}")
+        print(f"\n[Event {i + 1}] {event.name}")
         print(f"Type: {event.event_type.value}")
         print(f"Severity: {event.severity.name}")
         print(f"Description: {event.description}")

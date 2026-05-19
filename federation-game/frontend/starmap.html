@@ -57,6 +57,14 @@ body{background:#0a0a1a;color:#e0e0e0;font-family:'Courier New',monospace;overfl
 #search-box{position:fixed;top:52px;left:12px;z-index:10}
 #search-input{background:rgba(10,10,26,0.9);border:1px solid rgba(79,195,247,0.3);color:#e0e0e0;padding:6px 10px;border-radius:6px;font-size:12px;font-family:'Courier New',monospace;width:180px;outline:none}
 #search-input:focus{border-color:#4fc3f7;box-shadow:0 0 8px rgba(79,195,247,0.2)}
+
+/* Audio toggle */
+#audio-toggle{background:none;border:1px solid rgba(79,195,247,0.2);border-radius:3px;color:#4fc3f7;font-size:14px;cursor:pointer;padding:2px 8px;display:flex;align-items:center;justify-content:center;transition:color 0.2s,border-color 0.2s;margin-left:4px;height:24px;line-height:1}
+#audio-toggle:hover{border-color:#4fc3f7;box-shadow:0 0 8px rgba(79,195,247,0.2)}
+#audio-toggle.muted{color:#546e7a;border-color:rgba(79,195,247,0.08);position:relative}
+#audio-toggle.muted:hover{border-color:#546e7a}
+#audio-toggle.muted::after{content:'';position:absolute;left:3px;right:3px;top:50%;height:2px;background:#ef5350;transform:rotate(-35deg);opacity:0.7}
+#audio-toggle:focus-visible{outline:2px solid #4fc3f7;outline-offset:2px}
 </style>
 </head>
 <body>
@@ -77,6 +85,7 @@ body{background:#0a0a1a;color:#e0e0e0;font-family:'Courier New',monospace;overfl
     <a href="/" style="color:#78909c;font-size:10px;text-decoration:none;padding:6px 10px;letter-spacing:1px;text-transform:uppercase;transition:color 0.2s">Simulator</a>
     <a href="/adult.html" style="color:#78909c;font-size:10px;text-decoration:none;padding:6px 10px;letter-spacing:1px;text-transform:uppercase;transition:color 0.2s">Control</a>
     <a href="/earth.html" style="color:#78909c;font-size:10px;text-decoration:none;padding:6px 10px;letter-spacing:1px;text-transform:uppercase;transition:color 0.2s">Earth</a>
+  <button id="audio-toggle" title="Toggle audio (M)" aria-label="Toggle audio on/off">&#9835;</button>
   </nav>
   </div>
 
@@ -647,6 +656,36 @@ function onSearch(e) {
     panY = H/2 - found.y * zoom;
   }
 }
+
+// --- Audio toggle (persists mute state across pages) ---
+let isMuted = localStorage.getItem('federation-muted') === 'true';
+
+function toggleMute() {
+  isMuted = !isMuted;
+  localStorage.setItem('federation-muted', isMuted);
+  const btn = document.getElementById('audio-toggle');
+  if (isMuted) {
+    btn.classList.add('muted');
+    btn.setAttribute('aria-label', 'Audio muted — click to unmute');
+  } else {
+    btn.classList.remove('muted');
+    btn.setAttribute('aria-label', 'Audio on — click to mute');
+  }
+}
+
+document.addEventListener('keydown', function(e) {
+  if (e.key === 'm' || e.key === 'M') { toggleMute(); e.preventDefault(); }
+});
+
+// Audio toggle button init
+const audioBtn = document.getElementById('audio-toggle');
+if (isMuted) {
+  audioBtn.classList.add('muted');
+  audioBtn.setAttribute('aria-label', 'Audio muted — click to unmute');
+} else {
+  audioBtn.setAttribute('aria-label', 'Audio on — click to mute');
+}
+audioBtn.addEventListener('click', function(e) { e.stopPropagation(); toggleMute(); });
 
 // --- Start ---
 init();

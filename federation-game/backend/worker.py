@@ -279,21 +279,22 @@ def run_tick():
     political_data = []
 
     endpoints = [
-        ("/npcs/advance-turn", "NPC system"),
-        ("/simulation/tick", "NPC autonomy"),
-        ("/political/process-turn", "Political engine"),
-        ("/history-arc/advance", "History arc"),
+        ("/npcs/advance-turn", "NPC system", 30),
+        ("/simulation/tick", "NPC autonomy", 30),
+        ("/political/process-turn", "Political engine", 15),
+        ("/history-arc/advance", "History arc", 15),
+        ("/simulation/autonomous/tick", "Autonomous simulation", 60),
     ]
 
-    for path, name in endpoints:
+    for path, name, timeout_s in endpoints:
         try:
             resp = requests.post(
                 f"{BACKEND_URL}{path}",
                 json={},
-                timeout=30,
+                timeout=timeout_s,
             )
             status = resp.status_code
-            log.info(f"  {name}: {status}")
+            log.info(f" {name}: {status}")
             if status == 200:
                 data = _safe_json(resp, name)
                 if data is not None:
@@ -302,14 +303,14 @@ def run_tick():
                     elif path == "/political/process-turn":
                         political_data = data.get("details") or []
             elif status >= 400:
-                log.warning(f"  {name} error {status}: {resp.text[:100]}")
+                log.warning(f" {name} error {status}: {resp.text[:100]}")
 
         except requests.exceptions.ConnectionError:
-            log.error(f"  {name}: backend unreachable")
+            log.error(f" {name}: backend unreachable")
         except requests.exceptions.Timeout:
-            log.error(f"  {name}: timeout (30s)")
+            log.error(f" {name}: timeout ({timeout_s}s)")
         except Exception as e:
-            log.error(f"  {name}: {e}")
+            log.error(f" {name}: {e}")
 
     # ── Auto-save ──────────────────────────────────────
     try:

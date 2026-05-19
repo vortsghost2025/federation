@@ -1,8 +1,11 @@
 """Federation Star Map API - aggregated visualization data endpoint."""
 
 import json
+import logging
 import os
 from fastapi import APIRouter
+
+logger = logging.getLogger(__name__)
 from typing import Any, Dict, List, Optional
 
 try:
@@ -41,7 +44,7 @@ def _zset_latest(r, key: str) -> Optional[Any]:
         if items:
             return _safe_json_parse(items[0])
     except Exception:
-        pass
+        pass  # Redis key missing or corrupt; return None as fallback
     return None
 
 
@@ -52,7 +55,7 @@ def _list_first(r, key: str) -> Optional[Any]:
         if items:
             return _safe_json_parse(items[0])
     except Exception:
-        pass
+        pass  # Redis key missing or corrupt; return None as fallback
     return None
 
 
@@ -133,7 +136,7 @@ async def get_map_data():
             except (ValueError, TypeError):
                 result["world_state"][k] = v
     except Exception:
-        pass
+        logger.debug(f"Unexpected error parsing world_state key '{k}'; skipped")
 
     # --- NPCs ---
     try:
@@ -223,7 +226,7 @@ async def get_map_data():
                     try:
                         rels[other_id] = float(score)
                     except (ValueError, TypeError):
-                        pass
+                        pass  # Skip non-numeric relationship score
                 entry["relationships"] = rels
             except Exception:
                 entry["relationships"] = {}
@@ -250,11 +253,15 @@ async def get_map_data():
                             if not entry.get("name") or entry["name"] == entry["id"]:
                                 entry["name"] = prof.get("name", entry["id"])
         except Exception:
-            pass
+            logger.debug(
+                f"NPC profile enrichment failed for {entry.get('id', 'unknown')}"
+            )
 
         result["npcs"] = enriched
     except Exception:
-        pass
+        logger.warning(
+            "NPC enrichment section failed; NPCs may be incomplete in map data"
+        )
 
     # --- Factions ---
     try:
@@ -285,12 +292,12 @@ async def get_map_data():
                     if stance_parsed is not None:
                         faction_entry["stances"][target_fid] = stance_parsed
             except Exception:
-                pass
+                logger.debug(f"Faction stance parsing failed for {faction_id}")
             factions[faction_id] = faction_entry
 
         result["factions"] = factions
     except Exception:
-        pass
+        logger.warning("Faction section failed; factions may be incomplete in map data")
 
     # --- Events (latest 50) ---
     try:
@@ -302,7 +309,7 @@ async def get_map_data():
                 events.append(parsed)
         result["events"] = events
     except Exception:
-        pass
+        logger.warning("Events section failed; events may be incomplete in map data")
 
     # --- Broadcast Events (latest 20) ---
     try:
@@ -314,13 +321,15 @@ async def get_map_data():
                 broadcasts.append(parsed)
         result["broadcasts"] = broadcasts
     except Exception:
-        pass
+        logger.warning(
+            "Broadcast events section failed; broadcasts may be incomplete in map data"
+        )
 
     # --- Worker Status ---
     try:
         result["worker"] = r.hgetall("worker:status")
     except Exception:
-        pass
+        pass  # Worker status unavailable; omit from map data
 
     # --- History State ---
     try:
@@ -328,6 +337,6 @@ async def get_map_data():
         if history_raw:
             result["history"] = _safe_json_parse(history_raw)
     except Exception:
-        pass
+        pass  # History state unavailable; omit from map data
 
     return result

@@ -1336,7 +1336,7 @@ def get_world_state():
     state = {}
     for cond_key, config in WORLD_CONDITIONS.items():
         if cond_key in stored:
-            state[cond_key] = int(stored[cond_key])
+            state[cond_key] = int(float(stored[cond_key]))
         else:
             state[cond_key] = config["default"]
     state["_meta"] = {
