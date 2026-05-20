@@ -357,9 +357,9 @@ def generate_reaction(event: Dict, reacting_npc: Dict) -> Optional[Dict]:
 
     rel = _get_relationship(npc_id, source_id) if source_id else 50.0
 
-    if rel > 65:
+    if rel > 55:  # lowered from 65 — more NPCs qualify as allies
         pool = _ALLY_REACTIONS
-    elif rel < 35:
+    elif rel < 40:  # raised from 35 — fewer NPCs default to rival
         pool = _RIVAL_REACTIONS
     else:
         pool = _NEUTRAL_REACTIONS

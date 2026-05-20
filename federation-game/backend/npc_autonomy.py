@@ -769,12 +769,24 @@ def simulation_tick(npc_list: List[Dict]) -> Dict[str, Any]:
                     results["interactions"].append(event)
             except Exception as e:
                 results["errors"].append({"error": f"interaction failed: {str(e)}"})
+    # --- Faction dynamics only (NO world_state hash writes) ---
+    # world_state writes are now handled exclusively by simulation_engine.py
+    # which applies per-decision effects instead of this coarse aggregate formula.
+    # The old update_world_state() was overwriting simulation_engine's nuanced
+    # values with destructive aggregate calculations every tick (double-write conflict).
+    # Faction dynamics computation is preserved here since it's valuable data.
     try:
-        ws_changes = update_world_state(npc_list, results.get("decisions", []))
-        if ws_changes:
-            results["world_state_changes"] = ws_changes
+        _fd_events = get_broadcast_events(limit=50)
+        _fd = compute_faction_dynamics(
+            npc_list, results.get("decisions", []), _fd_events
+        )
+        _fs = compute_faction_stances(_fd, _fd_events)
+        store_faction_dynamics(_fd, _fs)
+        results["faction_dynamics"] = {
+            f: v["cohesion"] for f, v in _fd.items() if v.get("member_count", 0) > 0
+        }
     except Exception as e:
-        results["errors"].append({"error": f"world state update failed: {str(e)}"})
+        results["errors"].append({"error": f"faction dynamics failed: {str(e)}"})
 
     return results
 
@@ -1378,6 +1390,12 @@ def set_world_condition(condition, value):
 
 
 def update_world_state(npc_list, tick_decisions):
+    """DEPRECATED: No longer called from simulation_tick().
+    world_state writes are now handled exclusively by simulation_engine.py
+    which applies per-decision effects instead of coarse aggregate formulas.
+    This function is retained for reference but should not be called.
+    Faction dynamics are now computed directly in simulation_tick().
+    """
     tick_result = {}
     # Phase 7a: faction dynamics
     try:
@@ -1391,6 +1409,29 @@ def update_world_state(npc_list, tick_decisions):
     except Exception as _fd_err:
         tick_result["faction_dynamics_error"] = str(_fd_err)
         r = _get_redis()
+
+        # --- Double-write conflict guard ---
+        # If simulation_engine has run autonomous_tick recently (within 120s),
+        # it already wrote world_state with per-decision effects.
+        # Our formula-based update would overwrite those nuanced values with
+        # coarse aggregate calculations — skipping preserves the better data.
+        _sim_last = r.get("sim_last_tick")
+        if _sim_last:
+            try:
+                _elapsed = int(time.time()) - int(float(_sim_last))
+                if _elapsed < 120:
+                    logger.info(
+                        "update_world_state: skipping — sim_engine ran %ds ago",
+                        _elapsed,
+                    )
+                    tick_result["world_state_write_skipped"] = True
+                    tick_result["world_state_skip_reason"] = (
+                        f"sim_engine ran {_elapsed}s ago"
+                    )
+                    return tick_result
+            except (ValueError, TypeError):
+                pass  # corrupt timestamp — proceed with our own write
+
         current = get_world_state()
 
         num_npcs = max(1, len(npc_list))
@@ -1476,9 +1517,11 @@ def update_world_state(npc_list, tick_decisions):
 
         new_resources = (
             current["resource_abundance"]
-            + (explore_rate * 4)
-            - (seek_rate * 8)
-            - (num_npcs * 0.15)
+            + (explore_rate * 8)  # doubled: explore is the primary positive source
+            - (seek_rate * 6)  # reduced from 8: seeking is efficient, not wasteful
+            - (
+                num_npcs * 0.02
+            )  # reduced from 0.15: ~0.78/tick for 39 NPCs vs 5.85 before
         )
         new_resources += random.uniform(-2, 2)
 
@@ -1506,7 +1549,7 @@ def update_world_state(npc_list, tick_decisions):
             + (help_rate * 5)
             - (confront_rate * 4)
         )
-        new_morale += (advance_rate * 3) - (seek_rate * 2)
+        new_morale += advance_rate * 3  # seeking resources is neutral for morale
 
         new_anomaly = (
             current["anomaly_activity"] + (investigate_rate * 6) + random.uniform(-5, 5)
@@ -1869,22 +1912,36 @@ def make_decision(char_id, char_name, archetype, affiliation, mood=""):
             action_result["description"] = (
                 char_name + " focused on self-improvement and training"
             )
-    elif category == "confront_rival":
-        rel = get_npc_relationships(char_id)
-        if rel:
-            worst_rival = min(rel.items(), key=lambda x: x[1])
-            action_result = generate_npc_interaction(
-                {"char_id": char_id, "name": char_name, "id": char_id},
-                {
-                    "char_id": worst_rival[0],
-                    "name": worst_rival[0],
-                    "id": worst_rival[0],
-                },
-            )
-        else:
-            action_result = generate_action(
-                char_id, char_name, archetype, affiliation, mood
-            )
+        elif category == "confront_rival":
+            rel = get_npc_relationships(char_id)
+            target_faction = None  # track the rival's faction
+            if rel:
+                worst_rival = min(rel.items(), key=lambda x: x[1])
+                # Look up the rival's faction
+                rival_id = worst_rival[0]
+                try:
+                    r = _get_redis()
+                    rival_data = r.hget(f"npc:{rival_id}", "affiliation")
+                    if rival_data:
+                        target_faction = (
+                            rival_data
+                            if isinstance(rival_data, str)
+                            else rival_data.decode("utf-8", errors="ignore")
+                        )
+                except Exception:
+                    pass
+                action_result = generate_npc_interaction(
+                    {"char_id": char_id, "name": char_name, "id": char_id},
+                    {
+                        "char_id": worst_rival[0],
+                        "name": worst_rival[0],
+                        "id": worst_rival[0],
+                    },
+                )
+            else:
+                action_result = generate_action(
+                    char_id, char_name, archetype, affiliation, mood
+                )
     elif category == "help_ally":
         rel = get_npc_relationships(char_id)
         if rel:
@@ -1907,17 +1964,20 @@ def make_decision(char_id, char_name, archetype, affiliation, mood=""):
                 char_name + " set out to explore uncharted territory"
             )
 
-    decision = {
-        "char_id": char_id,
-        "char_name": char_name,
-        "category": category,
-        "description": char_name + " " + decision_desc,
-        "reasoning": reasoning,
-        "score": chosen["score"],
-        "considered_options": len(options),
-        "mood": mood or get_mood(char_id),
-        "ts": int(time.time()),
-    }
+        decision = {
+            "char_id": char_id,
+            "char_name": char_name,
+            "category": category,
+            "description": char_name + " " + decision_desc,
+            "reasoning": reasoning,
+            "score": chosen["score"],
+            "considered_options": len(options),
+            "mood": mood or get_mood(char_id),
+            "ts": int(time.time()),
+        }
+        # Attach target_faction for confront_rival decisions
+        if category == "confront_rival":
+            decision["target_faction"] = target_faction or affiliation or "unknown"
     if action_result and isinstance(action_result, dict):
         decision["action_taken"] = action_result.get("action_type", "none")
         decision["action_desc"] = action_result.get("description", "")
@@ -1981,6 +2041,7 @@ def broadcast_decision_event(decision, affiliation="independent"):
         "visibility": visibility,
         "significance": significance,
         "faction": affiliation,
+        "target_faction": decision.get("target_faction", ""),
         "ts": int(time.time()),
     }
     r = _get_redis()

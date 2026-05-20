@@ -3965,14 +3965,9 @@ async def autonomous_simulation_tick():
       4. Run faction AI for all 8 factions
       5. Resolve pending laws/treaties/research
       6. Process event cascades
-      7. Apply game state deltas
+    7. Apply game state deltas
     """
-    import redis as _redis
-
-    _r = _redis.Redis.from_url(
-        os.environ.get("REDIS_URL", "redis://redis:6379/0"),
-        decode_responses=True,
-    )
+    _r = _get_observer_redis()
 
     # Build NPC list (same pattern as /simulation/tick)
     npc_list = []
@@ -4125,19 +4120,33 @@ async def autonomous_simulation_tick():
 
 
 # ============================================================================
-# SIMULATION OBSERVER ENDPOINTS
+# SIMULATION OBSERVER ENDPOINTS (pipelined for performance)
 # ============================================================================
+
+# Lazy shared Redis connection for observer endpoints
+_observer_redis = None
+
+
+def _get_observer_redis():
+    """Get or create a shared Redis connection for observer endpoints."""
+    global _observer_redis
+    if _observer_redis is None:
+        import redis as _redis
+
+        _observer_redis = _redis.Redis.from_url(
+            os.environ.get("REDIS_URL", "redis://redis:6379/0"),
+            decode_responses=True,
+            socket_connect_timeout=3,
+            socket_timeout=3,
+        )
+    return _observer_redis
 
 
 @app.get("/simulation/status")
 async def simulation_status():
-    """Read-only view of the autonomous simulation's current state."""
-    import redis as _redis
-
-    _r = _redis.Redis.from_url(
-        os.environ.get("REDIS_URL", "redis://redis:6379/0"),
-        decode_responses=True,
-    )
+    """Read-only view of the autonomous simulation's current state.
+    Uses Redis pipelines to batch commands instead of N+1 sequential calls."""
+    _r = _get_observer_redis()
     result = {
         "world_state": {},
         "faction_dynamics": {},
@@ -4172,7 +4181,7 @@ async def simulation_status():
     except Exception:
         pass
 
-    # NPC activity summary (mood distribution, decision counts)
+    # NPC activity summary — pipelined: batch all mood GETs and ZCARDs
     try:
         npc_list = []
         for char_id, character in game_state.npc_system.characters.items():
@@ -4184,14 +4193,24 @@ async def simulation_status():
                     "affiliation": character.affiliation,
                 }
             )
-        mood_counts = {}
-        decision_counts = {}
+
+        # Batch all mood + decision-count queries in a single pipeline
+        pipe = _r.pipeline(transaction=False)
         for npc in npc_list:
             cid = npc["char_id"]
-            mood = _r.get(f"npc_mood:{cid}") or "unknown"
+            pipe.get(f"npc_mood:{cid}")
+            pipe.zcard(f"npc_decisions:{cid}")
+        pipe_results = pipe.execute()
+
+        mood_counts = {}
+        decision_counts = {}
+        for i, npc in enumerate(npc_list):
+            cid = npc["char_id"]
+            mood = pipe_results[i * 2] or "unknown"
             mood_counts[mood] = mood_counts.get(mood, 0) + 1
-            dec_count = _r.zcard(f"npc_decisions:{cid}") or 0
+            dec_count = pipe_results[i * 2 + 1] or 0
             decision_counts[cid] = dec_count
+
         result["npc_activity_summary"] = {
             "total_npcs": len(npc_list),
             "mood_distribution": mood_counts,
@@ -4200,38 +4219,43 @@ async def simulation_status():
     except Exception:
         pass
 
-    # Pending items (laws, treaties, research from simulation engine)
+    # Pending items — use ZCARD/HLEN instead of full-scan ZRANGE/HGETALL
     try:
+        pipe2 = _r.pipeline(transaction=False)
+        pipe2.llen("pending_laws")
+        pipe2.llen("pending_treaties")
+        pipe2.llen("pending_research")
+        pipe2.zcard("faction_laws_passed")
+        pipe2.hlen("faction_treaties_active")
+        p2 = pipe2.execute()
         result["pending_items"] = {
-            "laws": _r.llen("pending_laws") or 0,
-            "treaties": _r.llen("pending_treaties") or 0,
-            "research": _r.llen("pending_research") or 0,
-            "faction_laws": len(_r.zrange("faction_laws_passed", 0, -1)),
-            "active_treaties": len(_r.hgetall("faction_treaties_active")),
+            "laws": p2[0] or 0,
+            "treaties": p2[1] or 0,
+            "research": p2[2] or 0,
+            "faction_laws": p2[3] or 0,
+            "active_treaties": p2[4] or 0,
         }
     except Exception:
         pass
 
-    # Simulation engine last tick
+    # Simulation engine last tick + faction AI + cascade temp — batched
     try:
-        last_tick = _r.get("sim_last_tick")
-        result["last_tick_timestamp"] = last_tick
-        tick_log = _r.zrevrange("sim_tick_log", 0, 0)
+        pipe3 = _r.pipeline(transaction=False)
+        pipe3.get("sim_last_tick")
+        pipe3.zrevrange("sim_tick_log", 0, 0)
+        pipe3.hgetall("faction_ai:last_tick")
+        pipe3.get("cascade_temperature")
+        p3 = pipe3.execute()
+
+        result["last_tick_timestamp"] = p3[0]
+        tick_log = p3[1]
         if tick_log:
-            result["last_tick_result"] = json.loads(tick_log[0])
-    except Exception:
-        pass
-
-    # Faction AI last tick
-    try:
-        faction_ai_data = _r.hgetall("faction_ai:last_tick")
-        result["faction_ai_last_tick"] = faction_ai_data
-    except Exception:
-        pass
-
-    # Cascade temperature
-    try:
-        temp = _r.get("cascade_temperature")
+            try:
+                result["last_tick_result"] = json.loads(tick_log[0])
+            except (json.JSONDecodeError, IndexError):
+                pass
+        result["faction_ai_last_tick"] = p3[2] or {}
+        temp = p3[3]
         result["cascade_temperature"] = float(temp) if temp else 0.0
     except Exception:
         result["cascade_temperature"] = 0.0
@@ -4241,18 +4265,30 @@ async def simulation_status():
 
 @app.get("/simulation/factions")
 async def simulation_factions():
-    """Detailed faction AI status for the simulation observer."""
-    import redis as _redis
-
-    _r = _redis.Redis.from_url(
-        os.environ.get("REDIS_URL", "redis://redis:6379/0"),
-        decode_responses=True,
-    )
+    """Detailed faction AI status for the simulation observer.
+    Uses Redis pipelines to batch all faction queries."""
+    _r = _get_observer_redis()
     result = {}
+
+    # Build faction metadata first (no Redis needed)
+    faction_meta = {}
     for fid in KNOWN_FACTIONS:
-        faction_data = {
+        faction_meta[fid] = {
             "id": fid,
             "name": FACTION_DISPLAY.get(fid, fid),
+        }
+
+    # Pipeline: batch actions + power for all factions (16 cmds → 1 round-trip)
+    pipe = _r.pipeline(transaction=False)
+    for fid in KNOWN_FACTIONS:
+        pipe.zrevrange(f"faction_actions:{fid}", 0, 4)
+        pipe.get(f"faction_power:{fid}")
+    pipe_results = pipe.execute()
+
+    for i, fid in enumerate(KNOWN_FACTIONS):
+        faction_data = {
+            "id": fid,
+            "name": faction_meta[fid]["name"],
             "dynamics": {},
             "stances": {},
             "recent_actions": [],
@@ -4267,12 +4303,17 @@ async def simulation_factions():
         except Exception:
             pass
         try:
-            actions_raw = _r.zrevrange(f"faction_actions:{fid}", 0, 4)
-            faction_data["recent_actions"] = [json.loads(a) for a in actions_raw]
+            actions_raw = pipe_results[i * 2]
+            faction_data["recent_actions"] = []
+            for a in actions_raw:
+                try:
+                    faction_data["recent_actions"].append(json.loads(a))
+                except (json.JSONDecodeError, TypeError):
+                    pass
         except Exception:
             pass
         try:
-            power_raw = _r.get(f"faction_power:{fid}")
+            power_raw = pipe_results[i * 2 + 1]
             faction_data["power"] = float(power_raw) if power_raw else 0.0
         except Exception:
             pass
@@ -4282,21 +4323,55 @@ async def simulation_factions():
 
 @app.get("/simulation/npcs/activity")
 async def simulation_npcs_activity():
-    """NPC activity feed for the simulation observer."""
-    import redis as _redis
+    """NPC activity feed for the simulation observer.
+    Uses Redis pipelines: 5 batched calls instead of 234+ sequential.
+    All NPC moods, thoughts, decisions, actions, and states are fetched
+    in 5 pipeline round-trips total."""
+    _r = _get_observer_redis()
 
-    _r = _redis.Redis.from_url(
-        os.environ.get("REDIS_URL", "redis://redis:6379/0"),
-        decode_responses=True,
-    )
+    # Build NPC list from in-memory game state
+    npc_chars = list(game_state.npc_system.characters.items())
+    char_ids = [char_id for char_id, _ in npc_chars]
+
+    # Pipeline 1: moods (GET × 39)
+    pipe_moods = _r.pipeline(transaction=False)
+    for cid in char_ids:
+        pipe_moods.get(f"npc_mood:{cid}")
+    moods = pipe_moods.execute()
+
+    # Pipeline 2: thoughts (ZREVRANGE × 39)
+    pipe_thoughts = _r.pipeline(transaction=False)
+    for cid in char_ids:
+        pipe_thoughts.zrevrange(f"npc_thoughts:{cid}", 0, 2)
+    thoughts = pipe_thoughts.execute()
+
+    # Pipeline 3: decisions (ZREVRANGE × 39)
+    pipe_decisions = _r.pipeline(transaction=False)
+    for cid in char_ids:
+        pipe_decisions.zrevrange(f"npc_decisions:{cid}", 0, 2)
+    decisions = pipe_decisions.execute()
+
+    # Pipeline 4: actions (ZREVRANGE × 39)
+    pipe_actions = _r.pipeline(transaction=False)
+    for cid in char_ids:
+        pipe_actions.zrevrange(f"npc_actions:{cid}", 0, 2)
+    actions = pipe_actions.execute()
+
+    # Pipeline 5: state (HGETALL × 39)
+    pipe_state = _r.pipeline(transaction=False)
+    for cid in char_ids:
+        pipe_state.hgetall(f"npc_state:{cid}")
+    states = pipe_state.execute()
+
+    # Assemble results from pipeline responses
     npcs = []
-    for char_id, character in game_state.npc_system.characters.items():
+    for i, (char_id, character) in enumerate(npc_chars):
         npc_data = {
             "char_id": char_id,
             "name": character.name,
             "affiliation": character.affiliation,
             "archetype": character.personality_type.value,
-            "mood": "unknown",
+            "mood": moods[i] or "unknown",
             "recent_thoughts": [],
             "recent_decisions": [],
             "recent_actions": [],
@@ -4305,44 +4380,48 @@ async def simulation_npcs_activity():
             "status": "active",
         }
         try:
-            npc_data["mood"] = _r.get(f"npc_mood:{char_id}") or "unknown"
+            for t in thoughts[i]:
+                try:
+                    npc_data["recent_thoughts"].append(json.loads(t))
+                except (json.JSONDecodeError, TypeError):
+                    pass
         except Exception:
             pass
         try:
-            thoughts_raw = _r.zrevrange(f"npc_thoughts:{char_id}", 0, 2)
-            npc_data["recent_thoughts"] = [json.loads(t) for t in thoughts_raw]
+            for d in decisions[i]:
+                try:
+                    npc_data["recent_decisions"].append(json.loads(d))
+                except (json.JSONDecodeError, TypeError):
+                    pass
         except Exception:
             pass
         try:
-            decisions_raw = _r.zrevrange(f"npc_decisions:{char_id}", 0, 2)
-            npc_data["recent_decisions"] = [json.loads(d) for d in decisions_raw]
+            for a in actions[i]:
+                try:
+                    npc_data["recent_actions"].append(json.loads(a))
+                except (json.JSONDecodeError, TypeError):
+                    pass
         except Exception:
             pass
         try:
-            actions_raw = _r.zrevrange(f"npc_actions:{char_id}", 0, 2)
-            npc_data["recent_actions"] = [json.loads(a) for a in actions_raw]
-        except Exception:
-            pass
-        try:
-            state = _r.hgetall(f"npc_state:{char_id}")
+            state = states[i] or {}
             npc_data["corruption_level"] = float(state.get("corruption_level", 0))
             npc_data["rumor_level"] = float(state.get("rumor_level", 0))
             npc_data["status"] = state.get("status", "active")
         except Exception:
             pass
         npcs.append(npc_data)
+
     return {"npcs": npcs, "count": len(npcs)}
 
 
 @app.get("/simulation/events")
 async def simulation_events(limit: int = 50):
-    """World events and cascade events for the simulation observer."""
-    import redis as _redis
-
-    _r = _redis.Redis.from_url(
-        os.environ.get("REDIS_URL", "redis://redis:6379/0"),
-        decode_responses=True,
-    )
+    """World events and cascade events for the simulation observer.
+    Capped limit to prevent unbounded sorted-set scans."""
+    _r = _get_observer_redis()
+    # Cap limit to prevent abuse / accidental full-scan
+    limit = min(max(limit, 1), 100)
     result = {
         "world_events": [],
         "cascade_events": [],
@@ -4352,14 +4431,22 @@ async def simulation_events(limit: int = 50):
         result["world_events"] = get_world_events(limit=limit)
     except Exception:
         pass
+    # Batch cascade + broadcast fetch in one pipeline
     try:
-        cascade_raw = _r.zrevrange("cascade_reactions", 0, limit - 1)
-        result["cascade_events"] = [json.loads(c) for c in cascade_raw]
-    except Exception:
-        pass
-    try:
-        broadcast_raw = _r.zrevrange("npc_broadcast_events", 0, min(limit, 20) - 1)
-        result["broadcast_events"] = [json.loads(b) for b in broadcast_raw]
+        pipe = _r.pipeline(transaction=False)
+        pipe.zrevrange("cascade_reactions", 0, limit - 1)
+        pipe.zrevrange("npc_broadcast_events", 0, min(limit, 20) - 1)
+        pipe_results = pipe.execute()
+        for c in pipe_results[0]:
+            try:
+                result["cascade_events"].append(json.loads(c))
+            except (json.JSONDecodeError, TypeError):
+                pass
+        for b in pipe_results[1]:
+            try:
+                result["broadcast_events"].append(json.loads(b))
+            except (json.JSONDecodeError, TypeError):
+                pass
     except Exception:
         pass
     return result
