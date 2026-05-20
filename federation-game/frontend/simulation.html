@@ -343,14 +343,18 @@ function esc(s) {
 
 function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
 
-async function apiFetch(endpoint) {
-  try {
-    var r = await fetch('/api' + endpoint, { headers: { 'Accept': 'application/json' } });
-    if (!r.ok) throw new Error(r.status);
-    return await r.json();
-  } catch (e) {
-    return null;
-  }
+async function apiFetch(endpoint, timeoutMs) {
+ var ctl = new AbortController();
+ var timer = setTimeout(function() { ctl.abort(); }, timeoutMs || 8000);
+ try {
+ var r = await fetch('/api' + endpoint, { headers: { 'Accept': 'application/json' }, signal: ctl.signal });
+ clearTimeout(timer);
+ if (!r.ok) throw new Error(r.status);
+ return await r.json();
+ } catch (e) {
+ clearTimeout(timer);
+ return null;
+ }
 }
 
 function updateTopRibbon(status) {
@@ -728,47 +732,55 @@ function showSignalLost(show) {
   document.getElementById('signal-lost-center').classList.toggle('visible', show);
 }
 
+async function refreshLight() {
+ /* Fetch the 3 lightweight endpoints every 10s */
+ var results = await Promise.all([
+ apiFetch('/simulation/status', 8000),
+ apiFetch('/simulation/factions', 8000),
+ apiFetch('/simulation/events', 8000),
+ ]);
+ var status = results[0], factions = results[1], events = results[2];
+ var anyOk = status || factions || events;
+ if (!anyOk) {
+ fetchErrorCount++;
+ if (fetchErrorCount >= 3) showSignalLost(true);
+ } else {
+ fetchErrorCount = 0;
+ showSignalLost(false);
+ if (status) lastData.status = status;
+ if (factions) lastData.factions = factions;
+ if (events) lastData.events = events;
+ }
+ if (lastData.status) updateTopRibbon(lastData.status);
+ if (lastData.factions) renderFactions(lastData.factions);
+ if (lastData.events) renderEvents(lastData.events);
+ if (lastData.status) renderBottom(lastData.status);
+}
+
+async function refreshNpcs() {
+ /* Fetch the heavier NPC activity endpoint on a slower 30s cadence */
+ var npcs = await apiFetch('/simulation/npcs/activity', 12000);
+ if (npcs) {
+ lastData.npcs = npcs;
+ showSignalLost(false);
+ }
+ if (lastData.npcs) renderNpcs(lastData.npcs);
+}
+
 async function refresh() {
-  var loadingEls = document.querySelectorAll('.section-title');
-  for (var l = 0; l < loadingEls.length; l++) loadingEls[l].classList.add('loading-pulse');
-
-  var results = await Promise.all([
-    apiFetch('/simulation/status'),
-    apiFetch('/simulation/factions'),
-    apiFetch('/simulation/npcs/activity'),
-    apiFetch('/simulation/events'),
-  ]);
-
-  var status = results[0], factions = results[1], npcs = results[2], events = results[3];
-
-  for (var l2 = 0; l2 < loadingEls.length; l2++) loadingEls[l2].classList.remove('loading-pulse');
-
-  var anyOk = status || factions || npcs || events;
-
-  if (!anyOk) {
-    fetchErrorCount++;
-    if (fetchErrorCount >= 3) showSignalLost(true);
-  } else {
-    fetchErrorCount = 0;
-    showSignalLost(false);
-    if (status) lastData.status = status;
-    if (factions) lastData.factions = factions;
-    if (npcs) lastData.npcs = npcs;
-    if (events) lastData.events = events;
-  }
-
-  if (lastData.status) updateTopRibbon(lastData.status);
-  if (lastData.factions) renderFactions(lastData.factions);
-  if (lastData.events) renderEvents(lastData.events);
-  if (lastData.npcs) renderNpcs(lastData.npcs);
-  if (lastData.status) renderBottom(lastData.status);
+ var loadingEls = document.querySelectorAll('.section-title');
+ for (var l = 0; l < loadingEls.length; l++) loadingEls[l].classList.add('loading-pulse');
+ await refreshLight();
+ await refreshNpcs();
+ for (var l2 = 0; l2 < loadingEls.length; l2++) loadingEls[l2].classList.remove('loading-pulse');
 }
 
 function init() {
-  generateStarfield();
-  refresh();
-  setInterval(refresh, 10000);
-  setInterval(updateTimeSince, 1000);
+ generateStarfield();
+ refresh();
+ setInterval(refreshLight, 10000);
+ setInterval(refreshNpcs, 30000);
+ setInterval(updateTimeSince, 1000);
 }
 
 document.addEventListener('DOMContentLoaded', init);

@@ -38,22 +38,35 @@ services:
     healthcheck:
       test:
         - CMD
-        - python
+        - python3
         - -c
         - "import urllib.request; urllib.request.urlopen('http://localhost:8000/healthz')"
-  interval: 60s
-  timeout: 10s
-  retries: 3
-  start_period: 10s
-  depends_on:
-  - postgres
-  - redis
-  networks:
-  - fed-net
-  deploy:
-    resources:
-      limits:
-        cpus: "1.0"
+      interval: 60s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    depends_on:
+      - postgres
+      - redis
+    networks:
+      - fed-net
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+    labels:
+      - traefik.enable=true
+      - "traefik.http.routers.fed-api.rule=Host(`federation-game.deliberatefederation.cloud`) && (PathPrefix(`/npcs`) || PathPrefix(`/world`) || PathPrefix(`/simulation/`) || PathPrefix(`/political`) || PathPrefix(`/factions`) || PathPrefix(`/broadcast-events`) || PathPrefix(`/quests`) || PathPrefix(`/technology`) || PathPrefix(`/history-arc`) || PathPrefix(`/atlas`) || PathPrefix(`/consciousness`) || PathPrefix(`/engine-status`) || PathPrefix(`/map/`) || PathPrefix(`/state`) || PathPrefix(`/systems-overview`) || PathPrefix(`/timeline`) || PathPrefix(`/rivals`) || PathPrefix(`/reset`) || PathPrefix(`/log`) || PathPrefix(`/ws`) || PathPrefix(`/healthz`) || PathPrefix(`/docs`) || PathPrefix(`/openapi.json`) || PathPrefix(`/redoc`))"
+      - traefik.http.routers.fed-api.entrypoints=websecure
+      - traefik.http.routers.fed-api.tls.certresolver=letsencrypt
+      - "traefik.http.routers.fed-api.priority=100"
+      - traefik.http.routers.fed-api.service=fed-api-svc
+      - traefik.http.services.fed-api-svc.loadbalancer.server.port=8000
+      - "traefik.http.routers.fed-api-http.rule=Host(`federation-game.deliberatefederation.cloud`) && (PathPrefix(`/npcs`) || PathPrefix(`/world`) || PathPrefix(`/simulation/`) || PathPrefix(`/political`) || PathPrefix(`/factions`) || PathPrefix(`/broadcast-events`) || PathPrefix(`/quests`) || PathPrefix(`/technology`) || PathPrefix(`/history-arc`) || PathPrefix(`/atlas`) || PathPrefix(`/consciousness`) || PathPrefix(`/engine-status`) || PathPrefix(`/map/`) || PathPrefix(`/state`) || PathPrefix(`/systems-overview`) || PathPrefix(`/timeline`) || PathPrefix(`/rivals`) || PathPrefix(`/reset`) || PathPrefix(`/log`) || PathPrefix(`/ws`) || PathPrefix(`/healthz`) || PathPrefix(`/docs`) || PathPrefix(`/openapi.json`) || PathPrefix(`/redoc`))"
+      - traefik.http.routers.fed-api-http.entrypoints=web
+      - "traefik.http.routers.fed-api-http.priority=100"
+      - traefik.http.routers.fed-api-http.service=fed-api-http-svc
+      - traefik.http.services.fed-api-http-svc.loadbalancer.server.port=8000
 
   frontend:
     build: /docker/federation-game/frontend
@@ -71,6 +84,18 @@ services:
       - traefik.http.routers.federation-game-http.entrypoints=web
       - traefik.http.routers.federation-game-http.service=federation-game-http-svc
       - traefik.http.services.federation-game-http-svc.loadbalancer.server.port=80
+      # Priority-200: catch simulation.html BEFORE backend PathPrefix(/simulation/) rule
+      - "traefik.http.routers.fed-sim-html.rule=Host(`federation-game.deliberatefederation.cloud`) && (Path(`/simulation.html`) || Path(`/bridge.html`) || Path(`/starmap.html`) || Path(`/earth.html`))"
+      - traefik.http.routers.fed-sim-html.entrypoints=websecure
+      - traefik.http.routers.fed-sim-html.tls.certresolver=letsencrypt
+      - "traefik.http.routers.fed-sim-html.priority=200"
+      - traefik.http.routers.fed-sim-html.service=fed-sim-html-svc
+      - traefik.http.services.fed-sim-html-svc.loadbalancer.server.port=80
+      - "traefik.http.routers.fed-sim-html-http.rule=Host(`federation-game.deliberatefederation.cloud`) && (Path(`/simulation.html`) || Path(`/bridge.html`) || Path(`/starmap.html`) || Path(`/earth.html`))"
+      - traefik.http.routers.fed-sim-html-http.entrypoints=web
+      - "traefik.http.routers.fed-sim-html-http.priority=200"
+      - traefik.http.routers.fed-sim-html-http.service=fed-sim-html-http-svc
+      - traefik.http.services.fed-sim-html-http-svc.loadbalancer.server.port=80
     depends_on:
       - backend
     networks:
@@ -83,11 +108,11 @@ services:
     env_file:
       - .env
     environment:
-      - "NOTIFICATION_URLS=tgram://8908125951:AAEME7W8jlkh99AYIxM8IoIw_MlDznhajis/7312791490/,mailtos://seandavidramsingh:wotgjvdunpobkcqy@smtp.gmail.com/seandavidramsingh@gmail.com?mode=starttls"
+      - "NOTIFICATION_URLS=tgram://8908125951:AAEME7W8jlkh99AYIxM8IoIw_MlDznhajis/7312791490/"
     healthcheck:
       test:
         - CMD
-        - python
+        - python3
         - -c
         - "import os; open('/proc/1/cmdline').read()"
       interval: 30s
@@ -98,6 +123,10 @@ services:
       - redis
     networks:
       - fed-net
+    deploy:
+      resources:
+        limits:
+          cpus: "0.50"
 
   postgres:
     image: postgres:15-alpine
@@ -163,6 +192,7 @@ services:
     deploy:
       resources:
         limits:
+          cpus: "0.50"
           memory: 128M
 
   grafana:
@@ -192,17 +222,18 @@ services:
       - "traefik.http.routers.grafana.rule=Host(`federation-game.deliberatefederation.cloud`) && PathPrefix(`/grafana`)"
       - traefik.http.routers.grafana.entrypoints=websecure
       - traefik.http.routers.grafana.tls.certresolver=letsencrypt
-      - traefik.http.routers.grafana.priority=100
+      - "traefik.http.routers.grafana.priority=100"
       - traefik.http.routers.grafana.service=grafana-svc
       - traefik.http.services.grafana-svc.loadbalancer.server.port=3000
       - "traefik.http.routers.grafana-http.rule=Host(`federation-game.deliberatefederation.cloud`) && PathPrefix(`/grafana`)"
       - traefik.http.routers.grafana-http.entrypoints=web
-      - traefik.http.routers.grafana-http.priority=100
+      - "traefik.http.routers.grafana-http.priority=100"
       - traefik.http.routers.grafana-http.service=grafana-http-svc
       - traefik.http.services.grafana-http-svc.loadbalancer.server.port=3000
     deploy:
       resources:
         limits:
+          cpus: "0.50"
           memory: 256M
 
   node-exporter:
@@ -262,7 +293,7 @@ services:
       - /:/rootfs:ro
       - /var/run:/var/run:ro
       - /sys:/sys:ro
-      - /var/lib/docker/:/var/lib/docker:ro
+      - /var/lib/docker/:/var/lib/docker/ro
       - /dev/disk/:/dev/disk:ro
     networks:
       - fed-net
