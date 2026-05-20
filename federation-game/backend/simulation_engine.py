@@ -22,8 +22,50 @@ import redis
 
 from faction_dynamics import get_faction_context_for_npc
 from npc_autonomy import _get_redis as _get_npc_redis
+from npc_quest_engine import NPCQuestEngine
+from faction_tech_research import FactionTechBridge
+from faction_ai import FACTION_IDEOLOGY
+from quests import (
+    create_quest_library as _create_quest_library,
+)
+from technology import (
+    TechTree as _TechTree,
+    create_technology_tree as _create_technology_tree,
+)
 
 logger = logging.getLogger(__name__)
+
+_quest_system_singleton = None
+_quest_engine_singleton = None
+_tech_tree_singleton = None
+_tech_bridge_singleton = None
+
+
+def _get_quest_engine(redis_client):
+    global _quest_system_singleton, _quest_engine_singleton
+    if _quest_system_singleton is None:
+        _quest_system_singleton = _create_quest_library()
+    if (
+        _quest_engine_singleton is None
+        or _quest_engine_singleton.quest_system is not _quest_system_singleton
+    ):
+        _quest_engine_singleton = NPCQuestEngine(
+            quest_system=_quest_system_singleton, redis_client=redis_client
+        )
+    return _quest_engine_singleton
+
+
+def _get_tech_bridge(redis_client):
+    """Lazy singleton for FactionTechBridge with its own TechTree."""
+    global _tech_tree_singleton, _tech_bridge_singleton
+    if _tech_tree_singleton is None:
+        _tech_tree_singleton = _create_technology_tree()
+    if _tech_bridge_singleton is None:
+        _tech_bridge_singleton = FactionTechBridge(
+            tech_tree=_tech_tree_singleton, redis_client=redis_client
+        )
+    return _tech_bridge_singleton
+
 
 REDIS_URL = os.environ.get("REDIS_URL", "redis://redis:6379/0")
 
@@ -585,6 +627,266 @@ def bridge_world_state_to_game_state() -> Dict:
     return result
 
 
+def generate_and_apply_events(max_events: int = 3) -> Dict:
+    """Generate random game events and apply their effects to world_state + game_state.
+
+    This bridges the EventSystem with the simulation engine by:
+    1. Generating 1-3 random events per tick
+    2. For events with choices: resolve via faction ideology voting (AutonomousChoiceResolver)
+    3. For events without choices: apply base effects directly
+    4. Storing applied effects in Redis for audit trail
+    5. Writing event summaries to npc_world_events for cascade processing
+
+    Returns:
+    Dict with keys: events_generated, effects_applied, choice_resolutions, errors
+    """
+    r = _get_redis()
+    ts = time.time()
+    results = {
+        "events_generated": [],
+        "effects_applied": [],
+        "choice_resolutions": [],
+        "errors": [],
+    }
+
+    try:
+        from federation_game_events import EventSystem, EventGenerator, EffectType
+    except ImportError:
+        results["errors"].append("federation_game_events not importable")
+        return results
+
+    choice_resolver = None
+    try:
+        from autonomous_choice_resolver import AutonomousChoiceResolver
+        from faction_ai import FACTION_IDEOLOGY
+
+        choice_resolver = AutonomousChoiceResolver(redis_client=r)
+    except ImportError:
+        logger.info("autonomous_choice_resolver not available, using base effects only")
+
+    try:
+        generator = EventGenerator()
+        event_system = EventSystem(generator)
+
+        num_events = random.randint(1, max_events)
+
+        for _ in range(num_events):
+            try:
+                event = generator.generate_random_event()
+                has_choices = bool(
+                    getattr(event, "choices", None) and len(event.choices) > 0
+                )
+
+                if has_choices and choice_resolver is not None:
+                    resolution = choice_resolver.resolve_and_apply(
+                        event, FACTION_IDEOLOGY, redis_client=r
+                    )
+                    results["choice_resolutions"].append(
+                        {
+                            "event_name": event.name,
+                            "event_id": event.id,
+                            "chosen_choice_id": resolution.get("chosen_choice_id"),
+                            "vote_count": len(resolution.get("faction_votes", {})),
+                            "consequences_applied": len(
+                                resolution.get("consequences_applied", [])
+                            ),
+                        }
+                    )
+                    for ce in resolution.get("consequences_applied", []):
+                        results["effects_applied"].append(ce)
+                else:
+                    for effect in event.effects:
+                        applied = _apply_event_effect_to_world(r, effect, ts)
+                        results["effects_applied"].append(applied)
+
+                event_summary = {
+                    "event_type": "game_event",
+                    "game_event_type": event.event_type.value,
+                    "name": event.name,
+                    "severity": event.severity.name,
+                    "description": event.description,
+                    "source": "event_system",
+                    "visibility": "public",
+                    "significance": min(1.0, event.severity.value * 0.3),
+                    "ts": int(ts),
+                    "resolved_via": "faction_vote"
+                    if (has_choices and choice_resolver)
+                    else "base_effects",
+                }
+                r.zadd("npc_world_events", {json.dumps(event_summary): ts})
+
+                r.zadd("game_events_log", {json.dumps(event.to_dict()): ts})
+                r.zremrangebyrank("game_events_log", 0, -(101))
+
+                results["events_generated"].append(
+                    {
+                        "name": event.name,
+                        "type": event.event_type.value,
+                        "severity": event.severity.name,
+                        "effects_count": len(event.effects),
+                        "choices_count": len(event.choices) if has_choices else 0,
+                        "resolution": "faction_vote"
+                        if (has_choices and choice_resolver)
+                        else "base_only",
+                    }
+                )
+
+            except Exception as exc:
+                logger.error("Error generating/applying event: %s", exc)
+                results["errors"].append(str(exc))
+
+        r.zremrangebyrank("npc_world_events", 0, -(51))
+
+    except Exception as exc:
+        logger.error("Event system error: %s", exc)
+        results["errors"].append(str(exc))
+
+    return results
+
+    try:
+        generator = EventGenerator()
+        event_system = EventSystem(generator)
+
+        num_events = random.randint(1, max_events)
+
+        for _ in range(num_events):
+            try:
+                event = generator.generate_random_event()
+
+                # Apply base effects autonomously (no player choice in autonomous mode)
+                for effect in event.effects:
+                    applied = _apply_event_effect_to_world(r, effect, ts)
+                    results["effects_applied"].append(applied)
+
+                # Store event in npc_world_events for cascade processing
+                event_summary = {
+                    "event_type": "game_event",
+                    "game_event_type": event.event_type.value,
+                    "name": event.name,
+                    "severity": event.severity.name,
+                    "description": event.description,
+                    "source": "event_system",
+                    "visibility": "public",
+                    "significance": min(1.0, event.severity.value * 0.3),
+                    "ts": int(ts),
+                }
+                r.zadd("npc_world_events", {json.dumps(event_summary): ts})
+
+                # Store in event-specific Redis key for observer dashboard
+                r.zadd("game_events_log", {json.dumps(event.to_dict()): ts})
+                r.zremrangebyrank("game_events_log", 0, -(101))  # Keep last 100
+
+                results["events_generated"].append(
+                    {
+                        "name": event.name,
+                        "type": event.event_type.value,
+                        "severity": event.severity.name,
+                        "effects_count": len(event.effects),
+                    }
+                )
+
+            except Exception as exc:
+                logger.error("Error generating/applying event: %s", exc)
+                results["errors"].append(str(exc))
+
+        # Clean up npc_world_events to keep last 50
+        r.zremrangebyrank("npc_world_events", 0, -(51))
+
+    except Exception as exc:
+        logger.error("Event system error: %s", exc)
+        results["errors"].append(str(exc))
+
+    return results
+
+
+def _apply_event_effect_to_world(r, effect, ts: float) -> Dict:
+    """Apply a GameEffect directly to Redis world_state.
+
+    This is the autonomous-mode equivalent of EventSystem._apply_effect().
+    It doesn't need a FederationGameState instance — it modifies Redis directly,
+    which the bridge_world_state_to_game_state() function will pick up.
+    """
+    result = {
+        "effect_type": effect.effect_type.value,
+        "target": effect.target,
+        "magnitude": effect.magnitude,
+        "applied": False,
+        "timestamp": ts,
+    }
+
+    try:
+        mag = effect.magnitude
+
+        # Map effect types to world_state keys
+        world_key_map = {
+            "diplomacy_impact": "tension_level",
+            "consciousness_impact": "anomaly_activity",
+            "rival_impact": "threat_level",
+            "resource_impact": "resource_abundance",
+            "stability_impact": "stability",
+            "tech_impact": "anomaly_activity",
+            "culture_impact": "morale",
+            "paradox_impact": "stability",
+        }
+
+        effect_key = (
+            effect.effect_type.value
+            if hasattr(effect.effect_type, "value")
+            else str(effect.effect_type)
+        )
+        world_key = world_key_map.get(effect_key)
+
+        if world_key:
+            # Direction mapping:
+            # diplomacy_impact positive = less tension (invert)
+            # resource_impact positive = more abundance (same)
+            # stability_impact positive = more stability (same)
+            # culture_impact positive = more morale (same)
+            # rival_impact positive = more threat (same)
+            # paradox_impact negative = less stability (same direction, negative magnitude = less stability)
+            # tech_impact positive = more anomaly/research activity (same)
+            # consciousness_impact positive = more anomaly (same)
+            if effect_key == "diplomacy_impact":
+                delta = -mag * 5.0  # Good diplomacy reduces tension
+            elif effect_key == "rival_impact":
+                delta = mag * 3.0  # Rival gaining power increases threat
+            else:
+                delta = mag * 5.0  # Direct mapping
+
+            current = 50.0
+            try:
+                raw = r.hget("world_state", world_key)
+                if raw is not None:
+                    current = float(raw)
+            except (ValueError, TypeError):
+                pass
+
+            new_val = max(0.0, min(100.0, current + delta))
+            r.hset("world_state", world_key, str(round(new_val, 2)))
+
+            result["applied"] = True
+            result["world_key"] = world_key
+            result["delta"] = round(delta, 4)
+            result["new_value"] = round(new_val, 2)
+
+            # Store effect for audit
+            effect_record = {
+                "type": "event_effect",
+                "effect_type": effect_key,
+                "target": effect.target,
+                "magnitude": mag,
+                "world_key": world_key,
+                "delta": round(delta, 4),
+                "ts": int(ts),
+            }
+            r.zadd(f"sim_effects:{int(ts)}", {json.dumps(effect_record): ts})
+
+    except Exception as exc:
+        result["error"] = str(exc)
+
+    return result
+
+
 def get_faction_decision_modifier(faction_context: Optional[Dict]) -> Dict[str, float]:
     """
     Return score multipliers for each decision category based on faction context.
@@ -976,6 +1278,8 @@ def autonomous_tick(npc_list: List[Dict], tick_decisions: List[Dict]) -> Dict:
     3. Bridge world state to game state
     4. Bridge NPC events to political engine
     5. Check era advancement
+    6. Generate and apply game events
+    7. NPC autonomous quest progression
 
     Each sub-step is wrapped in try/except so failures are logged
     but don't stop the tick.
@@ -1070,6 +1374,57 @@ def autonomous_tick(npc_list: List[Dict], tick_decisions: List[Dict]) -> Dict:
         result["step5_era_check"] = {"errors": [str(exc)]}
         result["errors"].append(f"step5: {exc}")
 
+    # Step 6: Generate and apply game events
+    try:
+        result["step6_game_events"] = generate_and_apply_events(max_events=3)
+    except Exception as exc:
+        logger.error("Game events step failed: %s", exc)
+        result["step6_game_events"] = {"error": str(exc)}
+        result["errors"].append(f"game_events: {exc}")
+
+    # Step 7: NPC autonomous quest progression
+    try:
+        step_start = time.time()
+        quest_engine = _get_quest_engine(r)
+        result["step7_npc_quests"] = quest_engine.tick_npc_quests(npc_list)
+        result["step7_npc_quests"]["duration_ms"] = round(
+            (time.time() - step_start) * 1000, 1
+        )
+    except Exception as exc:
+        logger.error("Step 7 (NPC quest tick) failed: %s", exc)
+        result["step7_npc_quests"] = {"errors": [str(exc)]}
+        result["errors"].append(f"step7: {exc}")
+
+    # Step 8: Faction autonomous tech research
+    try:
+        step_start = time.time()
+        tech_bridge = _get_tech_bridge(r)
+        faction_data = {}
+        for fid, ideology in FACTION_IDEOLOGY.items():
+            power_raw = r.get(f"faction_power:{fid}")
+            power = float(power_raw) if power_raw else 50.0
+            fd_raw = r.hgetall(f"faction_dynamics")
+            influence = 0.5
+            try:
+                fd_key = f"{fid}_influence"
+                if fd_key in (fd_raw or {}):
+                    influence = float(fd_raw[fd_key])
+            except (ValueError, TypeError):
+                pass
+            faction_data[fid] = {
+                "ideology": ideology,
+                "power": power,
+                "influence": influence,
+            }
+        result["step8_faction_tech"] = tech_bridge.tick_faction_research(faction_data)
+        result["step8_faction_tech"]["duration_ms"] = round(
+            (time.time() - step_start) * 1000, 1
+        )
+    except Exception as exc:
+        logger.error("Step 8 (faction tech research) failed: %s", exc)
+        result["step8_faction_tech"] = {"errors": [str(exc)]}
+        result["errors"].append(f"step8: {exc}")
+
     result["duration_ms"] = round((time.time() - tick_start) * 1000, 1)
 
     try:
@@ -1088,6 +1443,21 @@ def autonomous_tick(npc_list: List[Dict], tick_decisions: List[Dict]) -> Dict:
                 "research_initiated", 0
             ),
             "era_recommendation": result["step5_era_check"].get("recommended_era", ""),
+            "quests_completed": result.get("step7_npc_quests", {}).get(
+                "quests_completed", 0
+            ),
+            "quests_accepted": result.get("step7_npc_quests", {}).get(
+                "quests_accepted", 0
+            ),
+            "quests_abandoned": result.get("step7_npc_quests", {}).get(
+                "quests_abandoned", 0
+            ),
+            "techs_completed": result.get("step8_faction_tech", {}).get(
+                "techs_completed", 0
+            ),
+            "techs_researching": result.get("step8_faction_tech", {}).get(
+                "research_advanced", 0
+            ),
             "duration_ms": result["duration_ms"],
             "errors": len(result["errors"]),
         }

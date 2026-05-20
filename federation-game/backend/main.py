@@ -127,6 +127,20 @@ try:
 except ImportError:
     EVENT_CASCADE_AVAILABLE = False
 
+try:
+    from npc_cognition import run_cognition, get_cognition_stats
+
+    COGNITION_AVAILABLE = True
+except ImportError:
+    COGNITION_AVAILABLE = False
+
+try:
+    from narrator import generate_narration, get_narration_history
+
+    NARRATOR_AVAILABLE = True
+except ImportError:
+    NARRATOR_AVAILABLE = False
+
 
 logger = logging.getLogger(__name__)
 app = FastAPI(title="Federation Game API", version="1.0.0")
@@ -3978,7 +3992,10 @@ async def autonomous_simulation_tick():
                 "char_id": char_id,
                 "name": character.name,
                 "archetype": character.personality_type.value,
+                "personality_type": character.personality_type.value,
                 "affiliation": character.affiliation,
+                "ambition": getattr(character, "ambition", 0.5),
+                "skills": getattr(character, "skills", []),
                 "title": character.title,
                 "description": getattr(character, "description", ""),
             }
@@ -4072,6 +4089,17 @@ async def autonomous_simulation_tick():
             logger.error("Cascade summary failed: %s", e)
             result["cascade_summary"] = {"error": str(e)}
             result["errors"].append(f"cascade_summary: {e}")
+
+    # Step 4.5: Generate and apply game events
+    if SIMULATION_ENGINE_AVAILABLE:
+        try:
+            from simulation_engine import generate_and_apply_events
+
+            result["game_events"] = generate_and_apply_events(max_events=3)
+        except Exception as e:
+            logger.error("Game events generation failed: %s", e)
+            result["game_events"] = {"error": str(e)}
+            result["errors"].append(f"game_events: {e}")
 
     # Step 4: Apply game state deltas from simulation engine
     if SIMULATION_ENGINE_AVAILABLE and game_state.game_state_v2:
@@ -4453,6 +4481,137 @@ async def simulation_events(limit: int = 50):
 
 
 # ============================================================================
+# NPC QUEST ENGINE ENDPOINTS (Phase 6 — Autonomous Quests)
+# ============================================================================
+
+
+@app.get("/simulation/npc-quests")
+async def simulation_npc_quests(limit: int = 20):
+    """NPC quest log and global stats for the simulation observer."""
+    try:
+        from npc_quest_engine import NPCQuestEngine
+        from quests import create_quest_library
+
+        _r = _get_observer_redis()
+        qs = create_quest_library()
+        engine = NPCQuestEngine(quest_system=qs, redis_client=_r)
+        return {
+            "quest_log": engine.get_quest_log(limit=limit),
+            "stats": "see per-npc endpoints",
+        }
+    except Exception as e:
+        return {"quest_log": [], "error": str(e)}
+
+
+@app.get("/simulation/npc-quests/{char_id}")
+async def simulation_npc_quest_detail(char_id: str):
+    """Per-NPC quest summary: active, completed, failed, stats."""
+    try:
+        from npc_quest_engine import NPCQuestEngine
+        from quests import create_quest_library
+
+        _r = _get_observer_redis()
+        qs = create_quest_library()
+        engine = NPCQuestEngine(quest_system=qs, redis_client=_r)
+        return engine.get_npc_quest_summary(char_id)
+    except Exception as e:
+        return {"char_id": char_id, "error": str(e)}
+
+
+# ============================================================================
+# FACTION TECH RESEARCH ENDPOINTS (Phase 6 — Autonomous Tech)
+# ============================================================================
+
+
+@app.get("/simulation/faction-tech")
+async def simulation_faction_tech():
+    """Faction tech research summary for all 8 factions."""
+    try:
+        from faction_tech_research import FactionTechBridge
+        from technology import create_technology_tree
+        from faction_ai import FACTION_IDEOLOGY
+
+        _r = _get_observer_redis()
+        tree = create_technology_tree()
+        bridge = FactionTechBridge(tech_tree=tree, redis_client=_r)
+        summaries = {}
+        for fid in FACTION_IDEOLOGY:
+            summaries[fid] = bridge.get_faction_tech_summary(fid)
+        return {"factions": summaries}
+    except Exception as e:
+        return {"factions": {}, "error": str(e)}
+
+
+@app.get("/simulation/faction-tech/{faction_id}")
+async def simulation_faction_tech_detail(faction_id: str):
+    """Per-faction tech research detail: active, completed, unlocks."""
+    try:
+        from faction_tech_research import FactionTechBridge
+        from technology import create_technology_tree
+
+        _r = _get_observer_redis()
+        tree = create_technology_tree()
+        bridge = FactionTechBridge(tech_tree=tree, redis_client=_r)
+        return bridge.get_faction_tech_summary(faction_id)
+    except Exception as e:
+        return {"faction_id": faction_id, "error": str(e)}
+
+
+@app.get("/simulation/faction-tech-log")
+async def simulation_faction_tech_log(limit: int = 20):
+    """Recent faction tech research events."""
+    try:
+        from faction_tech_research import FactionTechBridge
+        from technology import create_technology_tree
+
+        _r = _get_observer_redis()
+        tree = create_technology_tree()
+        bridge = FactionTechBridge(tech_tree=tree, redis_client=_r)
+        return {"log": bridge.get_research_log(limit=limit)}
+    except Exception as e:
+        return {"log": [], "error": str(e)}
+
+
+# ============================================================================
+# CHOICE RESOLUTION ENDPOINTS (Phase 6 — Ideology Voting)
+# ============================================================================
+
+
+@app.get("/simulation/choice-resolutions")
+async def simulation_choice_resolutions(limit: int = 20):
+    """Recent faction choice resolution history."""
+    try:
+        from autonomous_choice_resolver import AutonomousChoiceResolver
+
+        _r = _get_observer_redis()
+        resolver = AutonomousChoiceResolver(redis_client=_r)
+        return {
+            "stats": resolver.get_resolution_stats(),
+            "history": "see Redis choice_resolutions ZSET",
+        }
+    except Exception as e:
+        return {"stats": {}, "error": str(e)}
+
+
+@app.get("/simulation/choice-resolutions/{faction_id}")
+async def simulation_choice_resolution_faction(faction_id: str, limit: int = 20):
+    """Per-faction choice voting history."""
+    try:
+        from autonomous_choice_resolver import AutonomousChoiceResolver
+
+        _r = _get_observer_redis()
+        resolver = AutonomousChoiceResolver(redis_client=_r)
+        return {
+            "faction_id": faction_id,
+            "choice_history": resolver.get_faction_choice_history(
+                faction_id, limit=limit
+            ),
+        }
+    except Exception as e:
+        return {"faction_id": faction_id, "choice_history": [], "error": str(e)}
+
+
+# ============================================================================
 # NPC GOAL ENDPOINTS (Phase 5)
 # ============================================================================
 
@@ -4611,14 +4770,14 @@ async def abandon_quest(quest_id: str, req: QuestAbandonRequest):
 
 
 @app.get("/technology")
-async def get_technology(philsophy: Optional[str] = None):
+async def get_technology(philosophy: Optional[str] = None):
     tt = game_state.tech_tree
     available = tt.get_available_techs()
-    if philsophy:
+    if philosophy:
         try:
             from technology import ResearchPhilosophy
 
-            phil = ResearchPhilosophy(philsophy)
+            phil = ResearchPhilosophy(philosophy)
             available = [t for t in available if t.philosophy == phil]
         except ValueError:
             logger.info(
@@ -5132,3 +5291,133 @@ async def all_broadcast_events(limit: int = 20):
 
     events = get_broadcast_events(limit=limit)
     return {"events": events, "count": len(events)}
+
+
+# ============================================================================
+# LLM COGNITION & NARRATOR ENDPOINTS
+# ============================================================================
+
+
+@app.post("/cognition/tick")
+async def cognition_tick():
+    """Manually trigger LLM cognition for eligible NPCs.
+
+    This is a standalone endpoint for testing/observation.
+    Normally, cognition runs inside autonomous_tick() Step 1.5.
+    """
+    if not COGNITION_AVAILABLE:
+        return {"status": "unavailable", "error": "npc_cognition module not imported"}
+
+    _r = _get_observer_redis()
+
+    # Build NPC list
+    npc_list = []
+    for char_id, character in game_state.npc_system.characters.items():
+        npc_list.append(
+            {
+                "id": char_id,
+                "char_id": char_id,
+                "name": character.name,
+                "archetype": character.personality_type.value,
+                "affiliation": character.affiliation,
+                "title": character.title,
+            }
+        )
+
+    # Get world state
+    world_state = {}
+    try:
+        world_state = get_world_state()
+    except Exception:
+        pass
+
+    try:
+        result = run_cognition(npc_list, world_state)
+        return {"status": "completed", **result}
+    except Exception as e:
+        logger.error("Cognition tick failed: %s", e)
+        return {"status": "error", "error": str(e)}
+
+
+@app.get("/cognition/stats")
+async def cognition_stats():
+    """Get cognition layer statistics for the observer dashboard."""
+    if not COGNITION_AVAILABLE:
+        return {"status": "unavailable", "error": "npc_cognition module not imported"}
+
+    try:
+        stats = get_cognition_stats()
+        return {"status": "ok", **stats}
+    except Exception as e:
+        logger.error("Cognition stats failed: %s", e)
+        return {"status": "error", "error": str(e)}
+
+
+@app.post("/narrator/generate")
+async def narrator_generate():
+    """Manually trigger narration generation.
+
+    This is a standalone endpoint for testing/observation.
+    Normally, narration runs inside autonomous_tick() Step 6.
+    """
+    if not NARRATOR_AVAILABLE:
+        return {"status": "unavailable", "error": "narrator module not imported"}
+
+    _r = _get_observer_redis()
+
+    # Collect tick decisions for context
+    npc_list = []
+    for char_id, character in game_state.npc_system.characters.items():
+        npc_list.append(
+            {
+                "id": char_id,
+                "char_id": char_id,
+                "name": character.name,
+                "affiliation": character.affiliation,
+            }
+        )
+
+    tick_decisions = []
+    for npc in npc_list:
+        cid = npc["char_id"]
+        try:
+            raw = _r.zrange(f"npc_decisions:{cid}", 0, -1)
+            for item in raw:
+                try:
+                    tick_decisions.append(json.loads(item))
+                except (json.JSONDecodeError, TypeError):
+                    pass
+        except Exception:
+            pass
+
+    # Get world state
+    world_state = {}
+    try:
+        world_state = get_world_state()
+    except Exception:
+        pass
+
+    try:
+        result = generate_narration(
+            world_state=world_state,
+            tick_decisions=tick_decisions,
+        )
+        return {"status": "completed", **result}
+    except Exception as e:
+        logger.error("Narrator generate failed: %s", e)
+        return {"status": "error", "error": str(e)}
+
+
+@app.get("/narrator/history")
+async def narrator_history(limit: int = 10):
+    """Get recent narrations for the observer dashboard."""
+    if not NARRATOR_AVAILABLE:
+        return {"status": "unavailable", "error": "narrator module not imported"}
+
+    limit = min(max(limit, 1), 50)
+    try:
+        narrations = get_narration_history(limit=limit)
+        return {"status": "ok", "narrations": narrations, "count": len(narrations)}
+    except Exception as e:
+        logger.error("Narrator history failed: %s", e)
+        return {"status": "error", "error": str(e)}

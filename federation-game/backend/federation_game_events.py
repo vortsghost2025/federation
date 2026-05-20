@@ -190,8 +190,16 @@ class EventGenerator:
             return self.generate_paradox_manifestation()
         elif event_type == EventType.FIRST_CONTACT:
             return self.generate_first_contact()
+        elif event_type == EventType.NATURAL_DISASTER:
+            return self.generate_natural_disaster()
+        elif event_type == EventType.TECHNOLOGICAL_BREAKTHROUGH:
+            return self.generate_technological_breakthrough()
+        elif event_type == EventType.ALLIANCE_FORMATION:
+            return self.generate_alliance_formation()
+        elif event_type == EventType.ESPIONAGE_UNCOVERED:
+            return self.generate_espionage_uncovered()
         else:
-            return self.generate_random_event()
+            return self.generate_diplomatic_crisis()
 
     def generate_diplomatic_crisis(self) -> GameEvent:
         """Generate a diplomatic crisis event"""
@@ -807,6 +815,348 @@ class EventGenerator:
 
         return event
 
+    def generate_natural_disaster(self) -> GameEvent:
+        disaster_types = [
+            ("stellar_flare", "A massive stellar flare threatens nearby systems"),
+            ("quantum_storm", "A quantum storm disrupts subspace corridors"),
+            (
+                "dark_matter_surge",
+                "A dark matter surge destabilizes local gravity wells",
+            ),
+            ("nebula_collapse", "A nebula collapse sends shockwaves across the sector"),
+            (
+                "cosmic_rail_breach",
+                "A cosmic rail breach floods the region with radiation",
+            ),
+        ]
+        disaster_name, desc = random.choice(disaster_types)
+        affected_system = random.choice(
+            [
+                "Sol Prime",
+                "Alpha Centauri",
+                "Sirius Station",
+                "Vega Outpost",
+                "Arcturus Hub",
+            ]
+        )
+        severity = random.choice(list(EventSeverity))
+        event = GameEvent(
+            name="Natural Disaster: {}".format(disaster_name.replace("_", " ").title()),
+            event_type=EventType.NATURAL_DISASTER,
+            severity=severity,
+            description="{} near {}.".format(desc, affected_system),
+            long_description="A catastrophic {} has struck the {} system. "
+            "Immediate response is required to prevent further loss.".format(
+                disaster_name.replace("_", " "), affected_system
+            ),
+            required_subsystems=["diplomacy", "economy"],
+            metadata={
+                "disaster_type": disaster_name,
+                "affected_system": affected_system,
+            },
+        )
+        event.effects.append(
+            GameEffect(
+                effect_type=EffectType.STABILITY_IMPACT,
+                target=affected_system,
+                magnitude=-random.uniform(0.1, 0.3) * severity.value,
+                duration=300,
+                description="Stability undermined by {}".format(
+                    disaster_name.replace("_", " ")
+                ),
+            )
+        )
+        event.effects.append(
+            GameEffect(
+                effect_type=EffectType.RESOURCE_IMPACT,
+                target=affected_system,
+                magnitude=-random.uniform(0.05, 0.2) * severity.value,
+                duration=200,
+                description="Resources damaged by {}".format(
+                    disaster_name.replace("_", " ")
+                ),
+            )
+        )
+        event.choices.append(
+            GameChoice(
+                id="send_aid",
+                text="Dispatch emergency relief fleets",
+                consequences=[
+                    GameEffect(
+                        EffectType.STABILITY_IMPACT,
+                        affected_system,
+                        0.15,
+                        200,
+                        "Relief efforts stabilize the region",
+                    ),
+                    GameEffect(
+                        EffectType.RESOURCE_IMPACT,
+                        "federation",
+                        -0.1,
+                        100,
+                        "Relief drains Federation resources",
+                    ),
+                ],
+                risk_level=0.3,
+                reward_level=0.5,
+            )
+        )
+        event.choices.append(
+            GameChoice(
+                id="evacuate",
+                text="Evacuate {} and redirect resources".format(affected_system),
+                consequences=[
+                    GameEffect(
+                        EffectType.RESOURCE_IMPACT,
+                        "federation",
+                        0.1,
+                        200,
+                        "Evacuation redirects assets elsewhere",
+                    ),
+                    GameEffect(
+                        EffectType.STABILITY_IMPACT,
+                        affected_system,
+                        -0.2,
+                        300,
+                        "Abandoned system loses all stability",
+                    ),
+                ],
+                risk_level=0.6,
+                reward_level=0.2,
+            )
+        )
+        return event
+
+    def generate_technological_breakthrough(self) -> GameEvent:
+        tech_fields = [
+            (
+                "consciousness_engineering",
+                "Consciousness Engineering",
+                "A breakthrough in consciousness field manipulation",
+            ),
+            (
+                "ftl_communication",
+                "FTL Communication",
+                "Instantaneous faster-than-light communication achieved",
+            ),
+            (
+                "quantum_computing",
+                "Quantum Computing",
+                "Quantum computing reaches practical scale",
+            ),
+            (
+                "biological_integration",
+                "Biological Integration",
+                "New fusion of organic and synthetic systems",
+            ),
+            (
+                "temporal_mechanics",
+                "Temporal Mechanics",
+                "Partial understanding of temporal flow dynamics",
+            ),
+        ]
+        tech_key, tech_name, desc = random.choice(tech_fields)
+        severity = random.choice(list(EventSeverity))
+        event = GameEvent(
+            name="Technological Breakthrough: {}".format(tech_name),
+            event_type=EventType.TECHNOLOGICAL_BREAKTHROUGH,
+            severity=severity,
+            description="{}. The implications could reshape the Federation.".format(
+                desc
+            ),
+            long_description="Researchers have achieved a major breakthrough in {}. "
+            "The decision on how to handle this discovery will shape the Federation's future.".format(
+                tech_name
+            ),
+            required_subsystems=["consciousness", "economy"],
+            metadata={"tech_field": tech_key, "tech_name": tech_name},
+        )
+        event.effects.append(
+            GameEffect(
+                effect_type=EffectType.TECH_IMPACT,
+                target=tech_key,
+                magnitude=random.uniform(0.2, 0.5) * severity.value,
+                duration=600,
+                description="Major advancement in {}".format(tech_name),
+            )
+        )
+        event.choices.append(
+            GameChoice(
+                id="open_science",
+                text="Share the breakthrough across all Federation members",
+                consequences=[
+                    GameEffect(
+                        EffectType.DIPLOMACY_IMPACT,
+                        "federation",
+                        0.1,
+                        400,
+                        "Open science fosters unity",
+                    ),
+                ],
+                risk_level=0.2,
+                reward_level=0.7,
+            )
+        )
+        event.choices.append(
+            GameChoice(
+                id="classify",
+                text="Classify the technology for strategic advantage",
+                consequences=[
+                    GameEffect(
+                        EffectType.RIVAL_IMPACT,
+                        "federation",
+                        0.15,
+                        400,
+                        "Secrecy gives strategic edge over rivals",
+                    ),
+                ],
+                risk_level=0.5,
+                reward_level=0.4,
+            )
+        )
+        return event
+
+    def generate_alliance_formation(self) -> GameEvent:
+        faction1 = random.choice(self.faction_names)
+        faction2 = random.choice([f for f in self.faction_names if f != faction1])
+        severity = random.choice(list(EventSeverity))
+        event = GameEvent(
+            name="Alliance Formation: {} & {}".format(faction1, faction2),
+            event_type=EventType.ALLIANCE_FORMATION,
+            severity=severity,
+            description="{} and {} seek to formalize an alliance within the Federation.".format(
+                faction1, faction2
+            ),
+            long_description="Two major factions have expressed mutual interest in a formal pact. "
+            "The Federation's stance could tip the balance of power.",
+            required_subsystems=["diplomacy"],
+            metadata={"faction1": faction1, "faction2": faction2},
+        )
+        event.effects.append(
+            GameEffect(
+                effect_type=EffectType.DIPLOMACY_IMPACT,
+                target=faction1,
+                magnitude=0.2,
+                duration=400,
+                description="{} gains diplomatic standing".format(faction1),
+            )
+        )
+        event.effects.append(
+            GameEffect(
+                effect_type=EffectType.DIPLOMACY_IMPACT,
+                target=faction2,
+                magnitude=0.2,
+                duration=400,
+                description="{} gains diplomatic standing".format(faction2),
+            )
+        )
+        event.choices.append(
+            GameChoice(
+                id="endorse",
+                text="Endorse and facilitate the alliance",
+                consequences=[
+                    GameEffect(
+                        EffectType.DIPLOMACY_IMPACT,
+                        "federation",
+                        0.15,
+                        300,
+                        "The alliance strengthens Federation unity",
+                    ),
+                ],
+                risk_level=0.2,
+                reward_level=0.6,
+            )
+        )
+        event.choices.append(
+            GameChoice(
+                id="mediate",
+                text="Mediate to ensure balanced terms",
+                consequences=[
+                    GameEffect(
+                        EffectType.STABILITY_IMPACT,
+                        "federation",
+                        0.1,
+                        200,
+                        "Mediation ensures fairness but delays the pact",
+                    ),
+                ],
+                risk_level=0.3,
+                reward_level=0.5,
+            )
+        )
+        return event
+
+    def generate_espionage_uncovered(self) -> GameEvent:
+        spy_faction = random.choice(self.faction_names)
+        target_system = random.choice(
+            [
+                "Sol Prime",
+                "Alpha Centauri",
+                "Sirius Station",
+                "Vega Outpost",
+                "Arcturus Hub",
+            ]
+        )
+        severity = random.choice(list(EventSeverity))
+        event = GameEvent(
+            name="Espionage Uncovered: {}".format(spy_faction),
+            event_type=EventType.ESPIONAGE_UNCOVERED,
+            severity=severity,
+            description="An {} spy network has been uncovered operating in {}.".format(
+                spy_faction, target_system
+            ),
+            long_description="Intelligence operatives from {} have been apprehended in {}. "
+            "The Federation must decide how to respond to this violation of trust.".format(
+                spy_faction, target_system
+            ),
+            required_subsystems=["diplomacy", "intelligence"],
+            metadata={"spy_faction": spy_faction, "target_system": target_system},
+        )
+        event.effects.append(
+            GameEffect(
+                effect_type=EffectType.DIPLOMACY_IMPACT,
+                target=spy_faction,
+                magnitude=-0.25 * severity.value,
+                duration=300,
+                description="Trust eroded due to {} espionage".format(spy_faction),
+            )
+        )
+        event.choices.append(
+            GameChoice(
+                id="expose",
+                text="Publicly expose the espionage and demand accountability",
+                consequences=[
+                    GameEffect(
+                        EffectType.DIPLOMACY_IMPACT,
+                        spy_faction,
+                        -0.15,
+                        300,
+                        "Public exposure damages relations but deters future espionage",
+                    ),
+                ],
+                risk_level=0.5,
+                reward_level=0.4,
+            )
+        )
+        event.choices.append(
+            GameChoice(
+                id="covert_response",
+                text="Respond covertly with counter-intelligence",
+                consequences=[
+                    GameEffect(
+                        EffectType.RIVAL_IMPACT,
+                        spy_faction,
+                        0.1,
+                        200,
+                        "Covert response maintains public stability but risks escalation",
+                    ),
+                ],
+                risk_level=0.4,
+                reward_level=0.5,
+            )
+        )
+        return event
+
     @staticmethod
     def _describe_rival_move(rival: str, move_type: str) -> str:
         """Generate detailed description of rival move"""
@@ -824,8 +1174,9 @@ class EventGenerator:
 class EventSystem:
     """Complete event system managing generation, triggering, cascading, and resolution"""
 
-    def __init__(self, event_generator: Optional[EventGenerator] = None):
+    def __init__(self, event_generator=None, game_state=None):
         self.generator = event_generator or EventGenerator()
+        self.game_state = game_state
         self.active_events: Dict[str, GameEvent] = {}
         self.event_log: List[Dict[str, Any]] = []
         self.event_chains: Dict[
@@ -1002,16 +1353,75 @@ class EventSystem:
 
         return active
 
+    def _get_redis(self):
+        try:
+            import redis
+
+            return redis.Redis(host="localhost", port=6379, db=0, decode_responses=True)
+        except Exception:
+            return None
+
     def _apply_effect(self, effect: GameEffect) -> Dict[str, Any]:
-        """Apply a single effect to the game state"""
-        # Placeholder: integrate with actual game state system
-        return {
+        result = {
             "effect_type": effect.effect_type.value,
             "target": effect.target,
             "magnitude": effect.magnitude,
-            "applied": True,
+            "applied": False,
+            "game_state_modified": False,
+            "redis_modified": False,
             "timestamp": time.time(),
         }
+
+        try:
+            if self.game_state:
+                field_map = {
+                    "DIPLOMACY_IMPACT": "diplomacy",
+                    "CONSCIOUSNESS_IMPACT": "consciousness",
+                    "RIVAL_IMPACT": "rival_threat",
+                    "RESOURCE_IMPACT": "resources",
+                    "STABILITY_IMPACT": "stability",
+                    "TECH_IMPACT": "technology",
+                    "CULTURE_IMPACT": "culture",
+                    "PARADOX_IMPACT": "paradox_level",
+                }
+                field = field_map.get(effect.effect_type.value)
+                if field and hasattr(self.game_state, field):
+                    current = getattr(self.game_state, field, 0)
+                    if isinstance(current, (int, float)):
+                        setattr(self.game_state, field, current + effect.magnitude)
+                    result["game_state_modified"] = True
+
+            redis_key = "federation:world_state"
+            redis_field_map = {
+                "DIPLOMACY_IMPACT": "diplomacy_tension",
+                "CONSCIOUSNESS_IMPACT": "consciousness_level",
+                "RIVAL_IMPACT": "rival_activity",
+                "RESOURCE_IMPACT": "resource_abundance",
+                "STABILITY_IMPACT": "galactic_stability",
+                "TECH_IMPACT": "tech_progress",
+                "CULTURE_IMPACT": "cultural_flux",
+                "PARADOX_IMPACT": "paradox_intensity",
+            }
+            r = self._get_redis()
+            redis_field = redis_field_map.get(effect.effect_type.value)
+            if r and redis_field:
+                try:
+                    current = r.hget(redis_key, redis_field)
+                    if current is not None:
+                        new_val = float(str(current)) + effect.magnitude  # type: ignore[arg-type]
+                        r.hset(redis_key, redis_field, str(new_val))
+                        result["redis_modified"] = True
+                        result["world_state"] = {redis_field: new_val}
+                except Exception as e:
+                    result["error"] = f"Redis update failed: {e}"
+
+            result["applied"] = (
+                result["game_state_modified"] or result["redis_modified"]
+            )
+        except Exception as e:
+            result["error"] = str(e)
+
+        return result
 
     def _notify_subsystems(self, event: GameEvent) -> None:
         """Notify all relevant subsystems about event resolution"""
@@ -1093,10 +1503,10 @@ class EventSystem:
 
 
 # Initialization and convenience functions
-def create_event_system() -> EventSystem:
+def create_event_system(game_state=None) -> EventSystem:
     """Factory function to create a configured event system"""
     generator = EventGenerator()
-    system = EventSystem(generator)
+    system = EventSystem(generator, game_state=game_state)
 
     # Pre-register some common subsystems
     for subsystem in [
