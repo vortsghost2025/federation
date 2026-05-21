@@ -557,7 +557,7 @@ class FactionBrain:
         }
         try:
             r = _get_redis()
-            r.zadd("faction_treaties_active", {json.dumps(ev): _now()})  # type: ignore[union-attr]
+            r.hset("faction_treaties_active", f"{ev['from']}:{ev['to']}:trade", json.dumps(ev))
         except Exception:
             pass
         return {"partner": partner, "trade_volume": vol}
@@ -656,7 +656,7 @@ class FactionBrain:
         }
         try:
             r = _get_redis()
-            r.zadd("faction_treaties_active", {json.dumps(ev): _now()})  # type: ignore[union-attr]
+            r.hset("faction_treaties_active", f"{ev['from']}:{ev['to']}:diplomacy", json.dumps(ev))
         except Exception:
             pass
         return {"target": target, "gesture": gesture}
@@ -941,8 +941,8 @@ def resolve_pending_items() -> Dict:
     try:
         r = _get_redis()
         try:
-            laws = r.zrange("faction_laws_passed", 0, -1)  # type: ignore[union-attr]
-            for lj in laws:  # type: ignore[union-attr]
+            laws = r.zrange("faction_laws_passed", 0, -1) # type: ignore[union-attr]
+            for lj in laws: # type: ignore[union-attr]
                 try:
                     law = json.loads(lj)
                     if (
@@ -950,60 +950,55 @@ def resolve_pending_items() -> Dict:
                         and now - law.get("timestamp", now) > 60
                     ):
                         law["status"] = "passed"
-                        r.zrem("faction_laws_passed", lj)  # type: ignore[union-attr]
+                        r.zrem("faction_laws_passed", lj) # type: ignore[union-attr]
                         r.zadd(
                             "faction_laws_passed", {json.dumps(law): law["timestamp"]}
-                        )  # type: ignore[union-attr]
+                        ) # type: ignore[union-attr]
                         laws_passed += 1
                 except Exception:
                     continue
         except Exception as e:
             logger.error("resolve_pending_items laws failed: %s", e)
+    except Exception:
+        pass
+    try:
+        treaty_entries = r.hgetall("faction_treaties_active")
+        for hkey, treaty_json in treaty_entries.items():
             try:
-                # faction_treaties_active is a ZSET (score=timestamp), not a HASH
-                treaty_entries = r.zrange(
-                    "faction_treaties_active", 0, -1, withscores=True
-                )  # type: ignore[union-attr]
-                for treaty_json, score in treaty_entries:  # type: ignore[union-attr]
-                    try:
-                        data = json.loads(treaty_json)
-                        if (
-                            data.get("status") == "proposed"
-                            and now - data.get("ts", now) > 120
-                        ):
-                            data["status"] = "active"
-                            # Remove old entry and re-add with updated JSON
-                            r.zrem("faction_treaties_active", treaty_json)  # type: ignore[union-attr]
-                            r.zadd("faction_treaties_active", {json.dumps(data): score})  # type: ignore[union-attr]
-                            treaties_activated += 1
-                    except Exception:
-                        continue
-            except Exception as e:
-                logger.error("resolve_pending_items treaties failed: %s", e)
-        for fid in KNOWN_FACTIONS:
-            try:
-                actions = r.zrange(f"faction_actions:{fid}", 0, -1)  # type: ignore[union-attr]
-                for aj in actions:  # type: ignore[union-attr]
-                    try:
-                        action = json.loads(aj)
-                        if action.get("action") == "research_invest":
-                            det = action.get("detail", {})
-                            if (
-                                isinstance(det, dict)
-                                and not det.get("finalized")
-                                and now - action.get("ts", now) > 300
-                            ):
-                                det["finalized"] = True
-                                det["final_progress"] = det.get(
-                                    "progress", 0
-                                ) * random.uniform(0.8, 1.2)
-                                research_finalized += 1
-                    except Exception:
-                        continue
+                data = json.loads(treaty_json)
+                if (
+                    data.get("status") == "proposed"
+                    and now - data.get("ts", now) > 120
+                ):
+                    data["status"] = "active"
+                    r.hset("faction_treaties_active", hkey, json.dumps(data))
+                    treaties_activated += 1
             except Exception:
                 continue
     except Exception as e:
-        logger.error("resolve_pending_items failed: %s", e)
+        logger.error("resolve_pending_items treaties failed: %s", e)
+    for fid in KNOWN_FACTIONS:
+        try:
+            actions = r.zrange(f"faction_actions:{fid}", 0, -1) # type: ignore[union-attr]
+            for aj in actions: # type: ignore[union-attr]
+                try:
+                    action = json.loads(aj)
+                    if action.get("action") == "research_invest":
+                        det = action.get("detail", {})
+                        if (
+                            isinstance(det, dict)
+                            and not det.get("finalized")
+                            and now - action.get("ts", now) > 300
+                        ):
+                            det["finalized"] = True
+                            det["final_progress"] = det.get(
+                                "progress", 0
+                            ) * random.uniform(0.8, 1.2)
+                            research_finalized += 1
+                except Exception:
+                    continue
+        except Exception:
+            continue
     return {
         "laws_passed": laws_passed,
         "treaties_activated": treaties_activated,

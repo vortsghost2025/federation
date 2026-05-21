@@ -3725,6 +3725,23 @@ async def spawn_random_encounter():
         }
 
 
+
+@app.get("/npcs/relationship-network")
+async def npc_relationship_network():
+    """All NPC relationships in a single batch — full network map."""
+    _r = _get_observer_redis()
+    network = {}
+    char_ids = list(game_state.npc_system.characters.keys())
+    pipe = _r.pipeline(transaction=False)
+    for cid in char_ids:
+        pipe.hgetall(f"npc_relationships:{cid}")
+    pipe_results = pipe.execute()
+    for i, cid in enumerate(char_ids):
+        raw = pipe_results[i]
+        network[cid] = {k: float(v) for k, v in raw.items()} if raw else {}
+    return {"network": network, "npc_count": len(network)}
+
+
 @app.get("/npcs/{char_id}")
 async def get_npc_detail(char_id: str):
     report = game_state.npc_system.get_character_report(char_id)
@@ -4600,6 +4617,25 @@ async def simulation_choice_resolutions(limit: int = 20):
         return {"stats": {}, "error": str(e)}
 
 
+
+@app.get("/simulation/choice-resolutions/detail")
+async def simulation_choice_resolutions_detail(limit: int = 20):
+    """Detailed choice resolution history with per-faction vote breakdowns."""
+    limit = min(max(limit, 1), 100)
+    try:
+        _r = _get_observer_redis()
+        raw = _r.zrevrange("choice_resolutions", 0, limit - 1)
+        resolutions = []
+        for entry in raw:
+            try:
+                resolutions.append(json.loads(entry))
+            except (json.JSONDecodeError, TypeError):
+                continue
+        return {"resolutions": resolutions, "count": len(resolutions)}
+    except Exception as e:
+        return {"resolutions": [], "count": 0, "error": str(e)}
+
+
 @app.get("/simulation/choice-resolutions/{faction_id}")
 async def simulation_choice_resolution_faction(faction_id: str, limit: int = 20):
     """Per-faction choice voting history."""
@@ -5430,3 +5466,76 @@ async def narrator_history(limit: int = 10):
     except Exception as e:
         logger.error("Narrator history failed: %s", e)
         return {"status": "error", "error": str(e)}
+
+
+
+@app.get("/simulation/faction-brains")
+async def simulation_faction_brains():
+    """Faction brain states — decision-making priorities and weights."""
+    _r = _get_observer_redis()
+    result = {}
+    pipe = _r.pipeline(transaction=False)
+    for fid in KNOWN_FACTIONS:
+        pipe.get(f"faction_brain_state:{fid}")
+    pipe_results = pipe.execute()
+    for i, fid in enumerate(KNOWN_FACTIONS):
+        raw = pipe_results[i]
+        if raw:
+            try:
+                result[fid] = json.loads(raw)
+            except (json.JSONDecodeError, TypeError):
+                result[fid] = {}
+        else:
+            result[fid] = {}
+    return {"factions": result, "count": len(result)}
+
+
+@app.get("/simulation/cascade-chains")
+async def simulation_cascade_chains(limit: int = 50):
+    """Recent cascade chain propagation records."""
+    limit = min(max(limit, 1), 200)
+    try:
+        _r = _get_observer_redis()
+        raw = _r.zrevrange("cascade_chains", 0, limit - 1)
+        chains = []
+        for entry in raw:
+            try:
+                chains.append(json.loads(entry))
+            except (json.JSONDecodeError, TypeError):
+                continue
+        return {"chains": chains, "count": len(chains)}
+    except Exception as e:
+        return {"chains": [], "count": 0, "error": str(e)}
+
+
+
+@app.get("/simulation/faction-treaties")
+async def simulation_faction_treaties(limit: int = 50):
+    """Active faction treaties. Handles ZSET/HASH type ambiguity."""
+    limit = min(max(limit, 1), 200)
+    _r = _get_observer_redis()
+    try:
+        raw = _r.zrevrange("faction_treaties_active", 0, limit - 1, withscores=True)
+        treaties = []
+        for entry, score in raw:
+            try:
+                data = json.loads(entry)
+                data["_score"] = score
+                treaties.append(data)
+            except (json.JSONDecodeError, TypeError):
+                continue
+        return {"treaties": treaties, "count": len(treaties), "key_type": "zset"}
+    except Exception:
+        try:
+            raw = _r.hgetall("faction_treaties_active")
+            treaties = []
+            for key, val in raw.items():
+                try:
+                    data = json.loads(val)
+                    data["_hash_key"] = key
+                    treaties.append(data)
+                except (json.JSONDecodeError, TypeError):
+                    continue
+            return {"treaties": treaties, "count": len(treaties), "key_type": "hash"}
+        except Exception as e:
+            return {"treaties": [], "count": 0, "error": str(e)}

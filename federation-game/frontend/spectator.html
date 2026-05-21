@@ -229,6 +229,53 @@ aside{grid-area:aside;border-left:1px solid var(--border);display:flex;flex-dire
 .fm-stance-val{font-weight:700;letter-spacing:.5px}
 .fm-action{font-size:11px;color:var(--dim);margin-top:4px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 
+/* Network tab */
+.network-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:10px;margin-bottom:16px}
+.network-node{background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.05);border-radius:6px;padding:10px 12px;cursor:pointer;transition:border-color .3s,background .3s}
+.network-node:hover{background:rgba(255,255,255,0.04);border-color:rgba(0,188,212,0.2)}
+.network-node.highlight{border-color:var(--cyan);box-shadow:0 0 8px rgba(0,188,212,0.15)}
+.nn-name{font-family:'Orbitron',sans-serif;font-size:13px;font-weight:700;margin-bottom:4px}
+.nn-faction{font-size:10px;letter-spacing:1px;text-transform:uppercase;margin-bottom:6px}
+.nn-connections{display:flex;flex-wrap:wrap;gap:2px}
+.nn-link{font-size:9px;padding:1px 4px;border-radius:2px;margin:1px}
+.nn-link.ally{color:#4CAF50;background:rgba(76,175,80,0.1)}
+.nn-link.rival{color:#F44336;background:rgba(244,67,54,0.1)}
+.nn-link.neutral{color:#78909C;background:rgba(120,144,156,0.1)}
+
+/* Stances matrix */
+.stances-matrix{width:100%;border-collapse:separate;border-spacing:3px;margin-top:8px}
+.stances-matrix th{font-family:'Orbitron',sans-serif;font-size:9px;letter-spacing:1px;text-transform:uppercase;color:var(--dim);padding:6px 4px;text-align:center}
+.stances-matrix th.col-header{writing-mode:vertical-lr;text-orientation:mixed;max-width:30px;height:80px}
+.stances-matrix td{padding:6px 4px;text-align:center;border-radius:4px;font-size:11px;font-weight:700;transition:background .3s}
+.stances-matrix td.self{background:rgba(255,255,255,0.06);color:var(--dim)}
+.stances-matrix td.ally{background:rgba(76,175,80,0.15);color:#4CAF50}
+.stances-matrix td.cordial{background:rgba(76,175,80,0.08);color:#81C784}
+.stances-matrix td.neutral-cell{background:rgba(255,193,7,0.08);color:#FFC107}
+.stances-matrix td.tense{background:rgba(255,152,0,0.1);color:#FF9800}
+.stances-matrix td.hostile{background:rgba(244,67,54,0.12);color:#F44336}
+.stances-cell-val{display:block;font-family:'Orbitron',sans-serif;font-size:12px}
+.stances-cell-label{display:block;font-size:9px;letter-spacing:0.5px;text-transform:uppercase;opacity:0.7}
+
+/* Vote detail cards */
+.vote-detail-card{background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.05);border-left:3px solid var(--cyan);border-radius:6px;padding:12px 14px;margin-bottom:10px}
+.vote-event-title{font-size:14px;font-weight:700;color:var(--white);margin-bottom:4px}
+.vote-chosen{font-size:13px;color:var(--cyan);margin-bottom:8px}
+.vote-faction-row{display:flex;align-items:center;gap:8px;padding:3px 0;font-size:12px}
+.vf-name{width:140px;color:var(--dim);font-size:11px;text-transform:uppercase;letter-spacing:0.5px}
+.vf-choice{flex:1;color:var(--white);font-size:12px}
+.vf-score{font-family:'Orbitron',sans-serif;font-size:11px;min-width:50px;text-align:right}
+.vote-consequences{margin-top:8px;padding-top:8px;border-top:1px solid rgba(255,255,255,0.04);font-size:12px;color:var(--dim)}
+.vote-consequence-item{padding:2px 0}
+
+/* Brain tab */
+.brain-faction-card{background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.05);border-left:3px solid var(--violet);border-radius:6px;padding:12px 14px;margin-bottom:10px}
+.brain-faction-name{font-family:'Orbitron',sans-serif;font-size:14px;font-weight:700;margin-bottom:8px}
+.brain-priority{display:flex;align-items:center;gap:8px;margin-bottom:6px}
+.bp-label{width:160px;font-size:12px;text-transform:uppercase;letter-spacing:0.5px;color:var(--dim)}
+.bp-bar{flex:1;height:8px;background:rgba(255,255,255,0.05);border-radius:4px;overflow:hidden}
+.bp-fill{height:100%;border-radius:4px;transition:width .6s ease}
+.bp-weight{font-family:'Orbitron',sans-serif;font-size:12px;min-width:30px;text-align:right}
+
 /* ── RESPONSIVE ────────────────────────────────────────────── */
 @media(max-width:900px){
   #app{grid-template-columns:1fr;grid-template-areas:"top""main""aside";grid-template-rows:64px 1fr 280px}
@@ -282,8 +329,12 @@ aside{grid-area:aside;border-left:1px solid var(--border);display:flex;flex-dire
       <div class="tab" data-tab="quests">Quests</div>
       <div class="tab" data-tab="tech">Tech</div>
       <div class="tab" data-tab="choices">Choices</div>
-      <div class="tab" data-tab="log">Event Log</div>
-    </div>
+<div class="tab" data-tab="log">Event Log</div>
+<div class="tab" data-tab="network">Network</div>
+<div class="tab" data-tab="stances">Stances</div>
+<div class="tab" data-tab="votes">Votes</div>
+<div class="tab" data-tab="brain">Brain</div>
+</div>
 
     <!-- Tab Content -->
     <div class="tab-content">
@@ -291,8 +342,12 @@ aside{grid-area:aside;border-left:1px solid var(--border);display:flex;flex-dire
       <div class="tab-panel" id="panel-quests"></div>
       <div class="tab-panel" id="panel-tech"></div>
       <div class="tab-panel" id="panel-choices"></div>
-      <div class="tab-panel" id="panel-log"></div>
-    </div>
+<div class="tab-panel" id="panel-log"></div>
+<div class="tab-panel" id="panel-network"></div>
+<div class="tab-panel" id="panel-stances"></div>
+<div class="tab-panel" id="panel-votes"></div>
+<div class="tab-panel" id="panel-brain"></div>
+</div>
   </main>
 
   <aside>
@@ -344,6 +399,11 @@ let questLog=[];
 let techData={};
 let choiceStats={};
 let eventLog=[];
+let relationshipNetwork={};
+let cascadeChains=[];
+let factionBrains={};
+let choiceResolutions=[];
+let highlightedNPC=null;
 let ws=null;
 let wsReconnects=0;
 
@@ -614,7 +674,7 @@ function renderChoices(stats){
   if(!stats){panel.innerHTML='<div style="color:var(--dim)">No faction votes recorded yet</div>';return}
   // stats can be {stats: {choice_id: count}, history: [...]}
   var voteStats=stats.stats||{};
-  var history=stats.history||stats.recent_resolutions||[];
+  var history=Array.isArray(stats.history)?stats.history:(Array.isArray(stats.recent_resolutions)?stats.recent_resolutions:[]);
   var hasStats=Object.keys(voteStats).length>0;
   var hasHistory=history.length>0;
   if(!hasStats&&!hasHistory){panel.innerHTML='<div style="color:var(--dim)">No faction votes recorded yet — votes appear when world events trigger choices</div>';return}
@@ -661,27 +721,198 @@ function renderLog(events){
     else if(evSource==='faction'||evType==='faction_action'||ev.faction_id){typeClass='faction';sourceLabel='FACTION';sourceClass='faction'}
     else if(evSource==='quest'){typeClass='quest';sourceLabel='QUEST';sourceClass='quest'}
     else if(evSource==='tech'){typeClass='tech';sourceLabel='TECH';sourceClass='tech'}
-    var desc=ev.description||ev.message||ev.text||ev.event||'';
-    var ts=ev.timestamp||ev.time||'';
-    var fidBorder=ev.faction_id&&factionColor(ev.faction_id)?'border-left-color:'+factionColor(ev.faction_id):'';
-    html+=
-      '<div class="log-entry '+typeClass+'" style="'+fidBorder+'">'+
-        '<span class="log-time">'+esc(String(ts))+'</span>'+
-        '<span class="log-source '+sourceClass+'">'+sourceLabel+'</span>'+
-        '<span class="log-body">'+esc(desc)+'</span>'+
-      '</div>';
-  });
-  panel.innerHTML=html;
+var desc=ev.description||ev.message||ev.text||ev.event||'';
+var ts=ev.timestamp||ev.time||'';
+var fidBorder=ev.faction_id&&factionColor(ev.faction_id)?'border-left-color:'+factionColor(ev.faction_id):'';
+html+=
+'<div class="log-entry '+typeClass+'" style="'+fidBorder+'">'+
+'<span class="log-time">'+esc(String(ts))+'</span>'+
+'<span class="log-source '+sourceClass+'">'+sourceLabel+'</span>'+
+'<span class="log-body">'+esc(desc)+'</span>'+
+'</div>';
+});
+if(cascadeChains&&cascadeChains.length){
+html+='<div style="margin:16px 0 8px;font-family:Orbitron,sans-serif;font-size:11px;letter-spacing:2px;text-transform:uppercase;color:var(--violet)">Cascade Chains ('+cascadeChains.length+')</div>';
+cascadeChains.slice(0,15).forEach(function(c){
+var src=c.source_char||c.source_event||'?';
+var chain=c.chain||[];
+var chainHtml=chain.map(function(s){return'<span style="color:var(--violet);opacity:0.8">'+esc(s)+'</span>'}).join(' <span style="color:var(--dim)">→</span> ');
+html+='<div class="log-entry cascade" style="border-left-color:var(--violet)">';
+html+='<span class="log-time">'+ago(c.ts)+'</span>';
+html+='<span class="log-source cascade">CASCADE</span>';
+html+='<span class="log-body">'+esc(src)+': '+chainHtml+'</span>';
+html+='</div>';
+});
+}
+panel.innerHTML=html;
+}
+
+// ── Tab: Network ────────────────────────────────────────────
+function renderNetwork(){
+var panel=document.getElementById('panel-network');
+var keys=Object.keys(relationshipNetwork);
+if(!keys.length){panel.innerHTML='<div style="color:var(--dim)">No relationship data available — network populates as NPCs interact</div>';return}
+var nameMap={};
+(npcActivity||[]).forEach(function(n){nameMap[n.char_id||n.id]=n.name||n.char_id||n.id});
+var npcFaction={};
+(npcActivity||[]).forEach(function(n){npcFaction[n.char_id||n.id]=n.faction||n.affiliation||n.faction_id||''});
+var html='<div style="margin-bottom:10px;color:var(--dim);font-size:13px">NPC relationship network — click a node to highlight connections</div>';
+html+='<div class="network-grid">';
+keys.forEach(function(cid){
+var fc=factionColor(npcFaction[cid]);
+var name=nameMap[cid]||cid;
+var rels=relationshipNetwork[cid];
+var isHL=highlightedNPC===cid;
+var entries=Object.entries(rels).sort(function(a,b){return b[1]-a[1]});
+var connHtml='';
+entries.slice(0,8).forEach(function(e){
+var otherId=e[0],affinity=e[1];
+var cls=affinity>=70?'ally':affinity<=30?'rival':'neutral';
+var otherName=nameMap[otherId]||otherId;
+connHtml+='<span class="nn-link '+cls+'" title="'+otherName+': '+Math.round(affinity)+'">'+otherName.replace(/_/g,' ')+'</span>';
+});
+html+='<div class="network-node'+(isHL?' highlight':'')+'" onclick="highlightNPC(\''+cid+'\')">';
+html+='<div class="nn-name" style="color:'+fc+'">'+esc(name)+'</div>';
+html+='<div class="nn-faction" style="color:'+fc+'">'+esc(factionName(npcFaction[cid]))+'</div>';
+html+='<div class="nn-connections">'+connHtml+'</div>';
+html+='</div>';
+});
+html+='</div>';
+panel.innerHTML=html;
+}
+
+function highlightNPC(cid){
+highlightedNPC=highlightedNPC===cid?null:cid;
+renderNetwork();
+}
+
+// ── Tab: Stances ────────────────────────────────────────────
+function renderStances(){
+var panel=document.getElementById('panel-stances');
+if(!factions||!Object.keys(factions).length){panel.innerHTML='<div style="color:var(--dim)">No faction stance data available</div>';return}
+var fids=Object.keys(FC);
+var html='<div style="margin-bottom:10px;color:var(--dim);font-size:13px">8×8 faction stance matrix — rows show how each faction views the column faction</div>';
+html+='<table class="stances-matrix"><thead><tr><th></th>';
+fids.forEach(function(fid){
+html+='<th class="col-header" style="color:'+factionColor(fid)+'">'+esc(factionName(fid).substring(0,12))+'</th>';
+});
+html+='</tr></thead><tbody>';
+fids.forEach(function(rowFid){
+var rowData=factions[rowFid];
+var stances=rowData&&rowData.stances?rowData.stances:{};
+html+='<tr><th style="color:'+factionColor(rowFid)+';text-align:right;padding-right:8px">'+esc(factionName(rowFid))+'</th>';
+fids.forEach(function(colFid){
+if(rowFid===colFid){
+html+='<td class="self"><span class="stances-cell-val">&mdash;</span><span class="stances-cell-label">self</span></td>';
+}else{
+var s=stances[colFid];
+var val=s&&(s.value!=null)?s.value:null;
+var label=s?s.label||'':'';
+var trend=s?s.trend:0;
+var cellClass='neutral-cell';
+if(val!==null){
+if(val>=0.8)cellClass='ally';
+else if(val>=0.6)cellClass='cordial';
+else if(val>=0.4)cellClass='neutral-cell';
+else if(val>=0.2)cellClass='tense';
+else cellClass='hostile';
+}
+var trendArrow=trend>0.01?' ↑':trend<-0.01?' ↓':'';
+html+='<td class="'+cellClass+'">';
+html+='<span class="stances-cell-val">'+(val!==null?val.toFixed(2):'?')+'</span>';
+html+='<span class="stances-cell-label">'+esc(label)+trendArrow+'</span>';
+html+='</td>';
+}
+});
+html+='</tr>';
+});
+html+='</tbody></table>';
+panel.innerHTML=html;
+}
+
+// ── Tab: Votes ──────────────────────────────────────────────
+function renderVotes(){
+var panel=document.getElementById('panel-votes');
+if(!choiceResolutions.length){panel.innerHTML='<div style="color:var(--dim)">No detailed vote records yet — votes appear when world events trigger faction choices</div>';return}
+var html='<div style="margin-bottom:10px;color:var(--dim);font-size:13px">Faction vote breakdowns on galactic events — most recent first</div>';
+choiceResolutions.slice(0,20).forEach(function(r){
+var title=r.event_title||r.event_id||'Unknown Event';
+var chosen=r.chosen_choice_text||r.chosen_choice_id||'';
+var fv=r.faction_votes||{};
+var con=r.consequences_applied||[];
+var ts=r.resolved_at;
+html+='<div class="vote-detail-card">';
+html+='<div class="vote-event-title">'+esc(title)+'</div>';
+html+='<div class="vote-chosen">Chose: '+esc(chosen.replace(/_/g,' '))+'</div>';
+Object.keys(fv).forEach(function(fid){
+var vote=fv[fid];
+var fc=factionColor(fid);
+var choiceLabel=vote.choice_id?vote.choice_id.replace(/_/g,' '):'?';
+var score=vote.score!=null?vote.score.toFixed(3):'—';
+var ideology=vote.ideology||'';
+html+='<div class="vote-faction-row">';
+html+='<span class="vf-name" style="color:'+fc+'">'+esc(factionName(fid))+'</span>';
+html+='<span class="vf-choice">'+esc(choiceLabel)+'</span>';
+html+='<span class="vf-score" style="color:'+fc+'">'+score+'</span>';
+html+='</div>';
+});
+if(con.length){
+html+='<div class="vote-consequences"><div style="font-size:10px;text-transform:uppercase;letter-spacing:1px;margin-bottom:4px;color:var(--dim)">Consequences</div>';
+con.forEach(function(c){
+if(c.applied){
+html+='<div class="vote-consequence-item">'+esc(c.effect_type||'')+' → '+esc(c.target||c.world_key||'')+(c.delta?' ('+(c.delta>0?'+':'')+c.delta.toFixed(1)+')':'')+'</div>';
+}
+});
+html+='</div>';
+}
+if(ts)html+='<div style="margin-top:6px;font-size:10px;color:rgba(255,255,255,0.3)">'+ago(ts)+'</div>';
+html+='</div>';
+});
+panel.innerHTML=html;
+}
+
+// ── Tab: Brain ──────────────────────────────────────────────
+function renderBrain(){
+var panel=document.getElementById('panel-brain');
+var fids=Object.keys(factionBrains);
+if(!fids.length){panel.innerHTML='<div style="color:var(--dim)">No faction brain state data — brains update every 5 minutes during simulation ticks</div>';return}
+var html='<div style="margin-bottom:10px;color:var(--dim);font-size:13px">Faction decision-making priorities — higher weight = higher priority</div>';
+fids.forEach(function(fid){
+var brain=factionBrains[fid];
+var fc=factionColor(fid);
+var priorities=brain.priorities||[];
+if(!priorities.length)return;
+var maxW=0;
+priorities.forEach(function(p){if(p.weight>maxW)maxW=p.weight});
+if(maxW===0)maxW=1;
+html+='<div class="brain-faction-card" style="border-left-color:'+fc+'">';
+html+='<div class="brain-faction-name" style="color:'+fc+'">'+esc(factionName(fid))+'</div>';
+priorities.forEach(function(p){
+var pct=Math.round((p.weight/maxW)*100);
+var label=(p.action||'').replace(/_/g,' ');
+html+='<div class="brain-priority">';
+html+='<span class="bp-label">'+esc(label)+'</span>';
+html+='<div class="bp-bar"><div class="bp-fill" style="width:'+pct+'%;background:'+fc+'"></div></div>';
+html+='<span class="bp-weight" style="color:'+fc+'">'+p.weight.toFixed(1)+'</span>';
+html+='</div>';
+});
+html+='</div>';
+});
+panel.innerHTML=html;
 }
 
 function renderActiveTab(){
-  switch(activeTab){
-    case'thoughts':renderThoughts(npcActivity);break;
-    case'quests':renderQuests(questLog);break;
-    case'tech':renderTech(techData);break;
-    case'choices':renderChoices(choiceStats);break;
-    case'log':renderLog(eventLog);break;
-  }
+switch(activeTab){
+case'thoughts':renderThoughts(npcActivity);break;
+case'quests':renderQuests(questLog);break;
+case'tech':renderTech(techData);break;
+case'choices':renderChoices(choiceStats);break;
+case'log':renderLog(eventLog);break;
+case'network':renderNetwork();break;
+case'stances':renderStances();break;
+case'votes':renderVotes();break;
+case'brain':renderBrain();break;
+}
 }
 
 // ── WebSocket ────────────────────────────────────────────────
@@ -790,8 +1021,28 @@ async function refreshLight(){
   renderFactions(factions,techData,questLog);
 }
 
+async function fetchRelationshipNetwork(){
+var d=await api('/npcs/relationship-network',15000);
+if(d&&d.network)relationshipNetwork=d.network;
+}
+
+async function fetchCascadeChains(){
+var d=await api('/simulation/cascade-chains',10000);
+if(d&&d.chains)cascadeChains=d.chains;
+}
+
+async function fetchFactionBrains(){
+var d=await api('/simulation/faction-brains',10000);
+if(d&&d.factions)factionBrains=d.factions;
+}
+
+async function fetchChoiceResolutionsDetail(){
+var d=await api('/simulation/choice-resolutions/detail',10000);
+if(d&&d.resolutions)choiceResolutions=d.resolutions;
+}
+
 async function refreshHeavy(){
-  await Promise.all([fetchNPCs(),fetchQuests(),fetchTech(),fetchChoices(),fetchEvents()]);
+await Promise.all([fetchNPCs(),fetchQuests(),fetchTech(),fetchChoices(),fetchEvents(),fetchRelationshipNetwork(),fetchCascadeChains(),fetchFactionBrains(),fetchChoiceResolutionsDetail()]);
   renderActiveTab();
   renderFactions(factions,techData,questLog);
 }
