@@ -61,6 +61,11 @@ NIM_RATE_LIMIT_WINDOW = 60  # seconds
 OPENROUTER_API_KEY = os.environ.get("OPENROUTER_API_KEY", "")
 OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1/chat/completions"
 
+# Circuit breaker — if a provider fails N times in a window, skip it
+CIRCUIT_BREAKER_THRESHOLD = 3  # consecutive failures to trip
+CIRCUIT_BREAKER_WINDOW = 300  # seconds (5 min)
+CIRCUIT_BREAKER_KEY_PREFIX = "llm_circuit_breaker:"
+
 # ── Model Selection per Task Class ──────────────────────────────────
 # Each task class has a primary model on NIM, a fallback on NIM,
 # and a secondary fallback on OpenRouter.
@@ -83,7 +88,7 @@ TASK_MODELS = {
         },
         "fallback_openrouter": {
             "provider": "openrouter",
-            "model": "openrouter/free",
+            "model": "meta-llama/llama-3.3-70b-instruct:free",
             "max_tokens": 300,
             "temperature": 0.85,
             "timeout": 25,
@@ -106,7 +111,7 @@ TASK_MODELS = {
         },
         "fallback_openrouter": {
             "provider": "openrouter",
-            "model": "openrouter/free",
+            "model": "meta-llama/llama-3.2-3b-instruct:free",
             "max_tokens": 200,
             "temperature": 0.8,
             "timeout": 20,
@@ -129,7 +134,7 @@ TASK_MODELS = {
         },
         "fallback_openrouter": {
             "provider": "openrouter",
-            "model": "openrouter/free",
+            "model": "meta-llama/llama-3.2-3b-instruct:free",
             "max_tokens": 100,
             "temperature": 0.7,
             "timeout": 15,
@@ -152,7 +157,7 @@ TASK_MODELS = {
         },
         "fallback_openrouter": {
             "provider": "openrouter",
-            "model": "openrouter/free",
+            "model": "meta-llama/llama-3.3-70b-instruct:free",
             "max_tokens": 500,
             "temperature": 0.9,
             "timeout": 30,
@@ -293,6 +298,67 @@ def _record_call(
             r.zremrangebyrank(f"llm_errors:{provider}", 0, -101)
         except Exception:
             pass
+
+
+def _is_circuit_open(provider: str) -> bool:
+    """Check if a provider's circuit breaker is open (should be skipped).
+
+    Reads llm_circuit_breaker:{provider} from Redis. If the value is "open"
+    and TTL > 0, the circuit is open and the provider should be skipped.
+    Returns False (allow calls) if Redis is unavailable.
+    """
+    try:
+        r = _get_redis()
+        key = f"{CIRCUIT_BREAKER_KEY_PREFIX}{provider}"
+        val = r.get(key)
+        ttl = r.ttl(key)
+        if val == "open" and ttl and ttl > 0:
+            return True
+        return False
+    except Exception:
+        return False
+
+
+def _trip_circuit(provider: str):
+    """Trip a provider's circuit breaker, skipping it for CIRCUIT_BREAKER_WINDOW seconds."""
+    try:
+        r = _get_redis()
+        r.set(
+            f"{CIRCUIT_BREAKER_KEY_PREFIX}{provider}",
+            "open",
+            ex=CIRCUIT_BREAKER_WINDOW,
+        )
+        logger.warning(
+            "Circuit breaker TRIPPED for provider %s — skipping for %ds",
+            provider,
+            CIRCUIT_BREAKER_WINDOW,
+        )
+    except Exception:
+        pass
+
+
+def _record_provider_result(provider: str, success: bool):
+    """Record the result of a provider call for circuit breaker tracking.
+
+    On success: reset the failure counter and any open circuit.
+    On failure: increment the counter. If it reaches the threshold,
+    trip the circuit and clean up the counter.
+    """
+    try:
+        r = _get_redis()
+        if success:
+            r.delete(f"{CIRCUIT_BREAKER_KEY_PREFIX}{provider}")
+            r.delete(f"llm_circuit_failures:{provider}")
+            return
+
+        counter_key = f"llm_circuit_failures:{provider}"
+        count = r.incr(counter_key)
+        r.expire(counter_key, CIRCUIT_BREAKER_WINDOW)
+        if count >= CIRCUIT_BREAKER_THRESHOLD:
+            _trip_circuit(provider)
+            r.delete(counter_key)
+    except Exception:
+        pass
 
 
 # ── Low-Level API Call ──────────────────────────────────────────────
@@ -503,11 +569,22 @@ def route_call(
         temp = temperature if temperature is not None else tier_config["temperature"]
         tier_timeout = tier_config.get("timeout", 12)
 
+        if _is_circuit_open(provider):
+            logger.warning(
+                "Circuit breaker OPEN for provider %s — skipping %s tier",
+                provider,
+                tier_name,
+            )
+            result["errors"].append(f"{provider}: circuit breaker open, skipped")
+            continue
+
         result["attempts"] += 1
 
         ok, content, latency = _call_provider(
             provider, model, messages, mt, temp, tier_timeout
         )
+
+        _record_provider_result(provider, ok)
 
         if ok and content:
             result["success"] = True

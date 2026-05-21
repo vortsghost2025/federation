@@ -259,26 +259,91 @@ def check_triggers(npc_list: List[Dict], world_state: Dict) -> List[Dict]:
                     }
                 )
 
-    # Specialist triggers: high tension or investigation opportunities
-    if tension > 60:
-        for npc in npc_list:
-            cid = npc.get("char_id", "")
-            if cid in SPECIALIST_IDS:
-                # Only trigger for specialists in relevant factions
-                affiliation = npc.get("affiliation", "")
-                if affiliation in (
-                    "research_division",
-                    "consciousness_collective",
-                    "preservation_society",
-                ):
-                    triggers.append(
-                        {
-                            "char_id": cid,
-                            "trigger_type": "tension_investigation",
-                            "trigger_data": {"tension_level": tension},
-                            "priority": 4,
-                        }
-                    )
+    # Specialist triggers: each faction's specialists trigger when their domain is under pressure
+    for npc in npc_list:
+        cid = npc.get("char_id", "")
+        if cid not in SPECIALIST_IDS:
+            continue
+        affiliation = npc.get("affiliation", "")
+
+        if affiliation == "research_division" and tension > 60:
+            triggers.append(
+                {
+                    "char_id": cid,
+                    "trigger_type": "tension_investigation",
+                    "trigger_data": {"tension_level": tension},
+                    "priority": 4,
+                }
+            )
+        elif affiliation == "consciousness_collective" and anomaly > 65:
+            triggers.append(
+                {
+                    "char_id": cid,
+                    "trigger_type": "anomaly_investigation",
+                    "trigger_data": {"anomaly_activity": anomaly},
+                    "priority": 4,
+                }
+            )
+        elif affiliation == "preservation_society" and resources < 30:
+            triggers.append(
+                {
+                    "char_id": cid,
+                    "trigger_type": "resource_conservation",
+                    "trigger_data": {"resource_abundance": resources},
+                    "priority": 4,
+                }
+            )
+        elif affiliation == "diplomatic_corps" and (
+            tension > 65
+            or any(t.get("trigger_type") == "treaty_proposed" for t in triggers)
+        ):
+            triggers.append(
+                {
+                    "char_id": cid,
+                    "trigger_type": "diplomatic_intervention",
+                    "trigger_data": {"tension_level": tension},
+                    "priority": 4,
+                }
+            )
+        elif affiliation == "military_command" and (
+            threat > 60
+            or any(t.get("trigger_type") == "faction_action_against" for t in triggers)
+        ):
+            triggers.append(
+                {
+                    "char_id": cid,
+                    "trigger_type": "military_response",
+                    "trigger_data": {"threat_level": threat},
+                    "priority": 5,
+                }
+            )
+        elif affiliation == "cultural_ministry" and morale < 40:
+            triggers.append(
+                {
+                    "char_id": cid,
+                    "trigger_type": "morale_intervention",
+                    "trigger_data": {"morale": morale},
+                    "priority": 4,
+                }
+            )
+        elif affiliation == "economic_council" and resources < 40:
+            triggers.append(
+                {
+                    "char_id": cid,
+                    "trigger_type": "economic_crisis",
+                    "trigger_data": {"resource_abundance": resources},
+                    "priority": 5,
+                }
+            )
+        elif affiliation == "exploration_initiative" and anomaly > 60:
+            triggers.append(
+                {
+                    "char_id": cid,
+                    "trigger_type": "exploration_opportunity",
+                    "trigger_data": {"anomaly_activity": anomaly},
+                    "priority": 4,
+                }
+            )
 
     # Store triggers in Redis
     try:
@@ -493,6 +558,7 @@ You must choose ONE action from these categories:
 - seek_resources: Address resource shortages
 - react_to_events: Respond to a critical world event
 - self_improve: Strengthen your faction's capabilities
+- rest: Recover and conserve strength for future challenges
 
 RESPOND IN EXACTLY THIS FORMAT:
 CATEGORY: [one category from above]
@@ -759,6 +825,10 @@ def run_cognition(npc_list: List[Dict], world_state: Dict) -> Dict:
         if cid not in SPECIALIST_IDS:
             continue
 
+        # Check max LLM calls per tick
+        if llm_calls_this_tick >= MAX_LLM_CALLS_PER_TICK:
+            break
+
         # Check cooldown
         if _is_on_cooldown(cid, "specialist"):
             continue
@@ -781,6 +851,7 @@ def run_cognition(npc_list: List[Dict], world_state: Dict) -> Dict:
 
         # Make LLM call
         llm_result = route_call("specialist", system_prompt, user_prompt)
+        llm_calls_this_tick += 1
         result["stats"]["calls_made"] += 1
         result["stats"]["total_latency_ms"] += llm_result.get("latency_ms", 0)
 

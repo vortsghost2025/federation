@@ -141,6 +141,13 @@ try:
 except ImportError:
     NARRATOR_AVAILABLE = False
 
+try:
+    from llm_router import get_router_stats
+
+    LLM_ROUTER_AVAILABLE = True
+except ImportError:
+    LLM_ROUTER_AVAILABLE = False
+
 
 logger = logging.getLogger(__name__)
 app = FastAPI(title="Federation Game API", version="1.0.0")
@@ -5324,10 +5331,12 @@ async def cognition_tick():
             }
         )
 
-    # Get world state
+    # Get world state from Redis
     world_state = {}
     try:
-        world_state = get_world_state()
+        raw_ws = _r.hgetall("world_state")
+        if raw_ws:
+            world_state = raw_ws
     except Exception:
         pass
 
@@ -5339,11 +5348,11 @@ async def cognition_tick():
         return {"status": "error", "error": str(e)}
 
 
-@app.get("/cognition/stats")
+@app.get("/simulation/cognition/stats")
 async def cognition_stats():
     """Get cognition layer statistics for the observer dashboard."""
     if not COGNITION_AVAILABLE:
-        return {"status": "unavailable", "error": "npc_cognition module not imported"}
+        return {"status": "unavailable"}
 
     try:
         stats = get_cognition_stats()
