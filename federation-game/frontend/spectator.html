@@ -1,0 +1,812 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Federation — Spectator</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>👁</text></svg>">
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #040810;
+  --panel: rgba(8,14,24,0.96);
+  --border: rgba(0,188,212,0.12);
+  --cyan: #00BCD4;
+  --cyan-dim: rgba(0,188,212,0.10);
+  --amber: #FF9800;
+  --amber-dim: rgba(255,152,0,0.10);
+  --violet: #9C27B0;
+  --violet-dim: rgba(156,39,176,0.10);
+  --green: #4CAF50;
+  --red: #F44336;
+  --red-dim: rgba(244,67,54,0.10);
+  --white: #d8dce6;
+  --dim: #5a6a7a;
+  --bright: #f0f4ff;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--white);font-family:'Share Tech Mono',monospace;font-size:17px}
+
+/* ── STARFIELD ─────────────────────────────────────────────── */
+.starfield{position:fixed;inset:0;z-index:-1;overflow:hidden;pointer-events:none}
+.star{position:absolute;background:#fff;border-radius:50%;animation:twinkle var(--d) ease infinite var(--dl)}
+@keyframes twinkle{0%,100%{opacity:.15}50%{opacity:.7}}
+
+/* ── MAIN GRID ─────────────────────────────────────────────── */
+#app{
+  display:grid;
+  grid-template-rows:64px 1fr;
+  grid-template-columns:1fr 380px;
+  grid-template-areas:
+    "top top"
+    "main aside";
+  height:100vh;gap:1px;
+  background:var(--bg);
+}
+
+/* ── HEADER ────────────────────────────────────────────────── */
+header{grid-area:top;display:flex;align-items:center;gap:0;background:var(--panel);border-bottom:1px solid var(--border);padding:0 16px;z-index:5}
+.logo{font-family:'Orbitron',sans-serif;font-weight:900;font-size:22px;letter-spacing:4px;color:var(--cyan);text-shadow:0 0 16px rgba(0,188,212,0.4);white-space:nowrap;margin-right:20px}
+.logo-sub{font-size:11px;color:var(--dim);letter-spacing:2px;text-transform:uppercase;font-weight:400;margin-left:8px}
+.header-metrics{display:flex;align-items:center;gap:4px;flex:1;overflow-x:auto;scrollbar-width:none}
+.header-metrics::-webkit-scrollbar{display:none}
+.hm{display:flex;flex-direction:column;align-items:center;padding:4px 12px;min-width:80px;border-right:1px solid rgba(255,255,255,0.04)}
+.hm:last-of-type{border-right:none}
+.hm-label{font-size:9px;color:var(--dim);text-transform:uppercase;letter-spacing:1.5px}
+.hm-val{font-family:'Orbitron',sans-serif;font-size:18px;font-weight:700}
+.hm-bar{width:70px;height:6px;background:rgba(255,255,255,0.05);border-radius:3px;overflow:hidden;margin-top:2px}
+.hm-fill{height:100%;border-radius:3px;transition:width .8s ease,background .5s ease}
+.header-era{margin-left:auto;white-space:nowrap;display:flex;align-items:center;gap:10px}
+.era-name{font-family:'Orbitron',sans-serif;font-weight:700;font-size:18px;color:var(--amber);text-shadow:0 0 12px rgba(255,152,0,0.3)}
+.era-bar-wrap{display:flex;align-items:center;gap:6px}
+.era-bar{width:100px;height:8px;background:rgba(255,255,255,0.05);border-radius:4px;overflow:hidden}
+.era-fill{height:100%;border-radius:4px;background:linear-gradient(90deg,var(--cyan),var(--amber));transition:width 1s ease}
+.era-pct{font-family:'Orbitron',sans-serif;font-size:14px;color:var(--cyan);min-width:40px}
+
+/* ── MAIN CONTENT ──────────────────────────────────────────── */
+main{grid-area:main;display:flex;flex-direction:column;overflow:hidden}
+
+/* Narration hero */
+.narration-hero{
+  background:linear-gradient(180deg,rgba(0,188,212,0.04) 0%,transparent 100%);
+  border-bottom:1px solid var(--border);
+  padding:20px 24px 16px;
+  min-height:140px;
+  position:relative;
+}
+.narration-badge{font-size:10px;letter-spacing:2px;text-transform:uppercase;color:var(--dim);margin-bottom:6px;display:flex;align-items:center;gap:8px}
+.narration-badge .dot{width:6px;height:6px;border-radius:50%;background:var(--cyan);animation:dotPulse 2s ease infinite}
+@keyframes dotPulse{0%,100%{opacity:.3}50%{opacity:1}}
+.narration-headline{font-family:'Orbitron',sans-serif;font-size:26px;font-weight:700;color:var(--bright);line-height:1.3;margin-bottom:14px;letter-spacing:1px;text-shadow:0 0 20px rgba(0,188,212,0.15)}
+.narration-meta{display:flex;gap:16px;font-size:12px;color:var(--dim);align-items:center}
+.narration-source{padding:2px 8px;border-radius:3px;font-size:10px;letter-spacing:1px;text-transform:uppercase}
+.narration-source.llm{color:var(--cyan);background:var(--cyan-dim)}
+.narration-source.fallback{color:var(--amber);background:var(--amber-dim)}
+.narration-source.cached{color:var(--dim);background:rgba(255,255,255,0.04)}
+
+/* Developments + Voices row */
+.narration-row{display:grid;grid-template-columns:1fr 1fr;gap:16px;padding:0 24px 16px}
+.narration-section{background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.04);border-radius:8px;padding:14px 16px}
+.ns-title{font-family:'Orbitron',sans-serif;font-size:11px;letter-spacing:2px;text-transform:uppercase;margin-bottom:8px}
+.ns-title.dev{color:var(--amber)}
+.ns-title.voice{color:var(--violet)}
+.ns-title.fore{color:var(--cyan)}
+.ns-item{font-size:14px;line-height:1.5;padding:4px 0;border-bottom:1px solid rgba(255,255,255,0.03);color:var(--white)}
+.ns-item:last-child{border-bottom:none}
+.ns-item.voice-item{font-style:italic;color:rgba(255,255,255,0.8)}
+.ns-item.fore-item{color:var(--cyan);font-style:italic;font-size:15px}
+
+/* ── TAB BAR ──────────────────────────────────────────────── */
+.tab-bar{display:flex;gap:0;border-bottom:1px solid var(--border);padding:0 24px;background:var(--panel);flex-shrink:0}
+.tab{padding:10px 20px;font-family:'Orbitron',sans-serif;font-size:12px;letter-spacing:2px;text-transform:uppercase;color:var(--dim);cursor:pointer;border-bottom:2px solid transparent;transition:all .2s}
+.tab:hover{color:var(--white)}
+.tab.active{color:var(--cyan);border-bottom-color:var(--cyan);text-shadow:0 0 8px rgba(0,188,212,0.3)}
+
+/* ── TAB CONTENT ───────────────────────────────────────────── */
+.tab-content{flex:1;overflow-y:auto;padding:16px 24px;scrollbar-width:thin;scrollbar-color:rgba(0,188,212,0.15) transparent}
+.tab-content::-webkit-scrollbar{width:4px}
+.tab-content::-webkit-scrollbar-thumb{background:rgba(0,188,212,0.15);border-radius:2px}
+.tab-panel{display:none}
+.tab-panel.active{display:block}
+
+/* NPC thought cards */
+.thought-card{
+  background:rgba(255,255,255,0.02);
+  border:1px solid rgba(255,255,255,0.05);
+  border-left:3px solid var(--dim);
+  border-radius:6px;
+  padding:12px 14px;
+  margin-bottom:8px;
+  transition:border-color .3s,background .3s;
+}
+.thought-card:hover{background:rgba(255,255,255,0.04);border-color:rgba(0,188,212,0.15)}
+.thought-header{display:flex;align-items:center;gap:10px;margin-bottom:6px}
+.thought-name{font-family:'Orbitron',sans-serif;font-size:14px;font-weight:700;letter-spacing:.5px}
+.thought-title{font-size:12px;color:var(--dim)}
+.thought-faction{font-size:10px;padding:2px 6px;border-radius:3px;letter-spacing:1px;text-transform:uppercase;margin-left:auto}
+.thought-body{font-size:15px;line-height:1.6;color:rgba(255,255,255,0.85);font-style:italic;padding-left:12px;border-left:2px solid rgba(255,255,255,0.06)}
+.thought-mood{font-size:11px;color:var(--dim);margin-top:6px}
+.thought-time{float:right;font-size:10px;color:rgba(255,255,255,0.3)}
+
+/* Quest cards */
+.quest-card{
+  background:rgba(255,255,255,0.02);
+  border:1px solid rgba(255,255,255,0.05);
+  border-left:3px solid var(--amber);
+  border-radius:6px;
+  padding:12px 14px;
+  margin-bottom:8px;
+}
+.quest-header{display:flex;align-items:center;gap:10px;margin-bottom:4px}
+.quest-npc{font-family:'Orbitron',sans-serif;font-size:13px;font-weight:700}
+.quest-name{font-size:14px;color:var(--amber);font-weight:700}
+.quest-status{font-size:10px;padding:2px 8px;border-radius:3px;margin-left:auto;letter-spacing:1px;text-transform:uppercase}
+.quest-status.active{color:var(--cyan);background:var(--cyan-dim)}
+.quest-status.completed{color:var(--green);background:rgba(76,175,80,0.1)}
+.quest-status.abandoned{color:var(--red);background:var(--red-dim)}
+.quest-progress{height:6px;background:rgba(255,255,255,0.05);border-radius:3px;overflow:hidden;margin-top:8px}
+.quest-fill{height:100%;border-radius:3px;background:var(--amber);transition:width .6s ease}
+
+/* Tech cards */
+.tech-card{
+  background:rgba(255,255,255,0.02);
+  border:1px solid rgba(255,255,255,0.05);
+  border-left:3px solid var(--violet);
+  border-radius:6px;
+  padding:12px 14px;
+  margin-bottom:8px;
+}
+.tech-header{display:flex;align-items:center;gap:10px;margin-bottom:4px}
+.tech-faction{font-family:'Orbitron',sans-serif;font-size:13px;font-weight:700}
+.tech-name{font-size:14px;color:var(--violet);font-weight:700}
+.tech-tier{font-size:10px;color:var(--dim);margin-left:8px}
+.tech-progress{height:6px;background:rgba(255,255,255,0.05);border-radius:3px;overflow:hidden;margin-top:8px}
+.tech-fill{height:100%;border-radius:3px;background:var(--violet);transition:width .6s ease}
+.tech-completed{font-size:11px;color:var(--green);margin-top:6px}
+
+/* Choice cards */
+.choice-card{
+  background:rgba(255,255,255,0.02);
+  border:1px solid rgba(255,255,255,0.05);
+  border-left:3px solid var(--cyan);
+  border-radius:6px;
+  padding:12px 14px;
+  margin-bottom:8px;
+}
+.choice-event{font-size:14px;font-weight:700;color:var(--white);margin-bottom:6px}
+.choice-result{font-size:13px;color:var(--cyan);margin-bottom:8px}
+.choice-votes{display:flex;flex-wrap:wrap;gap:4px}
+.vote-badge{font-size:10px;padding:2px 6px;border-radius:3px;letter-spacing:.5px;background:rgba(255,255,255,0.04)}
+
+/* Event log entries */
+.log-entry{
+  display:flex;gap:10px;padding:8px 0;border-bottom:1px solid rgba(255,255,255,0.03);
+  font-size:14px;line-height:1.5;
+  animation:fadeSlide .4s ease;
+}
+@keyframes fadeSlide{from{opacity:0;transform:translateY(-6px)}to{opacity:1;transform:translateY(0)}}
+.log-time{color:var(--dim);font-size:11px;white-space:nowrap;min-width:55px;padding-top:3px}
+.log-source{font-size:9px;letter-spacing:1px;text-transform:uppercase;padding:2px 6px;border-radius:3px;white-space:nowrap;align-self:flex-start;min-width:70px;text-align:center}
+.log-source.world{color:var(--cyan);background:var(--cyan-dim)}
+.log-source.cascade{color:var(--violet);background:var(--violet-dim)}
+.log-source.faction{color:var(--amber);background:var(--amber-dim)}
+.log-source.quest{color:var(--green);background:rgba(76,175,80,0.1)}
+.log-source.tech{color:var(--violet);background:var(--violet-dim)}
+.log-source.narration{color:var(--cyan);background:var(--cyan-dim)}
+.log-body{flex:1;color:rgba(255,255,255,0.8)}
+
+/* ── ASIDE ─────────────────────────────────────────────────── */
+aside{grid-area:aside;border-left:1px solid var(--border);display:flex;flex-direction:column;overflow:hidden;background:var(--panel)}
+.aside-title{font-family:'Orbitron',sans-serif;font-weight:700;font-size:13px;letter-spacing:2px;text-transform:uppercase;padding:14px 16px 10px;border-bottom:1px solid var(--border);color:var(--amber);flex-shrink:0}
+.faction-list{flex:1;overflow-y:auto;padding:8px;scrollbar-width:thin;scrollbar-color:rgba(255,152,0,0.15) transparent}
+.faction-list::-webkit-scrollbar{width:4px}
+.faction-list::-webkit-scrollbar-thumb{background:rgba(255,152,0,0.15);border-radius:2px}
+
+.faction-mini{
+  background:rgba(255,255,255,0.02);
+  border:1px solid rgba(255,255,255,0.04);
+  border-radius:6px;
+  padding:10px 12px;
+  margin-bottom:6px;
+  cursor:pointer;
+  transition:border-color .3s,background .3s;
+}
+.faction-mini:hover{background:rgba(255,255,255,0.04);border-color:rgba(255,152,0,0.2)}
+.faction-mini.active{border-color:rgba(255,152,0,0.4);box-shadow:0 0 8px rgba(255,152,0,0.1)}
+.fm-top{display:flex;align-items:center;gap:8px;margin-bottom:4px}
+.fm-dot{width:10px;height:10px;border-radius:50%;flex-shrink:0}
+.fm-name{font-family:'Orbitron',sans-serif;font-size:13px;font-weight:700;flex:1;letter-spacing:.5px}
+.fm-power{font-family:'Orbitron',sans-serif;font-size:16px;font-weight:900}
+.fm-sub{display:flex;gap:8px;font-size:11px;color:var(--dim)}
+.fm-bar{flex:1;height:5px;background:rgba(255,255,255,0.05);border-radius:3px;overflow:hidden}
+.fm-fill{height:100%;border-radius:3px;transition:width .6s ease}
+.fm-tech{font-size:11px;color:var(--violet);margin-top:4px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.fm-quest-count{font-size:11px;color:var(--amber);margin-top:2px}
+.fm-detail{max-height:0;overflow:hidden;transition:max-height .4s ease,opacity .3s;opacity:0}
+.faction-mini.active .fm-detail{max-height:500px;opacity:1;margin-top:8px;padding-top:8px;border-top:1px solid rgba(255,255,255,0.04)}
+.fm-stance-row{display:flex;align-items:center;gap:6px;font-size:11px;padding:2px 0}
+.fm-stance-name{color:var(--dim);flex:1}
+.fm-stance-val{font-weight:700;letter-spacing:.5px}
+.fm-action{font-size:11px;color:var(--dim);margin-top:4px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+/* ── RESPONSIVE ────────────────────────────────────────────── */
+@media(max-width:900px){
+  #app{grid-template-columns:1fr;grid-template-areas:"top""main""aside";grid-template-rows:64px 1fr 280px}
+  aside{border-left:none;border-top:1px solid var(--border)}
+  .narration-row{grid-template-columns:1fr}
+}
+</style>
+</head>
+<body>
+
+<div class="starfield" id="starfield"></div>
+
+<div id="app">
+  <header>
+    <div class="logo">SPECTATOR<span class="logo-sub">observer mode</span></div>
+    <div class="header-metrics" id="header-metrics"></div>
+    <div class="header-era">
+      <span class="era-name" id="era-name">&mdash;</span>
+      <div class="era-bar-wrap">
+        <div class="era-bar"><div class="era-fill" id="era-fill" style="width:0"></div></div>
+        <span class="era-pct" id="era-pct">0%</span>
+      </div>
+    </div>
+  </header>
+
+  <main>
+    <!-- Narration Hero -->
+    <div class="narration-hero" id="narration-hero">
+      <div class="narration-badge"><span class="dot"></span>LATEST INTELLIGENCE</div>
+      <div class="narration-headline" id="narration-headline">Awaiting signal from the Federation...</div>
+      <div class="narration-meta" id="narration-meta">
+        <span class="narration-source cached">initializing</span>
+      </div>
+    </div>
+
+    <!-- Narration Details Row -->
+    <div class="narration-row" id="narration-row">
+      <div class="narration-section">
+        <div class="ns-title dev">Developments</div>
+        <div id="narration-developments"><div class="ns-item" style="color:var(--dim)">Listening...</div></div>
+      </div>
+      <div class="narration-section">
+        <div class="ns-title voice">Voices</div>
+        <div id="narration-voices"><div class="ns-item voice-item" style="color:var(--dim)">Waiting for faction voices...</div></div>
+      </div>
+    </div>
+
+    <!-- Tab Bar -->
+    <div class="tab-bar">
+      <div class="tab active" data-tab="thoughts">Thoughts</div>
+      <div class="tab" data-tab="quests">Quests</div>
+      <div class="tab" data-tab="tech">Tech</div>
+      <div class="tab" data-tab="choices">Choices</div>
+      <div class="tab" data-tab="log">Event Log</div>
+    </div>
+
+    <!-- Tab Content -->
+    <div class="tab-content">
+      <div class="tab-panel active" id="panel-thoughts"></div>
+      <div class="tab-panel" id="panel-quests"></div>
+      <div class="tab-panel" id="panel-tech"></div>
+      <div class="tab-panel" id="panel-choices"></div>
+      <div class="tab-panel" id="panel-log"></div>
+    </div>
+  </main>
+
+  <aside>
+    <div class="aside-title">Factions</div>
+    <div class="faction-list" id="faction-list"></div>
+  </aside>
+</div>
+
+<script>
+// ── Constants ────────────────────────────────────────────────
+const FC = {
+  military_command:{color:'#F44336',name:'Military Command',leader:'Marshal Ironbound'},
+  research_division:{color:'#2196F3',name:'Research Division',leader:'Dr. Prometheus'},
+  diplomatic_corps:{color:'#4CAF50',name:'Diplomatic Corps',leader:'Chancellor Harmony'},
+  cultural_ministry:{color:'#9C27B0',name:'Cultural Ministry',leader:'Maestro Celestia'},
+  economic_council:{color:'#FF9800',name:'Economic Council',leader:'Merchant-Prince Aurelius'},
+  exploration_initiative:{color:'#00BCD4',name:'Exploration Initiative',leader:'Captain Frontier'},
+  consciousness_collective:{color:'#E91E63',name:'Consciousness Collective',leader:'Oracle Vex'},
+  preservation_society:{color:'#8BC34A',name:'Preservation Society',leader:'Archivist Eternal'},
+};
+const MOOD_COLORS={
+  satisfied:'#4CAF50',inspired:'#66BB6A',serene:'#81C784',peaceful:'#A5D6A7',
+  hopeful:'#4CAF50',excited:'#66BB6A',confident:'#4CAF50',enlightened:'#66BB6A',
+  adventurous:'#81C784',determined:'#4CAF50',resolute:'#66BB6A',steadfast:'#4CAF50',
+  patient:'#81C784',valiant:'#4CAF50',free:'#66BB6A',
+  frustrated:'#F44336',aggressive:'#D32F2F',suspicious:'#FF9800',anxious:'#FF9800',
+  alarmed:'#F44336',worried:'#FF9800',unsettled:'#FF9800',weary:'#FF9800',
+  melancholic:'#9C27B0',paranoid:'#F44336',burdened:'#FF9800',
+  contemplative:'#00BCD4',thoughtful:'#00BCD4',curious:'#00BCD4',
+  distracted:'#78909C',reserved:'#78909C',
+};
+const METRICS=[
+  {key:'tension_level',label:'Tension',color:'#F44336'},
+  {key:'resource_abundance',label:'Resources',color:'#4CAF50'},
+  {key:'threat_level',label:'Threat',color:'#F44336'},
+  {key:'stability',label:'Stability',color:'#00BCD4'},
+  {key:'morale',label:'Morale',color:'#FF9800'},
+  {key:'anomaly_activity',label:'Anomaly',color:'#9C27B0'},
+];
+
+// ── State ────────────────────────────────────────────────────
+let activeTab='thoughts';
+let activeFaction=null;
+let worldState={};
+let factions={};
+let npcActivity=[];
+let narrationHistory=[];
+let questLog=[];
+let techData={};
+let choiceStats={};
+let eventLog=[];
+let ws=null;
+let wsReconnects=0;
+
+// ── Helpers ──────────────────────────────────────────────────
+function esc(s){if(s==null)return'';return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;')}
+function clamp(v,lo,hi){return Math.max(lo,Math.min(hi,v))}
+function moodColor(m){return MOOD_COLORS[String(m).toLowerCase()]||'#78909C'}
+function factionColor(fid){return(FC[fid]||{}).color||'#78909C'}
+function factionName(fid){return(FC[fid]||{}).name||fid.replace(/_/g,' ')}
+function stanceClass(s){if(!s)return'neutral';var l=String(s).toLowerCase();if(l==='ally'||l==='allied'||l==='friendly')return'ally';if(l==='enemy'||l==='hostile'||l==='adversarial')return'enemy';return'neutral'}
+function stanceColor(s){var c=stanceClass(s);return c==='ally'?'#4CAF50':c==='enemy'?'#F44336':'#FFC107'}
+function ago(ts){if(!ts)return'';var s=Math.floor((Date.now()/1000)-ts);if(s<60)return s+'s ago';if(s<3600)return Math.floor(s/60)+'m ago';return Math.floor(s/3600)+'h ago'}
+
+// ── API ──────────────────────────────────────────────────────
+async function api(ep,ms){
+  var ctl=new AbortController();
+  var t=setTimeout(function(){ctl.abort()},ms||10000);
+  try{
+    var r=await fetch(ep,{headers:{'Accept':'application/json'},signal:ctl.signal});
+    clearTimeout(t);
+    if(!r.ok)throw new Error(r.status);
+    return await r.json();
+  }catch(e){clearTimeout(t);return null}
+}
+
+// ── Starfield ────────────────────────────────────────────────
+function makeStars(){
+  var sf=document.getElementById('starfield');
+  for(var i=0;i<60;i++){
+    var s=document.createElement('div');s.className='star';
+    var sz=Math.random()*2+1;
+    s.style.cssText='width:'+sz+'px;height:'+sz+'px;left:'+Math.random()*100+'%;top:'+Math.random()*100+'%;--d:'+(2+Math.random()*4)+'s;--dl:'+Math.random()*3+'s;opacity:'+(0.15+Math.random()*0.4);
+    sf.appendChild(s);
+  }
+}
+
+// ── Tabs ─────────────────────────────────────────────────────
+document.querySelectorAll('.tab').forEach(function(t){
+  t.addEventListener('click',function(){
+    document.querySelectorAll('.tab').forEach(function(x){x.classList.remove('active')});
+    document.querySelectorAll('.tab-panel').forEach(function(x){x.classList.remove('active')});
+    t.classList.add('active');
+    activeTab=t.dataset.tab;
+    document.getElementById('panel-'+activeTab).classList.add('active');
+    renderActiveTab();
+  });
+});
+
+// ── Header Metrics ───────────────────────────────────────────
+function buildHeaderMetrics(){
+  var c=document.getElementById('header-metrics');
+  c.innerHTML='';
+  METRICS.forEach(function(m){
+    c.innerHTML+='<div class="hm"><span class="hm-label">'+m.label+'</span><span class="hm-val" id="hv-'+m.key+'">&mdash;</span><div class="hm-bar"><div class="hm-fill" id="hb-'+m.key+'" style="width:0;background:'+m.color+'"></div></div></div>';
+  });
+}
+
+function updateHeaderMetrics(ws){
+  if(!ws)return;
+  METRICS.forEach(function(m){
+    var v=ws[m.key]!=null?ws[m.key]:0;
+    var valEl=document.getElementById('hv-'+m.key);
+    var barEl=document.getElementById('hb-'+m.key);
+    if(valEl)valEl.textContent=Math.round(v);
+    if(barEl){barEl.style.width=clamp(v,0,100)+'%';barEl.style.background=m.color}
+  });
+}
+
+function updateEra(status){
+  if(!status)return;
+  // Try multiple locations for era data
+  var era=status.current_era||status.era||status.currentEra||{};
+  var name=era.name||era.era_name||era.label||status.era_name||status.current_phase||status.game_phase||'Unknown';
+  var progress=era.progress!=null?era.progress:(era.progress_pct!=null?era.progress_pct:0);
+  // If no direct progress, derive from turns_in_phase
+  if(!progress&&status.turns_in_phase!=null){
+    progress=Math.min(100,status.turns_in_phase*5); // rough: 20 turns per era
+  }
+  document.getElementById('era-name').textContent=name.replace(/_/g,' ');
+  document.getElementById('era-fill').style.width=clamp(progress,0,100)+'%';
+  document.getElementById('era-pct').textContent=Math.round(progress)+'%';
+}
+
+// ── Narration ────────────────────────────────────────────────
+function renderNarration(data){
+  if(!data)return;
+  var hl=document.getElementById('narration-headline');
+  if(data.headline)hl.textContent=data.headline;
+  var meta=document.getElementById('narration-meta');
+  var src=data.source||'none';
+  var srcLabel=src==='llm'?'AI NARRATED':src==='fallback'?'DETERMINISTIC':src==='cached'?'CACHED':'WAITING';
+  meta.innerHTML='<span class="narration-source '+src+'">'+srcLabel+'</span>'+(data.model?'<span style="color:var(--dim)">'+esc(data.model)+'</span>':'')+(data.latency_ms?'<span style="color:var(--dim)">'+data.latency_ms+'ms</span>':'');
+
+  var devEl=document.getElementById('narration-developments');
+  var devs=data.developments||[];
+  if(devs.length){devEl.innerHTML=devs.map(function(d){return'<div class="ns-item">'+esc(d)+'</div>'}).join('')}
+  else{devEl.innerHTML='<div class="ns-item" style="color:var(--dim)">No developments yet</div>'}
+
+  var voiceEl=document.getElementById('narration-voices');
+  var voices=data.voices||[];
+  if(voices.length){voiceEl.innerHTML=voices.map(function(v){return'<div class="ns-item voice-item">'+esc(v)+'</div>'}).join('')}
+  else{voiceEl.innerHTML='<div class="ns-item voice-item" style="color:var(--dim)">Waiting for voices...</div>'}
+
+  // Add forewarning at bottom of voices panel if present
+  if(data.forewarning){
+    voiceEl.innerHTML+='<div class="ns-item fore-item" style="margin-top:8px">'+esc(data.forewarning)+'</div>';
+  }
+}
+
+// ── Factions Sidebar ─────────────────────────────────────────
+function renderFactions(data,tech,quests){
+  if(!data)return;
+  var list=document.getElementById('faction-list');
+  var keys=Object.keys(data);
+  var sig=keys.join('|');
+  if(list.dataset.sig!==sig){
+    list.dataset.sig=sig;
+    list.innerHTML='';
+    keys.forEach(function(fk){
+      var fc=FC[fk]||{color:'#78909C',name:fk};
+      var card=document.createElement('div');
+      card.className='faction-mini';
+      card.dataset.fk=fk;
+      card.innerHTML=
+        '<div class="fm-top"><span class="fm-dot" style="background:'+fc.color+'"></span><span class="fm-name" style="color:'+fc.color+'">'+esc(fc.name)+'</span><span class="fm-power" style="color:'+fc.color+'" data-f="power">&mdash;</span></div>'+
+        '<div class="fm-sub"><span data-f="cohesion-l">Cohesion</span><div class="fm-bar"><div class="fm-fill" data-f="cohesion" style="width:0"></div></div></div>'+
+        '<div class="fm-tech" data-f="tech">No research</div>'+
+        '<div class="fm-quest-count" data-f="quests"></div>'+
+        '<div class="fm-detail"><div data-f="stances"></div><div class="fm-action" data-f="action"></div></div>';
+      card.addEventListener('click',function(){
+        var was=card.classList.contains('active');
+        list.querySelectorAll('.faction-mini').forEach(function(c){c.classList.remove('active')});
+        if(!was){card.classList.add('active');activeFaction=fk}else{activeFaction=null}
+      });
+      list.appendChild(card);
+    });
+  }
+
+  keys.forEach(function(fk){
+    var f=data[fk];
+    var card=list.querySelector('[data-fk="'+fk+'"]');
+    if(!card)return;
+    var pwr=card.querySelector('[data-f="power"]');
+    if(pwr)pwr.textContent=f.power!=null?f.power:'\u2014';
+    var coh=card.querySelector('[data-f="cohesion"]');
+    var cohVal=f.cohesion!=null?f.cohesion:50;
+    if(coh){coh.style.width=clamp(cohVal,0,100)+'%';coh.style.background=cohVal>60?'#4CAF50':cohVal>30?'#FF9800':'#F44336'}
+
+    // Tech info
+    var techEl=card.querySelector('[data-f="tech"]');
+    if(techEl&&tech&&tech.factions&&tech.factions[fk]){
+      var ft=tech.factions[fk];
+      var active=ft.active_research;
+      var completed=ft.completed_techs||[];
+      if(active){
+        techEl.textContent='Researching: '+active.technology+' ('+Math.round(active.progress_percentage||0)+'%)';
+      }else{
+        techEl.textContent=completed.length?'Research paused ('+completed.length+' completed)':'No research';
+      }
+    }
+
+    // Quest count
+    var qEl=card.querySelector('[data-f="quests"]');
+    if(qEl&&quests&&quests.quest_log){
+      var count=quests.quest_log.filter(function(q){return q.char_id&&(q.char_id.indexOf(fk.slice(0,4))>-1||true)}).length;
+      qEl.textContent=quests.quest_log.length+' active quests';
+    }
+
+    // Detail: stances
+    if(activeFaction===fk){
+      var stEl=card.querySelector('[data-f="stances"]');
+      if(stEl&&f.stances){
+        var sh='<div style="font-size:10px;color:var(--dim);margin-bottom:4px;text-transform:uppercase;letter-spacing:1px">Stances</div>';
+        Object.keys(f.stances).forEach(function(ok){
+          var sc=stanceClass(f.stances[ok]);
+          sh+='<div class="fm-stance-row"><span class="fm-stance-name">'+esc(factionName(ok))+'</span><span class="fm-stance-val" style="color:'+stanceColor(f.stances[ok])+'">'+esc(f.stances[ok])+'</span></div>';
+        });
+        stEl.innerHTML=sh;
+      }
+      var actEl=card.querySelector('[data-f="action"]');
+      if(actEl)actEl.textContent=f.recent_action||'No recent action';
+    }
+  });
+}
+
+// ── Tab: Thoughts ────────────────────────────────────────────
+function renderThoughts(npcs){
+  var panel=document.getElementById('panel-thoughts');
+  if(!npcs||!npcs.length){panel.innerHTML='<div style="color:var(--dim)">No NPC data available</div>';return}
+  var html='';
+  npcs.forEach(function(npc){
+    var thoughts=npc.recent_thoughts||npc.thoughts||[];
+    var factionKey=npc.faction||npc.affiliation||npc.faction_id||'';
+    var fc=factionColor(factionKey);
+    var mc=moodColor(npc.mood);
+    var thHtml='';
+    if(thoughts.length){
+      thoughts.slice(0,3).forEach(function(th){
+        var text=typeof th==='string'?th:(th.text||th.thought||'');
+        thHtml+='<div class="thought-body">'+esc(text)+'</div>';
+      });
+    }else{
+      thHtml='<div class="thought-body" style="color:var(--dim)">No recent thoughts</div>';
+    }
+    html+=
+      '<div class="thought-card" style="border-left-color:'+fc+'">'+
+        '<div class="thought-header">'+
+          '<span class="thought-name" style="color:'+fc+'">'+esc(npc.name||'Unknown')+'</span>'+
+          '<span class="thought-title">'+esc(npc.title||npc.role||'')+'</span>'+
+          '<span class="thought-faction" style="color:'+fc+';background:'+fc+'14">'+esc(factionName(factionKey))+'</span>'+
+        '</div>'+
+        thHtml+
+        '<div class="thought-mood">Mood: <span style="color:'+mc+'">'+esc(npc.mood||'\u2014')+'</span></div>'+
+      '</div>';
+  });
+  panel.innerHTML=html;
+}
+
+// ── Tab: Quests ──────────────────────────────────────────────
+function renderQuests(quests){
+  var panel=document.getElementById('panel-quests');
+  if(!quests||!quests.quest_log||!quests.quest_log.length){panel.innerHTML='<div style="color:var(--dim)">No quest activity yet</div>';return}
+  var html='';
+  quests.quest_log.forEach(function(q){
+    var status=q.event||'active';
+    var statusClass=status.indexOf('complet')>-1?'completed':status.indexOf('abandon')>-1||status.indexOf('fail')>-1?'abandoned':'active';
+    var pct=q.progress!=null?Math.round(q.progress):0;
+    html+=
+      '<div class="quest-card">'+
+        '<div class="quest-header">'+
+          '<span class="quest-npc">'+esc(q.char_id||'')+'</span>'+
+          '<span class="quest-name">'+esc(q.quest_title||q.quest_id||'')+'</span>'+
+          '<span class="quest-status '+statusClass+'">'+esc(status)+'</span>'+
+        '</div>'+
+        (pct>0?'<div class="quest-progress"><div class="quest-fill" style="width:'+pct+'%"></div></div>':'')+
+      '</div>';
+  });
+  panel.innerHTML=html;
+}
+
+// ── Tab: Tech ────────────────────────────────────────────────
+function renderTech(tech){
+  var panel=document.getElementById('panel-tech');
+  if(!tech||!tech.factions){panel.innerHTML='<div style="color:var(--dim)">No tech data available</div>';return}
+  var html='';
+  Object.keys(tech.factions).forEach(function(fid){
+    var ft=tech.factions[fid];
+    var fc=factionColor(fid);
+    var active=ft.active_research;
+    var completed=ft.completed_techs||[];
+    var pct=active?Math.round(active.progress_percentage||0):0;
+    html+=
+      '<div class="tech-card" style="border-left-color:'+fc+'">'+
+        '<div class="tech-header">'+
+          '<span class="tech-faction" style="color:'+fc+'">'+esc(factionName(fid))+'</span>'+
+          (active?'<span class="tech-name">'+esc(active.technology)+'</span><span class="tech-tier">Tier '+esc(active.tier||'?')+'</span>':'<span style="color:var(--dim)">Idle</span>')+
+        '</div>'+
+        (active?'<div class="tech-progress"><div class="tech-fill" style="width:'+pct+'%;background:'+fc+'"></div></div>':'')+
+        (completed.length?'<div class="tech-completed">Completed: '+completed.map(function(c){return esc(c)}).join(', ')+'</div>':'')+
+      '</div>';
+  });
+  panel.innerHTML=html;
+}
+
+// ── Tab: Choices ─────────────────────────────────────────────
+function renderChoices(stats){
+  var panel=document.getElementById('panel-choices');
+  if(!stats){panel.innerHTML='<div style="color:var(--dim)">No faction votes recorded yet</div>';return}
+  // stats can be {stats: {choice_id: count}, history: [...]}
+  var voteStats=stats.stats||{};
+  var history=stats.history||stats.recent_resolutions||[];
+  var hasStats=Object.keys(voteStats).length>0;
+  var hasHistory=history.length>0;
+  if(!hasStats&&!hasHistory){panel.innerHTML='<div style="color:var(--dim)">No faction votes recorded yet — votes appear when world events trigger choices</div>';return}
+  var html='<div style="margin-bottom:12px;color:var(--dim);font-size:13px">How factions voted on galactic events</div>';
+  if(hasStats){
+    Object.keys(voteStats).sort(function(a,b){return voteStats[b]-voteStats[a]}).forEach(function(choice){
+      var count=voteStats[choice];
+      html+=
+      '<div class="choice-card">'+
+      '<div class="choice-event">'+esc(choice.replace(/_/g,' '))+'</div>'+
+      '<div class="choice-result">'+count+' faction-endorsements</div>'+
+      '</div>';
+    });
+  }
+  if(hasHistory){
+    html+='<div style="margin:12px 0 8px;font-size:11px;color:var(--dim);text-transform:uppercase;letter-spacing:1px">Recent Resolutions</div>';
+    history.slice(0,20).forEach(function(h){
+      var evt=h.event_name||h.event_id||h.choice_id||'Unknown event';
+      var choice=h.chosen_option||h.choice||'';
+      var voters=h.voters||h.voter_count||0;
+      html+=
+      '<div class="choice-card">'+
+      '<div class="choice-event">'+esc(evt)+'</div>'+
+      (choice?'<div class="choice-result" style="color:var(--cyan)">Chose: '+esc(choice.replace(/_/g,' '))+'</div>':'')+
+      (voters?'<div class="choice-votes"><span class="vote-badge">'+voters+' voters</span></div>':'')+
+      '</div>';
+    });
+  }
+  panel.innerHTML=html;
+}
+
+// ── Tab: Event Log ───────────────────────────────────────────
+function renderLog(events){
+  var panel=document.getElementById('panel-log');
+  if(!events||!events.length){panel.innerHTML='<div style="color:var(--dim)">No events yet</div>';return}
+  var html='';
+  events.slice(0,50).forEach(function(ev){
+    var typeClass='world';
+    var sourceLabel='SYSTEM';
+    var sourceClass='world';
+    var evType=(ev.type||ev.event_type||'').toLowerCase();
+    var evSource=(ev.source||ev.source_type||'').toLowerCase();
+    if(evType==='cascade'||ev.cascade){typeClass='cascade';sourceLabel='CASCADE';sourceClass='cascade'}
+    else if(evSource==='faction'||evType==='faction_action'||ev.faction_id){typeClass='faction';sourceLabel='FACTION';sourceClass='faction'}
+    else if(evSource==='quest'){typeClass='quest';sourceLabel='QUEST';sourceClass='quest'}
+    else if(evSource==='tech'){typeClass='tech';sourceLabel='TECH';sourceClass='tech'}
+    var desc=ev.description||ev.message||ev.text||ev.event||'';
+    var ts=ev.timestamp||ev.time||'';
+    var fidBorder=ev.faction_id&&factionColor(ev.faction_id)?'border-left-color:'+factionColor(ev.faction_id):'';
+    html+=
+      '<div class="log-entry '+typeClass+'" style="'+fidBorder+'">'+
+        '<span class="log-time">'+esc(String(ts))+'</span>'+
+        '<span class="log-source '+sourceClass+'">'+sourceLabel+'</span>'+
+        '<span class="log-body">'+esc(desc)+'</span>'+
+      '</div>';
+  });
+  panel.innerHTML=html;
+}
+
+function renderActiveTab(){
+  switch(activeTab){
+    case'thoughts':renderThoughts(npcActivity);break;
+    case'quests':renderQuests(questLog);break;
+    case'tech':renderTech(techData);break;
+    case'choices':renderChoices(choiceStats);break;
+    case'log':renderLog(eventLog);break;
+  }
+}
+
+// ── WebSocket ────────────────────────────────────────────────
+function connectWS(){
+  try{
+    var proto=location.protocol==='https:'?'wss:':'ws:';
+    ws=new WebSocket(proto+'//'+location.host+'/ws');
+    ws.onopen=function(){wsReconnects=0;console.log('WS connected')};
+    ws.onmessage=function(e){
+      try{
+        var d=JSON.parse(e.data);
+        if(d.type==='world_state'||d.type==='world_state_update'){
+          worldState=d.data||d;
+          updateHeaderMetrics(worldState);
+        }
+        if(d.type==='narration')renderNarration(d.data);
+        if(d.type==='event')eventLog.unshift(d.data);
+      }catch(err){}
+    };
+    ws.onclose=function(){
+      wsReconnects++;
+      var delay=Math.min(5000,1000*wsReconnects);
+      setTimeout(connectWS,delay);
+    };
+    ws.onerror=function(){ws.close()};
+  }catch(e){setTimeout(connectWS,5000)}
+}
+
+// ── Data Fetching ────────────────────────────────────────────
+async function fetchWorldState(){
+  var d=await api('/world/state',8000);
+  if(d){
+    // API returns {state: {tension_level, resource_abundance, ...}, conditions: [...]}
+    var ws=d.state||d;
+    worldState=ws;
+    updateHeaderMetrics(ws);
+  }
+}
+
+async function fetchStatus(){
+  var d=await api('/simulation/status',10000);
+  if(d){
+    if(d.world_state||d.worldState)updateHeaderMetrics(d.world_state||d.worldState);
+    updateEra(d);
+  }
+  // Also fetch engine-status for era/phase info
+  var es=await api('/engine-status',8000);
+  if(es){
+    updateEra(es.turn_progression||es);
+  }
+}
+
+async function fetchNarration(){
+  var d=await api('/narrator/history',8000);
+  // API returns {status, narrations: [...], count}
+  var narrs=d&&d.narrations?d.narrations:(Array.isArray(d)?d:[]);
+  if(narrs.length){
+    narrationHistory=narrs;
+    renderNarration(narrs[0]);
+  }
+}
+
+async function fetchFactions(){
+  var d=await api('/simulation/factions',10000);
+  if(d)factions=d;
+}
+
+async function fetchNPCs(){
+  var d=await api('/simulation/npcs/activity',15000);
+  // API returns {npcs: [...], count}
+  if(d){
+    var arr=d.npcs||d;
+    npcActivity=Array.isArray(arr)?arr:Object.values(arr);
+  }
+}
+
+async function fetchQuests(){
+  var d=await api('/simulation/npc-quests',10000);
+  if(d)questLog=d;
+}
+
+async function fetchTech(){
+  var d=await api('/simulation/faction-tech',10000);
+  if(d)techData=d;
+}
+
+async function fetchChoices(){
+  var d=await api('/simulation/choice-resolutions',8000);
+  if(d)choiceStats=d;
+}
+
+async function fetchEvents(){
+  var d=await api('/simulation/events',10000);
+  if(d){
+    var all=[];
+    if(d.world_events&&Array.isArray(d.world_events))all=all.concat(d.world_events);
+    if(d.cascade_events&&Array.isArray(d.cascade_events))all=all.concat(d.cascade_events);
+    if(d.broadcast_events&&Array.isArray(d.broadcast_events))all=all.concat(d.broadcast_events);
+    eventLog=all;
+  }
+}
+
+// ── Main Refresh ─────────────────────────────────────────────
+async function refreshLight(){
+  await Promise.all([fetchWorldState(),fetchStatus(),fetchNarration(),fetchFactions()]);
+  renderFactions(factions,techData,questLog);
+}
+
+async function refreshHeavy(){
+  await Promise.all([fetchNPCs(),fetchQuests(),fetchTech(),fetchChoices(),fetchEvents()]);
+  renderActiveTab();
+  renderFactions(factions,techData,questLog);
+}
+
+async function init(){
+  makeStars();
+  buildHeaderMetrics();
+  connectWS();
+  await refreshLight();
+  await refreshHeavy();
+  setInterval(refreshLight,10000);
+  setInterval(refreshHeavy,30000);
+}
+
+document.addEventListener('DOMContentLoaded',init);
+</script>
+</body>
+</html>
