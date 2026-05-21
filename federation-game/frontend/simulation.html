@@ -8,35 +8,35 @@
 <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Share+Tech+Mono&display=swap" rel="stylesheet">
 <style>
 :root {
-  --amber: #FF9800;
-  --amber-dim: rgba(255,152,0,0.15);
-  --cyan: #00BCD4;
-  --cyan-dim: rgba(0,188,212,0.12);
-  --violet: #9C27B0;
-  --red: #F44336;
-  --red-dim: rgba(244,67,54,0.12);
-  --green: #4CAF50;
-  --green-dim: rgba(76,175,80,0.12);
-  --white: #e0e0e0;
-  --dim: #607080;
-  --panel-bg: rgba(8,12,20,0.94);
-  --panel-border: rgba(0,188,212,0.15);
-  --glow-cyan: 0 0 10px rgba(0,188,212,0.25);
-  --glow-amber: 0 0 10px rgba(255,152,0,0.25);
+--amber: #FF9800;
+--amber-dim: rgba(255,152,0,0.15);
+--cyan: #00BCD4;
+--cyan-dim: rgba(0,188,212,0.12);
+--violet: #9C27B0;
+--red: #F44336;
+--red-dim: rgba(244,67,54,0.12);
+--green: #4CAF50;
+--green-dim: rgba(76,175,80,0.12);
+--white: #e0e0e0;
+--dim: #607080;
+--panel-bg: rgba(8,12,20,0.94);
+--panel-border: rgba(0,188,212,0.15);
+--glow-cyan: 0 0 10px rgba(0,188,212,0.25);
+--glow-amber: 0 0 10px rgba(255,152,0,0.25);
 }
 *{margin:0;padding:0;box-sizing:border-box}
 html,body{height:100%;overflow:hidden;background:#040810;color:var(--white);font-family:'Share Tech Mono',monospace;font-size:18px}
 
 #app{
-  display:grid;
-  grid-template-rows:72px 1fr 64px;
-  grid-template-columns:30% 40% 30%;
-  grid-template-areas:
-    "top top top"
-    "left center right"
-    "bottom bottom bottom";
-  height:100vh;gap:1px;
-  background:radial-gradient(ellipse at 50% 30%,rgba(0,188,212,0.03) 0%,transparent 60%);
+display:grid;
+grid-template-rows:72px 1fr 64px;
+grid-template-columns:30% 40% 30%;
+grid-template-areas:
+"top top top"
+"left center right"
+"bottom bottom bottom";
+height:100vh;gap:1px;
+background:radial-gradient(ellipse at 50% 30%,rgba(0,188,212,0.03) 0%,transparent 60%);
 }
 
 .panel{background:var(--panel-bg);overflow-y:auto;scrollbar-width:thin;scrollbar-color:rgba(0,188,212,0.2) transparent}
@@ -163,6 +163,80 @@ html,body{height:100%;overflow:hidden;background:#040810;color:var(--white);font
 .starfield{position:fixed;inset:0;z-index:-1;overflow:hidden}
 .star{position:absolute;background:#fff;border-radius:50%;animation:twinkle var(--dur) ease infinite var(--delay)}
 @keyframes twinkle{0%,100%{opacity:0.2}50%{opacity:0.8}}
+
+.tab-bar{display:flex;gap:2px;margin-bottom:10px;border-bottom:1px solid var(--panel-border);padding-bottom:4px}
+.tab-btn{font-family:'Orbitron',sans-serif;font-size:12px;font-weight:700;letter-spacing:1px;text-transform:uppercase;padding:8px 14px;cursor:pointer;border:1px solid transparent;border-radius:6px 6px 0 0;background:rgba(255,255,255,0.02);color:var(--dim);transition:color 0.2s,background 0.2s,border-color 0.2s;min-width:60px;text-align:center}
+.tab-btn:hover{color:var(--white);background:rgba(255,255,255,0.04)}
+.tab-btn.active-amber{color:var(--amber);background:var(--amber-dim);border-color:rgba(255,152,0,0.25);border-bottom-color:transparent}
+.tab-btn.active-cyan{color:var(--cyan);background:var(--cyan-dim);border-color:rgba(0,188,212,0.25);border-bottom-color:transparent}
+.tab-btn.active-violet{color:var(--violet);background:rgba(156,39,176,0.12);border-color:rgba(156,39,176,0.25);border-bottom-color:transparent}
+
+.tab-content{display:none}
+.tab-content.visible{display:block}
+
+.quest-log{display:flex;flex-direction:column;gap:4px}
+.quest-entry{display:flex;gap:8px;padding:8px 10px;border-radius:6px;border-left:3px solid var(--violet);background:rgba(255,255,255,0.02);font-size:14px;cursor:pointer;transition:background 0.2s}
+.quest-entry:hover{background:rgba(255,255,255,0.05)}
+.quest-entry.quest-accept{border-left-color:var(--green)}
+.quest-entry.quest-progress{border-left-color:var(--cyan)}
+.quest-entry.quest-complete{border-left-color:var(--amber)}
+.quest-entry.quest-abandon{border-left-color:var(--red)}
+.quest-time{color:var(--dim);font-size:11px;white-space:nowrap;min-width:50px;padding-top:2px}
+.quest-event{font-size:10px;text-transform:uppercase;letter-spacing:1px;padding:2px 6px;border-radius:3px;white-space:nowrap;align-self:flex-start}
+.quest-event.accept{color:var(--green);background:var(--green-dim)}
+.quest-event.progress{color:var(--cyan);background:var(--cyan-dim)}
+.quest-event.complete{color:var(--amber);background:var(--amber-dim)}
+.quest-event.abandon{color:var(--red);background:var(--red-dim)}
+.quest-body{flex:1;line-height:1.4}
+
+.quest-detail{background:rgba(255,255,255,0.03);border:1px solid rgba(156,39,176,0.2);border-radius:8px;padding:12px;margin-top:8px;margin-bottom:8px}
+.quest-detail-title{font-family:'Orbitron',sans-serif;font-size:14px;font-weight:700;color:var(--violet);margin-bottom:6px}
+.quest-detail-desc{font-size:13px;color:var(--dim);margin-bottom:8px;line-height:1.4}
+.quest-objective{margin-bottom:6px}
+.quest-obj-label{font-size:12px;display:flex;justify-content:space-between;margin-bottom:3px}
+.quest-obj-name{color:var(--white)}
+.quest-obj-pct{color:var(--cyan);font-family:'Orbitron',sans-serif;font-size:11px}
+.quest-obj-bar{height:10px;background:rgba(255,255,255,0.06);border-radius:5px;overflow:hidden}
+.quest-obj-fill{height:100%;border-radius:5px;transition:width 0.8s ease}
+.quest-obj-fill.done{background:var(--green)}
+.quest-reward{font-size:12px;color:var(--amber);margin-top:6px}
+.quest-stats{display:flex;gap:12px;margin-top:8px;font-size:13px}
+.quest-stat{display:flex;flex-direction:column;align-items:center;gap:1px}
+.quest-stat-val{font-family:'Orbitron',sans-serif;font-size:18px;font-weight:900}
+.quest-stat-label{font-size:10px;color:var(--dim);text-transform:uppercase;letter-spacing:1px}
+
+.tech-card{background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.06);border-radius:8px;padding:10px 12px;margin-bottom:8px;transition:border-color 0.3s}
+.tech-card:hover{border-color:rgba(0,188,212,0.2)}
+.tech-header{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.tech-faction{font-family:'Orbitron',sans-serif;font-size:14px;font-weight:700;letter-spacing:1px}
+.tech-project{font-size:13px;color:var(--cyan);margin-top:4px}
+.tech-progress{margin-top:6px}
+.tech-progress-label{display:flex;justify-content:space-between;font-size:11px;margin-bottom:3px}
+.tech-progress-pct{font-family:'Orbitron',sans-serif;color:var(--amber);font-size:12px}
+.tech-progress-bar{height:12px;background:rgba(255,255,255,0.06);border-radius:6px;overflow:hidden;border:1px solid rgba(255,255,255,0.06)}
+.tech-progress-fill{height:100%;border-radius:6px;background:linear-gradient(90deg,var(--cyan),var(--amber));transition:width 0.8s ease;position:relative}
+.tech-progress-fill::after{content:'';position:absolute;inset:0;background:linear-gradient(180deg,rgba(255,255,255,0.15) 0%,transparent 50%);border-radius:6px}
+.tech-meta{display:flex;gap:10px;margin-top:6px;font-size:12px;color:var(--dim);flex-wrap:wrap}
+.tech-meta-item{display:flex;align-items:center;gap:4px}
+.tech-meta-val{color:var(--white);font-weight:700}
+.tech-completed{margin-top:6px;font-size:12px;color:var(--dim)}
+.tech-completed-tag{display:inline-block;font-size:11px;padding:2px 6px;margin:2px;border-radius:3px;background:rgba(76,175,80,0.1);border:1px solid rgba(76,175,80,0.2);color:var(--green)}
+.tech-no-research{font-size:13px;color:var(--dim);padding:8px 0}
+
+.choice-list{display:flex;flex-direction:column;gap:6px}
+.choice-item{display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:6px;background:rgba(255,255,255,0.02);cursor:pointer;transition:background 0.2s}
+.choice-item:hover{background:rgba(255,255,255,0.05)}
+.choice-rank{font-family:'Orbitron',sans-serif;font-size:18px;font-weight:900;color:var(--amber);min-width:30px;text-align:center}
+.choice-id{font-size:13px;color:var(--white);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.choice-count{font-family:'Orbitron',sans-serif;font-size:16px;color:var(--cyan);min-width:40px;text-align:right}
+.choice-bar-container{width:100%;margin-top:4px}
+.choice-bar{height:8px;background:rgba(255,255,255,0.06);border-radius:4px;overflow:hidden}
+.choice-bar-fill{height:100%;border-radius:4px;background:var(--violet);transition:width 0.8s ease}
+
+.faction-choice-detail{background:rgba(255,255,255,0.03);border:1px solid rgba(156,39,176,0.2);border-radius:8px;padding:12px;margin-top:8px;margin-bottom:8px}
+.faction-choice-title{font-family:'Orbitron',sans-serif;font-size:14px;font-weight:700;color:var(--violet);margin-bottom:6px}
+.faction-choice-history{display:flex;flex-direction:column;gap:3px;font-size:12px;color:var(--dim)}
+.faction-choice-entry{padding:3px 6px;border-radius:3px;background:rgba(156,39,176,0.06)}
 </style>
 </head>
 <body>
@@ -170,617 +244,997 @@ html,body{height:100%;overflow:hidden;background:#040810;color:var(--white);font
 <div class="starfield" id="starfield"></div>
 
 <div id="app">
-  <header id="top">
-    <div class="top-title">SIMULATION OBSERVER</div>
-    <div class="top-tick">
-      <span class="top-tick-label">Tick</span>
-      <span class="top-tick-val" id="tick-count">&mdash;</span>
-    </div>
-    <div class="top-metric">
-      <span class="tm-label">Tension</span>
-      <span class="tm-val" id="val-tension">&mdash;</span>
-      <div class="tm-bar"><div class="tm-fill" id="bar-tension" style="width:0;background:var(--red)"></div></div>
-    </div>
-    <div class="top-metric">
-      <span class="tm-label">Resources</span>
-      <span class="tm-val" id="val-resources">&mdash;</span>
-      <div class="tm-bar"><div class="tm-fill" id="bar-resources" style="width:0;background:var(--green)"></div></div>
-    </div>
-    <div class="top-metric">
-      <span class="tm-label">Threat</span>
-      <span class="tm-val" id="val-threat">&mdash;</span>
-      <div class="tm-bar"><div class="tm-fill" id="bar-threat" style="width:0;background:var(--red)"></div></div>
-    </div>
-    <div class="top-metric">
-      <span class="tm-label">Stability</span>
-      <span class="tm-val" id="val-stability">&mdash;</span>
-      <div class="tm-bar"><div class="tm-fill" id="bar-stability" style="width:0;background:var(--cyan)"></div></div>
-    </div>
-    <div class="top-metric">
-      <span class="tm-label">Morale</span>
-      <span class="tm-val" id="val-morale">&mdash;</span>
-      <div class="tm-bar"><div class="tm-fill" id="bar-morale" style="width:0;background:var(--amber)"></div></div>
-    </div>
-    <div class="top-metric">
-      <span class="tm-label">Anomaly</span>
-      <span class="tm-val" id="val-anomaly">&mdash;</span>
-      <div class="tm-bar"><div class="tm-fill" id="bar-anomaly" style="width:0;background:var(--violet)"></div></div>
-    </div>
-    <div class="cascade-gauge">
-      <span class="cascade-label">Cascade Temp</span>
-      <div class="cascade-bar"><div class="cascade-fill" id="cascade-fill" style="width:0;background:var(--green)"></div></div>
-      <span class="cascade-pct" id="cascade-pct">0%</span>
-    </div>
-    <div class="time-since">
-      <span class="time-since-label">Last Tick</span>
-      <span class="time-since-val" id="time-since">&mdash;</span>
-    </div>
-    <nav class="top-nav">
-      <a href="bridge.html">Bridge</a>
-      <a href="starmap.html">Starmap</a>
-      <a href="simulation.html" class="active">Sim</a>
-    </nav>
-  </header>
+<header id="top">
+<div class="top-title">SIMULATION OBSERVER</div>
+<div class="top-tick">
+<span class="top-tick-label">Tick</span>
+<span class="top-tick-val" id="tick-count">&mdash;</span>
+</div>
+<div class="top-metric">
+<span class="tm-label">Tension</span>
+<span class="tm-val" id="val-tension">&mdash;</span>
+<div class="tm-bar"><div class="tm-fill" id="bar-tension" style="width:0;background:var(--red)"></div></div>
+</div>
+<div class="top-metric">
+<span class="tm-label">Resources</span>
+<span class="tm-val" id="val-resources">&mdash;</span>
+<div class="tm-bar"><div class="tm-fill" id="bar-resources" style="width:0;background:var(--green)"></div></div>
+</div>
+<div class="top-metric">
+<span class="tm-label">Threat</span>
+<span class="tm-val" id="val-threat">&mdash;</span>
+<div class="tm-bar"><div class="tm-fill" id="bar-threat" style="width:0;background:var(--red)"></div></div>
+</div>
+<div class="top-metric">
+<span class="tm-label">Stability</span>
+<span class="tm-val" id="val-stability">&mdash;</span>
+<div class="tm-bar"><div class="tm-fill" id="bar-stability" style="width:0;background:var(--cyan)"></div></div>
+</div>
+<div class="top-metric">
+<span class="tm-label">Morale</span>
+<span class="tm-val" id="val-morale">&mdash;</span>
+<div class="tm-bar"><div class="tm-fill" id="bar-morale" style="width:0;background:var(--amber)"></div></div>
+</div>
+<div class="top-metric">
+<span class="tm-label">Anomaly</span>
+<span class="tm-val" id="val-anomaly">&mdash;</span>
+<div class="tm-bar"><div class="tm-fill" id="bar-anomaly" style="width:0;background:var(--violet)"></div></div>
+</div>
+<div class="cascade-gauge">
+<span class="cascade-label">Cascade Temp</span>
+<div class="cascade-bar"><div class="cascade-fill" id="cascade-fill" style="width:0;background:var(--green)"></div></div>
+<span class="cascade-pct" id="cascade-pct">0%</span>
+</div>
+<div class="time-since">
+<span class="time-since-label">Last Tick</span>
+<span class="time-since-val" id="time-since">&mdash;</span>
+</div>
+<nav class="top-nav">
+<a href="bridge.html">Bridge</a>
+<a href="starmap.html">Starmap</a>
+<a href="simulation.html" class="active">Sim</a>
+</nav>
+</header>
 
-  <section id="left" class="panel">
-    <div class="section-title amber">Faction Standings</div>
-    <div id="faction-list"></div>
-  </section>
+<section id="left" class="panel">
+<div class="tab-bar" id="left-tabs">
+<button class="tab-btn active-amber" data-tab="factions" onclick="switchLeftTab('factions')">Factions</button>
+<button class="tab-btn" data-tab="faction-tech" onclick="switchLeftTab('faction-tech')">Faction Tech</button>
+</div>
+<div class="tab-content visible" id="left-factions">
+<div class="section-title amber">Faction Standings</div>
+<div id="faction-list"></div>
+</div>
+<div class="tab-content" id="left-faction-tech">
+<div class="section-title amber">Faction Tech Research</div>
+<div id="tech-list"></div>
+</div>
+</section>
 
-  <section id="center" class="panel">
-    <div class="section-title cyan">World Events Feed</div>
-    <div class="event-feed" id="event-feed"></div>
-    <div class="signal-lost" id="signal-lost-center">
-      <span class="signal-lost-text">SIGNAL LOST</span>
-    </div>
-  </section>
+<section id="center" class="panel">
+<div class="section-title cyan">World Events Feed</div>
+<div class="event-feed" id="event-feed"></div>
+<div class="signal-lost" id="signal-lost-center">
+<span class="signal-lost-text">SIGNAL LOST</span>
+</div>
+</section>
 
-  <section id="right" class="panel">
-    <div class="section-title violet">NPC Activity</div>
-    <div class="npc-grid" id="npc-grid"></div>
-  </section>
+<section id="right" class="panel">
+<div class="tab-bar" id="right-tabs">
+<button class="tab-btn active-violet" data-tab="npcs" onclick="switchRightTab('npcs')">NPCs</button>
+<button class="tab-btn" data-tab="npc-quests" onclick="switchRightTab('npc-quests')">NPC Quests</button>
+<button class="tab-btn" data-tab="choices" onclick="switchRightTab('choices')">Choices</button>
+</div>
+<div class="tab-content visible" id="right-npcs">
+<div class="section-title violet">NPC Activity</div>
+<div class="npc-grid" id="npc-grid"></div>
+</div>
+<div class="tab-content" id="right-npc-quests">
+<div class="section-title violet">NPC Quest Feed</div>
+<div id="quest-detail-area"></div>
+<div class="quest-log" id="quest-log"></div>
+</div>
+<div class="tab-content" id="right-choices">
+<div class="section-title violet">Choice Resolutions</div>
+<div id="faction-choice-detail-area"></div>
+<div class="choice-list" id="choice-list"></div>
+</div>
+</section>
 
-  <footer id="bottom">
-    <div class="bottom-era" id="era-name">&mdash;</div>
-    <div class="bottom-progress">
-      <span class="bottom-progress-label">Next Era</span>
-      <div class="bottom-progress-bar"><div class="bottom-progress-fill" id="era-fill" style="width:0"></div></div>
-      <span class="bottom-progress-pct" id="era-pct">0%</span>
-    </div>
-    <div class="bottom-triggers" id="era-triggers"></div>
-    <div class="bottom-pending" id="pending-items">Pending: <strong>&mdash;</strong></div>
-  </footer>
+<footer id="bottom">
+<div class="bottom-era" id="era-name">&mdash;</div>
+<div class="bottom-progress">
+<span class="bottom-progress-label">Next Era</span>
+<div class="bottom-progress-bar"><div class="bottom-progress-fill" id="era-fill" style="width:0"></div></div>
+<span class="bottom-progress-pct" id="era-pct">0%</span>
+</div>
+<div class="bottom-triggers" id="era-triggers"></div>
+<div class="bottom-pending" id="pending-items">Pending: <strong>&mdash;</strong></div>
+</footer>
 </div>
 
 <script>
 const FACTION_COLORS = {
-  military_command: '#F44336',
-  research_division: '#2196F3',
-  diplomatic_corps: '#4CAF50',
-  cultural_ministry: '#9C27B0',
-  economic_council: '#FF9800',
-  exploration_initiative: '#00BCD4',
-  consciousness_collective: '#E91E63',
-  preservation_society: '#8BC34A',
+military_command: '#F44336',
+research_division: '#2196F3',
+diplomatic_corps: '#4CAF50',
+cultural_ministry: '#9C27B0',
+economic_council: '#FF9800',
+exploration_initiative: '#00BCD4',
+consciousness_collective: '#E91E63',
+preservation_society: '#8BC34A',
 };
 
 const FACTION_DISPLAY = {
-  military_command: 'Military Command',
-  research_division: 'Research Division',
-  diplomatic_corps: 'Diplomatic Corps',
-  cultural_ministry: 'Cultural Ministry',
-  economic_council: 'Economic Council',
-  exploration_initiative: 'Exploration Initiative',
-  consciousness_collective: 'Consciousness Collective',
-  preservation_society: 'Preservation Society',
+military_command: 'Military Command',
+research_division: 'Research Division',
+diplomatic_corps: 'Diplomatic Corps',
+cultural_ministry: 'Cultural Ministry',
+economic_council: 'Economic Council',
+exploration_initiative: 'Exploration Initiative',
+consciousness_collective: 'Consciousness Collective',
+preservation_society: 'Preservation Society',
 };
 
 const MOOD_COLORS = {
-  satisfied:'#4CAF50',inspired:'#66BB6A',serene:'#81C784',peaceful:'#A5D6A7',
-  hopeful:'#4CAF50',excited:'#66BB6A',confident:'#4CAF50',enlightened:'#66BB6A',
-  adventurous:'#81C784',determined:'#4CAF50',resolute:'#66BB6A',steadfast:'#4CAF50',
-  patient:'#81C784',valiant:'#4CAF50',free:'#66BB6A',
-  frustrated:'#F44336',aggressive:'#D32F2F',suspicious:'#FF9800',anxious:'#FF9800',
-  alarmed:'#F44336',worried:'#FF9800',unsettled:'#FF9800',weary:'#FF9800',
-  melancholic:'#9C27B0',paranoid:'#F44336',burdened:'#FF9800',
-  contemplative:'#00BCD4',thoughtful:'#00BCD4',curious:'#00BCD4',
-  distracted:'#78909C',reserved:'#78909C',
+satisfied:'#4CAF50',inspired:'#66BB6A',serene:'#81C784',peaceful:'#A5D6A7',
+hopeful:'#4CAF50',excited:'#66BB6A',confident:'#4CAF50',enlightened:'#66BB6A',
+adventurous:'#81C784',determined:'#4CAF50',resolute:'#66BB6A',steadfast:'#4CAF50',
+patient:'#81C784',valiant:'#4CAF50',free:'#66BB6A',
+frustrated:'#F44336',aggressive:'#D32F2F',suspicious:'#FF9800',anxious:'#FF9800',
+alarmed:'#F44336',worried:'#FF9800',unsettled:'#FF9800',weary:'#FF9800',
+melancholic:'#9C27B0',paranoid:'#F44336',burdened:'#FF9800',
+contemplative:'#00BCD4',thoughtful:'#00BCD4',curious:'#00BCD4',
+distracted:'#78909C',reserved:'#78909C',
 };
 
 const METRIC_COLORS = {
-  tension:'#F44336',resources:'#4CAF50',threat:'#F44336',
-  stability:'#00BCD4',morale:'#FF9800',anomaly:'#9C27B0'
+tension:'#F44336',resources:'#4CAF50',threat:'#F44336',
+stability:'#00BCD4',morale:'#FF9800',anomaly:'#9C27B0'
 };
 
-let lastData = { status:null, factions:null, npcs:null, events:null };
+let lastData = { status:null, factions:null, npcs:null, events:null, quests:null, factionTech:null, choices:null };
 let fetchErrorCount = 0;
 let lastTickTime = null;
 let expandedFaction = null;
 let expandedNpc = null;
+let activeLeftTab = 'factions';
+let activeRightTab = 'npcs';
+let expandedQuestNpc = null;
+let expandedChoiceFaction = null;
 
 function generateStarfield() {
-  const sf = document.getElementById('starfield');
-  for (let i = 0; i < 80; i++) {
-    const s = document.createElement('div');
-    s.className = 'star';
-    const size = Math.random() * 2 + 1;
-    s.style.cssText = 'width:' + size + 'px;height:' + size + 'px;left:' + (Math.random()*100) + '%;top:' + (Math.random()*100) + '%;--dur:' + (2+Math.random()*4) + 's;--delay:' + (Math.random()*3) + 's;opacity:' + (0.2+Math.random()*0.5);
-    sf.appendChild(s);
-  }
+const sf = document.getElementById('starfield');
+for (let i = 0; i < 80; i++) {
+const s = document.createElement('div');
+s.className = 'star';
+const size = Math.random() * 2 + 1;
+s.style.cssText = 'width:' + size + 'px;height:' + size + 'px;left:' + (Math.random()*100) + '%;top:' + (Math.random()*100) + '%;--dur:' + (2+Math.random()*4) + 's;--delay:' + (Math.random()*3) + 's;opacity:' + (0.2+Math.random()*0.5);
+sf.appendChild(s);
+}
 }
 
 function formatTime(seconds) {
-  if (seconds == null || isNaN(seconds)) return '\u2014';
-  if (seconds < 60) return Math.floor(seconds) + 's';
-  if (seconds < 3600) return Math.floor(seconds/60) + 'm ' + Math.floor(seconds%60) + 's';
-  return Math.floor(seconds/3600) + 'h ' + Math.floor((seconds%3600)/60) + 'm';
+if (seconds == null || isNaN(seconds)) return '\u2014';
+if (seconds < 60) return Math.floor(seconds) + 's';
+if (seconds < 3600) return Math.floor(seconds/60) + 'm ' + Math.floor(seconds%60) + 's';
+return Math.floor(seconds/3600) + 'h ' + Math.floor((seconds%3600)/60) + 'm';
 }
 
 function stanceToClass(stance) {
-  if (!stance) return 'neutral';
-  var s = String(stance).toLowerCase();
-  if (s === 'ally' || s === 'allied' || s === 'friendly') return 'ally';
-  if (s === 'enemy' || s === 'hostile' || s === 'adversarial') return 'enemy';
-  return 'neutral';
+if (!stance) return 'neutral';
+var s = String(stance).toLowerCase();
+if (s === 'ally' || s === 'allied' || s === 'friendly') return 'ally';
+if (s === 'enemy' || s === 'hostile' || s === 'adversarial') return 'enemy';
+return 'neutral';
 }
 
 function moodColorOf(mood) {
-  if (!mood) return '#78909C';
-  return MOOD_COLORS[String(mood).toLowerCase()] || '#78909C';
+if (!mood) return '#78909C';
+return MOOD_COLORS[String(mood).toLowerCase()] || '#78909C';
 }
 
 function cascadeColor(pct) {
-  if (pct < 30) return '#4CAF50';
-  if (pct < 60) return '#FF9800';
-  if (pct < 85) return '#F44336';
-  return '#E91E63';
+if (pct < 30) return '#4CAF50';
+if (pct < 60) return '#FF9800';
+if (pct < 85) return '#F44336';
+return '#E91E63';
 }
 
 function esc(s) {
-  if (s == null) return '';
-  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+if (s == null) return '';
+return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
 
 function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
 
 async function apiFetch(endpoint, timeoutMs) {
- var ctl = new AbortController();
- var timer = setTimeout(function() { ctl.abort(); }, timeoutMs || 8000);
- try {
- var r = await fetch('/api' + endpoint, { headers: { 'Accept': 'application/json' }, signal: ctl.signal });
- clearTimeout(timer);
- if (!r.ok) throw new Error(r.status);
- return await r.json();
- } catch (e) {
- clearTimeout(timer);
- return null;
- }
+var ctl = new AbortController();
+var timer = setTimeout(function() { ctl.abort(); }, timeoutMs || 8000);
+try {
+var r = await fetch('/api' + endpoint, { headers: { 'Accept': 'application/json' }, signal: ctl.signal });
+clearTimeout(timer);
+if (!r.ok) throw new Error(r.status);
+return await r.json();
+} catch (e) {
+clearTimeout(timer);
+return null;
+}
+}
+
+function switchLeftTab(tab) {
+activeLeftTab = tab;
+var btns = document.querySelectorAll('#left-tabs .tab-btn');
+for (var i = 0; i < btns.length; i++) {
+btns[i].classList.remove('active-amber');
+if (btns[i].dataset.tab === tab) btns[i].classList.add('active-amber');
+}
+document.getElementById('left-factions').classList.toggle('visible', tab === 'factions');
+document.getElementById('left-faction-tech').classList.toggle('visible', tab === 'faction-tech');
+if (tab === 'faction-tech' && !lastData.factionTech) refreshFactionTech();
+}
+
+function switchRightTab(tab) {
+activeRightTab = tab;
+var btns = document.querySelectorAll('#right-tabs .tab-btn');
+for (var i = 0; i < btns.length; i++) {
+btns[i].classList.remove('active-violet');
+if (btns[i].dataset.tab === tab) btns[i].classList.add('active-violet');
+}
+document.getElementById('right-npcs').classList.toggle('visible', tab === 'npcs');
+document.getElementById('right-npc-quests').classList.toggle('visible', tab === 'npc-quests');
+document.getElementById('right-choices').classList.toggle('visible', tab === 'choices');
+if (tab === 'npc-quests' && !lastData.quests) refreshQuests();
+if (tab === 'choices' && !lastData.choices) refreshChoices();
 }
 
 function updateTopRibbon(status) {
-  if (!status) return;
-  var ws = status.world_state || status.worldState || status;
-  var tick = ws.tick_count != null ? ws.tick_count : (ws.tickCount != null ? ws.tickCount : (ws.tick != null ? ws.tick : '\u2014'));
-  document.getElementById('tick-count').textContent = tick;
+if (!status) return;
+var ws = status.world_state || status.worldState || status;
+var tick = ws.tick_count != null ? ws.tick_count : (ws.tickCount != null ? ws.tickCount : (ws.tick != null ? ws.tick : '\u2014'));
+document.getElementById('tick-count').textContent = tick;
 
-  var metrics = ['tension','resources','threat','stability','morale','anomaly'];
-  for (var i = 0; i < metrics.length; i++) {
-    var m = metrics[i];
-    var v = ws[m] != null ? ws[m] : 0;
-    var valEl = document.getElementById('val-' + m);
-    var barEl = document.getElementById('bar-' + m);
-    if (typeof v === 'number') {
-      valEl.textContent = Math.round(v);
-      barEl.style.width = clamp(v, 0, 100) + '%';
-    } else {
-      valEl.textContent = v;
-    }
-    barEl.style.background = METRIC_COLORS[m] || 'var(--cyan)';
-  }
+var metrics = ['tension','resources','threat','stability','morale','anomaly'];
+for (var i = 0; i < metrics.length; i++) {
+var m = metrics[i];
+var v = ws[m] != null ? ws[m] : 0;
+var valEl = document.getElementById('val-' + m);
+var barEl = document.getElementById('bar-' + m);
+if (typeof v === 'number') {
+valEl.textContent = Math.round(v);
+barEl.style.width = clamp(v, 0, 100) + '%';
+} else {
+valEl.textContent = v;
+}
+barEl.style.background = METRIC_COLORS[m] || 'var(--cyan)';
+}
 
-  var cascade = status.cascade_summary || status.cascadeSummary || {};
-  var temp = cascade.temperature != null ? cascade.temperature : (cascade.cascade_temperature != null ? cascade.cascade_temperature : 0);
-  var cascadePct = clamp(typeof temp === 'number' ? temp : 0, 0, 100);
-  var cf = document.getElementById('cascade-fill');
-  cf.style.width = cascadePct + '%';
-  cf.style.background = cascadeColor(cascadePct);
-  var cpEl = document.getElementById('cascade-pct');
-  cpEl.textContent = Math.round(cascadePct) + '%';
-  cpEl.style.color = cascadeColor(cascadePct);
+var cascade = status.cascade_summary || status.cascadeSummary || {};
+var temp = cascade.temperature != null ? cascade.temperature : (cascade.cascade_temperature != null ? cascade.cascade_temperature : 0);
+var cascadePct = clamp(typeof temp === 'number' ? temp : 0, 0, 100);
+var cf = document.getElementById('cascade-fill');
+cf.style.width = cascadePct + '%';
+cf.style.background = cascadeColor(cascadePct);
+var cpEl = document.getElementById('cascade-pct');
+cpEl.textContent = Math.round(cascadePct) + '%';
+cpEl.style.color = cascadeColor(cascadePct);
 
-  lastTickTime = Date.now();
+lastTickTime = Date.now();
 }
 
 function updateTimeSince() {
-  if (!lastTickTime) return;
-  var elapsed = (Date.now() - lastTickTime) / 1000;
-  document.getElementById('time-since').textContent = formatTime(elapsed);
+if (!lastTickTime) return;
+var elapsed = (Date.now() - lastTickTime) / 1000;
+document.getElementById('time-since').textContent = formatTime(elapsed);
 }
 
 function renderFactions(factions) {
-  if (!factions) return;
-  var list = document.getElementById('faction-list');
-  var keys = Object.keys(factions);
-  var needsRebuild = list.children.length !== keys.length || list.dataset.keySig !== keys.join('|');
+if (!factions) return;
+var list = document.getElementById('faction-list');
+var keys = Object.keys(factions);
+var needsRebuild = list.children.length !== keys.length || list.dataset.keySig !== keys.join('|');
 
-  if (needsRebuild) {
-    list.dataset.keySig = keys.join('|');
-    list.innerHTML = '';
-    for (var fi = 0; fi < keys.length; fi++) {
-      (function(fk) {
-        var f = factions[fk];
-        var color = FACTION_COLORS[fk] || '#78909C';
-        var display = FACTION_DISPLAY[fk] || fk.replace(/_/g, ' ');
-        var card = document.createElement('div');
-        card.className = 'faction-card';
-        card.dataset.faction = fk;
+if (needsRebuild) {
+list.dataset.keySig = keys.join('|');
+list.innerHTML = '';
+for (var fi = 0; fi < keys.length; fi++) {
+(function(fk) {
+var f = factions[fk];
+var color = FACTION_COLORS[fk] || '#78909C';
+var display = FACTION_DISPLAY[fk] || fk.replace(/_/g, ' ');
+var card = document.createElement('div');
+card.className = 'faction-card';
+card.dataset.faction = fk;
 
-        var stancesHtml = '';
-        for (var si = 0; si < keys.length; si++) {
-          var otherK = keys[si];
-          if (otherK === fk) continue;
-          var stance = f.stances ? f.stances[otherK] : (f.stance_toward ? f.stance_toward[otherK] : null);
-          var sc = stanceToClass(stance);
-          var dotColor = sc === 'ally' ? '#4CAF50' : (sc === 'enemy' ? '#F44336' : '#FFC107');
-          stancesHtml += '<div class="stance-dot ' + sc + '" title="' + esc(FACTION_DISPLAY[otherK] || otherK) + ': ' + esc(stance || 'neutral') + '" style="color:' + dotColor + '"></div>';
-        }
+var stancesHtml = '';
+for (var si = 0; si < keys.length; si++) {
+var otherK = keys[si];
+if (otherK === fk) continue;
+var stance = f.stances ? f.stances[otherK] : (f.stance_toward ? f.stance_toward[otherK] : null);
+var sc = stanceToClass(stance);
+var dotColor = sc === 'ally' ? '#4CAF50' : (sc === 'enemy' ? '#F44336' : '#FFC107');
+stancesHtml += '<div class="stance-dot ' + sc + '" title="' + esc(FACTION_DISPLAY[otherK] || otherK) + ': ' + esc(stance || 'neutral') + '" style="color:' + dotColor + '"></div>';
+}
 
-        card.innerHTML =
-          '<div class="faction-header">' +
-            '<span class="faction-name" style="color:' + color + '">' + esc(display) + '</span>' +
-            '<span class="faction-power" style="color:' + color + '" data-field="power">\u2014</span>' +
-          '</div>' +
-          '<div class="faction-sub">' +
-            '<span class="faction-cohesion-label">Cohesion</span>' +
-            '<div class="faction-cohesion-bar"><div class="faction-cohesion-fill" data-field="cohesion-fill" style="width:0"></div></div>' +
-          '</div>' +
-          '<div class="faction-action" data-field="action">No recent action</div>' +
-          '<div class="faction-stances">' + stancesHtml + '</div>' +
-          '<div class="faction-detail">' +
-            '<div class="detail-stances" data-field="detail-stances"></div>' +
-            '<div class="detail-action-history" data-field="detail-history"></div>' +
-          '</div>';
+card.innerHTML =
+'<div class="faction-header">' +
+'<span class="faction-name" style="color:' + color + '">' + esc(display) + '</span>' +
+'<span class="faction-power" style="color:' + color + '" data-field="power">\u2014</span>' +
+'</div>' +
+'<div class="faction-sub">' +
+'<span class="faction-cohesion-label">Cohesion</span>' +
+'<div class="faction-cohesion-bar"><div class="faction-cohesion-fill" data-field="cohesion-fill" style="width:0"></div></div>' +
+'</div>' +
+'<div class="faction-action" data-field="action">No recent action</div>' +
+'<div class="faction-stances">' + stancesHtml + '</div>' +
+'<div class="faction-detail">' +
+'<div class="detail-stances" data-field="detail-stances"></div>' +
+'<div class="detail-action-history" data-field="detail-history"></div>' +
+'</div>';
 
-        card.addEventListener('click', function() {
-          var wasActive = card.classList.contains('active');
-          list.querySelectorAll('.faction-card').forEach(function(c) { c.classList.remove('active'); });
-          if (!wasActive) {
-            card.classList.add('active');
-            expandedFaction = fk;
-          } else {
-            expandedFaction = null;
-          }
-          fillFactionDetail(fk, factions);
-        });
+card.addEventListener('click', function() {
+var wasActive = card.classList.contains('active');
+list.querySelectorAll('.faction-card').forEach(function(c) { c.classList.remove('active'); });
+if (!wasActive) {
+card.classList.add('active');
+expandedFaction = fk;
+} else {
+expandedFaction = null;
+}
+fillFactionDetail(fk, factions);
+});
 
-        list.appendChild(card);
-      })(keys[fi]);
-    }
-  }
+list.appendChild(card);
+})(keys[fi]);
+}
+}
 
-  for (var ui = 0; ui < keys.length; ui++) {
-    var uk = keys[ui];
-    var uf = factions[uk];
-    var ucard = list.querySelector('[data-faction="' + uk + '"]');
-    if (!ucard) continue;
+for (var ui = 0; ui < keys.length; ui++) {
+var uk = keys[ui];
+var uf = factions[uk];
+var ucard = list.querySelector('[data-faction="' + uk + '"]');
+if (!ucard) continue;
 
-    var cohesionVal = uf.cohesion != null ? uf.cohesion : (uf.cohesion_level != null ? uf.cohesion_level : 50);
-    var cohesionPct = clamp(cohesionVal, 0, 100);
-    var cohesionColor = cohesionPct > 60 ? '#4CAF50' : (cohesionPct > 30 ? '#FF9800' : '#F44336');
-    var cFill = ucard.querySelector('[data-field="cohesion-fill"]');
-    if (cFill) { cFill.style.width = cohesionPct + '%'; cFill.style.background = cohesionColor; }
+var cohesionVal = uf.cohesion != null ? uf.cohesion : (uf.cohesion_level != null ? uf.cohesion_level : 50);
+var cohesionPct = clamp(cohesionVal, 0, 100);
+var cohesionColor = cohesionPct > 60 ? '#4CAF50' : (cohesionPct > 30 ? '#FF9800' : '#F44336');
+var cFill = ucard.querySelector('[data-field="cohesion-fill"]');
+if (cFill) { cFill.style.width = cohesionPct + '%'; cFill.style.background = cohesionColor; }
 
-    var pwr = ucard.querySelector('[data-field="power"]');
-    if (pwr) pwr.textContent = uf.power != null ? uf.power : (uf.power_level != null ? uf.power_level : '\u2014');
+var pwr = ucard.querySelector('[data-field="power"]');
+if (pwr) pwr.textContent = uf.power != null ? uf.power : (uf.power_level != null ? uf.power_level : '\u2014');
 
-    var act = ucard.querySelector('[data-field="action"]');
-    if (act) act.textContent = uf.recent_action || uf.lastAction || uf.recentAction || 'No recent action';
+var act = ucard.querySelector('[data-field="action"]');
+if (act) act.textContent = uf.recent_action || uf.lastAction || uf.recentAction || 'No recent action';
 
-    if (expandedFaction === uk) fillFactionDetail(uk, factions);
-  }
+if (expandedFaction === uk) fillFactionDetail(uk, factions);
+}
 }
 
 function fillFactionDetail(fk, factions) {
-  var f = factions[fk];
-  if (!f) return;
-  var keys = Object.keys(factions);
-  var card = document.querySelector('[data-faction="' + fk + '"]');
-  if (!card) return;
+var f = factions[fk];
+if (!f) return;
+var keys = Object.keys(factions);
+var card = document.querySelector('[data-faction="' + fk + '"]');
+if (!card) return;
 
-  var dsEl = card.querySelector('[data-field="detail-stances"]');
-  if (dsEl) {
-    var html = '<div style="font-size:12px;color:var(--dim);margin-bottom:4px;text-transform:uppercase;letter-spacing:1px">Stances</div>';
-    for (var i = 0; i < keys.length; i++) {
-      var otherK = keys[i];
-      if (otherK === fk) continue;
-      var stance = f.stances ? f.stances[otherK] : (f.stance_toward ? f.stance_toward[otherK] : null);
-      var sc = stanceToClass(stance);
-      var scColor = sc === 'ally' ? '#4CAF50' : (sc === 'enemy' ? '#F44336' : '#FFC107');
-      html += '<div class="detail-stance-row"><span class="detail-stance-name">' + esc(FACTION_DISPLAY[otherK] || otherK) + '</span><span class="detail-stance-val" style="color:' + scColor + '">' + esc(stance || 'neutral') + '</span></div>';
-    }
-    dsEl.innerHTML = html;
-  }
+var dsEl = card.querySelector('[data-field="detail-stances"]');
+if (dsEl) {
+var html = '<div style="font-size:12px;color:var(--dim);margin-bottom:4px;text-transform:uppercase;letter-spacing:1px">Stances</div>';
+for (var i = 0; i < keys.length; i++) {
+var otherK = keys[i];
+if (otherK === fk) continue;
+var stance = f.stances ? f.stances[otherK] : (f.stance_toward ? f.stance_toward[otherK] : null);
+var sc = stanceToClass(stance);
+var scColor = sc === 'ally' ? '#4CAF50' : (sc === 'enemy' ? '#F44336' : '#FFC107');
+html += '<div class="detail-stance-row"><span class="detail-stance-name">' + esc(FACTION_DISPLAY[otherK] || otherK) + '</span><span class="detail-stance-val" style="color:' + scColor + '">' + esc(stance || 'neutral') + '</span></div>';
+}
+dsEl.innerHTML = html;
+}
 
-  var dhEl = card.querySelector('[data-field="detail-history"]');
-  if (dhEl) {
-    var history = f.action_history || f.actionHistory || [];
-    var hhtml = '<div style="font-size:12px;color:var(--dim);margin-bottom:4px;text-transform:uppercase;letter-spacing:1px">Recent Actions</div>';
-    if (!history.length) {
-      hhtml += '<div style="font-size:12px;color:var(--dim)">No history available</div>';
-    } else {
-      for (var h = 0; h < Math.min(history.length, 8); h++) {
-        var a = history[h];
-        hhtml += '<div class="detail-action-item">' + esc(typeof a === 'string' ? a : (a.description || a.action || JSON.stringify(a))) + '</div>';
-      }
-    }
-    dhEl.innerHTML = hhtml;
-  }
+var dhEl = card.querySelector('[data-field="detail-history"]');
+if (dhEl) {
+var history = f.action_history || f.actionHistory || [];
+var hhtml = '<div style="font-size:12px;color:var(--dim);margin-bottom:4px;text-transform:uppercase;letter-spacing:1px">Recent Actions</div>';
+if (!history.length) {
+hhtml += '<div style="font-size:12px;color:var(--dim)">No history available</div>';
+} else {
+for (var h = 0; h < Math.min(history.length, 8); h++) {
+var a = history[h];
+hhtml += '<div class="detail-action-item">' + esc(typeof a === 'string' ? a : (a.description || a.action || JSON.stringify(a))) + '</div>';
+}
+}
+dhEl.innerHTML = hhtml;
+}
 }
 
 function renderEvents(events) {
-  if (!events || !Array.isArray(events)) return;
-  var feed = document.getElementById('event-feed');
+if (!events || !Array.isArray(events)) return;
+var feed = document.getElementById('event-feed');
 
-  for (var i = 0; i < Math.min(events.length, 60); i++) {
-    var ev = events[i];
-    var id = 'ev-' + (ev.id || i);
-    var el = document.getElementById(id);
-    if (!el) {
-      el = document.createElement('div');
-      el.id = id;
-      feed.insertBefore(el, feed.firstChild);
-    }
+for (var i = 0; i < Math.min(events.length, 60); i++) {
+var ev = events[i];
+var id = 'ev-' + (ev.id || i);
+var el = document.getElementById(id);
+if (!el) {
+el = document.createElement('div');
+el.id = id;
+feed.insertBefore(el, feed.firstChild);
+}
 
-    var typeClass = 'world';
-    var sourceLabel = 'SYSTEM';
-    var sourceClass = 'world';
-    var evType = (ev.type || ev.event_type || '').toLowerCase();
-    var evSource = (ev.source || ev.source_type || '').toLowerCase();
+var typeClass = 'world';
+var sourceLabel = 'SYSTEM';
+var sourceClass = 'world';
+var evType = (ev.type || ev.event_type || '').toLowerCase();
+var evSource = (ev.source || ev.source_type || '').toLowerCase();
 
-    if (evType === 'cascade' || ev.cascade) {
-      typeClass = 'cascade'; sourceLabel = 'CASCADE'; sourceClass = 'cascade';
-    } else if (evSource === 'faction' || evType === 'faction_action' || ev.faction_id) {
-      typeClass = 'faction-action'; sourceLabel = 'FACTION'; sourceClass = 'faction';
-    } else if (evType === 'broadcast' || ev.broadcast || evSource === 'npc') {
-      typeClass = 'broadcast'; sourceLabel = 'BROADCAST'; sourceClass = 'broadcast';
-    }
-    if (evSource === 'faction') { typeClass = 'faction-action'; sourceLabel = 'FACTION'; sourceClass = 'faction'; }
-    else if (evSource === 'cascade') { typeClass = 'cascade'; sourceLabel = 'CASCADE'; sourceClass = 'cascade'; }
-    else if (evSource === 'broadcast') { typeClass = 'broadcast'; sourceLabel = 'BROADCAST'; sourceClass = 'broadcast'; }
+if (evType === 'cascade' || ev.cascade) {
+typeClass = 'cascade'; sourceLabel = 'CASCADE'; sourceClass = 'cascade';
+} else if (evSource === 'faction' || evType === 'faction_action' || ev.faction_id) {
+typeClass = 'faction-action'; sourceLabel = 'FACTION'; sourceClass = 'faction';
+} else if (evType === 'broadcast' || ev.broadcast || evSource === 'npc') {
+typeClass = 'broadcast'; sourceLabel = 'BROADCAST'; sourceClass = 'broadcast';
+}
+if (evSource === 'faction') { typeClass = 'faction-action'; sourceLabel = 'FACTION'; sourceClass = 'faction'; }
+else if (evSource === 'cascade') { typeClass = 'cascade'; sourceLabel = 'CASCADE'; sourceClass = 'cascade'; }
+else if (evSource === 'broadcast') { typeClass = 'broadcast'; sourceLabel = 'BROADCAST'; sourceClass = 'broadcast'; }
 
-    var ts = ev.timestamp || ev.tick || ev.time || '';
-    var desc = ev.description || ev.message || ev.text || ev.event || JSON.stringify(ev);
-    var cascadeDepth = ev.cascade_depth || ev.depth || ev.cascadeDepth;
-    var cascadeHtml = cascadeDepth && typeClass === 'cascade'
-      ? '<span class="event-cascade-depth">D' + esc(String(cascadeDepth)) + '</span>' : '';
+var ts = ev.timestamp || ev.tick || ev.time || '';
+var desc = ev.description || ev.message || ev.text || ev.event || JSON.stringify(ev);
+var cascadeDepth = ev.cascade_depth || ev.depth || ev.cascadeDepth;
+var cascadeHtml = cascadeDepth && typeClass === 'cascade'
+? '<span class="event-cascade-depth">D' + esc(String(cascadeDepth)) + '</span>' : '';
 
-    var factionBorder = ev.faction_id && FACTION_COLORS[ev.faction_id]
-      ? 'border-left-color:' + FACTION_COLORS[ev.faction_id] : '';
+var factionBorder = ev.faction_id && FACTION_COLORS[ev.faction_id]
+? 'border-left-color:' + FACTION_COLORS[ev.faction_id] : '';
 
-    el.className = 'event-entry ' + typeClass;
-    el.style.cssText = factionBorder;
-    el.innerHTML =
-      '<span class="event-time">' + esc(String(ts)) + '</span>' +
-      '<span class="event-source ' + sourceClass + '">' + esc(sourceLabel) + '</span>' +
-      '<span class="event-body">' + esc(desc) + cascadeHtml + '</span>';
-  }
+el.className = 'event-entry ' + typeClass;
+el.style.cssText = factionBorder;
+el.innerHTML =
+'<span class="event-time">' + esc(String(ts)) + '</span>' +
+'<span class="event-source ' + sourceClass + '">' + esc(sourceLabel) + '</span>' +
+'<span class="event-body">' + esc(desc) + cascadeHtml + '</span>';
+}
 
-  if (feed.children.length > 80) {
-    while (feed.children.length > 80) feed.removeChild(feed.lastChild);
-  }
+if (feed.children.length > 80) {
+while (feed.children.length > 80) feed.removeChild(feed.lastChild);
+}
 }
 
 function renderNpcs(npcs) {
-  if (!npcs) return;
-  var grid = document.getElementById('npc-grid');
-  var list = Array.isArray(npcs) ? npcs : Object.values(npcs);
-  var needsRebuild = grid.children.length !== list.length || grid.dataset.count !== String(list.length);
+if (!npcs) return;
+var grid = document.getElementById('npc-grid');
+var list = Array.isArray(npcs) ? npcs : Object.values(npcs);
+var needsRebuild = grid.children.length !== list.length || grid.dataset.count !== String(list.length);
 
-  if (needsRebuild) {
-    grid.dataset.count = String(list.length);
-    grid.innerHTML = '';
-    for (var ni = 0; ni < list.length; ni++) {
-      (function(npc, idx) {
-        var card = document.createElement('div');
-        card.className = 'npc-card';
-        card.dataset.npcId = npc.id || npc.name || idx;
+if (needsRebuild) {
+grid.dataset.count = String(list.length);
+grid.innerHTML = '';
+for (var ni = 0; ni < list.length; ni++) {
+(function(npc, idx) {
+var card = document.createElement('div');
+card.className = 'npc-card';
+card.dataset.npcId = npc.id || npc.name || idx;
 
-        var mc = moodColorOf(npc.mood);
-        var factionKey = npc.faction || npc.affiliation || npc.faction_id || '';
-        var affilColor = FACTION_COLORS[factionKey] || '#78909C';
+var mc = moodColorOf(npc.mood);
+var factionKey = npc.faction || npc.affiliation || npc.faction_id || '';
+var affilColor = FACTION_COLORS[factionKey] || '#78909C';
 
-        card.innerHTML =
-          '<div class="npc-name">' + esc(npc.name || 'Unknown') + '</div>' +
-          '<div class="npc-badges">' +
-            '<span class="npc-mood" style="color:' + mc + ';background:' + mc + '18" data-field="mood">' + esc(npc.mood || '\u2014') + '</span>' +
-            '<span class="npc-decision" data-field="decision">' + esc(npc.last_decision_category || npc.lastDecision || npc.decision_category || '\u2014') + '</span>' +
-            '<span class="npc-affil" style="background:' + affilColor + '" data-field="affil"></span>' +
-          '</div>' +
-          '<div class="npc-detail">' +
-            '<div class="npc-detail-section"><div class="npc-detail-label">Recent Thoughts</div><div class="npc-detail-val" data-field="thoughts"></div></div>' +
-            '<div class="npc-detail-section"><div class="npc-detail-label">Recent Decisions</div><div class="npc-detail-val" data-field="decisions"></div></div>' +
-            '<div class="npc-detail-section"><div class="npc-detail-label">Corruption / Rumor</div><div class="npc-detail-val" data-field="corruption"></div></div>' +
-            '<div class="npc-detail-section"><div class="npc-detail-label">Relationships</div><div class="npc-detail-val" data-field="relationships"></div></div>' +
-          '</div>';
+card.innerHTML =
+'<div class="npc-name">' + esc(npc.name || 'Unknown') + '</div>' +
+'<div class="npc-badges">' +
+'<span class="npc-mood" style="color:' + mc + ';background:' + mc + '18" data-field="mood">' + esc(npc.mood || '\u2014') + '</span>' +
+'<span class="npc-decision" data-field="decision">' + esc(npc.last_decision_category || npc.lastDecision || npc.decision_category || '\u2014') + '</span>' +
+'<span class="npc-affil" style="background:' + affilColor + '" data-field="affil"></span>' +
+'</div>' +
+'<div class="npc-detail">' +
+'<div class="npc-detail-section"><div class="npc-detail-label">Recent Thoughts</div><div class="npc-detail-val" data-field="thoughts"></div></div>' +
+'<div class="npc-detail-section"><div class="npc-detail-label">Recent Decisions</div><div class="npc-detail-val" data-field="decisions"></div></div>' +
+'<div class="npc-detail-section"><div class="npc-detail-label">Corruption / Rumor</div><div class="npc-detail-val" data-field="corruption"></div></div>' +
+'<div class="npc-detail-section"><div class="npc-detail-label">Relationships</div><div class="npc-detail-val" data-field="relationships"></div></div>' +
+'</div>';
 
-        card.addEventListener('click', function() {
-          var wasActive = card.classList.contains('active');
-          grid.querySelectorAll('.npc-card').forEach(function(c) { c.classList.remove('active'); });
-          if (!wasActive) {
-            card.classList.add('active');
-            expandedNpc = npc.id || npc.name || idx;
-          } else {
-            expandedNpc = null;
-          }
-        });
+card.addEventListener('click', function() {
+var wasActive = card.classList.contains('active');
+grid.querySelectorAll('.npc-card').forEach(function(c) { c.classList.remove('active'); });
+if (!wasActive) {
+card.classList.add('active');
+expandedNpc = npc.id || npc.name || idx;
+} else {
+expandedNpc = null;
+}
+});
 
-        grid.appendChild(card);
-      })(list[ni], ni);
-    }
-  }
+grid.appendChild(card);
+})(list[ni], ni);
+}
+}
 
-  for (var ui = 0; ui < list.length; ui++) {
-    var npc = list[ui];
-    var nId = npc.id || npc.name || ui;
-    var ncard = grid.querySelector('[data-npc-id="' + nId + '"]');
-    if (!ncard) continue;
+for (var ui = 0; ui < list.length; ui++) {
+var npc = list[ui];
+var nId = npc.id || npc.name || ui;
+var ncard = grid.querySelector('[data-npc-id="' + nId + '"]');
+if (!ncard) continue;
 
-    var mc2 = moodColorOf(npc.mood);
-    var moodEl = ncard.querySelector('[data-field="mood"]');
-    if (moodEl) { moodEl.textContent = npc.mood || '\u2014'; moodEl.style.color = mc2; moodEl.style.background = mc2 + '18'; }
-    var decEl = ncard.querySelector('[data-field="decision"]');
-    if (decEl) decEl.textContent = npc.last_decision_category || npc.lastDecision || npc.decision_category || '\u2014';
-    var affilEl = ncard.querySelector('[data-field="affil"]');
-    var fk2 = npc.faction || npc.affiliation || npc.faction_id || '';
-    if (affilEl) affilEl.style.background = FACTION_COLORS[fk2] || '#78909C';
+var mc2 = moodColorOf(npc.mood);
+var moodEl = ncard.querySelector('[data-field="mood"]');
+if (moodEl) { moodEl.textContent = npc.mood || '\u2014'; moodEl.style.color = mc2; moodEl.style.background = mc2 + '18'; }
+var decEl = ncard.querySelector('[data-field="decision"]');
+if (decEl) decEl.textContent = npc.last_decision_category || npc.lastDecision || npc.decision_category || '\u2014';
+var affilEl = ncard.querySelector('[data-field="affil"]');
+var fk2 = npc.faction || npc.affiliation || npc.faction_id || '';
+if (affilEl) affilEl.style.background = FACTION_COLORS[fk2] || '#78909C';
 
-    if (expandedNpc === nId) {
-      var thoughts = npc.recent_thoughts || npc.thoughts || npc.recentThoughts || [];
-      var thoughtsEl = ncard.querySelector('[data-field="thoughts"]');
-      if (thoughtsEl) {
-        if (Array.isArray(thoughts) && thoughts.length) {
-          var thtml = '';
-          for (var t = 0; t < Math.min(thoughts.length, 4); t++) {
-            var th = thoughts[t];
-            thtml += '<div class="npc-thought">' + esc(typeof th === 'string' ? th : (th.text || th.thought || JSON.stringify(th))) + '</div>';
-          }
-          thoughtsEl.innerHTML = thtml;
-        } else {
-          thoughtsEl.textContent = 'None available';
-        }
-      }
+if (expandedNpc === nId) {
+var thoughts = npc.recent_thoughts || npc.thoughts || npc.recentThoughts || [];
+var thoughtsEl = ncard.querySelector('[data-field="thoughts"]');
+if (thoughtsEl) {
+if (Array.isArray(thoughts) && thoughts.length) {
+var thtml = '';
+for (var t = 0; t < Math.min(thoughts.length, 4); t++) {
+var th = thoughts[t];
+thtml += '<div class="npc-thought">' + esc(typeof th === 'string' ? th : (th.text || th.thought || JSON.stringify(th))) + '</div>';
+}
+thoughtsEl.innerHTML = thtml;
+} else {
+thoughtsEl.textContent = 'None available';
+}
+}
 
-      var decisions = npc.recent_decisions || npc.decisions || npc.recentDecisions || [];
-      var decDetailEl = ncard.querySelector('[data-field="decisions"]');
-      if (decDetailEl) {
-        if (Array.isArray(decisions) && decisions.length) {
-          var dhtml = '';
-          for (var d = 0; d < Math.min(decisions.length, 4); d++) {
-            var dc = decisions[d];
-            dhtml += '<div class="npc-thought">' + esc(typeof dc === 'string' ? dc : (dc.description || dc.decision || JSON.stringify(dc))) + '</div>';
-          }
-          decDetailEl.innerHTML = dhtml;
-        } else {
-          decDetailEl.textContent = 'None available';
-        }
-      }
+var decisions = npc.recent_decisions || npc.decisions || npc.recentDecisions || [];
+var decDetailEl = ncard.querySelector('[data-field="decisions"]');
+if (decDetailEl) {
+if (Array.isArray(decisions) && decisions.length) {
+var dhtml = '';
+for (var d = 0; d < Math.min(decisions.length, 4); d++) {
+var dc = decisions[d];
+dhtml += '<div class="npc-thought">' + esc(typeof dc === 'string' ? dc : (dc.description || dc.decision || JSON.stringify(dc))) + '</div>';
+}
+decDetailEl.innerHTML = dhtml;
+} else {
+decDetailEl.textContent = 'None available';
+}
+}
 
-      var corrEl = ncard.querySelector('[data-field="corruption"]');
-      if (corrEl) {
-        var corr = npc.corruption != null ? npc.corruption : (npc.corruption_level != null ? npc.corruption_level : 0);
-        var rum = npc.rumor != null ? npc.rumor : (npc.rumor_level != null ? npc.rumor_level : 0);
-        corrEl.innerHTML = '<span style="color:var(--red)">' + Math.round(corr) + '%</span> / <span style="color:var(--amber)">' + Math.round(rum) + '%</span>';
-      }
+var corrEl = ncard.querySelector('[data-field="corruption"]');
+if (corrEl) {
+var corr = npc.corruption != null ? npc.corruption : (npc.corruption_level != null ? npc.corruption_level : 0);
+var rum = npc.rumor != null ? npc.rumor : (npc.rumor_level != null ? npc.rumor_level : 0);
+corrEl.innerHTML = '<span style="color:var(--red)">' + Math.round(corr) + '%</span> / <span style="color:var(--amber)">' + Math.round(rum) + '%</span>';
+}
 
-      var relEl = ncard.querySelector('[data-field="relationships"]');
-      if (relEl) {
-        var rels = npc.relationships || npc.relations || {};
-        var rkeys = Object.keys(rels);
-        if (rkeys.length) {
-          var rhtml = '';
-          for (var ri = 0; ri < Math.min(rkeys.length, 8); ri++) {
-            var rk = rkeys[ri];
-            var rv = rels[rk];
-            var rval = typeof rv === 'number' ? rv : (rv.score != null ? rv.score : (rv.value != null ? rv.value : (rv.trust != null ? rv.trust : 0)));
-            var rvc = rval > 50 ? '#4CAF50' : (rval > 20 ? '#FFC107' : '#F44336');
-            rhtml += '<span class="npc-rel" style="border-left:2px solid ' + rvc + '">' + esc(rk) + ': ' + Math.round(rval) + '</span>';
-          }
-          relEl.innerHTML = rhtml;
-        } else {
-          relEl.textContent = 'None available';
-        }
-      }
-    }
-  }
+var relEl = ncard.querySelector('[data-field="relationships"]');
+if (relEl) {
+var rels = npc.relationships || npc.relations || {};
+var rkeys = Object.keys(rels);
+if (rkeys.length) {
+var rhtml = '';
+for (var ri = 0; ri < Math.min(rkeys.length, 8); ri++) {
+var rk = rkeys[ri];
+var rv = rels[rk];
+var rval = typeof rv === 'number' ? rv : (rv.score != null ? rv.score : (rv.value != null ? rv.value : (rv.trust != null ? rv.trust : 0)));
+var rvc = rval > 50 ? '#4CAF50' : (rval > 20 ? '#FFC107' : '#F44336');
+rhtml += '<span class="npc-rel" style="border-left:2px solid ' + rvc + '">' + esc(rk) + ': ' + Math.round(rval) + '</span>';
+}
+relEl.innerHTML = rhtml;
+} else {
+relEl.textContent = 'None available';
+}
+}
+}
+}
+}
+
+function renderQuests(data) {
+if (!data || !data.quest_log) return;
+var log = document.getElementById('quest-log');
+var entries = data.quest_log;
+if (!Array.isArray(entries)) return;
+var needsRebuild = log.children.length !== entries.length || log.dataset.keySig !== entries.map(function(e){return e.char_id+'_'+e.quest_id+'_'+e.event}).join('|');
+
+if (needsRebuild) {
+log.dataset.keySig = entries.map(function(e){return e.char_id+'_'+e.quest_id+'_'+e.event}).join('|');
+log.innerHTML = '';
+for (var i = 0; i < entries.length; i++) {
+(function(entry, idx) {
+var el = document.createElement('div');
+var evtLower = String(entry.event || '').toLowerCase();
+var cls = 'quest-entry';
+var eventClass = 'progress';
+if (evtLower.indexOf('accept') !== -1) { cls += ' quest-accept'; eventClass = 'accept'; }
+else if (evtLower.indexOf('complet') !== -1) { cls += ' quest-complete'; eventClass = 'complete'; }
+else if (evtLower.indexOf('abandon') !== -1 || evtLower.indexOf('fail') !== -1) { cls += ' quest-abandon'; eventClass = 'abandon'; }
+else { cls += ' quest-progress'; }
+el.className = cls;
+el.dataset.charId = entry.char_id || '';
+
+var evtLabel = entry.event || 'PROGRESS';
+el.innerHTML =
+'<span class="quest-time">' + esc(String(entry.timestamp || '')) + '</span>' +
+'<span class="quest-event ' + eventClass + '">' + esc(evtLabel.toUpperCase()) + '</span>' +
+'<span class="quest-body">' +
+'<strong>' + esc(entry.char_id || 'Unknown') + '</strong> \u2014 ' +
+esc(entry.quest_id || '') +
+(entry.reason ? ' <span style="color:var(--dim)">(' + esc(entry.reason) + ')</span>' : '') +
+'</span>';
+
+el.addEventListener('click', function() {
+loadQuestDetail(entry.char_id);
+});
+
+log.appendChild(el);
+})(entries[i], i);
+}
+}
+}
+
+async function loadQuestDetail(charId) {
+if (!charId) return;
+var detailArea = document.getElementById('quest-detail-area');
+if (expandedQuestNpc === charId) {
+expandedQuestNpc = null;
+detailArea.innerHTML = '';
+return;
+}
+expandedQuestNpc = charId;
+detailArea.innerHTML = '<div class="loading-pulse" style="color:var(--dim);padding:8px">Loading quest detail...</div>';
+var data = await apiFetch('/simulation/npc-quests/' + encodeURIComponent(charId), 10000);
+if (!data) {
+detailArea.innerHTML = '<div style="color:var(--red);padding:8px">Failed to load quest detail</div>';
+return;
+}
+var html = '<div class="quest-detail">';
+html += '<div class="quest-detail-title">' + esc(charId) + ' \u2014 Quest Status</div>';
+html += '<div class="quest-stats">';
+html += '<div class="quest-stat"><span class="quest-stat-val" style="color:var(--green)">' + (data.completed_count || 0) + '</span><span class="quest-stat-label">Completed</span></div>';
+html += '<div class="quest-stat"><span class="quest-stat-val" style="color:var(--red)">' + (data.failed_count || 0) + '</span><span class="quest-stat-label">Failed</span></div>';
+html += '<div class="quest-stat"><span class="quest-stat-val" style="color:var(--cyan)">' + (data.active_quests ? data.active_quests.length : 0) + '</span><span class="quest-stat-label">Active</span></div>';
+html += '</div>';
+
+if (data.active_quests && data.active_quests.length) {
+for (var q = 0; q < data.active_quests.length; q++) {
+var quest = data.active_quests[q];
+html += '<div style="margin-top:10px;padding-top:8px;border-top:1px solid rgba(255,255,255,0.06)">';
+html += '<div style="font-family:Orbitron,sans-serif;font-size:13px;color:var(--amber);margin-bottom:4px">' + esc(quest.title || quest.quest_id || 'Unknown Quest') + '</div>';
+if (quest.description) html += '<div class="quest-detail-desc">' + esc(quest.description) + '</div>';
+
+if (quest.objectives && quest.objectives.length) {
+for (var o = 0; o < quest.objectives.length; o++) {
+var obj = quest.objectives[o];
+var target = obj.target || 1;
+var current = obj.current_progress || 0;
+var pct = target > 0 ? Math.round((current / target) * 100) : 0;
+var completed = obj.completed || false;
+var fillClass = completed ? ' done' : '';
+var fillColor = completed ? '' : ' style="background:var(--cyan)"';
+html += '<div class="quest-objective">';
+html += '<div class="quest-obj-label"><span class="quest-obj-name">' + esc(obj.description || obj.objective_type || 'Objective') + '</span>';
+html += '<span class="quest-obj-pct">' + (completed ? 'DONE' : pct + '%') + '</span></div>';
+html += '<div class="quest-obj-bar"><div class="quest-obj-fill' + fillClass + '"' + fillColor + ' style="width:' + clamp(pct, 0, 100) + '%"></div></div>';
+html += '</div>';
+}
+}
+
+if (quest.rewards) {
+var rewardStr = typeof quest.rewards === 'string' ? quest.rewards : JSON.stringify(quest.rewards);
+html += '<div class="quest-reward">Rewards: ' + esc(rewardStr) + '</div>';
+}
+html += '</div>';
+}
+}
+
+html += '</div>';
+detailArea.innerHTML = html;
+}
+
+function renderFactionTech(data) {
+if (!data || !data.factions) return;
+var list = document.getElementById('tech-list');
+var factions = data.factions;
+var keys = Object.keys(factions);
+var needsRebuild = list.children.length !== keys.length || list.dataset.keySig !== keys.join('|');
+
+if (needsRebuild) {
+list.dataset.keySig = keys.join('|');
+list.innerHTML = '';
+for (var i = 0; i < keys.length; i++) {
+(function(fk) {
+var f = factions[fk];
+var color = FACTION_COLORS[fk] || '#78909C';
+var display = FACTION_DISPLAY[fk] || fk.replace(/_/g, ' ');
+var card = document.createElement('div');
+card.className = 'tech-card';
+card.dataset.techFaction = fk;
+
+card.innerHTML =
+'<div class="tech-header">' +
+'<span class="tech-faction" style="color:' + color + '">' + esc(display) + '</span>' +
+'</div>' +
+'<div class="tech-project" data-field="tech-name">No active research</div>' +
+'<div class="tech-progress">' +
+'<div class="tech-progress-label"><span data-field="tech-pct-label">Progress</span><span class="tech-progress-pct" data-field="tech-pct">0%</span></div>' +
+'<div class="tech-progress-bar"><div class="tech-progress-fill" data-field="tech-fill" style="width:0"></div></div>' +
+'</div>' +
+'<div class="tech-meta">' +
+'<span class="tech-meta-item">Turns left: <span class="tech-meta-val" data-field="tech-turns">\u2014</span></span>' +
+'<span class="tech-meta-item">RP invested: <span class="tech-meta-val" data-field="tech-rp">0</span></span>' +
+'<span class="tech-meta-item">Total RP: <span class="tech-meta-val" data-field="tech-total-rp">0</span></span>' +
+'</div>' +
+'<div class="tech-completed" data-field="tech-completed"></div>';
+
+list.appendChild(card);
+})(keys[i]);
+}
+}
+
+for (var ui = 0; ui < keys.length; ui++) {
+var uk = keys[ui];
+var uf = factions[uk];
+var ucard = list.querySelector('[data-tech-faction="' + uk + '"]');
+if (!ucard) continue;
+
+var research = uf.active_research || null;
+var progressPct = uf.progress_percent != null ? uf.progress_percent : 0;
+
+if (research) {
+var techName = ucard.querySelector('[data-field="tech-name"]');
+if (techName) techName.textContent = research.technology || 'Unknown Tech';
+
+var pct = research.progress_percentage != null ? research.progress_percentage : progressPct;
+var pctClamped = clamp(pct, 0, 100);
+var pctEl = ucard.querySelector('[data-field="tech-pct"]');
+if (pctEl) pctEl.textContent = Math.round(pctClamped) + '%';
+var fillEl = ucard.querySelector('[data-field="tech-fill"]');
+if (fillEl) fillEl.style.width = pctClamped + '%';
+
+var turnsEl = ucard.querySelector('[data-field="tech-turns"]');
+if (turnsEl) turnsEl.textContent = research.turns_remaining != null ? research.turns_remaining : '\u2014';
+
+var rpEl = ucard.querySelector('[data-field="tech-rp"]');
+if (rpEl) rpEl.textContent = research.research_points_invested != null ? research.research_points_invested : '0';
+} else {
+var noTechName = ucard.querySelector('[data-field="tech-name"]');
+if (noTechName) noTechName.innerHTML = '<span class="tech-no-research">No active research</span>';
+var noFillEl = ucard.querySelector('[data-field="tech-fill"]');
+if (noFillEl) noFillEl.style.width = '0%';
+var noPctEl = ucard.querySelector('[data-field="tech-pct"]');
+if (noPctEl) noPctEl.textContent = '0%';
+}
+
+var totalRpEl = ucard.querySelector('[data-field="tech-total-rp"]');
+if (totalRpEl) totalRpEl.textContent = uf.research_points != null ? uf.research_points : '0';
+
+var completedEl = ucard.querySelector('[data-field="tech-completed"]');
+if (completedEl) {
+var completed = uf.completed_techs || [];
+if (completed.length) {
+var chtml = '<div style="margin-bottom:3px;text-transform:uppercase;letter-spacing:1px;font-size:10px;color:var(--dim)">Completed</div>';
+for (var c = 0; c < Math.min(completed.length, 8); c++) {
+chtml += '<span class="tech-completed-tag">' + esc(typeof completed[c] === 'string' ? completed[c] : (completed[c].name || completed[c].technology || JSON.stringify(completed[c]))) + '</span> ';
+}
+if (completed.length > 8) chtml += '<span style="font-size:11px;color:var(--dim)">+' + (completed.length - 8) + ' more</span>';
+completedEl.innerHTML = chtml;
+} else {
+completedEl.innerHTML = '';
+}
+}
+}
+}
+
+function renderChoices(data) {
+if (!data || !data.stats) return;
+var list = document.getElementById('choice-list');
+var stats = data.stats;
+var entries = [];
+for (var key in stats) {
+if (stats.hasOwnProperty(key)) {
+entries.push({ id: key, count: stats[key] });
+}
+}
+entries.sort(function(a, b) { return b.count - a.count; });
+
+var maxCount = entries.length ? entries[0].count : 1;
+if (maxCount < 1) maxCount = 1;
+
+var needsRebuild = list.children.length !== entries.length || list.dataset.keySig !== entries.map(function(e){return e.id}).join('|');
+
+if (needsRebuild) {
+list.dataset.keySig = entries.map(function(e){return e.id}).join('|');
+list.innerHTML = '';
+for (var i = 0; i < entries.length; i++) {
+(function(entry, rank) {
+var el = document.createElement('div');
+el.className = 'choice-item';
+el.dataset.choiceId = entry.id;
+
+var barPct = Math.round((entry.count / maxCount) * 100);
+
+el.innerHTML =
+'<span class="choice-rank">' + (rank + 1) + '</span>' +
+'<span class="choice-id">' + esc(entry.id) + '</span>' +
+'<span class="choice-count">' + entry.count + '</span>' +
+'<div class="choice-bar-container"><div class="choice-bar"><div class="choice-bar-fill" style="width:' + barPct + '%"></div></div></div>';
+
+el.addEventListener('click', function() {
+var factionId = entry.id;
+if (factionId.indexOf('_') !== -1) {
+var parts = factionId.split('_');
+if (parts.length >= 2) factionId = parts[0] + '_' + parts[1];
+}
+if (FACTION_DISPLAY[factionId]) {
+loadFactionChoiceDetail(factionId);
+} else {
+loadFactionChoiceDetail(entry.id);
+}
+});
+
+list.appendChild(el);
+})(entries[i], i);
+}
+} else {
+for (var u = 0; u < entries.length; u++) {
+var existing = list.children[u];
+if (existing) {
+var barPct2 = Math.round((entries[u].count / maxCount) * 100);
+var countEl = existing.querySelector('.choice-count');
+if (countEl) countEl.textContent = entries[u].count;
+var fillEl = existing.querySelector('.choice-bar-fill');
+if (fillEl) fillEl.style.width = barPct2 + '%';
+}
+}
+}
+}
+
+async function loadFactionChoiceDetail(factionId) {
+if (!factionId) return;
+var detailArea = document.getElementById('faction-choice-detail-area');
+if (expandedChoiceFaction === factionId) {
+expandedChoiceFaction = null;
+detailArea.innerHTML = '';
+return;
+}
+expandedChoiceFaction = factionId;
+var displayName = FACTION_DISPLAY[factionId] || factionId.replace(/_/g, ' ');
+detailArea.innerHTML = '<div class="loading-pulse" style="color:var(--dim);padding:8px">Loading choices for ' + esc(displayName) + '...</div>';
+var data = await apiFetch('/simulation/choice-resolutions/' + encodeURIComponent(factionId), 10000);
+if (!data) {
+detailArea.innerHTML = '<div style="color:var(--red);padding:8px">Failed to load faction choices</div>';
+return;
+}
+var html = '<div class="faction-choice-detail">';
+html += '<div class="faction-choice-title">' + esc(displayName) + ' \u2014 Choice History</div>';
+if (data.choice_history && data.choice_history.length) {
+html += '<div class="faction-choice-history">';
+for (var i = 0; i < data.choice_history.length; i++) {
+var ch = data.choice_history[i];
+html += '<div class="faction-choice-entry">' + esc(typeof ch === 'string' ? ch : (ch.choice_id || ch.description || JSON.stringify(ch))) + '</div>';
+}
+html += '</div>';
+} else {
+html += '<div style="font-size:13px;color:var(--dim)">No choice history available</div>';
+}
+html += '</div>';
+detailArea.innerHTML = html;
 }
 
 function renderBottom(status) {
-  if (!status) return;
-  var era = status.current_era || status.era || status.currentEra || {};
-  var eraName = era.name || era.era_name || era.label || status.era_name || 'Unknown Era';
-  document.getElementById('era-name').textContent = eraName;
+if (!status) return;
+var era = status.current_era || status.era || status.currentEra || {};
+var eraName = era.name || era.era_name || era.label || status.era_name || 'Unknown Era';
+document.getElementById('era-name').textContent = eraName;
 
-  var progress = era.progress != null ? era.progress : (era.progress_pct != null ? era.progress_pct : (era.progressPercent != null ? era.progressPercent : 0));
-  var eraPct = clamp(progress, 0, 100);
-  document.getElementById('era-fill').style.width = eraPct + '%';
-  document.getElementById('era-pct').textContent = Math.round(eraPct) + '%';
+var progress = era.progress != null ? era.progress : (era.progress_pct != null ? era.progress_pct : (era.progressPercent != null ? era.progressPercent : 0));
+var eraPct = clamp(progress, 0, 100);
+document.getElementById('era-fill').style.width = eraPct + '%';
+document.getElementById('era-pct').textContent = Math.round(eraPct) + '%';
 
-  var triggers = era.recent_triggers || era.triggers || status.era_triggers || [];
-  var trigEl = document.getElementById('era-triggers');
-  if (Array.isArray(triggers) && triggers.length) {
-    var thtml = '';
-    for (var t = 0; t < Math.min(triggers.length, 5); t++) {
-      var tr = triggers[t];
-      thtml += '<span class="bottom-trigger">' + esc(typeof tr === 'string' ? tr : (tr.name || tr.description || JSON.stringify(tr))) + '</span>';
-    }
-    trigEl.innerHTML = thtml;
-  } else {
-    trigEl.innerHTML = '';
-  }
+var triggers = era.recent_triggers || era.triggers || status.era_triggers || [];
+var trigEl = document.getElementById('era-triggers');
+if (Array.isArray(triggers) && triggers.length) {
+var thtml = '';
+for (var t = 0; t < Math.min(triggers.length, 5); t++) {
+var tr = triggers[t];
+thtml += '<span class="bottom-trigger">' + esc(typeof tr === 'string' ? tr : (tr.name || tr.description || JSON.stringify(tr))) + '</span>';
+}
+trigEl.innerHTML = thtml;
+} else {
+trigEl.innerHTML = '';
+}
 
-  var pending = status.pending_items || status.pendingItems || {};
-  var total = 0;
-  var pKeys = Object.keys(pending);
-  for (var p = 0; p < pKeys.length; p++) {
-    var pv = pending[pKeys[p]];
-    total += typeof pv === 'number' ? pv : (Array.isArray(pv) ? pv.length : 0);
-  }
-  document.getElementById('pending-items').innerHTML = 'Pending: <strong>' + total + '</strong>';
+var pending = status.pending_items || status.pendingItems || {};
+var total = 0;
+var pKeys = Object.keys(pending);
+for (var p = 0; p < pKeys.length; p++) {
+var pv = pending[pKeys[p]];
+total += typeof pv === 'number' ? pv : (Array.isArray(pv) ? pv.length : 0);
+}
+document.getElementById('pending-items').innerHTML = 'Pending: <strong>' + total + '</strong>';
 }
 
 function showSignalLost(show) {
-  document.getElementById('signal-lost-center').classList.toggle('visible', show);
+document.getElementById('signal-lost-center').classList.toggle('visible', show);
 }
 
 async function refreshLight() {
- /* Fetch the 3 lightweight endpoints every 10s */
- var results = await Promise.all([
- apiFetch('/simulation/status', 8000),
- apiFetch('/simulation/factions', 8000),
- apiFetch('/simulation/events', 8000),
- ]);
- var status = results[0], factions = results[1], events = results[2];
- var anyOk = status || factions || events;
- if (!anyOk) {
- fetchErrorCount++;
- if (fetchErrorCount >= 3) showSignalLost(true);
- } else {
- fetchErrorCount = 0;
- showSignalLost(false);
- if (status) lastData.status = status;
- if (factions) lastData.factions = factions;
- if (events) lastData.events = events;
- }
- if (lastData.status) updateTopRibbon(lastData.status);
- if (lastData.factions) renderFactions(lastData.factions);
- if (lastData.events) renderEvents(lastData.events);
- if (lastData.status) renderBottom(lastData.status);
+var results = await Promise.all([
+apiFetch('/simulation/status', 8000),
+apiFetch('/simulation/factions', 8000),
+apiFetch('/simulation/events', 8000),
+]);
+var status = results[0], factions = results[1], events = results[2];
+var anyOk = status || factions || events;
+if (!anyOk) {
+fetchErrorCount++;
+if (fetchErrorCount >= 3) showSignalLost(true);
+} else {
+fetchErrorCount = 0;
+showSignalLost(false);
+if (status) lastData.status = status;
+if (factions) lastData.factions = factions;
+if (events) lastData.events = events;
+}
+if (lastData.status) updateTopRibbon(lastData.status);
+if (lastData.factions) renderFactions(lastData.factions);
+if (lastData.events) renderEvents(lastData.events);
+if (lastData.status) renderBottom(lastData.status);
 }
 
 async function refreshNpcs() {
- /* Fetch the heavier NPC activity endpoint on a slower 30s cadence */
- var npcs = await apiFetch('/simulation/npcs/activity', 12000);
- if (npcs) {
- lastData.npcs = npcs;
- showSignalLost(false);
- }
- if (lastData.npcs) renderNpcs(lastData.npcs);
+var npcs = await apiFetch('/simulation/npcs/activity', 12000);
+if (npcs) {
+lastData.npcs = npcs;
+showSignalLost(false);
+}
+if (lastData.npcs) renderNpcs(lastData.npcs);
+}
+
+async function refreshQuests() {
+var data = await apiFetch('/simulation/npc-quests', 12000);
+if (data) {
+lastData.quests = data;
+showSignalLost(false);
+}
+if (lastData.quests) renderQuests(lastData.quests);
+}
+
+async function refreshFactionTech() {
+var data = await apiFetch('/simulation/faction-tech', 12000);
+if (data) {
+lastData.factionTech = data;
+showSignalLost(false);
+}
+if (lastData.factionTech) renderFactionTech(lastData.factionTech);
+}
+
+async function refreshChoices() {
+var data = await apiFetch('/simulation/choice-resolutions', 12000);
+if (data) {
+lastData.choices = data;
+showSignalLost(false);
+}
+if (lastData.choices) renderChoices(lastData.choices);
 }
 
 async function refresh() {
- var loadingEls = document.querySelectorAll('.section-title');
- for (var l = 0; l < loadingEls.length; l++) loadingEls[l].classList.add('loading-pulse');
- await refreshLight();
- await refreshNpcs();
- for (var l2 = 0; l2 < loadingEls.length; l2++) loadingEls[l2].classList.remove('loading-pulse');
+var loadingEls = document.querySelectorAll('.section-title');
+for (var l = 0; l < loadingEls.length; l++) loadingEls[l].classList.add('loading-pulse');
+await refreshLight();
+await refreshNpcs();
+await refreshQuests();
+await refreshFactionTech();
+await refreshChoices();
+for (var l2 = 0; l2 < loadingEls.length; l2++) loadingEls[l2].classList.remove('loading-pulse');
 }
 
 function init() {
- generateStarfield();
- refresh();
- setInterval(refreshLight, 10000);
- setInterval(refreshNpcs, 30000);
- setInterval(updateTimeSince, 1000);
+generateStarfield();
+refresh();
+setInterval(refreshLight, 10000);
+setInterval(refreshNpcs, 30000);
+setInterval(refreshQuests, 20000);
+setInterval(refreshFactionTech, 25000);
+setInterval(refreshChoices, 20000);
+setInterval(updateTimeSince, 1000);
 }
 
 document.addEventListener('DOMContentLoaded', init);

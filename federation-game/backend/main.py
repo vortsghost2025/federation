@@ -3725,7 +3725,6 @@ async def spawn_random_encounter():
         }
 
 
-
 @app.get("/npcs/relationship-network")
 async def npc_relationship_network():
     """All NPC relationships in a single batch — full network map."""
@@ -4617,7 +4616,6 @@ async def simulation_choice_resolutions(limit: int = 20):
         return {"stats": {}, "error": str(e)}
 
 
-
 @app.get("/simulation/choice-resolutions/detail")
 async def simulation_choice_resolutions_detail(limit: int = 20):
     """Detailed choice resolution history with per-faction vote breakdowns."""
@@ -5468,7 +5466,6 @@ async def narrator_history(limit: int = 10):
         return {"status": "error", "error": str(e)}
 
 
-
 @app.get("/simulation/faction-brains")
 async def simulation_faction_brains():
     """Faction brain states — decision-making priorities and weights."""
@@ -5508,34 +5505,25 @@ async def simulation_cascade_chains(limit: int = 50):
         return {"chains": [], "count": 0, "error": str(e)}
 
 
-
 @app.get("/simulation/faction-treaties")
 async def simulation_faction_treaties(limit: int = 50):
-    """Active faction treaties. Handles ZSET/HASH type ambiguity."""
+    """Active faction treaties. Canonical type is HASH."""
     limit = min(max(limit, 1), 200)
     _r = _get_observer_redis()
     try:
-        raw = _r.zrevrange("faction_treaties_active", 0, limit - 1, withscores=True)
+        raw = _r.hgetall("faction_treaties_active")
         treaties = []
-        for entry, score in raw:
+        for key, val in raw.items():
             try:
-                data = json.loads(entry)
-                data["_score"] = score
+                data = json.loads(val)
+                data["_hash_key"] = key
                 treaties.append(data)
             except (json.JSONDecodeError, TypeError):
                 continue
-        return {"treaties": treaties, "count": len(treaties), "key_type": "zset"}
-    except Exception:
-        try:
-            raw = _r.hgetall("faction_treaties_active")
-            treaties = []
-            for key, val in raw.items():
-                try:
-                    data = json.loads(val)
-                    data["_hash_key"] = key
-                    treaties.append(data)
-                except (json.JSONDecodeError, TypeError):
-                    continue
-            return {"treaties": treaties, "count": len(treaties), "key_type": "hash"}
-        except Exception as e:
-            return {"treaties": [], "count": 0, "error": str(e)}
+        return {
+            "treaties": treaties[:limit],
+            "count": len(treaties),
+            "key_type": "hash",
+        }
+    except Exception as e:
+        return {"treaties": [], "count": 0, "error": str(e)}
