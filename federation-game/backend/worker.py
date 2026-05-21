@@ -284,6 +284,8 @@ def run_tick():
         ("/political/process-turn", "Political engine", 30),
         ("/history-arc/advance", "History arc", 30),
         ("/simulation/autonomous/tick", "Autonomous simulation", 120),
+        ("/cognition/tick", "LLM cognition", 60),
+        ("/narrator/generate", "Narrator", 45),
     ]
 
     for path, name, timeout_s in endpoints:

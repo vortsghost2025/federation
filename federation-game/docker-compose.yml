@@ -24,16 +24,16 @@ services:
   backend:
     build: /docker/federation-game/backend
     command:
-      - uvicorn
-      - main:app
-      - --host
-      - 0.0.0.0
-      - --port
-      - '8000'
+    - uvicorn
+    - main:app
+    - --host
+    - 0.0.0.0
+    - --port
+    - '8000'
     restart: unless-stopped
     env_file:
-      - .env
-    volumes:
+    - .env
+  volumes:
       - /docker/federation-game/backend:/app:ro
     healthcheck:
       test:
@@ -56,13 +56,13 @@ services:
           cpus: "1.0"
     labels:
       - traefik.enable=true
-      - "traefik.http.routers.fed-api.rule=Host(`federation-game.deliberatefederation.cloud`) && (PathPrefix(`/npcs`) || PathPrefix(`/world`) || PathPrefix(`/simulation/`) || PathPrefix(`/political`) || PathPrefix(`/factions`) || PathPrefix(`/broadcast-events`) || PathPrefix(`/quests`) || PathPrefix(`/technology`) || PathPrefix(`/history-arc`) || PathPrefix(`/atlas`) || PathPrefix(`/consciousness`) || PathPrefix(`/engine-status`) || PathPrefix(`/map/`) || PathPrefix(`/state`) || PathPrefix(`/systems-overview`) || PathPrefix(`/timeline`) || PathPrefix(`/rivals`) || PathPrefix(`/reset`) || PathPrefix(`/log`) || PathPrefix(`/ws`) || PathPrefix(`/healthz`) || PathPrefix(`/docs`) || PathPrefix(`/openapi.json`) || PathPrefix(`/redoc`))"
+        - "traefik.http.routers.fed-api.rule=Host(`federation-game.deliberatefederation.cloud`) && (PathPrefix(`/npcs`) || PathPrefix(`/world`) || PathPrefix(`/simulation/`) || PathPrefix(`/political`) || PathPrefix(`/factions`) || PathPrefix(`/broadcast-events`) || PathPrefix(`/quests`) || PathPrefix(`/technology`) || PathPrefix(`/history-arc`) || PathPrefix(`/atlas`) || PathPrefix(`/consciousness`) || PathPrefix(`/engine-status`) || PathPrefix(`/map/`) || PathPrefix(`/state`) || PathPrefix(`/systems-overview`) || PathPrefix(`/timeline`) || PathPrefix(`/rivals`) || PathPrefix(`/reset`) || PathPrefix(`/log`) || PathPrefix(`/ws`) || PathPrefix(`/healthz`) || PathPrefix(`/docs`) || PathPrefix(`/openapi.json`) || PathPrefix(`/redoc`) || PathPrefix(`/cognition`) || PathPrefix(`/narrator`))"
       - traefik.http.routers.fed-api.entrypoints=websecure
       - traefik.http.routers.fed-api.tls.certresolver=letsencrypt
       - "traefik.http.routers.fed-api.priority=100"
       - traefik.http.routers.fed-api.service=fed-api-svc
       - traefik.http.services.fed-api-svc.loadbalancer.server.port=8000
-      - "traefik.http.routers.fed-api-http.rule=Host(`federation-game.deliberatefederation.cloud`) && (PathPrefix(`/npcs`) || PathPrefix(`/world`) || PathPrefix(`/simulation/`) || PathPrefix(`/political`) || PathPrefix(`/factions`) || PathPrefix(`/broadcast-events`) || PathPrefix(`/quests`) || PathPrefix(`/technology`) || PathPrefix(`/history-arc`) || PathPrefix(`/atlas`) || PathPrefix(`/consciousness`) || PathPrefix(`/engine-status`) || PathPrefix(`/map/`) || PathPrefix(`/state`) || PathPrefix(`/systems-overview`) || PathPrefix(`/timeline`) || PathPrefix(`/rivals`) || PathPrefix(`/reset`) || PathPrefix(`/log`) || PathPrefix(`/ws`) || PathPrefix(`/healthz`) || PathPrefix(`/docs`) || PathPrefix(`/openapi.json`) || PathPrefix(`/redoc`))"
+        - "traefik.http.routers.fed-api-http.rule=Host(`federation-game.deliberatefederation.cloud`) && (PathPrefix(`/npcs`) || PathPrefix(`/world`) || PathPrefix(`/simulation/`) || PathPrefix(`/political`) || PathPrefix(`/factions`) || PathPrefix(`/broadcast-events`) || PathPrefix(`/quests`) || PathPrefix(`/technology`) || PathPrefix(`/history-arc`) || PathPrefix(`/atlas`) || PathPrefix(`/consciousness`) || PathPrefix(`/engine-status`) || PathPrefix(`/map/`) || PathPrefix(`/state`) || PathPrefix(`/systems-overview`) || PathPrefix(`/timeline`) || PathPrefix(`/rivals`) || PathPrefix(`/reset`) || PathPrefix(`/log`) || PathPrefix(`/ws`) || PathPrefix(`/healthz`) || PathPrefix(`/docs`) || PathPrefix(`/openapi.json`) || PathPrefix(`/redoc`) || PathPrefix(`/cognition`) || PathPrefix(`/narrator`))"
       - traefik.http.routers.fed-api-http.entrypoints=web
       - "traefik.http.routers.fed-api-http.priority=100"
       - traefik.http.routers.fed-api-http.service=fed-api-http-svc
@@ -106,8 +106,8 @@ services:
     command: python -u worker.py
     restart: unless-stopped
     env_file:
-      - .env
-    environment:
+    - .env
+  environment:
       - "NOTIFICATION_URLS=tgram://8908125951:AAEME7W8jlkh99AYIxM8IoIw_MlDznhajis/7312791490/"
     healthcheck:
       test:

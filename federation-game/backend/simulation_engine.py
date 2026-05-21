@@ -28,6 +28,21 @@ from faction_ai import FACTION_IDEOLOGY
 from quests import (
     create_quest_library as _create_quest_library,
 )
+
+# LLM cognition and narration — guarded imports (graceful degradation if unavailable)
+try:
+    from npc_cognition import run_cognition
+
+    COGNITION_AVAILABLE = True
+except ImportError:
+    COGNITION_AVAILABLE = False
+
+try:
+    from narrator import generate_narration
+
+    NARRATOR_AVAILABLE = True
+except ImportError:
+    NARRATOR_AVAILABLE = False
 from technology import (
     TechTree as _TechTree,
     create_technology_tree as _create_technology_tree,
@@ -1274,12 +1289,16 @@ def autonomous_tick(npc_list: List[Dict], tick_decisions: List[Dict]) -> Dict:
     cross-pollination order:
 
     1. Wire faction context into NPC decisions
+    1.5. LLM Cognition — leaders/specialists get LLM reasoning (if available)
+         LLM proposals are injected into tick_decisions before Step 2
     2. Execute NPC decisions with concrete effects
     3. Bridge world state to game state
     4. Bridge NPC events to political engine
     5. Check era advancement
     6. Generate and apply game events
     7. NPC autonomous quest progression
+    8. Faction autonomous tech research
+    9. Narration — generate dramatic prose summarizing the tick (if available)
 
     Each sub-step is wrapped in try/except so failures are logged
     but don't stop the tick.
@@ -1311,6 +1330,7 @@ def autonomous_tick(npc_list: List[Dict], tick_decisions: List[Dict]) -> Dict:
     result = {
         "tick_ts": tick_ts,
         "step1_faction_context": {},
+        "step1_5_cognition": {},
         "step2_decision_effects": {},
         "step3_game_state_bridge": {},
         "step4_political_bridge": {},
@@ -1329,6 +1349,34 @@ def autonomous_tick(npc_list: List[Dict], tick_decisions: List[Dict]) -> Dict:
         logger.error("Step 1 (faction context wiring) failed: %s", exc)
         result["step1_faction_context"] = {"errors": [str(exc)]}
         result["errors"].append(f"step1: {exc}")
+
+    # Step 1.5: LLM Cognition — leaders and specialists get LLM reasoning
+    # if triggered events demand it. LLM proposals are merged into
+    # tick_decisions BEFORE Step 2 executes them.
+    # "LLMs PROPOSE, deterministic engine DISPOSES."
+    if COGNITION_AVAILABLE:
+        try:
+            step_start = time.time()
+            world_state = _read_world_state(r)
+            cog_result = run_cognition(npc_list, world_state)
+            result["step1_5_cognition"] = cog_result
+            result["step1_5_cognition"]["duration_ms"] = round(
+                (time.time() - step_start) * 1000, 1
+            )
+            # Merge LLM proposals into tick_decisions so Step 2 executes them
+            llm_decisions = cog_result.get("decisions", [])
+            if llm_decisions:
+                tick_decisions.extend(llm_decisions)
+                logger.info(
+                    "Cognition injected %d LLM decisions into tick pipeline",
+                    len(llm_decisions),
+                )
+        except Exception as exc:
+            logger.error("Step 1.5 (LLM cognition) failed: %s", exc)
+            result["step1_5_cognition"] = {"errors": [str(exc)]}
+            result["errors"].append(f"step1_5: {exc}")
+    else:
+        result["step1_5_cognition"] = {"status": "unavailable", "skipped": True}
 
     try:
         step_start = time.time()
@@ -1425,6 +1473,46 @@ def autonomous_tick(npc_list: List[Dict], tick_decisions: List[Dict]) -> Dict:
         result["step8_faction_tech"] = {"errors": [str(exc)]}
         result["errors"].append(f"step8: {exc}")
 
+    # Step 9: Narration — generate dramatic prose summarizing this tick
+    # Runs AFTER all world state changes so it can narrate what actually happened.
+    # Has built-in cooldown (120s) and deterministic fallback if LLM is down.
+    if NARRATOR_AVAILABLE:
+        try:
+            step_start = time.time()
+            world_state = _read_world_state(r)
+            # Collect faction actions from Step 4 if available
+            faction_actions = []
+            try:
+                pol_bridge = result.get("step4_political_bridge", {})
+                faction_actions = pol_bridge.get("faction_actions", [])
+            except Exception:
+                pass
+            # Collect cascade events from Step 6 if available
+            cascade_events = []
+            try:
+                game_events = result.get("step6_game_events", {})
+                cascade_events = game_events.get(
+                    "events", game_events.get("applied_events", [])
+                )
+            except Exception:
+                pass
+            narration = generate_narration(
+                world_state=world_state,
+                tick_decisions=tick_decisions,
+                faction_actions=faction_actions,
+                cascade_events=cascade_events,
+            )
+            result["step9_narration"] = narration
+            result["step9_narration"]["duration_ms"] = round(
+                (time.time() - step_start) * 1000, 1
+            )
+        except Exception as exc:
+            logger.error("Step 9 (narration) failed: %s", exc)
+            result["step9_narration"] = {"errors": [str(exc)]}
+            result["errors"].append(f"step9: {exc}")
+    else:
+        result["step9_narration"] = {"status": "unavailable", "skipped": True}
+
     result["duration_ms"] = round((time.time() - tick_start) * 1000, 1)
 
     try:
@@ -1458,6 +1546,21 @@ def autonomous_tick(npc_list: List[Dict], tick_decisions: List[Dict]) -> Dict:
             "techs_researching": result.get("step8_faction_tech", {}).get(
                 "research_advanced", 0
             ),
+            "cognition_leaders": result.get("step1_5_cognition", {}).get(
+                "leaders_cognized", 0
+            ),
+            "cognition_specialists": result.get("step1_5_cognition", {}).get(
+                "specialists_cognized", 0
+            ),
+            "cognition_triggers": result.get("step1_5_cognition", {}).get(
+                "triggers_detected", 0
+            ),
+            "narration_source": result.get("step9_narration", {}).get(
+                "source", "unavailable"
+            ),
+            "narration_headline": result.get("step9_narration", {}).get("headline", "")[
+                :80
+            ],
             "duration_ms": result["duration_ms"],
             "errors": len(result["errors"]),
         }
