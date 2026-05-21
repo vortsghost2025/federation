@@ -161,10 +161,12 @@ class NPCQuestEngine:
         if not available:
             return None
 
-        preferred_types = PERSONALITY_OBJECTIVE_MAP.get(personality_type.lower(), [])
+        safe_personality = (personality_type or "default").lower()
+        safe_affiliation = (affiliation or "none").lower()
+        preferred_types = PERSONALITY_OBJECTIVE_MAP.get(safe_personality, [])
 
         npc_faction = FACTION_AFFILIATION_MAP.get(
-            affiliation.lower(), FactionAffiliation.NONE
+            safe_affiliation, FactionAffiliation.NONE
         )
 
         scored: List[Tuple[float, str]] = []
@@ -467,8 +469,8 @@ class NPCQuestEngine:
                 summary["errors"] += 1
                 continue
 
-            affiliation = npc.get("affiliation", "none")
-            personality = npc.get("personality_type", "default")
+            affiliation = npc.get("affiliation") or "none"
+            personality = npc.get("personality_type") or "default"
             ambition = float(npc.get("ambition", 0.5))
             skills = npc.get("skills", [])
 
@@ -517,9 +519,9 @@ class NPCQuestEngine:
 
                     # Calculate progress amount
                     progress_amount = 1
-                    quest_faction_str = quest_data.get("faction_affiliation", "none")
+                    quest_faction_str = (quest_data.get("faction_affiliation") or "none").lower()
                     if any(
-                        skill.lower() in quest_faction_str.lower() for skill in skills
+                        s in quest_faction_str for s in [(sk or "").lower() for sk in skills]
                     ):
                         progress_amount += 1
 
