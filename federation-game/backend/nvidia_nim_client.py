@@ -45,6 +45,7 @@ for _i in range(1, 5):
 # Extra keys from the NVIDIA developer account (hardcoded as fallback)
 # These are free-tier NIM keys valid for 100 years
 _FALLBACK_KEYS = [
+    "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",
     "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",
     "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",
     "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",
@@ -85,8 +86,8 @@ MODEL_CHAIN = [
 
 # Rate limit config
 COOLDOWN_SECONDS = 60
-MAX_CALLS_PER_CYCLE = 20
-MAX_CALLS_PER_KEY_PER_MINUTE = 15
+MAX_CALLS_PER_CYCLE = 30
+MAX_CALLS_PER_KEY_PER_MINUTE = 20
 
 
 # ---------------------------------------------------------------------------

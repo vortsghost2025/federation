@@ -53,6 +53,23 @@ def _get_redis():
 # NIM keys — comma-separated in env var, rotated round-robin
 _NIM_KEYS_RAW = os.environ.get("NIM_API_KEYS", "")
 NIM_KEYS = [k.strip() for k in _NIM_KEYS_RAW.split(",") if k.strip()]
+
+# Also check individual key env vars
+for _i in range(1, 5):
+    _k = os.environ.get(f"NIM_API_KEY_{_i}", "")
+    if _k and _k not in NIM_KEYS:
+        NIM_KEYS.append(_k)
+
+# Hardcoded fallback keys (free-tier NIM, valid for 100 years)
+_FALLBACK_KEYS = [
+    "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",
+    "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",
+    "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",
+    "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",
+]
+for _fk in _FALLBACK_KEYS:
+    if _fk not in NIM_KEYS:
+        NIM_KEYS.append(_fk)
 NIM_BASE_URL = "https://integrate.api.nvidia.com/v1/chat/completions"
 NIM_RATE_LIMIT_PER_KEY = 40  # requests per minute per key
 NIM_RATE_LIMIT_WINDOW = 60  # seconds
