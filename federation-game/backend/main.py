@@ -5527,3 +5527,16 @@ async def simulation_faction_treaties(limit: int = 50):
         }
     except Exception as e:
         return {"treaties": [], "count": 0, "error": str(e)}
+
+
+@app.get("/simulation/nim-stats")
+async def simulation_nim_stats():
+    """NVIDIA NIM LLM client usage statistics."""
+    try:
+        from nvidia_nim_client import get_nim_client
+
+        client = get_nim_client()
+        stats = client.get_stats()
+        return {"status": "ok", "nim_stats": stats}
+    except Exception as e:
+        return {"status": "error", "error": str(e), "nim_stats": None}
