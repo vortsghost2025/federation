@@ -816,8 +816,7 @@ def run_cognition(npc_list: List[Dict], world_state: Dict) -> Dict:
                 f"{cid}: {llm_result.get('content', 'unknown error')[:100]}"
             )
 
-        # Small delay between calls
-        time.sleep(0.5)
+        # Rate limiting handled by llm_router / NimClient — no artificial delay needed
 
     # Step 3: Process specialists (only if triggered)
     for npc in npc_list:
@@ -898,7 +897,7 @@ def run_cognition(npc_list: List[Dict], world_state: Dict) -> Dict:
                 f"{cid}: {llm_result.get('content', 'unknown error')[:100]}"
             )
 
-        time.sleep(0.3)
+        # Rate limiting handled by llm_router / NimClient — no artificial delay needed
 
     # Store cognition log
     try:
