@@ -270,6 +270,103 @@ def _safe_json(resp, name):
 
 CONNECTION_TIMEOUT = 10
 
+# ── Async tick completion monitoring ───────────────────────
+# Maps async tick endpoint paths to their corresponding status endpoints
+ASYNC_STATUS_MAP = {
+    "/simulation/tick": "/simulation/tick/status",
+    "/simulation/autonomous/tick": "/simulation/autonomous/status",
+}
+
+# How long to poll for completion before giving up (seconds)
+ASYNC_POLL_TIMEOUT = int(os.getenv("ASYNC_POLL_TIMEOUT", "240"))
+# How often to poll the status endpoint (seconds)
+ASYNC_POLL_INTERVAL = int(os.getenv("ASYNC_POLL_INTERVAL", "5"))
+
+
+def _poll_async_completion(tick_path, name):
+    """Poll the status endpoint after an async tick returns 202.
+
+    Returns one of: 'completed', 'failed', 'timeout', 'error'
+    Logs outcome at appropriate level.
+    """
+    status_path = ASYNC_STATUS_MAP.get(tick_path)
+    if not status_path:
+        log.warning(f" {name}: no status endpoint mapped for {tick_path}")
+        return "error"
+
+    deadline = time.time() + ASYNC_POLL_TIMEOUT
+    attempts = 0
+
+    while time.time() < deadline:
+        if not running:
+            log.info(f" {name}: shutdown requested during poll, aborting")
+            return "timeout"
+
+        attempts += 1
+        try:
+            resp = requests.get(
+                f"{BACKEND_URL}{status_path}",
+                timeout=(CONNECTION_TIMEOUT, 10),
+            )
+            if resp.status_code != 200:
+                log.warning(
+                    f" {name}: status endpoint returned {resp.status_code} "
+                    f"(attempt {attempts})"
+                )
+            else:
+                data = resp.json()
+                tick_status = data.get("status", "unknown")
+
+                if tick_status == "completed":
+                    duration = data.get("duration")
+                    dur_str = f"{duration:.1f}s" if duration else "?"
+                    log.info(f" {name}: COMPLETED (duration={dur_str})")
+                    return "completed"
+
+                elif tick_status == "failed":
+                    error_msg = data.get("error", "unknown error")
+                    duration = data.get("duration")
+                    dur_str = f"{duration:.1f}s" if duration else "?"
+                    log.error(
+                        f" {name}: FAILED (duration={dur_str}, error={error_msg})"
+                    )
+                    return "failed"
+
+                elif tick_status == "running":
+                    elapsed = data.get("elapsed", 0)
+                    log.debug(
+                        f" {name}: still running (elapsed={elapsed:.1f}s, "
+                        f"attempt {attempts})"
+                    )
+                    # Continue polling
+
+                elif tick_status == "idle":
+                    # Tick hasn't registered yet — might be a race condition
+                    # right after 202. Give it another cycle.
+                    log.debug(f" {name}: status=idle (race?), retrying...")
+
+                else:
+                    log.warning(f" {name}: unknown tick status '{tick_status}'")
+
+        except requests.exceptions.ConnectionError:
+            log.warning(f" {name}: status endpoint unreachable (attempt {attempts})")
+        except requests.exceptions.Timeout:
+            log.warning(f" {name}: status endpoint timeout (attempt {attempts})")
+        except Exception as e:
+            log.warning(f" {name}: status poll error — {e}")
+
+        # Wait before next poll (signal-responsive)
+        wait_until = min(time.time() + ASYNC_POLL_INTERVAL, deadline)
+        while time.time() < wait_until:
+            if not running:
+                return "timeout"
+            time.sleep(1)
+
+    log.error(
+        f" {name}: ASYNC POLL TIMEOUT after {ASYNC_POLL_TIMEOUT}s ({attempts} attempts)"
+    )
+    return "timeout"
+
 
 def _call_endpoint(path, name, read_timeout, retries=1, retry_delay=5):
     """Call a backend endpoint with connection/read timeout split,
@@ -329,8 +426,9 @@ def run_tick():
     history_data = {}
     political_data = []
 
-    # Fire-and-forget endpoints return 202 immediately (background thread)
-    # Sync endpoints still block until done
+    # Async endpoints return 202 immediately (background thread) —
+    # we now poll their status endpoints to verify completion.
+    # Sync endpoints still block until done.
     endpoints = [
         ("/npcs/advance-turn", "NPC system", 120, False),
         ("/simulation/tick", "NPC autonomy", 15, True),
@@ -341,17 +439,44 @@ def run_tick():
         ("/narrator/generate", "Narrator", 90, False),
     ]
 
+    # Track async tick outcomes for this tick (keyed by endpoint path)
+    async_outcomes = {}
+
     for path, name, read_timeout, is_async in endpoints:
         resp, err = _call_endpoint(path, name, read_timeout)
         if err is None:
             status = resp.status_code
             if is_async and status == 202:
-                # Fire-and-forget: backend started the tick in background
-                log.info(f" {name}: 202 (started in background)")
+                # Backend started the tick in background — poll for completion
+                log.info(f" {name}: 202 (started in background, polling...)")
+                outcome = _poll_async_completion(path, name)
+                async_outcomes[path] = outcome
+                if outcome == "completed":
+                    log.info(f" {name}: async tick finished successfully")
+                elif outcome == "failed":
+                    log.error(f" {name}: async tick FAILED — check backend logs")
+                elif outcome == "timeout":
+                    log.warning(
+                        f" {name}: async tick did not complete within "
+                        f"{ASYNC_POLL_TIMEOUT}s — may still be running"
+                    )
                 continue
             if is_async and status == 409:
-                # Already running from previous tick
-                log.info(f" {name}: 409 (already running)")
+                # Already running from previous tick — poll for that one's completion
+                log.info(f" {name}: 409 (already running, polling existing...)")
+                outcome = _poll_async_completion(path, name)
+                async_outcomes[path] = f"already_running:{outcome}"
+                if outcome == "completed":
+                    log.info(f" {name}: existing async tick finished successfully")
+                elif outcome == "failed":
+                    log.error(
+                        f" {name}: existing async tick FAILED — check backend logs"
+                    )
+                elif outcome == "timeout":
+                    log.warning(
+                        f" {name}: existing async tick did not complete within "
+                        f"{ASYNC_POLL_TIMEOUT}s"
+                    )
                 continue
             log.info(f" {name}: {status}")
             data = _safe_json(resp, name)
@@ -393,6 +518,7 @@ def run_tick():
                     "event": "game:tick",
                     "tick": tick_count,
                     "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+                    "async_outcomes": async_outcomes if async_outcomes else None,
                 }
             ),
         )
@@ -403,6 +529,9 @@ def run_tick():
                 "tick_count": str(tick_count),
                 "backend_url": BACKEND_URL,
                 "enabled": "1",
+                "async_outcomes": json.dumps(async_outcomes)
+                if async_outcomes
+                else "{}",
             },
         )
     except Exception as e:
@@ -466,6 +595,9 @@ def main():
     log.info(f" Backend: {BACKEND_URL}")
     log.info(f" Redis: {REDIS_URL}")
     log.info(f" Tick interval: {TICK_INTERVAL}s")
+    log.info(
+        f" Async poll timeout: {ASYNC_POLL_TIMEOUT}s, interval: {ASYNC_POLL_INTERVAL}s"
+    )
 
     for attempt in range(30):
         try:
