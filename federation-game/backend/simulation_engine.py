@@ -44,6 +44,13 @@ try:
     NARRATOR_AVAILABLE = True
 except ImportError:
     NARRATOR_AVAILABLE = False
+
+try:
+    from npc_memory import harvest_tick_memories
+
+    NPC_MEMORY_AVAILABLE = True
+except ImportError:
+    NPC_MEMORY_AVAILABLE = False
 from technology import (
     TechTree as _TechTree,
     create_technology_tree as _create_technology_tree,
@@ -1887,6 +1894,7 @@ def autonomous_tick(npc_list: List[Dict], tick_decisions: List[Dict]) -> Dict:
         "step4_political_bridge": {},
         "step4b_consume_pending": {},
         "step5_era_check": {},
+        "step9_5_memory_harvest": {},
         "duration_ms": 0,
         "errors": [],
     }
@@ -2109,6 +2117,23 @@ def autonomous_tick(npc_list: List[Dict], tick_decisions: List[Dict]) -> Dict:
             result["errors"].append(f"step9: {exc}")
     else:
         result["step9_narration"] = {"status": "unavailable", "skipped": True}
+
+    # ── Step 9.5: NPC Memory Harvest ──
+    if NPC_MEMORY_AVAILABLE:
+        try:
+            step_start = time.time()
+            result["step9_5_memory_harvest"] = harvest_tick_memories(
+                npc_list, tick_decisions, tick_ts
+            )
+            result["step9_5_memory_harvest"]["duration_ms"] = round(
+                (time.time() - step_start) * 1000, 1
+            )
+        except Exception as exc:
+            logger.error("Step 9.5 (memory harvest) failed: %s", exc)
+            result["step9_5_memory_harvest"] = {"errors": [str(exc)]}
+            result["errors"].append(f"step9_5: {exc}")
+    else:
+        result["step9_5_memory_harvest"] = {"status": "unavailable", "skipped": True}
 
     result["duration_ms"] = round((time.time() - tick_start) * 1000, 1)
 

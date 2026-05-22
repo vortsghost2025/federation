@@ -104,6 +104,134 @@ DEFAULT_NPC_STATS = {
     "total_tech_points_earned": 0,
 }
 
+QUEST_CHAINS = {
+    "first_contact_protocol": {
+        "chain_id": "diplomatic_ascension",
+        "chain_name": "Diplomatic Ascension",
+        "chain_position": 1,
+        "chain_total": 3,
+        "next_quest_type": "treaty_negotiation",
+        "narrative_link": "First contact established — now formalize relations through treaties",
+        "bonus_rewards": {"resources": 50, "reputation": 0.05},
+    },
+    "treaty_negotiation:diplomatic_ascension": {
+        "chain_id": "diplomatic_ascension",
+        "chain_name": "Diplomatic Ascension",
+        "chain_position": 2,
+        "chain_total": 3,
+        "next_quest_type": "alliance_of_equals",
+        "narrative_link": "Treaties signed — forge a true alliance of equals",
+        "bonus_rewards": {"resources": 100, "reputation": 0.1},
+    },
+    "defense_stronghold": {
+        "chain_id": "iron_bulwark",
+        "chain_name": "Iron Bulwark",
+        "chain_position": 1,
+        "chain_total": 3,
+        "next_quest_type": "fortress_unbreakable",
+        "narrative_link": "Borders held — now build an unbreakable fortress",
+        "bonus_rewards": {"resources": 75, "morale_boost": 0.05},
+    },
+    "fortress_unbreakable:iron_bulwark": {
+        "chain_id": "iron_bulwark",
+        "chain_name": "Iron Bulwark",
+        "chain_position": 2,
+        "chain_total": 3,
+        "next_quest_type": "invincible_armada",
+        "narrative_link": "Fortress stands — project power with an invincible armada",
+        "bonus_rewards": {"resources": 200, "stability_boost": 0.1},
+    },
+    "cultural_renaissance": {
+        "chain_id": "cultural_zenith",
+        "chain_name": "Cultural Zenith",
+        "chain_position": 1,
+        "chain_total": 3,
+        "next_quest_type": "artistic_enlightenment",
+        "narrative_link": "Culture blooms — pursue artistic enlightenment",
+        "bonus_rewards": {"resources": 100, "morale_boost": 0.08},
+    },
+    "artistic_enlightenment:cultural_zenith": {
+        "chain_id": "cultural_zenith",
+        "chain_name": "Cultural Zenith",
+        "chain_position": 2,
+        "chain_total": 3,
+        "next_quest_type": "universal_culture",
+        "narrative_link": "Enlightenment achieved — spread culture universally",
+        "bonus_rewards": {"resources": 200, "reputation": 0.15},
+    },
+    "prophecy_fulfillment": {
+        "chain_id": "destiny_unbound",
+        "chain_name": "Destiny Unbound",
+        "chain_position": 1,
+        "chain_total": 2,
+        "next_quest_type": "fate_weavers",
+        "narrative_link": "Prophecies fulfilled — master the art of fate weaving",
+        "bonus_rewards": {"resources": 150, "reputation": 0.1},
+    },
+    "rival_elimination": {
+        "chain_id": "military_supremacy",
+        "chain_name": "Military Supremacy",
+        "chain_position": 1,
+        "chain_total": 2,
+        "next_quest_type": "dominion_assured",
+        "narrative_link": "Rivals eliminated — secure permanent dominion",
+        "bonus_rewards": {"resources": 250, "stability_boost": 0.1},
+    },
+    "resource_abundance": {
+        "chain_id": "economic_dominance",
+        "chain_name": "Economic Dominance",
+        "chain_position": 1,
+        "chain_total": 2,
+        "next_quest_type": "infinite_wealth",
+        "narrative_link": "Resources gathered — pursue infinite wealth",
+        "bonus_rewards": {"resources": 100, "tech_points": 25},
+    },
+    "consciousness_evolution": {
+        "chain_id": "transcendent_awakening",
+        "chain_name": "Transcendent Awakening",
+        "chain_position": 1,
+        "chain_total": 2,
+        "next_quest_type": "transcendence",
+        "narrative_link": "Consciousness evolved — seek ultimate transcendence",
+        "bonus_rewards": {
+            "resources": 200,
+            "morale_boost": 0.1,
+            "stability_boost": 0.1,
+        },
+    },
+    "alliance_of_equals:diplomatic_ascension": {
+        "chain_id": "diplomatic_ascension",
+        "chain_name": "Diplomatic Ascension",
+        "chain_position": 3,
+        "chain_total": 3,
+        "next_quest_type": None,
+        "narrative_link": "Alliance forged — diplomatic ascension complete",
+        "bonus_rewards": {"resources": 300, "reputation": 0.2, "morale_boost": 0.1},
+    },
+    "invincible_armada:iron_bulwark": {
+        "chain_id": "iron_bulwark",
+        "chain_name": "Iron Bulwark",
+        "chain_position": 3,
+        "chain_total": 3,
+        "next_quest_type": None,
+        "narrative_link": "Armada unleashed — iron bulwark complete",
+        "bonus_rewards": {
+            "resources": 400,
+            "stability_boost": 0.15,
+            "morale_boost": 0.1,
+        },
+    },
+    "universal_culture:cultural_zenith": {
+        "chain_id": "cultural_zenith",
+        "chain_name": "Cultural Zenith",
+        "chain_position": 3,
+        "chain_total": 3,
+        "next_quest_type": None,
+        "narrative_link": "Culture universal — cultural zenith complete",
+        "bonus_rewards": {"resources": 300, "reputation": 0.2, "morale_boost": 0.1},
+    },
+}
+
 
 class NPCQuestEngine:
     """Autonomous quest engine for NPC characters backed by Redis."""
@@ -229,7 +357,12 @@ class NPCQuestEngine:
                 obj["target"] = max(3, int(original_target * NPC_OBJECTIVE_SCALE))
         return quest_data
 
-    def accept_quest(self, char_id: str, quest_id: str) -> Tuple[bool, str]:
+    def accept_quest(
+        self,
+        char_id: str,
+        quest_id: str,
+        chain_meta: Optional[Dict[str, Any]] = None,
+    ) -> Tuple[bool, str]:
         """
         Accept a quest on behalf of an NPC and persist to Redis.
 
@@ -250,6 +383,12 @@ class NPCQuestEngine:
             active_key = f"npc_quests:active:{char_id}"
             quest_dict = self._quest_to_dict(quest)
             quest_dict = self._scale_quest_for_npc(quest_dict)
+            if chain_meta:
+                quest_dict["chain_id"] = chain_meta.get("chain_id", "")
+                quest_dict["chain_position"] = chain_meta.get("chain_position", 0)
+                quest_dict["chain_total"] = chain_meta.get("chain_total", 0)
+                quest_dict["narrative_link"] = chain_meta.get("narrative_link", "")
+                quest_dict["priority_boost"] = chain_meta.get("priority_boost", 0.0)
             quest_json = json.dumps(quest_dict, default=str)
 
             r.hset(active_key, quest_id, quest_json)
@@ -414,6 +553,121 @@ class NPCQuestEngine:
             )
 
             logger.info("NPC %s completed quest %s", char_id, quest_id)
+
+            stored_quest_data = None
+            if quest_json:
+                try:
+                    stored_quest_data = json.loads(quest_json)
+                except (json.JSONDecodeError, TypeError):
+                    stored_quest_data = None
+
+            chain_id = ""
+            if stored_quest_data and isinstance(stored_quest_data, dict):
+                chain_id = stored_quest_data.get("chain_id", "")
+
+            chain_key = quest_id
+            if chain_id:
+                chain_key = f"{quest_id}:{chain_id}"
+
+            chain_entry = QUEST_CHAINS.get(chain_key)
+            if not chain_entry:
+                chain_entry = QUEST_CHAINS.get(quest_id)
+
+            if chain_entry:
+                bonus = chain_entry.get("bonus_rewards", {})
+                if bonus.get("resources"):
+                    rewards_dict["bonus_resources"] = bonus["resources"]
+                    self._incr_stat(
+                        char_id, "total_resources_earned", bonus["resources"]
+                    )
+                if bonus.get("reputation"):
+                    rewards_dict["bonus_reputation"] = bonus["reputation"]
+                if bonus.get("morale_boost"):
+                    rewards_dict["bonus_morale_boost"] = bonus["morale_boost"]
+                if bonus.get("stability_boost"):
+                    rewards_dict["bonus_stability_boost"] = bonus["stability_boost"]
+                if bonus.get("tech_points"):
+                    rewards_dict["bonus_tech_points"] = bonus["tech_points"]
+
+                c_id = chain_entry["chain_id"]
+                chain_progress_key = f"npc_quests:chain_progress:{char_id}:{c_id}"
+                r.hset(chain_progress_key, "chain_id", c_id)
+                r.hset(chain_progress_key, "chain_name", chain_entry["chain_name"])
+                r.hset(
+                    chain_progress_key,
+                    "current_position",
+                    str(chain_entry["chain_position"]),
+                )
+                r.hset(
+                    chain_progress_key,
+                    "chain_total",
+                    str(chain_entry["chain_total"]),
+                )
+
+                is_chain_final = (
+                    chain_entry["chain_position"] >= chain_entry["chain_total"]
+                )
+                status = "completed" if is_chain_final else "active"
+                r.hset(chain_progress_key, "status", status)
+
+                self._log_event(
+                    {
+                        "event": "chain_progress",
+                        "char_id": char_id,
+                        "quest_id": quest_id,
+                        "chain_id": c_id,
+                        "chain_name": chain_entry["chain_name"],
+                        "chain_position": chain_entry["chain_position"],
+                        "chain_total": chain_entry["chain_total"],
+                        "status": status,
+                        "narrative_link": chain_entry["narrative_link"],
+                        "timestamp": datetime.now().isoformat(),
+                    }
+                )
+
+                logger.info(
+                    "NPC %s chain %s progress: %d/%d",
+                    char_id,
+                    c_id,
+                    chain_entry["chain_position"],
+                    chain_entry["chain_total"],
+                )
+
+                next_quest_type = chain_entry.get("next_quest_type")
+                if next_quest_type and not is_chain_final:
+                    next_quest = self.quest_system.quests.get(next_quest_type)
+                    if next_quest:
+                        next_chain_meta = {
+                            "chain_id": c_id,
+                            "chain_name": chain_entry["chain_name"],
+                            "chain_position": chain_entry["chain_position"] + 1,
+                            "chain_total": chain_entry["chain_total"],
+                            "narrative_link": chain_entry["narrative_link"],
+                            "priority_boost": 0.3,
+                        }
+                        accept_ok, accept_msg = self.accept_quest(
+                            char_id, next_quest_type, chain_meta=next_chain_meta
+                        )
+                        if accept_ok:
+                            logger.info(
+                                "NPC %s chain quest triggered: %s -> %s",
+                                char_id,
+                                quest_id,
+                                next_quest_type,
+                            )
+                        else:
+                            logger.warning(
+                                "NPC %s chain quest %s accept failed: %s",
+                                char_id,
+                                next_quest_type,
+                                accept_msg,
+                            )
+                    else:
+                        logger.warning(
+                            "NPC %s chain next quest %s not found in library",
+                            char_id,
+                            next_quest_type,
+                        )
 
         except redis.RedisError as exc:
             logger.error(
@@ -592,7 +846,10 @@ class NPCQuestEngine:
                         objective_types_seen = set()
                         for obj_data in quest_data.get("objectives", []):
                             obj_type_val = obj_data.get("objective_type", "")
-                            if obj_type_val and obj_type_val not in objective_types_seen:
+                            if (
+                                obj_type_val
+                                and obj_type_val not in objective_types_seen
+                            ):
                                 objective_types_seen.add(obj_type_val)
                                 try:
                                     obj_type = ObjectiveType(obj_type_val)
