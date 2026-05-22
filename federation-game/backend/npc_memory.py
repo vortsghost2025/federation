@@ -49,6 +49,7 @@ def _significance_score(event: Dict) -> int:
         "birth",
         "promotion",
         "demotion",
+        "quest_chain_advance",
     ):
         score += 4
     elif etype in (
@@ -172,7 +173,10 @@ def generate_reflective_summary(char_id: str, npc_name: str = "") -> Dict:
 
 
 def harvest_tick_memories(
-    npc_list: List[Dict], tick_decisions: List[Dict], tick_ts: int
+    npc_list: List[Dict],
+    tick_decisions: List[Dict],
+    tick_ts: int,
+    tick_results: Optional[Dict] = None,
 ) -> Dict:
     r = _get_redis()
     harvested = 0
@@ -241,22 +245,68 @@ def harvest_tick_memories(
                     "ts": tick_ts,
                 }
             )
+        # P24c: Harvest additional event types from tick results
+        if tick_results:
+            # Quest completions for this NPC
+            quest_data = tick_results.get("step7_npc_quests", {})
+            completed_quests = quest_data.get("completed_details", [])
+            for cq in completed_quests:
+                if cq.get("char_id") == char_id:
+                    events.append(
+                        {
+                            "type": "quest_complete",
+                            "content": f"Completed quest: {cq.get('quest_id', 'unknown')} - {cq.get('quest_title', '')[:100]}",
+                            "ts": tick_ts,
+                            "faction_impact": bool(
+                                cq.get("rewards", {}).get("reputation")
+                            ),
+                        }
+                    )
+            # Diplomacy events (applies to all NPCs in affected factions)
+            diplo_data = tick_results.get("step8_5_diplomacy", {})
+            proposals = diplo_data.get("proposals", [])
+            for prop in proposals:
+                if isinstance(prop, dict):
+                    factions_involved = (
+                        prop.get("faction_a", "") + " " + prop.get("faction_b", "")
+                    )
+                    npc_faction = npc.get("faction_id", npc.get("faction", ""))
+                    if npc_faction and npc_faction in factions_involved:
+                        events.append(
+                            {
+                                "type": "diplomacy_proposal",
+                                "content": f"Diplomacy: {prop.get('diplomacy_type', 'unknown')} proposed between {prop.get('faction_a', '?')} and {prop.get('faction_b', '?')}",
+                                "ts": tick_ts,
+                                "faction_impact": True,
+                            }
+                        )
+            # Era transitions
+            era_data = tick_results.get("step5_era_check", {})
+            if era_data.get("era_advanced"):
+                events.append(
+                    {
+                        "type": "era_shift",
+                        "content": f"Era advanced to: {era_data.get('recommended_era', 'unknown')}",
+                        "ts": tick_ts,
+                        "faction_impact": True,
+                    }
+                )
         if events:
             result = record_memories_batch(char_id, events)
             harvested += result.get("recorded", 0)
-        summary_tick_key = MEMORY_SUMMARY_TICK_KEY.format(char_id=char_id)
-        last_summary_tick = r.get(summary_tick_key)
-        if (
-            last_summary_tick is None
-            or (tick_ts - int(last_summary_tick)) >= SUMMARY_INTERVAL_TICKS
-        ):
-            npc_name = npc.get("name", char_id)
-            try:
-                generate_reflective_summary(char_id, npc_name)
-                r.set(summary_tick_key, str(tick_ts), ex=86400 * 30)
-                summaries_triggered += 1
-            except Exception as exc:
-                logger.warning("Auto-summary failed for %s: %s", char_id, exc)
+            summary_tick_key = MEMORY_SUMMARY_TICK_KEY.format(char_id=char_id)
+            last_summary_tick = r.get(summary_tick_key)
+            if (
+                last_summary_tick is None
+                or (tick_ts - int(last_summary_tick)) >= SUMMARY_INTERVAL_TICKS
+            ):
+                npc_name = npc.get("name", char_id)
+                try:
+                    generate_reflective_summary(char_id, npc_name)
+                    r.set(summary_tick_key, str(tick_ts), ex=86400 * 30)
+                    summaries_triggered += 1
+                except Exception as exc:
+                    logger.warning("Auto-summary failed for %s: %s", char_id, exc)
     return {
         "harvested": harvested,
         "summaries_triggered": summaries_triggered,

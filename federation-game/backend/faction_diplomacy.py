@@ -183,6 +183,17 @@ class FactionDiplomacyEngine:
     def _get_eligible_pairs(self, faction_ids: List[str], r) -> List[tuple]:
         pairs = []
         current_time = time.time()
+
+        # Read treaties ONCE before the loop — O(1) Redis call instead of O(n²)
+        all_treaties = r.hgetall("faction_treaties_active")
+        active_pair_set = set()
+        for tkey in all_treaties.keys():
+            if isinstance(tkey, bytes):
+                tkey = tkey.decode()
+            parts = tkey.replace("treaty_", "").split("_")
+            if len(parts) >= 2:
+                active_pair_set.add(tuple(sorted([parts[0], parts[1]])))
+
         for i, fid_a in enumerate(faction_ids):
             for fid_b in faction_ids[i + 1 :]:
                 cooldown_key = f"diplomacy_cooldown:{fid_a}:{fid_b}"
@@ -193,17 +204,10 @@ class FactionDiplomacyEngine:
                     if current_time - float(last_attempt) < FACTION_DIPLOMACY_COOLDOWN:
                         continue
 
-                has_treaty = False
-                all_treaties = r.hgetall("faction_treaties_active")
-                for tkey in all_treaties.keys():
-                    if isinstance(tkey, bytes):
-                        tkey = tkey.decode()
-                    if fid_a in tkey and fid_b in tkey:
-                        has_treaty = True
-                        break
+                if tuple(sorted([fid_a, fid_b])) in active_pair_set:
+                    continue
 
-                if not has_treaty:
-                    pairs.append((fid_a, fid_b))
+                pairs.append((fid_a, fid_b))
 
         max_attempts = min(len(pairs), 3)
         if len(pairs) > max_attempts:

@@ -1914,6 +1914,7 @@ def autonomous_tick(npc_list: List[Dict], tick_decisions: List[Dict]) -> Dict:
     # if triggered events demand it. LLM proposals are merged into
     # tick_decisions BEFORE Step 2 executes them.
     # "LLMs PROPOSE, deterministic engine DISPOSES."
+    world_state = None
     if COGNITION_AVAILABLE:
         try:
             step_start = time.time()
