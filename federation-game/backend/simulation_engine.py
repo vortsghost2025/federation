@@ -20,7 +20,7 @@ from typing import Dict, List, Optional, Tuple
 
 import redis
 
-from faction_dynamics import get_faction_context_for_npc
+from faction_dynamics import get_faction_context_for_npc, KNOWN_FACTIONS
 from npc_autonomy import _get_redis as _get_npc_redis
 from npc_quest_engine import NPCQuestEngine
 from faction_tech_research import FactionTechBridge
@@ -1028,12 +1028,22 @@ def wire_faction_context_into_decisions(npc_list: List[Dict]) -> Dict:
 
 def bridge_npc_events_to_political(npc_list: List[Dict]) -> Dict:
     """
-    Read npc_broadcast_events and produce political consequences:
-    - 3+ confront_rival events from same faction → propose "sanctions" law
-    - 5+ help_ally events between two factions → create "alliance_proposal"
+    Read npc_broadcast_events, npc_world_events, and faction_actions:* to
+    produce political consequences:
+    - Adaptive-threshold confront_rival events from same faction → propose "sanctions" law
+    - Adaptive-threshold help_ally events between two factions → create "alliance_proposal"
     - Any investigate breakthrough → create "research_initiative"
 
+    Thresholds are now ADAPTIVE based on NPC count per faction:
+    - confront_rival: max(2, ceil(npcs_in_faction / 4))  (was hardcoded 3)
+    - help_ally:      max(2, ceil(npcs_in_pair / 6))     (was hardcoded 5)
+
+    Data sources expanded from npc_broadcast_events only to also include
+    npc_world_events and faction_actions:* for richer signal.
+
     Stores results in Redis lists: pending_laws, pending_treaties, pending_research.
+    Also writes directly to faction_laws_passed and faction_treaties_active so that
+    resolve_pending_items() in faction_ai can process them.
 
     Args:
         npc_list: List of NPC dicts with 'char_id' and 'affiliation'.
@@ -1051,37 +1061,46 @@ def bridge_npc_events_to_political(npc_list: List[Dict]) -> Dict:
         "errors": [],
     }
 
+    # ── Count NPCs per faction for adaptive thresholds ──────────────────
+    faction_npc_counts: Dict[str, int] = {}
+    for npc in npc_list:
+        fid = npc.get("affiliation", "")
+        if fid and fid != "independent":
+            faction_npc_counts[fid] = faction_npc_counts.get(fid, 0) + 1
+
+    # ── Collect events from ALL three data sources ──────────────────────
     confront_by_faction: Dict[str, List[Dict]] = {}
     ally_pairs: Dict[str, int] = {}
     breakthroughs: List[Dict] = []
 
-    try:
-        raw_events = r.zrevrange("npc_broadcast_events", 0, 99, withscores=True)
-    except Exception as exc:
-        logger.error("Error reading broadcast events: %s", exc)
-        results["errors"].append(str(exc))
-        return results
-
-    for event_json, score in raw_events:
-        try:
-            evt = json.loads(event_json)
-        except (json.JSONDecodeError, TypeError):
-            continue
-
+    def _process_event(evt: Dict):
+        """Classify a single event into confront/ally/breakthrough buckets."""
         category = evt.get("decision_category", "")
         faction = evt.get("source_affiliation", evt.get("faction", ""))
+
+        # Also detect political signals from faction_actions
+        action_type = evt.get("action", evt.get("type", ""))
+        if not category and action_type in ("confront", "hostile_act", "sanction"):
+            category = "confront_rival"
+            if not faction:
+                faction = evt.get("from", evt.get("faction_id", ""))
+        if not category and action_type in ("aid", "trade", "alliance", "help_ally"):
+            category = "help_ally"
+            if not faction:
+                faction = evt.get("from", evt.get("faction_id", ""))
 
         if category == "confront_rival":
             if faction and faction != "independent":
                 confront_by_faction.setdefault(faction, []).append(evt)
 
         elif category == "help_ally":
-            target = evt.get("target_faction", "")
+            target = evt.get("target_faction", evt.get("to", ""))
             if (
                 faction
                 and target
                 and faction != "independent"
                 and target != "independent"
+                and faction != target
             ):
                 pair = tuple(sorted([faction, target]))
                 ally_pairs[str(pair)] = ally_pairs.get(str(pair), 0) + 1
@@ -1090,9 +1109,75 @@ def bridge_npc_events_to_political(npc_list: List[Dict]) -> Dict:
             if evt.get("event_type") == "investigation_breakthrough":
                 breakthroughs.append(evt)
 
+    # Source 1: npc_broadcast_events (the original source — last 100)
+    try:
+        raw_events = r.zrevrange("npc_broadcast_events", 0, 99, withscores=True)
+        for event_json, score in raw_events:
+            try:
+                evt = json.loads(event_json)
+                _process_event(evt)
+            except (json.JSONDecodeError, TypeError):
+                continue
+    except Exception as exc:
+        logger.error("Error reading broadcast events: %s", exc)
+        results["errors"].append(str(exc))
+
+    # Source 2: npc_world_events (last 50 — contains cascade summaries)
+    try:
+        world_events = r.zrevrange("npc_world_events", 0, 49, withscores=True)
+        for event_json, score in world_events:
+            try:
+                evt = json.loads(event_json)
+                _process_event(evt)
+            except (json.JSONDecodeError, TypeError):
+                continue
+    except Exception as exc:
+        logger.error("Error reading world events: %s", exc)
+        results["errors"].append(str(exc))
+
+    # Source 3: faction_actions:* for each known faction (last 10 per faction)
+    for fid in KNOWN_FACTIONS:
+        try:
+            faction_actions = r.zrevrange(
+                f"faction_actions:{fid}", 0, 9, withscores=True
+            )
+            for action_json, score in faction_actions:
+                try:
+                    action = json.loads(action_json)
+                    # Inject faction context if missing
+                    if "source_affiliation" not in action and "faction" not in action:
+                        action["source_affiliation"] = fid
+                    _process_event(action)
+                except (json.JSONDecodeError, TypeError):
+                    continue
+        except Exception:
+            continue
+
+    # ── Adaptive threshold calculation ──────────────────────────────────
+    import math
+
+    def _confront_threshold(faction: str) -> int:
+        """Adaptive: max(2, ceil(npcs_in_faction / 4)). With ~5 NPCs/faction, yields 2."""
+        count = faction_npc_counts.get(faction, 5)
+        return max(2, math.ceil(count / 4))
+
+    def _treaty_threshold(pair_str: str) -> int:
+        """Adaptive: max(2, ceil(total_npcs_in_pair / 6)). With ~10 NPCs/pair, yields 2."""
+        try:
+            parts = (
+                pair_str.replace("(", "").replace(")", "").replace("'", "").split(", ")
+            )
+            parts = [p.strip() for p in parts if p.strip()]
+            total = sum(faction_npc_counts.get(p, 5) for p in parts)
+        except Exception:
+            total = 10
+        return max(2, math.ceil(total / 6))
+
+    # ── Propose laws (with adaptive thresholds) ─────────────────────────
     try:
         for faction, events in confront_by_faction.items():
-            if len(events) >= 3:
+            threshold = _confront_threshold(faction)
+            if len(events) >= threshold:
                 target_factions = set()
                 for evt in events:
                     tf = evt.get("target_faction", "unknown")
@@ -1105,20 +1190,44 @@ def bridge_npc_events_to_political(npc_list: List[Dict]) -> Dict:
                     "proposing_faction": faction,
                     "target_factions": target_list,
                     "trigger_count": len(events),
-                    "description": f"{faction} demands sanctions after {len(events)} confrontations",
+                    "threshold_used": threshold,
+                    "description": f"{faction} demands sanctions after {len(events)} confrontations (threshold: {threshold})",
                     "severity": min(len(events) / 5.0, 1.0),
                     "ts": int(ts),
                 }
+                # Write to pending_laws (original path)
                 r.lpush("pending_laws", json.dumps(law))
+                # ALSO write to faction_laws_passed so resolve_pending_items() processes it
+                law_for_faction_ai = {
+                    "title": f"Sanctions vs {', '.join(target_list)}",
+                    "proposed_by": faction,
+                    "ideology": FACTION_IDEOLOGY.get(faction, "diplomatic"),
+                    "description": law["description"],
+                    "morale_delta": round(-0.05 * law["severity"], 3),
+                    "stability_delta": round(0.02 * law["severity"], 3),
+                    "treasury_delta": 0,
+                    "timestamp": int(ts),
+                    "status": "pending",
+                    "source": "political_bridge",
+                }
+                r.zadd("faction_laws_passed", {json.dumps(law_for_faction_ai): int(ts)})
                 results["laws_proposed"] += 1
+                logger.info(
+                    "Political bridge: law proposed by %s (%d confronts, threshold %d)",
+                    faction,
+                    len(events),
+                    threshold,
+                )
 
     except Exception as exc:
         logger.error("Error proposing laws: %s", exc)
         results["errors"].append(str(exc))
 
+    # ── Propose treaties (with adaptive thresholds) ─────────────────────
     try:
         for pair_str, count in ally_pairs.items():
-            if count >= 5:
+            threshold = _treaty_threshold(pair_str)
+            if count >= threshold:
                 pair = (
                     pair_str.replace("(", "")
                     .replace(")", "")
@@ -1131,17 +1240,44 @@ def bridge_npc_events_to_political(npc_list: List[Dict]) -> Dict:
                         "type": "alliance_proposal",
                         "factions": pair,
                         "trigger_count": count,
-                        "description": f"Alliance proposed between {pair[0]} and {pair[1]} after {count} mutual aid events",
+                        "threshold_used": threshold,
+                        "description": f"Alliance proposed between {pair[0]} and {pair[1]} after {count} mutual aid events (threshold: {threshold})",
                         "strength": min(count / 10.0, 1.0),
                         "ts": int(ts),
                     }
+                    # Write to pending_treaties (original path)
                     r.lpush("pending_treaties", json.dumps(treaty))
+                    # ALSO write to faction_treaties_active so resolve_pending_items() processes it
+                    treaty_key = f"{pair[0]}:{pair[1]}:alliance"
+                    treaty_for_faction_ai = {
+                        "type": "alliance",
+                        "from": pair[0],
+                        "to": pair[1],
+                        "strength": treaty["strength"],
+                        "ts": int(ts),
+                        "status": "proposed",
+                        "description": treaty["description"],
+                        "source": "political_bridge",
+                    }
+                    r.hset(
+                        "faction_treaties_active",
+                        treaty_key,
+                        json.dumps(treaty_for_faction_ai),
+                    )
                     results["treaties_proposed"] += 1
+                    logger.info(
+                        "Political bridge: treaty proposed between %s and %s (%d aid events, threshold %d)",
+                        pair[0],
+                        pair[1],
+                        count,
+                        threshold,
+                    )
 
     except Exception as exc:
         logger.error("Error proposing treaties: %s", exc)
         results["errors"].append(str(exc))
 
+    # ── Research initiatives (unchanged logic) ──────────────────────────
     try:
         for evt in breakthroughs:
             faction = evt.get("source_affiliation", evt.get("faction", "independent"))
@@ -1168,6 +1304,214 @@ def bridge_npc_events_to_political(npc_list: List[Dict]) -> Dict:
         r.ltrim("pending_research", 0, 49)
     except Exception as exc:
         logger.error("Error trimming pending lists: %s", exc)
+        results["errors"].append(str(exc))
+
+    return results
+
+
+def consume_pending_political_items() -> Dict:
+    """
+    Consume pending_laws, pending_treaties, and pending_research from Redis
+    and apply their effects to the world state and faction systems.
+
+    This is the MISSING PIPE that was causing Step 4 to produce 0 laws/treaties
+    in practice — bridge_npc_events_to_political() was writing to pending_laws
+    and pending_treaties, but nothing was reading them to apply effects.
+
+    What this function does:
+    1. RPOPLPUSH each item from pending_laws → applies morale/stability effects
+       to Redis world state keys, then records the law in history and discards it.
+    2. RPOPLPUSH each item from pending_treaties → applies alliance effects
+       (diplomacy boost between factions), records in history, discards.
+    3. RPOPLPUSH each item from pending_research → applies tech progress
+       to the proposing faction, records in history, discards.
+
+    Returns:
+        Dict with keys: laws_applied, treaties_applied, research_applied, errors
+    """
+    r = _get_redis()
+    now = int(time.time())
+
+    results = {
+        "laws_applied": 0,
+        "treaties_applied": 0,
+        "research_applied": 0,
+        "errors": [],
+    }
+
+    # ── Consume pending_laws ────────────────────────────────────────────
+    try:
+        while True:
+            raw = r.rpop("pending_laws")
+            if not raw:
+                break
+            try:
+                law = json.loads(raw)
+            except (json.JSONDecodeError, TypeError):
+                continue
+
+            proposing = law.get("proposing_faction", "")
+            targets = law.get("target_factions", [])
+            severity = law.get("severity", 0.5)
+
+            # Apply stability effect: proposing faction gains stability, targets lose
+            try:
+                current_stability = float(r.get("world:stability") or 60)
+                r.set(
+                    "world:stability",
+                    str(round(current_stability + 0.02 * severity, 2)),
+                )
+
+                # Apply morale dip to target factions via faction_power
+                for tf in targets:
+                    power_key = f"faction_power:{tf}"
+                    current_power = float(r.get(power_key) or 50)
+                    r.set(power_key, str(round(current_power - 1.5 * severity, 2)))
+            except Exception as exc:
+                logger.error("Error applying law effects: %s", exc)
+                results["errors"].append(str(exc))
+
+            # Record in history for the timeline
+            try:
+                history_entry = {
+                    "event_type": "law_enacted",
+                    "proposing_faction": proposing,
+                    "target_factions": targets,
+                    "description": law.get("description", "Unknown law"),
+                    "severity": severity,
+                    "ts": now,
+                    "source": "political_bridge",
+                }
+                r.zadd("npc_world_events", {json.dumps(history_entry): now})
+            except Exception as exc:
+                logger.error("Error recording law history: %s", exc)
+
+            results["laws_applied"] += 1
+            logger.info(
+                "Consumed pending law from %s (severity %.2f)",
+                proposing,
+                severity,
+            )
+
+    except Exception as exc:
+        logger.error("Error consuming pending laws: %s", exc)
+        results["errors"].append(str(exc))
+
+    # ── Consume pending_treaties ────────────────────────────────────────
+    try:
+        while True:
+            raw = r.rpop("pending_treaties")
+            if not raw:
+                break
+            try:
+                treaty = json.loads(raw)
+            except (json.JSONDecodeError, TypeError):
+                continue
+
+            factions = treaty.get("factions", [])
+            strength = treaty.get("strength", 0.5)
+
+            if len(factions) >= 2:
+                # Apply diplomacy boost between the two factions
+                try:
+                    for f1, f2 in [(factions[0], factions[1])]:
+                        stance_key = f"faction_stance:{f1}:{f2}"
+                        current_stance = float(r.get(stance_key) or 0.5)
+                        r.set(
+                            stance_key,
+                            str(round(min(current_stance + 0.1 * strength, 1.0), 2)),
+                        )
+                        # Reverse direction too
+                        stance_key_rev = f"faction_stance:{f2}:{f1}"
+                        current_stance_rev = float(r.get(stance_key_rev) or 0.5)
+                        r.set(
+                            stance_key_rev,
+                            str(
+                                round(min(current_stance_rev + 0.1 * strength, 1.0), 2)
+                            ),
+                        )
+                except Exception as exc:
+                    logger.error("Error applying treaty effects: %s", exc)
+                    results["errors"].append(str(exc))
+
+            # Record in history
+            try:
+                history_entry = {
+                    "event_type": "treaty_signed",
+                    "factions": factions,
+                    "description": treaty.get("description", "Unknown treaty"),
+                    "strength": strength,
+                    "ts": now,
+                    "source": "political_bridge",
+                }
+                r.zadd("npc_world_events", {json.dumps(history_entry): now})
+            except Exception as exc:
+                logger.error("Error recording treaty history: %s", exc)
+
+            results["treaties_applied"] += 1
+            logger.info(
+                "Consumed pending treaty between %s (strength %.2f)",
+                " & ".join(factions),
+                strength,
+            )
+
+    except Exception as exc:
+        logger.error("Error consuming pending treaties: %s", exc)
+        results["errors"].append(str(exc))
+
+    # ── Consume pending_research ────────────────────────────────────────
+    try:
+        while True:
+            raw = r.rpop("pending_research")
+            if not raw:
+                break
+            try:
+                research = json.loads(raw)
+            except (json.JSONDecodeError, TypeError):
+                continue
+
+            faction = research.get("proposing_faction", "independent")
+            potential = research.get("potential", 0.5)
+
+            # Apply tech progress to faction
+            try:
+                tech_key = f"faction_tech_progress:{faction}"
+                current_progress = float(r.get(tech_key) or 0.0)
+                r.set(tech_key, str(round(current_progress + potential * 5.0, 2)))
+
+                # Also boost world technological_level slightly
+                current_tech = float(r.get("world:technological_level") or 0.2)
+                r.set(
+                    "world:technological_level",
+                    str(round(min(current_tech + 0.005 * potential, 1.0), 3)),
+                )
+            except Exception as exc:
+                logger.error("Error applying research effects: %s", exc)
+                results["errors"].append(str(exc))
+
+            # Record in history
+            try:
+                history_entry = {
+                    "event_type": "research_breakthrough",
+                    "proposing_faction": faction,
+                    "description": research.get("description", "Unknown research"),
+                    "potential": potential,
+                    "ts": now,
+                    "source": "political_bridge",
+                }
+                r.zadd("npc_world_events", {json.dumps(history_entry): now})
+            except Exception as exc:
+                logger.error("Error recording research history: %s", exc)
+
+            results["research_applied"] += 1
+            logger.info(
+                "Consumed pending research from %s (potential %.2f)",
+                faction,
+                potential,
+            )
+
+    except Exception as exc:
+        logger.error("Error consuming pending research: %s", exc)
         results["errors"].append(str(exc))
 
     return results
@@ -1334,6 +1678,7 @@ def autonomous_tick(npc_list: List[Dict], tick_decisions: List[Dict]) -> Dict:
         "step2_decision_effects": {},
         "step3_game_state_bridge": {},
         "step4_political_bridge": {},
+        "step4b_consume_pending": {},
         "step5_era_check": {},
         "duration_ms": 0,
         "errors": [],
@@ -1410,6 +1755,18 @@ def autonomous_tick(npc_list: List[Dict], tick_decisions: List[Dict]) -> Dict:
         logger.error("Step 4 (political bridge) failed: %s", exc)
         result["step4_political_bridge"] = {"errors": [str(exc)]}
         result["errors"].append(f"step4: {exc}")
+
+    # Step 4b: Consume pending political items (apply effects)
+    try:
+        step_start = time.time()
+        result["step4b_consume_pending"] = consume_pending_political_items()
+        result["step4b_consume_pending"]["duration_ms"] = round(
+            (time.time() - step_start) * 1000, 1
+        )
+    except Exception as exc:
+        logger.error("Step 4b (consume pending political) failed: %s", exc)
+        result["step4b_consume_pending"] = {"errors": [str(exc)]}
+        result["errors"].append(f"step4b: {exc}")
 
     try:
         step_start = time.time()
@@ -1530,6 +1887,13 @@ def autonomous_tick(npc_list: List[Dict], tick_decisions: List[Dict]) -> Dict:
             "research_initiated": result["step4_political_bridge"].get(
                 "research_initiated", 0
             ),
+            "laws_applied": result["step4b_consume_pending"].get("laws_applied", 0),
+            "treaties_applied": result["step4b_consume_pending"].get(
+                "treaties_applied", 0
+            ),
+            "research_applied": result["step4b_consume_pending"].get(
+                "research_applied", 0
+            ),
             "era_recommendation": result["step5_era_check"].get("recommended_era", ""),
             "quests_completed": result.get("step7_npc_quests", {}).get(
                 "quests_completed", 0
@@ -1574,9 +1938,11 @@ def autonomous_tick(npc_list: List[Dict], tick_decisions: List[Dict]) -> Dict:
         result["errors"].append(f"tick_log: {exc}")
 
     logger.info(
-        "Autonomous tick %d complete: %d effects, %dms, %d errors",
+        "Autonomous tick %d complete: %d effects, %d laws, %d treaties, %dms, %d errors",
         tick_ts,
         result["step2_decision_effects"].get("effects_applied", 0),
+        result.get("step4b_consume_pending", {}).get("laws_applied", 0),
+        result.get("step4b_consume_pending", {}).get("treaties_applied", 0),
         result["duration_ms"],
         len(result["errors"]),
     )
