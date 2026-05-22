@@ -8,21 +8,21 @@
 <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Share+Tech+Mono&display=swap" rel="stylesheet">
 <style>
 :root {
-  --bg: #040810;
-  --panel: rgba(8,14,24,0.96);
-  --border: rgba(0,188,212,0.12);
-  --cyan: #00BCD4;
-  --cyan-dim: rgba(0,188,212,0.10);
-  --amber: #FF9800;
-  --amber-dim: rgba(255,152,0,0.10);
-  --violet: #9C27B0;
-  --violet-dim: rgba(156,39,176,0.10);
-  --green: #4CAF50;
-  --red: #F44336;
-  --red-dim: rgba(244,67,54,0.10);
-  --white: #d8dce6;
-  --dim: #5a6a7a;
-  --bright: #f0f4ff;
+--bg: #040810;
+--panel: rgba(8,14,24,0.96);
+--border: rgba(0,188,212,0.12);
+--cyan: #00BCD4;
+--cyan-dim: rgba(0,188,212,0.10);
+--amber: #FF9800;
+--amber-dim: rgba(255,152,0,0.10);
+--violet: #9C27B0;
+--violet-dim: rgba(156,39,176,0.10);
+--green: #4CAF50;
+--red: #F44336;
+--red-dim: rgba(244,67,54,0.10);
+--white: #e0e4ee;
+--dim: #7a8a9a;
+--bright: #f0f4ff;
 }
 *{margin:0;padding:0;box-sizing:border-box}
 html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--white);font-family:'Share Tech Mono',monospace;font-size:17px}
@@ -34,14 +34,14 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--white);fo
 
 /* ── MAIN GRID ─────────────────────────────────────────────── */
 #app{
-  display:grid;
-  grid-template-rows:64px 1fr;
-  grid-template-columns:1fr 380px;
-  grid-template-areas:
-    "top top"
-    "main aside";
-  height:100vh;gap:1px;
-  background:var(--bg);
+display:grid;
+grid-template-rows:64px 1fr;
+grid-template-columns:1fr 380px;
+grid-template-areas:
+"top top"
+"main aside";
+height:100vh;gap:1px;
+background:var(--bg);
 }
 
 /* ── HEADER ────────────────────────────────────────────────── */
@@ -68,11 +68,11 @@ main{grid-area:main;display:flex;flex-direction:column;overflow:hidden}
 
 /* Narration hero */
 .narration-hero{
-  background:linear-gradient(180deg,rgba(0,188,212,0.04) 0%,transparent 100%);
-  border-bottom:1px solid var(--border);
-  padding:20px 24px 16px;
-  min-height:140px;
-  position:relative;
+background:linear-gradient(180deg,rgba(0,188,212,0.04) 0%,transparent 100%);
+border-bottom:1px solid var(--border);
+padding:20px 24px 16px;
+min-height:140px;
+position:relative;
 }
 .narration-badge{font-size:10px;letter-spacing:2px;text-transform:uppercase;color:var(--dim);margin-bottom:6px;display:flex;align-items:center;gap:8px}
 .narration-badge .dot{width:6px;height:6px;border-radius:50%;background:var(--cyan);animation:dotPulse 2s ease infinite}
@@ -98,9 +98,10 @@ main{grid-area:main;display:flex;flex-direction:column;overflow:hidden}
 
 /* ── TAB BAR ──────────────────────────────────────────────── */
 .tab-bar{display:flex;gap:0;border-bottom:1px solid var(--border);padding:0 24px;background:var(--panel);flex-shrink:0}
-.tab{padding:10px 20px;font-family:'Orbitron',sans-serif;font-size:12px;letter-spacing:2px;text-transform:uppercase;color:var(--dim);cursor:pointer;border-bottom:2px solid transparent;transition:all .2s}
+.tab{padding:12px 24px;font-family:'Orbitron',sans-serif;font-size:14px;letter-spacing:3px;text-transform:uppercase;color:var(--dim);cursor:pointer;border-bottom:2px solid transparent;transition:all .25s}
 .tab:hover{color:var(--white)}
-.tab.active{color:var(--cyan);border-bottom-color:var(--cyan);text-shadow:0 0 8px rgba(0,188,212,0.3)}
+.tab.active{color:var(--cyan);border-bottom-color:var(--cyan);text-shadow:0 0 8px rgba(0,188,212,0.3);animation:tabPulse 3s ease infinite}
+@keyframes tabPulse{0%,100%{text-shadow:0 0 8px rgba(0,188,212,0.3)}50%{text-shadow:0 0 16px rgba(0,188,212,0.5)}}
 
 /* ── TAB CONTENT ───────────────────────────────────────────── */
 .tab-content{flex:1;overflow-y:auto;padding:16px 24px;scrollbar-width:thin;scrollbar-color:rgba(0,188,212,0.15) transparent}
@@ -111,89 +112,30 @@ main{grid-area:main;display:flex;flex-direction:column;overflow:hidden}
 
 /* NPC thought cards */
 .thought-card{
-  background:rgba(255,255,255,0.02);
-  border:1px solid rgba(255,255,255,0.05);
-  border-left:3px solid var(--dim);
-  border-radius:6px;
-  padding:12px 14px;
-  margin-bottom:8px;
-  transition:border-color .3s,background .3s;
+background:rgba(255,255,255,0.02);
+border:1px solid rgba(255,255,255,0.05);
+border-left:3px solid var(--dim);
+border-radius:6px;
+padding:14px 16px;
+margin-bottom:10px;
+transition:border-color .3s,background .3s,box-shadow .3s;
 }
-.thought-card:hover{background:rgba(255,255,255,0.04);border-color:rgba(0,188,212,0.15)}
-.thought-header{display:flex;align-items:center;gap:10px;margin-bottom:6px}
-.thought-name{font-family:'Orbitron',sans-serif;font-size:14px;font-weight:700;letter-spacing:.5px}
-.thought-title{font-size:12px;color:var(--dim)}
-.thought-faction{font-size:10px;padding:2px 6px;border-radius:3px;letter-spacing:1px;text-transform:uppercase;margin-left:auto}
-.thought-body{font-size:15px;line-height:1.6;color:rgba(255,255,255,0.85);font-style:italic;padding-left:12px;border-left:2px solid rgba(255,255,255,0.06)}
-.thought-mood{font-size:11px;color:var(--dim);margin-top:6px}
-.thought-time{float:right;font-size:10px;color:rgba(255,255,255,0.3)}
-
-/* Quest cards */
-.quest-card{
-  background:rgba(255,255,255,0.02);
-  border:1px solid rgba(255,255,255,0.05);
-  border-left:3px solid var(--amber);
-  border-radius:6px;
-  padding:12px 14px;
-  margin-bottom:8px;
+.thought-card:hover{
+background:rgba(255,255,255,0.04);
+border-color:rgba(0,188,212,0.25);
+box-shadow:0 0 12px rgba(0,188,212,0.08);
+animation:thoughtGlow 2s ease infinite;
 }
-.quest-header{display:flex;align-items:center;gap:10px;margin-bottom:4px}
-.quest-npc{font-family:'Orbitron',sans-serif;font-size:13px;font-weight:700}
-.quest-name{font-size:14px;color:var(--amber);font-weight:700}
-.quest-status{font-size:10px;padding:2px 8px;border-radius:3px;margin-left:auto;letter-spacing:1px;text-transform:uppercase}
-.quest-status.active{color:var(--cyan);background:var(--cyan-dim)}
-.quest-status.completed{color:var(--green);background:rgba(76,175,80,0.1)}
-.quest-status.abandoned{color:var(--red);background:var(--red-dim)}
-.quest-progress{height:6px;background:rgba(255,255,255,0.05);border-radius:3px;overflow:hidden;margin-top:8px}
-.quest-fill{height:100%;border-radius:3px;background:var(--amber);transition:width .6s ease}
-
-/* Tech cards */
-.tech-card{
-  background:rgba(255,255,255,0.02);
-  border:1px solid rgba(255,255,255,0.05);
-  border-left:3px solid var(--violet);
-  border-radius:6px;
-  padding:12px 14px;
-  margin-bottom:8px;
-}
-.tech-header{display:flex;align-items:center;gap:10px;margin-bottom:4px}
-.tech-faction{font-family:'Orbitron',sans-serif;font-size:13px;font-weight:700}
-.tech-name{font-size:14px;color:var(--violet);font-weight:700}
-.tech-tier{font-size:10px;color:var(--dim);margin-left:8px}
-.tech-progress{height:6px;background:rgba(255,255,255,0.05);border-radius:3px;overflow:hidden;margin-top:8px}
-.tech-fill{height:100%;border-radius:3px;background:var(--violet);transition:width .6s ease}
-.tech-completed{font-size:11px;color:var(--green);margin-top:6px}
-
-/* Choice cards */
-.choice-card{
-  background:rgba(255,255,255,0.02);
-  border:1px solid rgba(255,255,255,0.05);
-  border-left:3px solid var(--cyan);
-  border-radius:6px;
-  padding:12px 14px;
-  margin-bottom:8px;
-}
-.choice-event{font-size:14px;font-weight:700;color:var(--white);margin-bottom:6px}
-.choice-result{font-size:13px;color:var(--cyan);margin-bottom:8px}
-.choice-votes{display:flex;flex-wrap:wrap;gap:4px}
-.vote-badge{font-size:10px;padding:2px 6px;border-radius:3px;letter-spacing:.5px;background:rgba(255,255,255,0.04)}
-
-/* Event log entries */
-.log-entry{
-  display:flex;gap:10px;padding:8px 0;border-bottom:1px solid rgba(255,255,255,0.03);
-  font-size:14px;line-height:1.5;
-  animation:fadeSlide .4s ease;
-}
-@keyframes fadeSlide{from{opacity:0;transform:translateY(-6px)}to{opacity:1;transform:translateY(0)}}
-.log-time{color:var(--dim);font-size:11px;white-space:nowrap;min-width:55px;padding-top:3px}
-.log-source{font-size:9px;letter-spacing:1px;text-transform:uppercase;padding:2px 6px;border-radius:3px;white-space:nowrap;align-self:flex-start;min-width:70px;text-align:center}
-.log-source.world{color:var(--cyan);background:var(--cyan-dim)}
-.log-source.cascade{color:var(--violet);background:var(--violet-dim)}
-.log-source.faction{color:var(--amber);background:var(--amber-dim)}
-.log-source.quest{color:var(--green);background:rgba(76,175,80,0.1)}
-.log-source.tech{color:var(--violet);background:var(--violet-dim)}
-.log-source.narration{color:var(--cyan);background:var(--cyan-dim)}
-.log-body{flex:1;color:rgba(255,255,255,0.8)}
+@keyframes thoughtGlow{0%,100%{box-shadow:0 0 8px rgba(0,188,212,0.06)}50%{box-shadow:0 0 18px rgba(0,188,212,0.12)}}
+.thought-header{display:flex;align-items:center;gap:10px;margin-bottom:8px}
+.thought-name{font-family:'Orbitron',sans-serif;font-size:15px;font-weight:700;letter-spacing:.5px}
+.thought-title{font-size:13px;color:var(--dim)}
+.thought-faction{font-size:11px;padding:3px 8px;border-radius:3px;letter-spacing:1px;text-transform:uppercase;margin-left:auto}
+.thought-body{font-size:16px;line-height:1.6;color:rgba(255,255,255,0.88);font-style:italic;padding-left:14px;border-left:2px solid rgba(255,255,255,0.06)}
+.thought-mood{font-size:13px;color:var(--dim);margin-top:8px}
+.thought-time{float:right;font-size:12px;color:rgba(255,255,255,0.4)}
+.thought-quest-badge{display:inline-block;font-size:12px;padding:2px 8px;border-radius:3px;color:var(--amber);background:var(--amber-dim);margin-top:6px;margin-right:8px;letter-spacing:.5px}
+.thought-tech-line{font-size:12px;color:var(--violet);margin-top:4px;padding-left:14px}
 
 /* ── ASIDE ─────────────────────────────────────────────────── */
 aside{grid-area:aside;border-left:1px solid var(--border);display:flex;flex-direction:column;overflow:hidden;background:var(--panel)}
@@ -203,13 +145,13 @@ aside{grid-area:aside;border-left:1px solid var(--border);display:flex;flex-dire
 .faction-list::-webkit-scrollbar-thumb{background:rgba(255,152,0,0.15);border-radius:2px}
 
 .faction-mini{
-  background:rgba(255,255,255,0.02);
-  border:1px solid rgba(255,255,255,0.04);
-  border-radius:6px;
-  padding:10px 12px;
-  margin-bottom:6px;
-  cursor:pointer;
-  transition:border-color .3s,background .3s;
+background:rgba(255,255,255,0.02);
+border:1px solid rgba(255,255,255,0.04);
+border-radius:6px;
+padding:10px 12px;
+margin-bottom:6px;
+cursor:pointer;
+transition:border-color .3s,background .3s;
 }
 .faction-mini:hover{background:rgba(255,255,255,0.04);border-color:rgba(255,152,0,0.2)}
 .faction-mini.active{border-color:rgba(255,152,0,0.4);box-shadow:0 0 8px rgba(255,152,0,0.1)}
@@ -230,57 +172,90 @@ aside{grid-area:aside;border-left:1px solid var(--border);display:flex;flex-dire
 .fm-action{font-size:11px;color:var(--dim);margin-top:4px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 
 /* Network tab */
-.network-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:10px;margin-bottom:16px}
-.network-node{background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.05);border-radius:6px;padding:10px 12px;cursor:pointer;transition:border-color .3s,background .3s}
-.network-node:hover{background:rgba(255,255,255,0.04);border-color:rgba(0,188,212,0.2)}
-.network-node.highlight{border-color:var(--cyan);box-shadow:0 0 8px rgba(0,188,212,0.15)}
-.nn-name{font-family:'Orbitron',sans-serif;font-size:13px;font-weight:700;margin-bottom:4px}
-.nn-faction{font-size:10px;letter-spacing:1px;text-transform:uppercase;margin-bottom:6px}
-.nn-connections{display:flex;flex-wrap:wrap;gap:2px}
-.nn-link{font-size:9px;padding:1px 4px;border-radius:2px;margin:1px}
+.network-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px;margin-bottom:16px}
+.network-node{background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.05);border-radius:8px;padding:14px 16px;cursor:pointer;transition:border-color .3s,background .3s,box-shadow .3s;position:relative}
+.network-node:hover{background:rgba(255,255,255,0.04);border-color:rgba(0,188,212,0.25);box-shadow:0 0 10px rgba(0,188,212,0.08)}
+.network-node.highlight{border-color:var(--cyan);box-shadow:0 0 16px rgba(0,188,212,0.2);background:rgba(0,188,212,0.04)}
+.network-node.highlight .nn-name{text-shadow:0 0 10px rgba(0,188,212,0.4)}
+.nn-name{font-family:'Orbitron',sans-serif;font-size:14px;font-weight:700;margin-bottom:4px}
+.nn-faction{font-size:11px;letter-spacing:1px;text-transform:uppercase;margin-bottom:6px}
+.nn-quest-badge{position:absolute;top:8px;right:8px;font-family:'Orbitron',sans-serif;font-size:11px;font-weight:700;color:var(--amber);background:var(--amber-dim);padding:2px 7px;border-radius:3px;min-width:20px;text-align:center}
+.nn-connections{display:flex;flex-wrap:wrap;gap:3px}
+.nn-link{font-size:10px;padding:2px 5px;border-radius:2px;margin:1px}
 .nn-link.ally{color:#4CAF50;background:rgba(76,175,80,0.1)}
 .nn-link.rival{color:#F44336;background:rgba(244,67,54,0.1)}
-.nn-link.neutral{color:#78909C;background:rgba(120,144,156,0.1)}
+.nn-link.neutral{color:#90A4AE;background:rgba(144,164,174,0.1)}
+.nn-strength{font-size:10px;color:var(--dim);margin-left:2px}
 
 /* Stances matrix */
-.stances-matrix{width:100%;border-collapse:separate;border-spacing:3px;margin-top:8px}
-.stances-matrix th{font-family:'Orbitron',sans-serif;font-size:9px;letter-spacing:1px;text-transform:uppercase;color:var(--dim);padding:6px 4px;text-align:center}
-.stances-matrix th.col-header{writing-mode:vertical-lr;text-orientation:mixed;max-width:30px;height:80px}
-.stances-matrix td{padding:6px 4px;text-align:center;border-radius:4px;font-size:11px;font-weight:700;transition:background .3s}
+.stances-matrix{width:100%;border-collapse:separate;border-spacing:4px;margin-top:8px}
+.stances-matrix th{font-family:'Orbitron',sans-serif;font-size:10px;letter-spacing:1px;text-transform:uppercase;color:var(--dim);padding:8px 6px;text-align:center}
+.stances-matrix th.col-header{writing-mode:vertical-lr;text-orientation:mixed;max-width:32px;height:90px}
+.stances-matrix td{padding:8px 6px;text-align:center;border-radius:4px;font-size:14px;font-weight:700;transition:background .3s,transform .2s;cursor:default}
+.stances-matrix td:hover{transform:scale(1.08);z-index:1}
+.stances-matrix tr:hover td{background:rgba(255,255,255,0.06)}
 .stances-matrix td.self{background:rgba(255,255,255,0.06);color:var(--dim)}
-.stances-matrix td.ally{background:rgba(76,175,80,0.15);color:#4CAF50}
-.stances-matrix td.cordial{background:rgba(76,175,80,0.08);color:#81C784}
-.stances-matrix td.neutral-cell{background:rgba(255,193,7,0.08);color:#FFC107}
-.stances-matrix td.tense{background:rgba(255,152,0,0.1);color:#FF9800}
-.stances-matrix td.hostile{background:rgba(244,67,54,0.12);color:#F44336}
-.stances-cell-val{display:block;font-family:'Orbitron',sans-serif;font-size:12px}
-.stances-cell-label{display:block;font-size:9px;letter-spacing:0.5px;text-transform:uppercase;opacity:0.7}
+.stances-matrix td.ally{background:rgba(76,175,80,0.18);color:#4CAF50}
+.stances-matrix td.cordial{background:rgba(76,175,80,0.10);color:#81C784}
+.stances-matrix td.neutral-cell{background:rgba(255,193,7,0.10);color:#FFC107}
+.stances-matrix td.tense{background:rgba(255,152,0,0.12);color:#FF9800}
+.stances-matrix td.hostile{background:rgba(244,67,54,0.14);color:#F44336}
+.stances-cell-val{display:block;font-family:'Orbitron',sans-serif;font-size:14px}
+.stances-cell-label{display:block;font-size:10px;letter-spacing:0.5px;text-transform:uppercase;opacity:0.7}
 
-/* Vote detail cards */
-.vote-detail-card{background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.05);border-left:3px solid var(--cyan);border-radius:6px;padding:12px 14px;margin-bottom:10px}
-.vote-event-title{font-size:14px;font-weight:700;color:var(--white);margin-bottom:4px}
-.vote-chosen{font-size:13px;color:var(--cyan);margin-bottom:8px}
-.vote-faction-row{display:flex;align-items:center;gap:8px;padding:3px 0;font-size:12px}
-.vf-name{width:140px;color:var(--dim);font-size:11px;text-transform:uppercase;letter-spacing:0.5px}
-.vf-choice{flex:1;color:var(--white);font-size:12px}
-.vf-score{font-family:'Orbitron',sans-serif;font-size:11px;min-width:50px;text-align:right}
-.vote-consequences{margin-top:8px;padding-top:8px;border-top:1px solid rgba(255,255,255,0.04);font-size:12px;color:var(--dim)}
-.vote-consequence-item{padding:2px 0}
+/* Stances legend */
+.stances-legend{display:flex;flex-wrap:wrap;gap:12px;margin-top:14px;padding:10px 14px;background:rgba(255,255,255,0.02);border-radius:6px;border:1px solid rgba(255,255,255,0.04)}
+.legend-item{display:flex;align-items:center;gap:6px;font-size:13px;color:var(--dim)}
+.legend-dot{width:12px;height:12px;border-radius:3px;flex-shrink:0}
+
+/* Recent Decisions section */
+.recent-decisions{margin-top:20px;border-top:1px solid var(--border);padding-top:16px}
+.rd-title{font-family:'Orbitron',sans-serif;font-size:13px;letter-spacing:2px;text-transform:uppercase;color:var(--cyan);margin-bottom:10px}
+.rd-item{background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.04);border-radius:6px;padding:10px 14px;margin-bottom:8px}
+.rd-event{font-size:14px;font-weight:700;color:var(--white);margin-bottom:4px}
+.rd-choice{font-size:13px;color:var(--cyan);margin-bottom:6px}
+.rd-votes{display:flex;flex-wrap:wrap;gap:6px}
+.rd-vote-badge{font-size:11px;padding:2px 7px;border-radius:3px;letter-spacing:.5px}
+.rd-vote-badge.for{color:#4CAF50;background:rgba(76,175,80,0.1)}
+.rd-vote-badge.against{color:#F44336;background:rgba(244,67,54,0.1)}
+.rd-vote-badge.abstain{color:var(--dim);background:rgba(255,255,255,0.04)}
 
 /* Brain tab */
-.brain-faction-card{background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.05);border-left:3px solid var(--violet);border-radius:6px;padding:12px 14px;margin-bottom:10px}
-.brain-faction-name{font-family:'Orbitron',sans-serif;font-size:14px;font-weight:700;margin-bottom:8px}
-.brain-priority{display:flex;align-items:center;gap:8px;margin-bottom:6px}
-.bp-label{width:160px;font-size:12px;text-transform:uppercase;letter-spacing:0.5px;color:var(--dim)}
-.bp-bar{flex:1;height:8px;background:rgba(255,255,255,0.05);border-radius:4px;overflow:hidden}
-.bp-fill{height:100%;border-radius:4px;transition:width .6s ease}
-.bp-weight{font-family:'Orbitron',sans-serif;font-size:12px;min-width:30px;text-align:right}
+.brain-faction-card{background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.05);border-left:3px solid var(--violet);border-radius:6px;padding:14px 16px;margin-bottom:12px}
+.brain-faction-name{font-family:'Orbitron',sans-serif;font-size:15px;font-weight:700;margin-bottom:10px}
+.brain-priority{display:flex;align-items:center;gap:8px;margin-bottom:7px}
+.bp-label{width:180px;font-size:14px;text-transform:uppercase;letter-spacing:0.5px;color:var(--dim)}
+.bp-bar{flex:1;height:12px;background:rgba(255,255,255,0.05);border-radius:6px;overflow:hidden}
+.bp-fill{height:100%;border-radius:6px;transition:width .6s ease}
+.bp-fill.top-priority{animation:priorityPulse 2.5s ease infinite}
+@keyframes priorityPulse{0%,100%{opacity:.85}50%{opacity:1;box-shadow:0 0 8px rgba(255,255,255,0.15)}}
+.bp-weight{font-family:'Orbitron',sans-serif;font-size:14px;min-width:40px;text-align:right}
+
+/* Recent Events timeline */
+.recent-events{margin-top:20px;border-top:1px solid var(--border);padding-top:16px}
+.re-title{font-family:'Orbitron',sans-serif;font-size:13px;letter-spacing:2px;text-transform:uppercase;color:var(--amber);margin-bottom:10px}
+.re-timeline{position:relative;padding-left:20px}
+.re-timeline::before{content:'';position:absolute;left:6px;top:0;bottom:0;width:2px;background:rgba(255,255,255,0.06)}
+.re-entry{position:relative;padding:6px 0 10px 16px;font-size:14px;line-height:1.5;animation:fadeSlide .4s ease}
+.re-entry::before{content:'';position:absolute;left:-18px;top:10px;width:8px;height:8px;border-radius:50%;border:2px solid var(--dim);background:var(--bg)}
+.re-entry:first-child::before{border-color:var(--amber);background:var(--amber);box-shadow:0 0 8px rgba(255,152,0,0.3)}
+.re-time{color:var(--dim);font-size:12px;display:block;margin-bottom:2px}
+.re-source{font-size:10px;letter-spacing:1px;text-transform:uppercase;padding:2px 6px;border-radius:3px;white-space:nowrap;display:inline-block;margin-right:6px}
+.re-source.world{color:var(--cyan);background:var(--cyan-dim)}
+.re-source.cascade{color:var(--violet);background:var(--violet-dim)}
+.re-source.faction{color:var(--amber);background:var(--amber-dim)}
+.re-source.quest{color:var(--green);background:rgba(76,175,80,0.1)}
+.re-source.tech{color:var(--violet);background:var(--violet-dim)}
+.re-body{color:rgba(255,255,255,0.82)}
+
+@keyframes fadeSlide{from{opacity:0;transform:translateY(-6px)}to{opacity:1;transform:translateY(0)}}
 
 /* ── RESPONSIVE ────────────────────────────────────────────── */
 @media(max-width:900px){
-  #app{grid-template-columns:1fr;grid-template-areas:"top""main""aside";grid-template-rows:64px 1fr 280px}
-  aside{border-left:none;border-top:1px solid var(--border)}
-  .narration-row{grid-template-columns:1fr}
+#app{grid-template-columns:1fr;grid-template-areas:"top""main""aside";grid-template-rows:64px 1fr 280px}
+aside{border-left:none;border-top:1px solid var(--border)}
+.narration-row{grid-template-columns:1fr}
+.network-grid{grid-template-columns:repeat(auto-fill,minmax(160px,1fr))}
 }
 </style>
 </head>
@@ -289,103 +264,93 @@ aside{grid-area:aside;border-left:1px solid var(--border);display:flex;flex-dire
 <div class="starfield" id="starfield"></div>
 
 <div id="app">
-  <header>
-    <div class="logo">SPECTATOR<span class="logo-sub">observer mode</span></div>
-    <div class="header-metrics" id="header-metrics"></div>
-    <div class="header-era">
-      <span class="era-name" id="era-name">&mdash;</span>
-      <div class="era-bar-wrap">
-        <div class="era-bar"><div class="era-fill" id="era-fill" style="width:0"></div></div>
-        <span class="era-pct" id="era-pct">0%</span>
-      </div>
-    </div>
-  </header>
+<header>
+<div class="logo">SPECTATOR<span class="logo-sub">analyst console</span></div>
+<div class="header-metrics" id="header-metrics"></div>
+<div class="header-era">
+<span class="era-name" id="era-name">&mdash;</span>
+<div class="era-bar-wrap">
+<div class="era-bar"><div class="era-fill" id="era-fill" style="width:0"></div></div>
+<span class="era-pct" id="era-pct">0%</span>
+</div>
+</div>
+</header>
 
-  <main>
-    <!-- Narration Hero -->
-    <div class="narration-hero" id="narration-hero">
-      <div class="narration-badge"><span class="dot"></span>LATEST INTELLIGENCE</div>
-      <div class="narration-headline" id="narration-headline">Awaiting signal from the Federation...</div>
-      <div class="narration-meta" id="narration-meta">
-        <span class="narration-source cached">initializing</span>
-      </div>
-    </div>
+<main>
+<!-- Narration Hero -->
+<div class="narration-hero" id="narration-hero">
+<div class="narration-badge"><span class="dot"></span>LATEST INTELLIGENCE</div>
+<div class="narration-headline" id="narration-headline">Awaiting signal from the Federation...</div>
+<div class="narration-meta" id="narration-meta">
+<span class="narration-source cached">initializing</span>
+</div>
+</div>
 
-    <!-- Narration Details Row -->
-    <div class="narration-row" id="narration-row">
-      <div class="narration-section">
-        <div class="ns-title dev">Developments</div>
-        <div id="narration-developments"><div class="ns-item" style="color:var(--dim)">Listening...</div></div>
-      </div>
-      <div class="narration-section">
-        <div class="ns-title voice">Voices</div>
-        <div id="narration-voices"><div class="ns-item voice-item" style="color:var(--dim)">Waiting for faction voices...</div></div>
-      </div>
-    </div>
+<!-- Narration Details Row -->
+<div class="narration-row" id="narration-row">
+<div class="narration-section">
+<div class="ns-title dev">Developments</div>
+<div id="narration-developments"><div class="ns-item" style="color:var(--dim)">Listening...</div></div>
+</div>
+<div class="narration-section">
+<div class="ns-title voice">Voices</div>
+<div id="narration-voices"><div class="ns-item voice-item" style="color:var(--dim)">Waiting for faction voices...</div></div>
+</div>
+</div>
 
-    <!-- Tab Bar -->
-    <div class="tab-bar">
-      <div class="tab active" data-tab="thoughts">Thoughts</div>
-      <div class="tab" data-tab="quests">Quests</div>
-      <div class="tab" data-tab="tech">Tech</div>
-      <div class="tab" data-tab="choices">Choices</div>
-<div class="tab" data-tab="log">Event Log</div>
+<!-- Tab Bar -->
+<div class="tab-bar">
+<div class="tab active" data-tab="thoughts">Thoughts</div>
 <div class="tab" data-tab="network">Network</div>
 <div class="tab" data-tab="stances">Stances</div>
-<div class="tab" data-tab="votes">Votes</div>
 <div class="tab" data-tab="brain">Brain</div>
 </div>
 
-    <!-- Tab Content -->
-    <div class="tab-content">
-      <div class="tab-panel active" id="panel-thoughts"></div>
-      <div class="tab-panel" id="panel-quests"></div>
-      <div class="tab-panel" id="panel-tech"></div>
-      <div class="tab-panel" id="panel-choices"></div>
-<div class="tab-panel" id="panel-log"></div>
+<!-- Tab Content -->
+<div class="tab-content">
+<div class="tab-panel active" id="panel-thoughts"></div>
 <div class="tab-panel" id="panel-network"></div>
 <div class="tab-panel" id="panel-stances"></div>
-<div class="tab-panel" id="panel-votes"></div>
 <div class="tab-panel" id="panel-brain"></div>
 </div>
-  </main>
+</main>
 
-  <aside>
-    <div class="aside-title">Factions</div>
-    <div class="faction-list" id="faction-list"></div>
-  </aside>
+<aside>
+<div class="aside-title">Factions</div>
+<div class="faction-list" id="faction-list"></div>
+</aside>
 </div>
 
 <script>
 // ── Constants ────────────────────────────────────────────────
 const FC = {
-  military_command:{color:'#F44336',name:'Military Command',leader:'Marshal Ironbound'},
-  research_division:{color:'#2196F3',name:'Research Division',leader:'Dr. Prometheus'},
-  diplomatic_corps:{color:'#4CAF50',name:'Diplomatic Corps',leader:'Chancellor Harmony'},
-  cultural_ministry:{color:'#9C27B0',name:'Cultural Ministry',leader:'Maestro Celestia'},
-  economic_council:{color:'#FF9800',name:'Economic Council',leader:'Merchant-Prince Aurelius'},
-  exploration_initiative:{color:'#00BCD4',name:'Exploration Initiative',leader:'Captain Frontier'},
-  consciousness_collective:{color:'#E91E63',name:'Consciousness Collective',leader:'Oracle Vex'},
-  preservation_society:{color:'#8BC34A',name:'Preservation Society',leader:'Archivist Eternal'},
+military_command:{color:'#F44336',name:'Military Command',leader:'Marshal Ironbound'},
+research_division:{color:'#2196F3',name:'Research Division',leader:'Dr. Prometheus'},
+diplomatic_corps:{color:'#4CAF50',name:'Diplomatic Corps',leader:'Chancellor Harmony'},
+cultural_ministry:{color:'#9C27B0',name:'Cultural Ministry',leader:'Maestro Celestia'},
+economic_council:{color:'#FF9800',name:'Economic Council',leader:'Merchant-Prince Aurelius'},
+exploration_initiative:{color:'#00BCD4',name:'Exploration Initiative',leader:'Captain Frontier'},
+consciousness_collective:{color:'#E91E63',name:'Consciousness Collective',leader:'Oracle Vex'},
+preservation_society:{color:'#8BC34A',name:'Preservation Society',leader:'Archivist Eternal'},
 };
 const MOOD_COLORS={
-  satisfied:'#4CAF50',inspired:'#66BB6A',serene:'#81C784',peaceful:'#A5D6A7',
-  hopeful:'#4CAF50',excited:'#66BB6A',confident:'#4CAF50',enlightened:'#66BB6A',
-  adventurous:'#81C784',determined:'#4CAF50',resolute:'#66BB6A',steadfast:'#4CAF50',
-  patient:'#81C784',valiant:'#4CAF50',free:'#66BB6A',
-  frustrated:'#F44336',aggressive:'#D32F2F',suspicious:'#FF9800',anxious:'#FF9800',
-  alarmed:'#F44336',worried:'#FF9800',unsettled:'#FF9800',weary:'#FF9800',
-  melancholic:'#9C27B0',paranoid:'#F44336',burdened:'#FF9800',
-  contemplative:'#00BCD4',thoughtful:'#00BCD4',curious:'#00BCD4',
-  distracted:'#78909C',reserved:'#78909C',
+satisfied:'#4CAF50',inspired:'#66BB6A',serene:'#81C784',peaceful:'#A5D6A7',
+hopeful:'#4CAF50',excited:'#66BB6A',confident:'#4CAF50',enlightened:'#66BB6A',
+adventurous:'#81C784',determined:'#4CAF50',resolute:'#66BB6A',steadfast:'#4CAF50',
+patient:'#81C784',valiant:'#4CAF50',free:'#66BB6A',
+frustrated:'#F44336',aggressive:'#D32F2F',suspicious:'#FF9800',anxious:'#FF9800',
+alarmed:'#F44336',worried:'#FF9800',unsettled:'#FF9800',weary:'#FF9800',
+melancholic:'#9C27B0',paranoid:'#F44336',burdened:'#FF9800',
+contemplative:'#00BCD4',thoughtful:'#00BCD4',curious:'#00BCD4',
+distracted:'#78909C',reserved:'#78909C',
 };
 const METRICS=[
-  {key:'tension_level',label:'Tension',color:'#F44336'},
-  {key:'resource_abundance',label:'Resources',color:'#4CAF50'},
-  {key:'threat_level',label:'Threat',color:'#F44336'},
-  {key:'stability',label:'Stability',color:'#00BCD4'},
-  {key:'morale',label:'Morale',color:'#FF9800'},
-  {key:'anomaly_activity',label:'Anomaly',color:'#9C27B0'},
+{key:'tension_level',label:'Tension',color:'#F44336'},
+{key:'resource_abundance',label:'Resources',color:'#4CAF50'},
+{key:'threat_level',label:'Threat',color:'#F44336'},
+{key:'stability',label:'Stability',color:'#00BCD4'},
+{key:'morale',label:'Morale',color:'#FF9800'},
+{key:'anomaly_activity',label:'Anomaly',color:'#9C27B0'},
 ];
 
 // ── State ────────────────────────────────────────────────────
@@ -417,333 +382,244 @@ function stanceClass(s){if(!s)return'neutral';var l=String(s).toLowerCase();if(l
 function stanceColor(s){var c=stanceClass(s);return c==='ally'?'#4CAF50':c==='enemy'?'#F44336':'#FFC107'}
 function ago(ts){if(!ts)return'';var s=Math.floor((Date.now()/1000)-ts);if(s<60)return s+'s ago';if(s<3600)return Math.floor(s/60)+'m ago';return Math.floor(s/3600)+'h ago'}
 
+function getQuestForNPC(npcId){
+if(!questLog||!questLog.quest_log)return null;
+var log=questLog.quest_log;
+for(var i=0;i<log.length;i++){
+var q=log[i];
+var qCharId=q.char_id||'';
+if(qCharId===npcId||qCharId.indexOf(npcId)>-1||npcId.indexOf(qCharId)>-1){
+if(!q.event||q.event.indexOf('complet')===-1&&q.event.indexOf('abandon')===-1&&q.event.indexOf('fail')===-1){
+return q;
+}
+}
+}
+return null;
+}
+
+function getQuestCountForNPC(npcId){
+if(!questLog||!questLog.quest_log)return 0;
+return questLog.quest_log.filter(function(q){
+var qCharId=q.char_id||'';
+return qCharId===npcId||qCharId.indexOf(npcId)>-1||npcId.indexOf(qCharId)>-1;
+}).length;
+}
+
+function getTechForFaction(fid){
+if(!techData||!techData.factions||!techData.factions[fid])return null;
+return techData.factions[fid].active_research||null;
+}
+
 // ── API ──────────────────────────────────────────────────────
 async function api(ep,ms){
-  var ctl=new AbortController();
-  var t=setTimeout(function(){ctl.abort()},ms||10000);
-  try{
-    var r=await fetch(ep,{headers:{'Accept':'application/json'},signal:ctl.signal});
-    clearTimeout(t);
-    if(!r.ok)throw new Error(r.status);
-    return await r.json();
-  }catch(e){clearTimeout(t);return null}
+var ctl=new AbortController();
+var t=setTimeout(function(){ctl.abort()},ms||10000);
+try{
+var r=await fetch(ep,{headers:{'Accept':'application/json'},signal:ctl.signal});
+clearTimeout(t);
+if(!r.ok)throw new Error(r.status);
+return await r.json();
+}catch(e){clearTimeout(t);return null}
 }
 
 // ── Starfield ────────────────────────────────────────────────
 function makeStars(){
-  var sf=document.getElementById('starfield');
-  for(var i=0;i<60;i++){
-    var s=document.createElement('div');s.className='star';
-    var sz=Math.random()*2+1;
-    s.style.cssText='width:'+sz+'px;height:'+sz+'px;left:'+Math.random()*100+'%;top:'+Math.random()*100+'%;--d:'+(2+Math.random()*4)+'s;--dl:'+Math.random()*3+'s;opacity:'+(0.15+Math.random()*0.4);
-    sf.appendChild(s);
-  }
+var sf=document.getElementById('starfield');
+for(var i=0;i<60;i++){
+var s=document.createElement('div');s.className='star';
+var sz=Math.random()*2+1;
+s.style.cssText='width:'+sz+'px;height:'+sz+'px;left:'+Math.random()*100+'%;top:'+Math.random()*100+'%;--d:'+(2+Math.random()*4)+'s;--dl:'+Math.random()*3+'s;opacity:'+(0.15+Math.random()*0.4);
+sf.appendChild(s);
+}
 }
 
 // ── Tabs ─────────────────────────────────────────────────────
 document.querySelectorAll('.tab').forEach(function(t){
-  t.addEventListener('click',function(){
-    document.querySelectorAll('.tab').forEach(function(x){x.classList.remove('active')});
-    document.querySelectorAll('.tab-panel').forEach(function(x){x.classList.remove('active')});
-    t.classList.add('active');
-    activeTab=t.dataset.tab;
-    document.getElementById('panel-'+activeTab).classList.add('active');
-    renderActiveTab();
-  });
+t.addEventListener('click',function(){
+document.querySelectorAll('.tab').forEach(function(x){x.classList.remove('active')});
+document.querySelectorAll('.tab-panel').forEach(function(x){x.classList.remove('active')});
+t.classList.add('active');
+activeTab=t.dataset.tab;
+document.getElementById('panel-'+activeTab).classList.add('active');
+renderActiveTab();
+});
 });
 
 // ── Header Metrics ───────────────────────────────────────────
 function buildHeaderMetrics(){
-  var c=document.getElementById('header-metrics');
-  c.innerHTML='';
-  METRICS.forEach(function(m){
-    c.innerHTML+='<div class="hm"><span class="hm-label">'+m.label+'</span><span class="hm-val" id="hv-'+m.key+'">&mdash;</span><div class="hm-bar"><div class="hm-fill" id="hb-'+m.key+'" style="width:0;background:'+m.color+'"></div></div></div>';
-  });
+var c=document.getElementById('header-metrics');
+c.innerHTML='';
+METRICS.forEach(function(m){
+c.innerHTML+='<div class="hm"><span class="hm-label">'+m.label+'</span><span class="hm-val" id="hv-'+m.key+'">&mdash;</span><div class="hm-bar"><div class="hm-fill" id="hb-'+m.key+'" style="width:0;background:'+m.color+'"></div></div></div>';
+});
 }
 
 function updateHeaderMetrics(ws){
-  if(!ws)return;
-  METRICS.forEach(function(m){
-    var v=ws[m.key]!=null?ws[m.key]:0;
-    var valEl=document.getElementById('hv-'+m.key);
-    var barEl=document.getElementById('hb-'+m.key);
-    if(valEl)valEl.textContent=Math.round(v);
-    if(barEl){barEl.style.width=clamp(v,0,100)+'%';barEl.style.background=m.color}
-  });
+if(!ws)return;
+METRICS.forEach(function(m){
+var v=ws[m.key]!=null?ws[m.key]:0;
+var valEl=document.getElementById('hv-'+m.key);
+var barEl=document.getElementById('hb-'+m.key);
+if(valEl)valEl.textContent=Math.round(v);
+if(barEl){barEl.style.width=clamp(v,0,100)+'%';barEl.style.background=m.color}
+});
 }
 
 function updateEra(status){
-  if(!status)return;
-  // Try multiple locations for era data
-  var era=status.current_era||status.era||status.currentEra||{};
-  var name=era.name||era.era_name||era.label||status.era_name||status.current_phase||status.game_phase||'Unknown';
-  var progress=era.progress!=null?era.progress:(era.progress_pct!=null?era.progress_pct:0);
-  // If no direct progress, derive from turns_in_phase
-  if(!progress&&status.turns_in_phase!=null){
-    progress=Math.min(100,status.turns_in_phase*5); // rough: 20 turns per era
-  }
-  document.getElementById('era-name').textContent=name.replace(/_/g,' ');
-  document.getElementById('era-fill').style.width=clamp(progress,0,100)+'%';
-  document.getElementById('era-pct').textContent=Math.round(progress)+'%';
+if(!status)return;
+var era=status.current_era||status.era||status.currentEra||{};
+var name=era.name||era.era_name||era.label||status.era_name||status.current_phase||status.game_phase||'Unknown';
+var progress=era.progress!=null?era.progress:(era.progress_pct!=null?era.progress_pct:0);
+if(!progress&&status.turns_in_phase!=null){
+progress=Math.min(100,status.turns_in_phase*5);
+}
+document.getElementById('era-name').textContent=name.replace(/_/g,' ');
+document.getElementById('era-fill').style.width=clamp(progress,0,100)+'%';
+document.getElementById('era-pct').textContent=Math.round(progress)+'%';
 }
 
 // ── Narration ────────────────────────────────────────────────
 function renderNarration(data){
-  if(!data)return;
-  var hl=document.getElementById('narration-headline');
-  if(data.headline)hl.textContent=data.headline;
-  var meta=document.getElementById('narration-meta');
-  var src=data.source||'none';
-  var srcLabel=src==='llm'?'AI NARRATED':src==='fallback'?'DETERMINISTIC':src==='cached'?'CACHED':'WAITING';
-  meta.innerHTML='<span class="narration-source '+src+'">'+srcLabel+'</span>'+(data.model?'<span style="color:var(--dim)">'+esc(data.model)+'</span>':'')+(data.latency_ms?'<span style="color:var(--dim)">'+data.latency_ms+'ms</span>':'');
+if(!data)return;
+var hl=document.getElementById('narration-headline');
+if(data.headline)hl.textContent=data.headline;
+var meta=document.getElementById('narration-meta');
+var src=data.source||'none';
+var srcLabel=src==='llm'?'AI NARRATED':src==='fallback'?'DETERMINISTIC':src==='cached'?'CACHED':'WAITING';
+meta.innerHTML='<span class="narration-source '+src+'">'+srcLabel+'</span>'+(data.model?'<span style="color:var(--dim)">'+esc(data.model)+'</span>':'')+(data.latency_ms?'<span style="color:var(--dim)">'+data.latency_ms+'ms</span>':'');
 
-  var devEl=document.getElementById('narration-developments');
-  var devs=data.developments||[];
-  if(devs.length){devEl.innerHTML=devs.map(function(d){return'<div class="ns-item">'+esc(d)+'</div>'}).join('')}
-  else{devEl.innerHTML='<div class="ns-item" style="color:var(--dim)">No developments yet</div>'}
+var devEl=document.getElementById('narration-developments');
+var devs=data.developments||[];
+if(devs.length){devEl.innerHTML=devs.map(function(d){return'<div class="ns-item">'+esc(d)+'</div>'}).join('')}
+else{devEl.innerHTML='<div class="ns-item" style="color:var(--dim)">No developments yet</div>'}
 
-  var voiceEl=document.getElementById('narration-voices');
-  var voices=data.voices||[];
-  if(voices.length){voiceEl.innerHTML=voices.map(function(v){return'<div class="ns-item voice-item">'+esc(v)+'</div>'}).join('')}
-  else{voiceEl.innerHTML='<div class="ns-item voice-item" style="color:var(--dim)">Waiting for voices...</div>'}
+var voiceEl=document.getElementById('narration-voices');
+var voices=data.voices||[];
+if(voices.length){voiceEl.innerHTML=voices.map(function(v){return'<div class="ns-item voice-item">'+esc(v)+'</div>'}).join('')}
+else{voiceEl.innerHTML='<div class="ns-item voice-item" style="color:var(--dim)">Waiting for voices...</div>'}
 
-  // Add forewarning at bottom of voices panel if present
-  if(data.forewarning){
-    voiceEl.innerHTML+='<div class="ns-item fore-item" style="margin-top:8px">'+esc(data.forewarning)+'</div>';
-  }
+if(data.forewarning){
+voiceEl.innerHTML+='<div class="ns-item fore-item" style="margin-top:8px">'+esc(data.forewarning)+'</div>';
+}
 }
 
 // ── Factions Sidebar ─────────────────────────────────────────
 function renderFactions(data,tech,quests){
-  if(!data)return;
-  var list=document.getElementById('faction-list');
-  var keys=Object.keys(data);
-  var sig=keys.join('|');
-  if(list.dataset.sig!==sig){
-    list.dataset.sig=sig;
-    list.innerHTML='';
-    keys.forEach(function(fk){
-      var fc=FC[fk]||{color:'#78909C',name:fk};
-      var card=document.createElement('div');
-      card.className='faction-mini';
-      card.dataset.fk=fk;
-      card.innerHTML=
-        '<div class="fm-top"><span class="fm-dot" style="background:'+fc.color+'"></span><span class="fm-name" style="color:'+fc.color+'">'+esc(fc.name)+'</span><span class="fm-power" style="color:'+fc.color+'" data-f="power">&mdash;</span></div>'+
-        '<div class="fm-sub"><span data-f="cohesion-l">Cohesion</span><div class="fm-bar"><div class="fm-fill" data-f="cohesion" style="width:0"></div></div></div>'+
-        '<div class="fm-tech" data-f="tech">No research</div>'+
-        '<div class="fm-quest-count" data-f="quests"></div>'+
-        '<div class="fm-detail"><div data-f="stances"></div><div class="fm-action" data-f="action"></div></div>';
-      card.addEventListener('click',function(){
-        var was=card.classList.contains('active');
-        list.querySelectorAll('.faction-mini').forEach(function(c){c.classList.remove('active')});
-        if(!was){card.classList.add('active');activeFaction=fk}else{activeFaction=null}
-      });
-      list.appendChild(card);
-    });
-  }
+if(!data)return;
+var list=document.getElementById('faction-list');
+var keys=Object.keys(data);
+var sig=keys.join('|');
+if(list.dataset.sig!==sig){
+list.dataset.sig=sig;
+list.innerHTML='';
+keys.forEach(function(fk){
+var fc=FC[fk]||{color:'#78909C',name:fk};
+var card=document.createElement('div');
+card.className='faction-mini';
+card.dataset.fk=fk;
+card.innerHTML=
+'<div class="fm-top"><span class="fm-dot" style="background:'+fc.color+'"></span><span class="fm-name" style="color:'+fc.color+'">'+esc(fc.name)+'</span><span class="fm-power" style="color:'+fc.color+'" data-f="power">&mdash;</span></div>'+
+'<div class="fm-sub"><span data-f="cohesion-l">Cohesion</span><div class="fm-bar"><div class="fm-fill" data-f="cohesion" style="width:0"></div></div></div>'+
+'<div class="fm-tech" data-f="tech">No research</div>'+
+'<div class="fm-quest-count" data-f="quests"></div>'+
+'<div class="fm-detail"><div data-f="stances"></div><div class="fm-action" data-f="action"></div></div>';
+card.addEventListener('click',function(){
+var was=card.classList.contains('active');
+list.querySelectorAll('.faction-mini').forEach(function(c){c.classList.remove('active')});
+if(!was){card.classList.add('active');activeFaction=fk}else{activeFaction=null}
+});
+list.appendChild(card);
+});
+}
 
-  keys.forEach(function(fk){
-    var f=data[fk];
-    var card=list.querySelector('[data-fk="'+fk+'"]');
-    if(!card)return;
-    var pwr=card.querySelector('[data-f="power"]');
-    if(pwr)pwr.textContent=f.power!=null?f.power:'\u2014';
-    var coh=card.querySelector('[data-f="cohesion"]');
-    var cohVal=f.cohesion!=null?f.cohesion:50;
-    if(coh){coh.style.width=clamp(cohVal,0,100)+'%';coh.style.background=cohVal>60?'#4CAF50':cohVal>30?'#FF9800':'#F44336'}
+keys.forEach(function(fk){
+var f=data[fk];
+var card=list.querySelector('[data-fk="'+fk+'"]');
+if(!card)return;
+var pwr=card.querySelector('[data-f="power"]');
+if(pwr)pwr.textContent=f.power!=null?f.power:'\u2014';
+var coh=card.querySelector('[data-f="cohesion"]');
+var cohVal=f.cohesion!=null?f.cohesion:50;
+if(coh){coh.style.width=clamp(cohVal,0,100)+'%';coh.style.background=cohVal>60?'#4CAF50':cohVal>30?'#FF9800':'#F44336'}
 
-    // Tech info
-    var techEl=card.querySelector('[data-f="tech"]');
-    if(techEl&&tech&&tech.factions&&tech.factions[fk]){
-      var ft=tech.factions[fk];
-      var active=ft.active_research;
-      var completed=ft.completed_techs||[];
-      if(active){
-        techEl.textContent='Researching: '+active.technology+' ('+Math.round(active.progress_percentage||0)+'%)';
-      }else{
-        techEl.textContent=completed.length?'Research paused ('+completed.length+' completed)':'No research';
-      }
-    }
+var techEl=card.querySelector('[data-f="tech"]');
+if(techEl&&tech&&tech.factions&&tech.factions[fk]){
+var ft=tech.factions[fk];
+var active=ft.active_research;
+var completed=ft.completed_techs||[];
+if(active){
+techEl.textContent='Researching: '+active.technology+' ('+Math.round(active.progress_percentage||0)+'%)';
+}else{
+techEl.textContent=completed.length?'Research paused ('+completed.length+' completed)':'No research';
+}
+}
 
-    // Quest count
-    var qEl=card.querySelector('[data-f="quests"]');
-    if(qEl&&quests&&quests.quest_log){
-      var count=quests.quest_log.filter(function(q){return q.char_id&&(q.char_id.indexOf(fk.slice(0,4))>-1||true)}).length;
-      qEl.textContent=quests.quest_log.length+' active quests';
-    }
+var qEl=card.querySelector('[data-f="quests"]');
+if(qEl&&quests&&quests.quest_log){
+qEl.textContent=quests.quest_log.length+' active quests';
+}
 
-    // Detail: stances
-    if(activeFaction===fk){
-      var stEl=card.querySelector('[data-f="stances"]');
-      if(stEl&&f.stances){
-        var sh='<div style="font-size:10px;color:var(--dim);margin-bottom:4px;text-transform:uppercase;letter-spacing:1px">Stances</div>';
-        Object.keys(f.stances).forEach(function(ok){
-          var sc=stanceClass(f.stances[ok]);
-          sh+='<div class="fm-stance-row"><span class="fm-stance-name">'+esc(factionName(ok))+'</span><span class="fm-stance-val" style="color:'+stanceColor(f.stances[ok])+'">'+esc(f.stances[ok])+'</span></div>';
-        });
-        stEl.innerHTML=sh;
-      }
-      var actEl=card.querySelector('[data-f="action"]');
-      if(actEl)actEl.textContent=f.recent_action||'No recent action';
-    }
-  });
+if(activeFaction===fk){
+var stEl=card.querySelector('[data-f="stances"]');
+if(stEl&&f.stances){
+var sh='<div style="font-size:10px;color:var(--dim);margin-bottom:4px;text-transform:uppercase;letter-spacing:1px">Stances</div>';
+Object.keys(f.stances).forEach(function(ok){
+var sc=stanceClass(f.stances[ok]);
+sh+='<div class="fm-stance-row"><span class="fm-stance-name">'+esc(factionName(ok))+'</span><span class="fm-stance-val" style="color:'+stanceColor(f.stances[ok])+'">'+esc(f.stances[ok])+'</span></div>';
+});
+stEl.innerHTML=sh;
+}
+var actEl=card.querySelector('[data-f="action"]');
+if(actEl)actEl.textContent=f.recent_action||'No recent action';
+}
+});
 }
 
 // ── Tab: Thoughts ────────────────────────────────────────────
 function renderThoughts(npcs){
-  var panel=document.getElementById('panel-thoughts');
-  if(!npcs||!npcs.length){panel.innerHTML='<div style="color:var(--dim)">No NPC data available</div>';return}
-  var html='';
-  npcs.forEach(function(npc){
-    var thoughts=npc.recent_thoughts||npc.thoughts||[];
-    var factionKey=npc.faction||npc.affiliation||npc.faction_id||'';
-    var fc=factionColor(factionKey);
-    var mc=moodColor(npc.mood);
-    var thHtml='';
-    if(thoughts.length){
-      thoughts.slice(0,3).forEach(function(th){
-        var text=typeof th==='string'?th:(th.text||th.thought||'');
-        thHtml+='<div class="thought-body">'+esc(text)+'</div>';
-      });
-    }else{
-      thHtml='<div class="thought-body" style="color:var(--dim)">No recent thoughts</div>';
-    }
-    html+=
-      '<div class="thought-card" style="border-left-color:'+fc+'">'+
-        '<div class="thought-header">'+
-          '<span class="thought-name" style="color:'+fc+'">'+esc(npc.name||'Unknown')+'</span>'+
-          '<span class="thought-title">'+esc(npc.title||npc.role||'')+'</span>'+
-          '<span class="thought-faction" style="color:'+fc+';background:'+fc+'14">'+esc(factionName(factionKey))+'</span>'+
-        '</div>'+
-        thHtml+
-        '<div class="thought-mood">Mood: <span style="color:'+mc+'">'+esc(npc.mood||'\u2014')+'</span></div>'+
-      '</div>';
-  });
-  panel.innerHTML=html;
+var panel=document.getElementById('panel-thoughts');
+if(!npcs||!npcs.length){panel.innerHTML='<div style="color:var(--dim)">No NPC data available</div>';return}
+var html='';
+npcs.forEach(function(npc){
+var thoughts=npc.recent_thoughts||npc.thoughts||[];
+var factionKey=npc.faction||npc.affiliation||npc.faction_id||'';
+var fc=factionColor(factionKey);
+var mc=moodColor(npc.mood);
+var npcId=npc.char_id||npc.id||'';
+var thHtml='';
+if(thoughts.length){
+thoughts.slice(0,3).forEach(function(th){
+var text=typeof th==='string'?th:(th.text||th.thought||'');
+thHtml+='<div class="thought-body">'+esc(text)+'</div>';
+});
+}else{
+thHtml='<div class="thought-body" style="color:var(--dim)">No recent thoughts</div>';
 }
-
-// ── Tab: Quests ──────────────────────────────────────────────
-function renderQuests(quests){
-  var panel=document.getElementById('panel-quests');
-  if(!quests||!quests.quest_log||!quests.quest_log.length){panel.innerHTML='<div style="color:var(--dim)">No quest activity yet</div>';return}
-  var html='';
-  quests.quest_log.forEach(function(q){
-    var status=q.event||'active';
-    var statusClass=status.indexOf('complet')>-1?'completed':status.indexOf('abandon')>-1||status.indexOf('fail')>-1?'abandoned':'active';
-    var pct=q.progress!=null?Math.round(q.progress):0;
-    html+=
-      '<div class="quest-card">'+
-        '<div class="quest-header">'+
-          '<span class="quest-npc">'+esc(q.char_id||'')+'</span>'+
-          '<span class="quest-name">'+esc(q.quest_title||q.quest_id||'')+'</span>'+
-          '<span class="quest-status '+statusClass+'">'+esc(status)+'</span>'+
-        '</div>'+
-        (pct>0?'<div class="quest-progress"><div class="quest-fill" style="width:'+pct+'%"></div></div>':'')+
-      '</div>';
-  });
-  panel.innerHTML=html;
+var questHtml='';
+var npcQuest=getQuestForNPC(npcId);
+if(npcQuest){
+var qTitle=npcQuest.quest_title||npcQuest.quest_id||'Unknown quest';
+var qStatus=npcQuest.event||'active';
+questHtml='<div class="thought-quest-badge">Quest: '+esc(qTitle)+' ('+esc(qStatus)+')</div>';
 }
-
-// ── Tab: Tech ────────────────────────────────────────────────
-function renderTech(tech){
-  var panel=document.getElementById('panel-tech');
-  if(!tech||!tech.factions){panel.innerHTML='<div style="color:var(--dim)">No tech data available</div>';return}
-  var html='';
-  Object.keys(tech.factions).forEach(function(fid){
-    var ft=tech.factions[fid];
-    var fc=factionColor(fid);
-    var active=ft.active_research;
-    var completed=ft.completed_techs||[];
-    var pct=active?Math.round(active.progress_percentage||0):0;
-    html+=
-      '<div class="tech-card" style="border-left-color:'+fc+'">'+
-        '<div class="tech-header">'+
-          '<span class="tech-faction" style="color:'+fc+'">'+esc(factionName(fid))+'</span>'+
-          (active?'<span class="tech-name">'+esc(active.technology)+'</span><span class="tech-tier">Tier '+esc(active.tier||'?')+'</span>':'<span style="color:var(--dim)">Idle</span>')+
-        '</div>'+
-        (active?'<div class="tech-progress"><div class="tech-fill" style="width:'+pct+'%;background:'+fc+'"></div></div>':'')+
-        (completed.length?'<div class="tech-completed">Completed: '+completed.map(function(c){return esc(c)}).join(', ')+'</div>':'')+
-      '</div>';
-  });
-  panel.innerHTML=html;
+var techHtml='';
+var factionTech=getTechForFaction(factionKey);
+if(factionTech){
+techHtml='<div class="thought-tech-line">Faction researching: '+esc(factionTech.technology)+' ('+Math.round(factionTech.progress_percentage||0)+'%)</div>';
 }
-
-// ── Tab: Choices ─────────────────────────────────────────────
-function renderChoices(stats){
-  var panel=document.getElementById('panel-choices');
-  if(!stats){panel.innerHTML='<div style="color:var(--dim)">No faction votes recorded yet</div>';return}
-  // stats can be {stats: {choice_id: count}, history: [...]}
-  var voteStats=stats.stats||{};
-  var history=Array.isArray(stats.history)?stats.history:(Array.isArray(stats.recent_resolutions)?stats.recent_resolutions:[]);
-  var hasStats=Object.keys(voteStats).length>0;
-  var hasHistory=history.length>0;
-  if(!hasStats&&!hasHistory){panel.innerHTML='<div style="color:var(--dim)">No faction votes recorded yet — votes appear when world events trigger choices</div>';return}
-  var html='<div style="margin-bottom:12px;color:var(--dim);font-size:13px">How factions voted on galactic events</div>';
-  if(hasStats){
-    Object.keys(voteStats).sort(function(a,b){return voteStats[b]-voteStats[a]}).forEach(function(choice){
-      var count=voteStats[choice];
-      html+=
-      '<div class="choice-card">'+
-      '<div class="choice-event">'+esc(choice.replace(/_/g,' '))+'</div>'+
-      '<div class="choice-result">'+count+' faction-endorsements</div>'+
-      '</div>';
-    });
-  }
-  if(hasHistory){
-    html+='<div style="margin:12px 0 8px;font-size:11px;color:var(--dim);text-transform:uppercase;letter-spacing:1px">Recent Resolutions</div>';
-    history.slice(0,20).forEach(function(h){
-      var evt=h.event_name||h.event_id||h.choice_id||'Unknown event';
-      var choice=h.chosen_option||h.choice||'';
-      var voters=h.voters||h.voter_count||0;
-      html+=
-      '<div class="choice-card">'+
-      '<div class="choice-event">'+esc(evt)+'</div>'+
-      (choice?'<div class="choice-result" style="color:var(--cyan)">Chose: '+esc(choice.replace(/_/g,' '))+'</div>':'')+
-      (voters?'<div class="choice-votes"><span class="vote-badge">'+voters+' voters</span></div>':'')+
-      '</div>';
-    });
-  }
-  panel.innerHTML=html;
-}
-
-// ── Tab: Event Log ───────────────────────────────────────────
-function renderLog(events){
-  var panel=document.getElementById('panel-log');
-  if(!events||!events.length){panel.innerHTML='<div style="color:var(--dim)">No events yet</div>';return}
-  var html='';
-  events.slice(0,50).forEach(function(ev){
-    var typeClass='world';
-    var sourceLabel='SYSTEM';
-    var sourceClass='world';
-    var evType=(ev.type||ev.event_type||'').toLowerCase();
-    var evSource=(ev.source||ev.source_type||'').toLowerCase();
-    if(evType==='cascade'||ev.cascade){typeClass='cascade';sourceLabel='CASCADE';sourceClass='cascade'}
-    else if(evSource==='faction'||evType==='faction_action'||ev.faction_id){typeClass='faction';sourceLabel='FACTION';sourceClass='faction'}
-    else if(evSource==='quest'){typeClass='quest';sourceLabel='QUEST';sourceClass='quest'}
-    else if(evSource==='tech'){typeClass='tech';sourceLabel='TECH';sourceClass='tech'}
-var desc=ev.description||ev.message||ev.text||ev.event||'';
-var ts=ev.timestamp||ev.time||'';
-var fidBorder=ev.faction_id&&factionColor(ev.faction_id)?'border-left-color:'+factionColor(ev.faction_id):'';
 html+=
-'<div class="log-entry '+typeClass+'" style="'+fidBorder+'">'+
-'<span class="log-time">'+esc(String(ts))+'</span>'+
-'<span class="log-source '+sourceClass+'">'+sourceLabel+'</span>'+
-'<span class="log-body">'+esc(desc)+'</span>'+
+'<div class="thought-card" style="border-left-color:'+fc+'">'+
+'<div class="thought-header">'+
+'<span class="thought-name" style="color:'+fc+'">'+esc(npc.name||'Unknown')+'</span>'+
+'<span class="thought-title">'+esc(npc.title||npc.role||'')+'</span>'+
+'<span class="thought-faction" style="color:'+fc+';background:'+fc+'14">'+esc(factionName(factionKey))+'</span>'+
+'</div>'+
+thHtml+
+'<div class="thought-mood">Mood: <span style="color:'+mc+'">'+esc(npc.mood||'\u2014')+'</span><span class="thought-time">'+ago(npc.last_active||npc.last_thought||0)+'</span></div>'+
+questHtml+
+techHtml+
 '</div>';
 });
-if(cascadeChains&&cascadeChains.length){
-html+='<div style="margin:16px 0 8px;font-family:Orbitron,sans-serif;font-size:11px;letter-spacing:2px;text-transform:uppercase;color:var(--violet)">Cascade Chains ('+cascadeChains.length+')</div>';
-cascadeChains.slice(0,15).forEach(function(c){
-var src=c.source_char||c.source_event||'?';
-var chain=c.chain||[];
-var chainHtml=chain.map(function(s){return'<span style="color:var(--violet);opacity:0.8">'+esc(s)+'</span>'}).join(' <span style="color:var(--dim)">→</span> ');
-html+='<div class="log-entry cascade" style="border-left-color:var(--violet)">';
-html+='<span class="log-time">'+ago(c.ts)+'</span>';
-html+='<span class="log-source cascade">CASCADE</span>';
-html+='<span class="log-body">'+esc(src)+': '+chainHtml+'</span>';
-html+='</div>';
-});
-}
 panel.innerHTML=html;
 }
 
@@ -756,7 +632,7 @@ var nameMap={};
 (npcActivity||[]).forEach(function(n){nameMap[n.char_id||n.id]=n.name||n.char_id||n.id});
 var npcFaction={};
 (npcActivity||[]).forEach(function(n){npcFaction[n.char_id||n.id]=n.faction||n.affiliation||n.faction_id||''});
-var html='<div style="margin-bottom:10px;color:var(--dim);font-size:13px">NPC relationship network — click a node to highlight connections</div>';
+var html='<div style="margin-bottom:10px;color:var(--dim);font-size:14px">NPC relationship network — click a node to highlight connections</div>';
 html+='<div class="network-grid">';
 keys.forEach(function(cid){
 var fc=factionColor(npcFaction[cid]);
@@ -769,9 +645,12 @@ entries.slice(0,8).forEach(function(e){
 var otherId=e[0],affinity=e[1];
 var cls=affinity>=70?'ally':affinity<=30?'rival':'neutral';
 var otherName=nameMap[otherId]||otherId;
-connHtml+='<span class="nn-link '+cls+'" title="'+otherName+': '+Math.round(affinity)+'">'+otherName.replace(/_/g,' ')+'</span>';
+connHtml+='<span class="nn-link '+cls+'" title="'+otherName+': '+Math.round(affinity)+'">'+esc(otherName.replace(/_/g,' '))+'<span class="nn-strength">'+Math.round(affinity)+'</span></span>';
 });
-html+='<div class="network-node'+(isHL?' highlight':'')+'" onclick="highlightNPC(\''+cid+'\')">';
+var questCount=getQuestCountForNPC(cid);
+var badgeHtml=questCount>0?'<div class="nn-quest-badge">'+questCount+'</div>':'';
+html+='<div class="network-node'+(isHL?' highlight':'')+'" onclick="highlightNPC(\''+esc(cid)+'\')">';
+html+=badgeHtml;
 html+='<div class="nn-name" style="color:'+fc+'">'+esc(name)+'</div>';
 html+='<div class="nn-faction" style="color:'+fc+'">'+esc(factionName(npcFaction[cid]))+'</div>';
 html+='<div class="nn-connections">'+connHtml+'</div>';
@@ -791,7 +670,7 @@ function renderStances(){
 var panel=document.getElementById('panel-stances');
 if(!factions||!Object.keys(factions).length){panel.innerHTML='<div style="color:var(--dim)">No faction stance data available</div>';return}
 var fids=Object.keys(FC);
-var html='<div style="margin-bottom:10px;color:var(--dim);font-size:13px">8×8 faction stance matrix — rows show how each faction views the column faction</div>';
+var html='<div style="margin-bottom:10px;color:var(--dim);font-size:14px">8\u00d78 faction stance matrix — rows show how each faction views the column faction</div>';
 html+='<table class="stances-matrix"><thead><tr><th></th>';
 fids.forEach(function(fid){
 html+='<th class="col-header" style="color:'+factionColor(fid)+'">'+esc(factionName(fid).substring(0,12))+'</th>';
@@ -817,7 +696,7 @@ else if(val>=0.4)cellClass='neutral-cell';
 else if(val>=0.2)cellClass='tense';
 else cellClass='hostile';
 }
-var trendArrow=trend>0.01?' ↑':trend<-0.01?' ↓':'';
+var trendArrow=trend>0.01?' \u2191':trend<-0.01?' \u2193':'';
 html+='<td class="'+cellClass+'">';
 html+='<span class="stances-cell-val">'+(val!==null?val.toFixed(2):'?')+'</span>';
 html+='<span class="stances-cell-label">'+esc(label)+trendArrow+'</span>';
@@ -827,47 +706,45 @@ html+='</td>';
 html+='</tr>';
 });
 html+='</tbody></table>';
-panel.innerHTML=html;
-}
 
-// ── Tab: Votes ──────────────────────────────────────────────
-function renderVotes(){
-var panel=document.getElementById('panel-votes');
-if(!choiceResolutions.length){panel.innerHTML='<div style="color:var(--dim)">No detailed vote records yet — votes appear when world events trigger faction choices</div>';return}
-var html='<div style="margin-bottom:10px;color:var(--dim);font-size:13px">Faction vote breakdowns on galactic events — most recent first</div>';
-choiceResolutions.slice(0,20).forEach(function(r){
+html+='<div class="stances-legend">';
+html+='<div class="legend-item"><span class="legend-dot" style="background:rgba(76,175,80,0.18)"></span>Ally (0.80+)</div>';
+html+='<div class="legend-item"><span class="legend-dot" style="background:rgba(76,175,80,0.10)"></span>Cordial (0.60-0.79)</div>';
+html+='<div class="legend-item"><span class="legend-dot" style="background:rgba(255,193,7,0.10)"></span>Neutral (0.40-0.59)</div>';
+html+='<div class="legend-item"><span class="legend-dot" style="background:rgba(255,152,0,0.12)"></span>Tense (0.20-0.39)</div>';
+html+='<div class="legend-item"><span class="legend-dot" style="background:rgba(244,67,54,0.14)"></span>Hostile (<0.20)</div>';
+html+='<div class="legend-item"><span style="font-size:13px;color:var(--dim)">\u2191 improving &nbsp; \u2193 worsening</span></div>';
+html+='</div>';
+
+html+='<div class="recent-decisions">';
+html+='<div class="rd-title">Recent Decisions</div>';
+if(choiceResolutions&&choiceResolutions.length){
+choiceResolutions.slice(0,5).forEach(function(r){
 var title=r.event_title||r.event_id||'Unknown Event';
 var chosen=r.chosen_choice_text||r.chosen_choice_id||'';
 var fv=r.faction_votes||{};
-var con=r.consequences_applied||[];
-var ts=r.resolved_at;
-html+='<div class="vote-detail-card">';
-html+='<div class="vote-event-title">'+esc(title)+'</div>';
-html+='<div class="vote-chosen">Chose: '+esc(chosen.replace(/_/g,' '))+'</div>';
+html+='<div class="rd-item">';
+html+='<div class="rd-event">'+esc(title)+'</div>';
+html+='<div class="rd-choice">Chose: '+esc(chosen.replace(/_/g,' '))+'</div>';
+var votesHtml='';
 Object.keys(fv).forEach(function(fid){
 var vote=fv[fid];
 var fc=factionColor(fid);
 var choiceLabel=vote.choice_id?vote.choice_id.replace(/_/g,' '):'?';
-var score=vote.score!=null?vote.score.toFixed(3):'—';
-var ideology=vote.ideology||'';
-html+='<div class="vote-faction-row">';
-html+='<span class="vf-name" style="color:'+fc+'">'+esc(factionName(fid))+'</span>';
-html+='<span class="vf-choice">'+esc(choiceLabel)+'</span>';
-html+='<span class="vf-score" style="color:'+fc+'">'+score+'</span>';
+var score=vote.score!=null?vote.score.toFixed(3):'\u2014';
+var vCls=chosen&&vote.choice_id&&vote.choice_id===r.chosen_choice_id?'for':'against';
+if(vote.choice_id===chosen)vCls='for';
+else if(score<0.3)vCls='abstain';
+votesHtml+='<span class="rd-vote-badge '+vCls+'" style="border-left:2px solid '+fc+'">'+esc(factionName(fid))+': '+esc(choiceLabel)+' ('+score+')</span>';
+});
+html+='<div class="rd-votes">'+votesHtml+'</div>';
 html+='</div>';
 });
-if(con.length){
-html+='<div class="vote-consequences"><div style="font-size:10px;text-transform:uppercase;letter-spacing:1px;margin-bottom:4px;color:var(--dim)">Consequences</div>';
-con.forEach(function(c){
-if(c.applied){
-html+='<div class="vote-consequence-item">'+esc(c.effect_type||'')+' → '+esc(c.target||c.world_key||'')+(c.delta?' ('+(c.delta>0?'+':'')+c.delta.toFixed(1)+')':'')+'</div>';
+}else{
+html+='<div style="color:var(--dim);font-size:14px">No faction decisions recorded yet</div>';
 }
-});
 html+='</div>';
-}
-if(ts)html+='<div style="margin-top:6px;font-size:10px;color:rgba(255,255,255,0.3)">'+ago(ts)+'</div>';
-html+='</div>';
-});
+
 panel.innerHTML=html;
 }
 
@@ -876,7 +753,7 @@ function renderBrain(){
 var panel=document.getElementById('panel-brain');
 var fids=Object.keys(factionBrains);
 if(!fids.length){panel.innerHTML='<div style="color:var(--dim)">No faction brain state data — brains update every 5 minutes during simulation ticks</div>';return}
-var html='<div style="margin-bottom:10px;color:var(--dim);font-size:13px">Faction decision-making priorities — higher weight = higher priority</div>';
+var html='<div style="margin-bottom:10px;color:var(--dim);font-size:14px">Faction decision-making priorities — higher weight = higher priority</div>';
 fids.forEach(function(fid){
 var brain=factionBrains[fid];
 var fc=factionColor(fid);
@@ -890,135 +767,149 @@ html+='<div class="brain-faction-name" style="color:'+fc+'">'+esc(factionName(fi
 priorities.forEach(function(p){
 var pct=Math.round((p.weight/maxW)*100);
 var label=(p.action||'').replace(/_/g,' ');
+var isTop=p.weight===maxW;
 html+='<div class="brain-priority">';
 html+='<span class="bp-label">'+esc(label)+'</span>';
-html+='<div class="bp-bar"><div class="bp-fill" style="width:'+pct+'%;background:'+fc+'"></div></div>';
+html+='<div class="bp-bar"><div class="bp-fill'+(isTop?' top-priority':'')+'" style="width:'+pct+'%;background:'+fc+'"></div></div>';
 html+='<span class="bp-weight" style="color:'+fc+'">'+p.weight.toFixed(1)+'</span>';
 html+='</div>';
 });
 html+='</div>';
 });
+
+html+='<div class="recent-events">';
+html+='<div class="re-title">Recent Events</div>';
+if(eventLog&&eventLog.length){
+html+='<div class="re-timeline">';
+eventLog.slice(0,5).forEach(function(ev){
+var evType=(ev.type||ev.event_type||'').toLowerCase();
+var evSource=(ev.source||ev.source_type||'').toLowerCase();
+var srcClass='world';
+var srcLabel='SYSTEM';
+if(evType==='cascade'||ev.cascade){srcClass='cascade';srcLabel='CASCADE'}
+else if(evSource==='faction'||evType==='faction_action'||ev.faction_id){srcClass='faction';srcLabel='FACTION'}
+else if(evSource==='quest'){srcClass='quest';srcLabel='QUEST'}
+else if(evSource==='tech'){srcClass='tech';srcLabel='TECH'}
+var desc=ev.description||ev.message||ev.text||ev.event||'';
+var ts=ev.timestamp||ev.time||'';
+html+='<div class="re-entry">';
+html+='<span class="re-time">'+esc(String(ts))+'</span>';
+html+='<span class="re-source '+srcClass+'">'+srcLabel+'</span>';
+html+='<span class="re-body">'+esc(desc)+'</span>';
+html+='</div>';
+});
+html+='</div>';
+}else{
+html+='<div style="color:var(--dim);font-size:14px">No events recorded yet</div>';
+}
+html+='</div>';
+
 panel.innerHTML=html;
 }
 
 function renderActiveTab(){
 switch(activeTab){
 case'thoughts':renderThoughts(npcActivity);break;
-case'quests':renderQuests(questLog);break;
-case'tech':renderTech(techData);break;
-case'choices':renderChoices(choiceStats);break;
-case'log':renderLog(eventLog);break;
 case'network':renderNetwork();break;
 case'stances':renderStances();break;
-case'votes':renderVotes();break;
 case'brain':renderBrain();break;
 }
 }
 
 // ── WebSocket ────────────────────────────────────────────────
 function connectWS(){
-  try{
-    var proto=location.protocol==='https:'?'wss:':'ws:';
-    ws=new WebSocket(proto+'//'+location.host+'/ws');
-    ws.onopen=function(){wsReconnects=0;console.log('WS connected')};
-    ws.onmessage=function(e){
-      try{
-        var d=JSON.parse(e.data);
-        if(d.type==='world_state'||d.type==='world_state_update'){
-          worldState=d.data||d;
-          updateHeaderMetrics(worldState);
-        }
-        if(d.type==='narration')renderNarration(d.data);
-        if(d.type==='event')eventLog.unshift(d.data);
-      }catch(err){}
-    };
-    ws.onclose=function(){
-      wsReconnects++;
-      var delay=Math.min(5000,1000*wsReconnects);
-      setTimeout(connectWS,delay);
-    };
-    ws.onerror=function(){ws.close()};
-  }catch(e){setTimeout(connectWS,5000)}
+try{
+var proto=location.protocol==='https:'?'wss:':'ws:';
+ws=new WebSocket(proto+'//'+location.host+'/ws');
+ws.onopen=function(){wsReconnects=0;console.log('WS connected')};
+ws.onmessage=function(e){
+try{
+var d=JSON.parse(e.data);
+if(d.type==='world_state'||d.type==='world_state_update'){
+worldState=d.data||d;
+updateHeaderMetrics(worldState);
+}
+if(d.type==='narration')renderNarration(d.data);
+if(d.type==='event')eventLog.unshift(d.data);
+}catch(err){}
+};
+ws.onclose=function(){
+wsReconnects++;
+var delay=Math.min(5000,1000*wsReconnects);
+setTimeout(connectWS,delay);
+};
+ws.onerror=function(){ws.close()};
+}catch(e){setTimeout(connectWS,5000)}
 }
 
 // ── Data Fetching ────────────────────────────────────────────
 async function fetchWorldState(){
-  var d=await api('/world/state',8000);
-  if(d){
-    // API returns {state: {tension_level, resource_abundance, ...}, conditions: [...]}
-    var ws=d.state||d;
-    worldState=ws;
-    updateHeaderMetrics(ws);
-  }
+var d=await api('/world/state',8000);
+if(d){
+var ws=d.state||d;
+worldState=ws;
+updateHeaderMetrics(ws);
+}
 }
 
 async function fetchStatus(){
-  var d=await api('/simulation/status',10000);
-  if(d){
-    if(d.world_state||d.worldState)updateHeaderMetrics(d.world_state||d.worldState);
-    updateEra(d);
-  }
-  // Also fetch engine-status for era/phase info
-  var es=await api('/engine-status',8000);
-  if(es){
-    updateEra(es.turn_progression||es);
-  }
+var d=await api('/simulation/status',10000);
+if(d){
+if(d.world_state||d.worldState)updateHeaderMetrics(d.world_state||d.worldState);
+updateEra(d);
+}
+var es=await api('/engine-status',8000);
+if(es){
+updateEra(es.turn_progression||es);
+}
 }
 
 async function fetchNarration(){
-  var d=await api('/narrator/history',8000);
-  // API returns {status, narrations: [...], count}
-  var narrs=d&&d.narrations?d.narrations:(Array.isArray(d)?d:[]);
-  if(narrs.length){
-    narrationHistory=narrs;
-    renderNarration(narrs[0]);
-  }
+var d=await api('/narrator/history',8000);
+var narrs=d&&d.narrations?d.narrations:(Array.isArray(d)?d:[]);
+if(narrs.length){
+narrationHistory=narrs;
+renderNarration(narrs[0]);
+}
 }
 
 async function fetchFactions(){
-  var d=await api('/simulation/factions',10000);
-  if(d)factions=d;
+var d=await api('/simulation/factions',10000);
+if(d)factions=d;
 }
 
 async function fetchNPCs(){
-  var d=await api('/simulation/npcs/activity',15000);
-  // API returns {npcs: [...], count}
-  if(d){
-    var arr=d.npcs||d;
-    npcActivity=Array.isArray(arr)?arr:Object.values(arr);
-  }
+var d=await api('/simulation/npcs/activity',15000);
+if(d){
+var arr=d.npcs||d;
+npcActivity=Array.isArray(arr)?arr:Object.values(arr);
+}
 }
 
 async function fetchQuests(){
-  var d=await api('/simulation/npc-quests',10000);
-  if(d)questLog=d;
+var d=await api('/simulation/npc-quests',10000);
+if(d)questLog=d;
 }
 
 async function fetchTech(){
-  var d=await api('/simulation/faction-tech',10000);
-  if(d)techData=d;
+var d=await api('/simulation/faction-tech',10000);
+if(d)techData=d;
 }
 
 async function fetchChoices(){
-  var d=await api('/simulation/choice-resolutions',8000);
-  if(d)choiceStats=d;
+var d=await api('/simulation/choice-resolutions',8000);
+if(d)choiceStats=d;
 }
 
 async function fetchEvents(){
-  var d=await api('/simulation/events',10000);
-  if(d){
-    var all=[];
-    if(d.world_events&&Array.isArray(d.world_events))all=all.concat(d.world_events);
-    if(d.cascade_events&&Array.isArray(d.cascade_events))all=all.concat(d.cascade_events);
-    if(d.broadcast_events&&Array.isArray(d.broadcast_events))all=all.concat(d.broadcast_events);
-    eventLog=all;
-  }
+var d=await api('/simulation/events',10000);
+if(d){
+var all=[];
+if(d.world_events&&Array.isArray(d.world_events))all=all.concat(d.world_events);
+if(d.cascade_events&&Array.isArray(d.cascade_events))all=all.concat(d.cascade_events);
+if(d.broadcast_events&&Array.isArray(d.broadcast_events))all=all.concat(d.broadcast_events);
+eventLog=all;
 }
-
-// ── Main Refresh ─────────────────────────────────────────────
-async function refreshLight(){
-  await Promise.all([fetchWorldState(),fetchStatus(),fetchNarration(),fetchFactions()]);
-  renderFactions(factions,techData,questLog);
 }
 
 async function fetchRelationshipNetwork(){
@@ -1041,20 +932,26 @@ var d=await api('/simulation/choice-resolutions/detail',10000);
 if(d&&d.resolutions)choiceResolutions=d.resolutions;
 }
 
+// ── Main Refresh ─────────────────────────────────────────────
+async function refreshLight(){
+await Promise.all([fetchWorldState(),fetchStatus(),fetchNarration(),fetchFactions()]);
+renderFactions(factions,techData,questLog);
+}
+
 async function refreshHeavy(){
 await Promise.all([fetchNPCs(),fetchQuests(),fetchTech(),fetchChoices(),fetchEvents(),fetchRelationshipNetwork(),fetchCascadeChains(),fetchFactionBrains(),fetchChoiceResolutionsDetail()]);
-  renderActiveTab();
-  renderFactions(factions,techData,questLog);
+renderActiveTab();
+renderFactions(factions,techData,questLog);
 }
 
 async function init(){
-  makeStars();
-  buildHeaderMetrics();
-  connectWS();
-  await refreshLight();
-  await refreshHeavy();
-  setInterval(refreshLight,10000);
-  setInterval(refreshHeavy,30000);
+makeStars();
+buildHeaderMetrics();
+connectWS();
+await refreshLight();
+await refreshHeavy();
+setInterval(refreshLight,10000);
+setInterval(refreshHeavy,30000);
 }
 
 document.addEventListener('DOMContentLoaded',init);
