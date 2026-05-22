@@ -28,6 +28,8 @@ import time
 import random
 import urllib.request
 import urllib.error
+import concurrent.futures
+import threading
 from typing import Dict, List, Optional, Any
 
 import redis
@@ -76,12 +78,15 @@ THOUGHT_TTL = 86400 * 7
 OPINION_TTL = 86400 * 14
 
 _redis_client = None
+_redis_lock = threading.Lock()
 
 
 def _get_redis():
     global _redis_client
     if _redis_client is None:
-        _redis_client = redis.Redis.from_url(REDIS_URL, decode_responses=True)
+        with _redis_lock:
+            if _redis_client is None:
+                _redis_client = redis.Redis.from_url(REDIS_URL, decode_responses=True)
     return _redis_client
 
 
@@ -117,15 +122,20 @@ def _call_llm(
     user_prompt: str,
     max_tokens: int = 150,
     temperature: float = 0.9,
+    priority: str = "local",
 ) -> str:
-    # Priority 1: NVIDIA NIM (free, fast, returns proper content field)
+    # Priority 0: Local Ollama + NVIDIA NIM via tiered NimClient
     if LLM_USE_NIM:
         try:
             from nvidia_nim_client import get_nim_client, _run_async
 
             result = _run_async(
                 get_nim_client().call(
-                    system_prompt, user_prompt, max_tokens, temperature
+                    system_prompt,
+                    user_prompt,
+                    max_tokens,
+                    temperature,
+                    priority=priority,
                 )
             )
             if result:
@@ -721,6 +731,140 @@ def get_relationship_summary(char_id: str) -> Dict[str, Any]:
     }
 
 
+# --- PARALLEL NPC PROCESSING (P25b-4) ---
+# Max concurrent NPC processing threads. 8 balances LLM throughput
+# (Ollama/NIM handle concurrent requests) against resource limits.
+_NPC_PARALLEL_WORKERS = 8
+
+
+def _process_single_npc(npc: Dict) -> Dict[str, Any]:
+    """Process a single NPC through the full autonomy pipeline.
+
+    Extracted from simulation_tick() to enable parallel execution via
+    ThreadPoolExecutor. Each call is independent — Redis writes use
+    per-NPC keys, and _call_llm uses _run_async() internally which
+    is thread-safe.
+    """
+    char_id = npc.get("char_id") or npc.get("id", "")
+    char_name = npc.get("name", "Unknown")
+    archetype = npc.get("archetype") or npc.get("personality_type", "scholar")
+    affiliation = npc.get("affiliation", "independent")
+    title = npc.get("title", "")
+    description = npc.get("description", "")
+
+    npc_result: Dict[str, Any] = {
+        "thoughts": [],
+        "actions": [],
+        "moods": [],
+        "opinions": [],
+        "decisions": [],
+        "errors": [],
+    }
+
+    try:
+        new_mood = update_mood(char_id, archetype)
+        npc_result["moods"].append({"char_id": char_id, "mood": new_mood})
+        decision = make_decision(
+            char_id, char_name, archetype, affiliation, mood=new_mood
+        )
+        if decision:
+            npc_result["decisions"].append(decision)
+            try:
+                broadcast_decision_event(decision, affiliation)
+            except Exception:
+                logger.debug("Decision broadcast failed for NPC decision event")
+            # Significance gate: prioritize LLM calls for meaningful moments
+            category = decision.get("category", "")
+            sig = SIGNIFICANCE_PRIORITY.get(category, "medium")
+            if category in (
+                "advance_goal",
+                "investigate",
+                "seek_resources",
+                "self_improve",
+                "explore",
+            ):
+                thought = generate_thought(
+                    char_id,
+                    char_name,
+                    archetype,
+                    affiliation,
+                    title,
+                    description,
+                    mood=new_mood,
+                    significance=sig,
+                )
+                if thought:
+                    npc_result["thoughts"].append(thought)
+                action = generate_action(
+                    char_id, char_name, archetype, affiliation, mood=new_mood
+                )
+                if action:
+                    npc_result["actions"].append(action)
+            elif category in ("socialize", "help_ally", "confront_rival"):
+                thought = generate_thought(
+                    char_id,
+                    char_name,
+                    archetype,
+                    affiliation,
+                    title,
+                    description,
+                    mood=new_mood,
+                    significance=sig,
+                )
+                if thought:
+                    npc_result["thoughts"].append(thought)
+            elif category == "rest":
+                thought = generate_thought(
+                    char_id,
+                    char_name,
+                    archetype,
+                    affiliation,
+                    title,
+                    description,
+                    mood=new_mood,
+                    significance=sig,
+                )
+                if thought:
+                    npc_result["thoughts"].append(thought)
+            elif category == "react_to_events":
+                action = generate_action(
+                    char_id, char_name, archetype, affiliation, mood=new_mood
+                )
+                if action:
+                    npc_result["actions"].append(action)
+            else:
+                if random.random() < 0.5:
+                    thought = generate_thought(
+                        char_id,
+                        char_name,
+                        archetype,
+                        affiliation,
+                        title,
+                        description,
+                        mood=new_mood,
+                        significance=sig,
+                    )
+                    if thought:
+                        npc_result["thoughts"].append(thought)
+        r = _get_redis()
+        opinion_keys = list(r.scan_iter(f"npc_opinion:{char_id}:*"))
+        for okey in opinion_keys[:2]:
+            if random.random() < 0.3:
+                player_id = okey.split(":")[-1]
+                shift_type = random.choice(
+                    ["friendly", "neutral", "neutral", "helpful"]
+                )
+                opinion = update_opinion(char_id, player_id, shift_type)
+                npc_result["opinions"].append(
+                    {"char_id": char_id, "player_id": player_id, "opinion": opinion}
+                )
+        r.set(f"npc_last_active:{char_id}", str(int(time.time())), ex=86400 * 7)
+    except Exception as e:
+        npc_result["errors"].append({"char_id": char_id, "error": str(e)})
+
+    return npc_result
+
+
 def simulation_tick(npc_list: List[Dict]) -> Dict[str, Any]:
     results = {
         "thoughts": [],
@@ -731,113 +875,47 @@ def simulation_tick(npc_list: List[Dict]) -> Dict[str, Any]:
         "decisions": [],
         "errors": [],
     }
-    for npc in npc_list:
-        char_id = npc.get("char_id") or npc.get("id", "")
-        char_name = npc.get("name", "Unknown")
-        archetype = npc.get("archetype") or npc.get("personality_type", "scholar")
-        affiliation = npc.get("affiliation", "independent")
-        title = npc.get("title", "")
-        description = npc.get("description", "")
-        try:
-            new_mood = update_mood(char_id, archetype)
-            results["moods"].append({"char_id": char_id, "mood": new_mood})
-            decision = make_decision(
-                char_id, char_name, archetype, affiliation, mood=new_mood
-            )
-            if decision:
-                results["decisions"].append(decision)
-                try:
-                    broadcast_decision_event(decision, affiliation)
-                except Exception:
-                    logger.debug("Decision broadcast failed for NPC decision event")
-                # Significance gate: prioritize LLM calls for meaningful moments
-                category = decision.get("category", "")
-                sig = SIGNIFICANCE_PRIORITY.get(category, "medium")
-                if category in (
-                    "advance_goal",
-                    "investigate",
-                    "seek_resources",
-                    "self_improve",
-                    "explore",
-                ):
-                    thought = generate_thought(
-                        char_id,
-                        char_name,
-                        archetype,
-                        affiliation,
-                        title,
-                        description,
-                        mood=new_mood,
-                        significance=sig,
-                    )
-                    if thought:
-                        results["thoughts"].append(thought)
-                    action = generate_action(
-                        char_id, char_name, archetype, affiliation, mood=new_mood
-                    )
-                    if action:
-                        results["actions"].append(action)
-                elif category in ("socialize", "help_ally", "confront_rival"):
-                    thought = generate_thought(
-                        char_id,
-                        char_name,
-                        archetype,
-                        affiliation,
-                        title,
-                        description,
-                        mood=new_mood,
-                        significance=sig,
-                    )
-                    if thought:
-                        results["thoughts"].append(thought)
-                elif category == "rest":
-                    thought = generate_thought(
-                        char_id,
-                        char_name,
-                        archetype,
-                        affiliation,
-                        title,
-                        description,
-                        mood=new_mood,
-                        significance=sig,
-                    )
-                    if thought:
-                        results["thoughts"].append(thought)
-                elif category == "react_to_events":
-                    action = generate_action(
-                        char_id, char_name, archetype, affiliation, mood=new_mood
-                    )
-                    if action:
-                        results["actions"].append(action)
-                else:
-                    if random.random() < 0.5:
-                        thought = generate_thought(
-                            char_id,
-                            char_name,
-                            archetype,
-                            affiliation,
-                            title,
-                            description,
-                            mood=new_mood,
-                            significance=sig,
-                        )
-                        if thought:
-                            results["thoughts"].append(thought)
-            r = _get_redis()
-            opinion_keys = list(r.scan_iter(f"npc_opinion:{char_id}:*"))
-            for okey in opinion_keys[:2]:
-                if random.random() < 0.3:
-                    player_id = okey.split(":")[-1]
-                    shift_type = random.choice(
-                        ["friendly", "neutral", "neutral", "helpful"]
-                    )
-                    opinion = update_opinion(char_id, player_id, shift_type)
-                    results["opinions"].append(
-                        {"char_id": char_id, "player_id": player_id, "opinion": opinion}
-                    )
-            r.set(f"npc_last_active:{char_id}", str(int(time.time())), ex=86400 * 7)
-        except Exception as e:
-            results["errors"].append({"char_id": char_id, "error": str(e)})
+
+    # --- Parallel NPC processing (P25b-4) ---
+    # Process all NPCs concurrently using ThreadPoolExecutor.
+    # Each NPC is independent — Redis writes use per-NPC keys,
+    # and _call_llm() uses _run_async() which is thread-safe.
+    # This cuts ~27 sequential LLM calls from 110-280s to ~30-60s.
+    tick_start = time.time()
+    npc_results: List[Dict[str, Any]] = []
+
+    with concurrent.futures.ThreadPoolExecutor(
+        max_workers=_NPC_PARALLEL_WORKERS
+    ) as executor:
+        future_to_npc = {
+            executor.submit(_process_single_npc, npc): npc for npc in npc_list
+        }
+        for future in concurrent.futures.as_completed(future_to_npc):
+            npc = future_to_npc[future]
+            try:
+                npc_result = future.result(timeout=60)
+                npc_results.append(npc_result)
+            except Exception as exc:
+                char_id = npc.get("char_id") or npc.get("id", "unknown")
+                logger.warning("NPC %s parallel processing failed: %s", char_id, exc)
+                results["errors"].append(
+                    {"char_id": char_id, "error": f"parallel processing failed: {exc}"}
+                )
+
+    # Merge per-NPC results into aggregate results
+    for nr in npc_results:
+        for key in ("thoughts", "actions", "moods", "opinions", "decisions", "errors"):
+            if nr.get(key):
+                results[key].extend(nr[key])
+
+    parallel_elapsed = time.time() - tick_start
+    logger.info(
+        "Parallel NPC processing: %d NPCs in %.1fs (%d workers)",
+        len(npc_list),
+        parallel_elapsed,
+        _NPC_PARALLEL_WORKERS,
+    )
+
     if len(npc_list) >= 2:
         num_interactions = random.randint(1, min(3, len(npc_list) // 2))
         for _ in range(num_interactions):

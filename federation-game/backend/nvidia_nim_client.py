@@ -1,19 +1,23 @@
 #!/usr/bin/env python3
-"""NVIDIA NIM Client -- LLM client for NPC cognition.
+"""NVIDIA NIM Client + Ollama Offload -- LLM client for NPC cognition.
 
-Provides a multi-key, multi-model client for NVIDIA NIM free endpoints.
-Uses the OpenAI-compatible API at integrate.api.nvidia.com/v1.
+Provides a tiered LLM routing system:
+  Tier 1 (cheap/high-volume): Local Ollama (qwen2.5-coder:7b via Tailscale)
+  Tier 2 (cloud): NVIDIA NIM (5 keys, Qwen3/Minimax/Gemma)
+  Tier 3 (last resort): None (returns None for template fallback)
 
 Features:
+- Ollama offload: high-volume NPC thoughts go to local GPU, saving NIM budget
 - Round-robin key rotation across multiple NIM API keys
-- Primary/fallback model chain (Qwen3 Coder -> Minimax -> Gemma)
+- Primary/fallback model chain (Qwen3 Coder -> Minimax -> Gemma) on NIM
 - Rate-limit tracking per key with cooldown windows
 - Token budget management (max calls per tick cycle)
 - Automatic reasoning_content extraction for thinking models
 - Circuit breaker: if all keys fail, gracefully degrades to templates
+- Priority routing: "local" (Ollama first), "cloud" (NIM only for high-value)
 
 Architecture:
-  npc_autonomy._call_llm() -> NimClient.call() -> OpenAI SDK -> NVIDIA NIM
+npc_autonomy._call_llm() -> NimClient.call(priority=...) -> Ollama/NIM
 """
 
 import asyncio
@@ -88,6 +92,14 @@ MODEL_CHAIN = [
 COOLDOWN_SECONDS = 60
 MAX_CALLS_PER_CYCLE = 30
 MAX_CALLS_PER_KEY_PER_MINUTE = 20
+
+# ---------------------------------------------------------------------------
+# Ollama configuration -- local GPU inference via Tailscale
+# ---------------------------------------------------------------------------
+OLLAMA_BASE_URL = os.environ.get("OLLAMA_BASE_URL", "http://100.95.92.117:11434/v1")
+OLLAMA_MODEL = os.environ.get("OLLAMA_MODEL", "qwen2.5-coder:7b")
+OLLAMA_TIMEOUT = int(os.environ.get("OLLAMA_TIMEOUT", "15"))
+_ollama_available: Optional[bool] = None  # lazy-checked on first call
 
 
 # ---------------------------------------------------------------------------
@@ -187,6 +199,8 @@ class NimClient:
         self._total_calls: int = 0
         self._total_failures: int = 0
         self._openai_clients: Dict[str, object] = {}
+        self._ollama_calls: int = 0
+        self._ollama_failures: int = 0
 
         if not self.keys:
             logger.warning("NimClient: No NIM API keys configured")
@@ -237,13 +251,111 @@ class NimClient:
         logger.warning("NimClient: All keys rate-limited or exhausted")
         return None
 
-    async def call(
+    # ------------------------------------------------------------------
+    # Ollama tier -- local GPU via Tailscale
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _check_ollama() -> bool:
+        """Lazy-check if Ollama is reachable (cached after first check)."""
+        global _ollama_available
+        if _ollama_available is not None:
+            return _ollama_available
+        try:
+            import urllib.request
+
+            base = OLLAMA_BASE_URL.replace("/v1", "")
+            r = urllib.request.urlopen(f"{base}/api/tags", timeout=3)
+            _ollama_available = r.status == 200
+            if _ollama_available:
+                logger.info("Ollama available at %s (model: %s)", base, OLLAMA_MODEL)
+            return bool(_ollama_available)
+        except Exception:
+            _ollama_available = False
+            logger.info("Ollama not reachable at %s -- NIM-only mode", OLLAMA_BASE_URL)
+            return False
+
+    async def _call_ollama(
         self,
         system_prompt: str,
         user_prompt: str,
         max_tokens: int = 80,
         temperature: float = 0.8,
     ) -> Optional[str]:
+        """Try local Ollama inference. Returns content string or None."""
+        if not self._check_ollama():
+            return None
+
+        messages = [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_prompt},
+        ]
+
+        try:
+            from openai import AsyncOpenAI
+
+            ollama_client = AsyncOpenAI(
+                base_url=OLLAMA_BASE_URL,
+                api_key="ollama",  # Ollama doesn't need a real key
+                timeout=httpx.Timeout(float(OLLAMA_TIMEOUT), connect=5.0),
+                max_retries=1,
+            )
+            resp = await asyncio.wait_for(
+                ollama_client.chat.completions.create(
+                    model=OLLAMA_MODEL,
+                    messages=messages,
+                    max_tokens=min(max_tokens, 512),
+                    temperature=temperature,
+                    stream=False,
+                ),
+                timeout=float(OLLAMA_TIMEOUT) + 5.0,
+            )
+            content = resp.choices[0].message.content
+            if content:
+                content = content.strip().strip('"').strip("'")
+                if len(content) > 500:
+                    content = content[:500]
+                self._ollama_calls += 1
+                logger.debug("Ollama: %s -> %d chars", OLLAMA_MODEL, len(content))
+                return content
+        except asyncio.TimeoutError:
+            self._ollama_failures += 1
+            logger.warning("Ollama: %s timed out (%ds)", OLLAMA_MODEL, OLLAMA_TIMEOUT)
+        except Exception as exc:
+            self._ollama_failures += 1
+            exc_str = str(exc).lower()
+            if "connect" in exc_str or "refused" in exc_str:
+                global _ollama_available
+                _ollama_available = False
+                logger.info("Ollama connection lost -- falling back to NIM")
+            else:
+                logger.warning("Ollama: error: %s", exc)
+        return None
+
+    async def call(
+        self,
+        system_prompt: str,
+        user_prompt: str,
+        max_tokens: int = 80,
+        temperature: float = 0.8,
+        priority: str = "local",
+    ) -> Optional[str]:
+        """Call LLM with tiered routing.
+
+        priority="local" (default): Try Ollama first, then NIM. Good for
+            high-volume NPC thoughts where quality can be "good enough".
+        priority="cloud": Skip Ollama, use NIM only. For high-value content
+            like faction justifications, narration, diplomacy.
+        """
+        # Tier 1: Local Ollama (cheap, fast, unlimited) for "local" priority
+        if priority == "local":
+            ollama_result = await self._call_ollama(
+                system_prompt, user_prompt, max_tokens, temperature
+            )
+            if ollama_result is not None:
+                return ollama_result
+
+        # Tier 2: NIM cloud (quality, rate-limited)
         if not self.keys:
             return None
 
@@ -352,6 +464,9 @@ class NimClient:
             "cycle_budget": MAX_CALLS_PER_CYCLE,
             "keys_available": sum(1 for k in self.keys if k.is_available()),
             "keys_total": len(self.keys),
+            "ollama_calls": self._ollama_calls,
+            "ollama_failures": self._ollama_failures,
+            "ollama_available": self._check_ollama(),
         }
 
 
