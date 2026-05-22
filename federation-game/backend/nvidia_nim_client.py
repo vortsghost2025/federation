@@ -82,8 +82,8 @@ MODEL_CHAIN = [
 
 # Rate limit config
 COOLDOWN_SECONDS = 60
-MAX_CALLS_PER_CYCLE = 12
-MAX_CALLS_PER_KEY_PER_MINUTE = 10
+MAX_CALLS_PER_CYCLE = 20
+MAX_CALLS_PER_KEY_PER_MINUTE = 15
 
 
 # ---------------------------------------------------------------------------
