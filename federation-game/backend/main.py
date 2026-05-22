@@ -8,9 +8,12 @@ import random
 import hashlib
 import asyncio
 import logging
+import threading
+import time
 from datetime import datetime
 from typing import Optional, Dict, List, Any
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException
+from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 import sys
@@ -3984,144 +3987,173 @@ async def world_events(limit: int = 10):
     return {"events": events, "count": len(events)}
 
 
-@app.post("/simulation/tick")
-async def simulation_tick_endpoint():
-    npc_list = []
-    for char_id, character in game_state.npc_system.characters.items():
-        npc_list.append(
-            {
-                "id": char_id,
-                "char_id": char_id,
-                "name": character.name,
-                "archetype": character.personality_type.value,
-                "affiliation": character.affiliation,
-                "title": character.title,
-                "description": getattr(character, "description", ""),
-            }
-        )
-    results = simulation_tick(npc_list)
-    goals_generated = 0
-    goal_actions = 0
-    for npc in npc_list:
-        cid = npc["char_id"]
-        try:
-            existing = get_goals(cid)
-            if not existing:
-                generate_goal(cid, npc["archetype"])
-                goals_generated += 1
-            goal_action = generate_goal_driven_action(
-                cid, npc["name"], npc["archetype"], npc.get("affiliation", "")
-            )
-            if goal_action:
-                goal_actions += 1
-        except Exception:
-            logger.debug("NPC goal action evaluation failed for character")
+_tick_lock = threading.Lock()
+_tick_status = {
+    "running": False,
+    "last_start": 0.0,
+    "last_end": 0.0,
+    "last_result": None,
+    "last_error": None,
+}
+
+_auto_tick_lock = threading.Lock()
+_auto_tick_status = {
+    "running": False,
+    "last_start": 0.0,
+    "last_end": 0.0,
+    "last_result": None,
+    "last_error": None,
+}
+
+
+def _run_tick_background():
+    with _tick_lock:
+        _tick_status["running"] = True
+        _tick_status["last_start"] = time.time()
+        _tick_status["last_error"] = None
+        _tick_status["last_result"] = None
     try:
-        game_state.save_to_db(snapshot_type="auto")
-    except Exception:
-        logger.warning("Auto-save snapshot after NPC processing failed")
-    return {
-        "status": "completed",
-        "thoughts_generated": len(results.get("thoughts", [])),
-        "actions_generated": len(results.get("actions", [])),
-        "moods_updated": len(results.get("moods", [])),
-        "opinions_drifted": len(results.get("opinions", [])),
-        "goals_generated": goals_generated,
-        "goal_actions": goal_actions,
-        "errors": len(results.get("errors", [])),
-        "details": results,
-    }
+        npc_list = []
+        for char_id, character in game_state.npc_system.characters.items():
+            npc_list.append(
+                {
+                    "id": char_id,
+                    "char_id": char_id,
+                    "name": character.name,
+                    "archetype": character.personality_type.value,
+                    "affiliation": character.affiliation,
+                    "title": character.title,
+                    "description": getattr(character, "description", ""),
+                }
+            )
+        results = simulation_tick(npc_list)
+        goals_generated = 0
+        goal_actions = 0
+        for npc in npc_list:
+            cid = npc["char_id"]
+            try:
+                existing = get_goals(cid)
+                if not existing:
+                    generate_goal(cid, npc["archetype"])
+                    goals_generated += 1
+                goal_action = generate_goal_driven_action(
+                    cid, npc["name"], npc["archetype"], npc.get("affiliation", "")
+                )
+                if goal_action:
+                    goal_actions += 1
+            except Exception:
+                logger.debug("NPC goal action evaluation failed for character")
+        try:
+            game_state.save_to_db(snapshot_type="auto")
+        except Exception:
+            logger.warning("Auto-save snapshot after NPC processing failed")
+        result = {
+            "status": "completed",
+            "thoughts_generated": len(results.get("thoughts", [])),
+            "actions_generated": len(results.get("actions", [])),
+            "moods_updated": len(results.get("moods", [])),
+            "opinions_drifted": len(results.get("opinions", [])),
+            "goals_generated": goals_generated,
+            "goal_actions": goal_actions,
+            "errors": len(results.get("errors", [])),
+            "details": results,
+        }
+        with _tick_lock:
+            _tick_status["last_result"] = result
+    except Exception as e:
+        logger.error("Background tick failed: %s", e)
+        with _tick_lock:
+            _tick_status["last_error"] = str(e)
+    finally:
+        with _tick_lock:
+            _tick_status["running"] = False
+            _tick_status["last_end"] = time.time()
 
 
-@app.post("/simulation/autonomous/tick")
-async def autonomous_simulation_tick():
-    """Autonomous simulation tick: cross-pollination of all subsystems.
+def _run_autonomous_tick_background():
+    with _auto_tick_lock:
+        _auto_tick_status["running"] = True
+        _auto_tick_status["last_start"] = time.time()
+        _auto_tick_status["last_error"] = None
+        _auto_tick_status["last_result"] = None
+    try:
+        import redis as _redis_thread
 
-    Runs after the base simulation_tick to:
-      1. Wire faction context into NPC decisions
-      2. Execute NPC decisions with concrete world effects
-      3. Bridge world state → game_state_v2
-      4. Run faction AI for all 8 factions
-      5. Resolve pending laws/treaties/research
-      6. Process event cascades
-    7. Apply game state deltas
-    """
-    _r = _get_observer_redis()
-
-    # Build NPC list (same pattern as /simulation/tick)
-    npc_list = []
-    for char_id, character in game_state.npc_system.characters.items():
-        npc_list.append(
-            {
-                "id": char_id,
-                "char_id": char_id,
-                "name": character.name,
-                "archetype": character.personality_type.value,
-                "personality_type": character.personality_type.value,
-                "affiliation": character.affiliation,
-                "ambition": getattr(character, "ambition", 0.5),
-                "skills": getattr(character, "skills", []),
-                "title": character.title,
-                "description": getattr(character, "description", ""),
-            }
+        _r = _redis_thread.Redis.from_url(
+            os.environ.get("REDIS_URL", "redis://redis:6379/0"),
+            decode_responses=True,
+            socket_connect_timeout=3,
+            socket_timeout=3,
         )
 
-    # Collect tick decisions from Redis
-    tick_decisions = []
-    for npc in npc_list:
-        cid = npc["char_id"]
-        try:
-            raw = _r.zrange(f"npc_decisions:{cid}", 0, -1)
-            for item in raw:
-                try:
-                    tick_decisions.append(json.loads(item))
-                except (json.JSONDecodeError, TypeError):
-                    pass
-        except Exception:
-            pass
+        npc_list = []
+        for char_id, character in game_state.npc_system.characters.items():
+            npc_list.append(
+                {
+                    "id": char_id,
+                    "char_id": char_id,
+                    "name": character.name,
+                    "archetype": character.personality_type.value,
+                    "personality_type": character.personality_type.value,
+                    "affiliation": character.affiliation,
+                    "ambition": getattr(character, "ambition", 0.5),
+                    "skills": getattr(character, "skills", []),
+                    "title": character.title,
+                    "description": getattr(character, "description", ""),
+                }
+            )
 
-    result = {
-        "status": "completed",
-        "npcs_processed": len(npc_list),
-        "tick_decisions_collected": len(tick_decisions),
-        "autonomous_tick": {},
-        "faction_ai": {},
-        "pending_resolved": {},
-        "npc_cascade": {},
-        "faction_cascade": {},
-        "cascade_summary": {},
-        "game_state_deltas": {},
-        "errors": [],
-    }
+        tick_decisions = []
+        for npc in npc_list:
+            cid = npc["char_id"]
+            try:
+                raw = _r.zrange(f"npc_decisions:{cid}", 0, -1)
+                for item in raw:
+                    try:
+                        tick_decisions.append(json.loads(item))
+                    except (json.JSONDecodeError, TypeError):
+                        pass
+            except Exception:
+                pass
 
-    # Step 1: Autonomous tick (cross-pollination engine)
-    if SIMULATION_ENGINE_AVAILABLE:
-        try:
-            result["autonomous_tick"] = autonomous_tick(npc_list, tick_decisions)
-        except Exception as e:
-            logger.error("Autonomous tick failed: %s", e)
-            result["autonomous_tick"] = {"error": str(e)}
-            result["errors"].append(f"autonomous_tick: {e}")
+        result = {
+            "status": "completed",
+            "npcs_processed": len(npc_list),
+            "tick_decisions_collected": len(tick_decisions),
+            "autonomous_tick": {},
+            "faction_ai": {},
+            "pending_resolved": {},
+            "npc_cascade": {},
+            "faction_cascade": {},
+            "cascade_summary": {},
+            "game_state_deltas": {},
+            "errors": [],
+        }
 
-    # Step 2: Faction AI
-    faction_actions_list = []
-    if FACTION_AI_AVAILABLE:
-        try:
-            faction_result = run_all_factions(npc_list)
-            result["faction_ai"] = faction_result
+        if SIMULATION_ENGINE_AVAILABLE:
+            try:
+                result["autonomous_tick"] = autonomous_tick(npc_list, tick_decisions)
+            except Exception as e:
+                logger.error("Autonomous tick failed: %s", e)
+                result["autonomous_tick"] = {"error": str(e)}
+                result["errors"].append(f"autonomous_tick: {e}")
 
-            # Collect faction actions for cascade processing
-            for fid, fdata in faction_result.get("factions", {}).items():
-                actions = fdata.get("actions", fdata.get("results", []))
-                if isinstance(actions, list):
-                    for a in actions:
-                        if isinstance(a, dict):
-                            a["faction_id"] = fid
-                            faction_actions_list.append(a)
-        except Exception as e:
-            logger.error("Faction AI failed: %s", e)
-            result["faction_ai"] = {"error": str(e)}
-            result["errors"].append(f"faction_ai: {e}")
+        faction_actions_list = []
+        if FACTION_AI_AVAILABLE:
+            try:
+                faction_result = run_all_factions(npc_list)
+                result["faction_ai"] = faction_result
+                for fid, fdata in faction_result.get("factions", {}).items():
+                    actions = fdata.get("actions", fdata.get("results", []))
+                    if isinstance(actions, list):
+                        for a in actions:
+                            if isinstance(a, dict):
+                                a["faction_id"] = fid
+                                faction_actions_list.append(a)
+            except Exception as e:
+                logger.error("Faction AI failed: %s", e)
+                result["faction_ai"] = {"error": str(e)}
+                result["errors"].append(f"faction_ai: {e}")
 
         try:
             result["pending_resolved"] = resolve_pending_items()
@@ -4130,85 +4162,209 @@ async def autonomous_simulation_tick():
             result["pending_resolved"] = {"error": str(e)}
             result["errors"].append(f"resolve_pending: {e}")
 
-    # Step 3: Event cascade
-    if EVENT_CASCADE_AVAILABLE:
-        try:
-            result["npc_cascade"] = process_cascade(npc_list)
-        except Exception as e:
-            logger.error("NPC cascade failed: %s", e)
-            result["npc_cascade"] = {"error": str(e)}
-            result["errors"].append(f"npc_cascade: {e}")
+        if EVENT_CASCADE_AVAILABLE:
+            try:
+                result["npc_cascade"] = process_cascade(npc_list)
+            except Exception as e:
+                logger.error("NPC cascade failed: %s", e)
+                result["npc_cascade"] = {"error": str(e)}
+                result["errors"].append(f"npc_cascade: {e}")
+
+            try:
+                result["faction_cascade"] = process_faction_cascade(
+                    faction_actions_list, npc_list
+                )
+            except Exception as e:
+                logger.error("Faction cascade failed: %s", e)
+                result["faction_cascade"] = {"error": str(e)}
+                result["errors"].append(f"faction_cascade: {e}")
+
+            try:
+                result["cascade_summary"] = get_cascade_summary()
+            except Exception as e:
+                logger.error("Cascade summary failed: %s", e)
+                result["cascade_summary"] = {"error": str(e)}
+                result["errors"].append(f"cascade_summary: {e}")
+
+        if SIMULATION_ENGINE_AVAILABLE:
+            try:
+                from simulation_engine import generate_and_apply_events
+
+                result["game_events"] = generate_and_apply_events(max_events=3)
+            except Exception as e:
+                logger.error("Game events generation failed: %s", e)
+                result["game_events"] = {"error": str(e)}
+                result["errors"].append(f"game_events: {e}")
+
+        if SIMULATION_ENGINE_AVAILABLE and game_state.game_state_v2:
+            try:
+                bridge_result = bridge_world_state_to_game_state()
+                deltas = bridge_result.get("deltas", {})
+                result["game_state_deltas"] = deltas
+                fed = game_state.game_state_v2.federation
+
+                if "federation.morale" in deltas:
+                    fed.morale = max(
+                        0.0, min(1.0, fed.morale + deltas["federation.morale"])
+                    )
+                if "federation.stability" in deltas:
+                    fed.stability = max(
+                        0.0, min(1.0, fed.stability + deltas["federation.stability"])
+                    )
+                if "federation.technological_level" in deltas:
+                    fed.technological_level = max(
+                        0.0,
+                        min(
+                            1.0,
+                            fed.technological_level
+                            + deltas["federation.technological_level"],
+                        ),
+                    )
+                if "federation.military_power" in deltas:
+                    fed.military_power = max(
+                        0.0,
+                        min(
+                            1.0,
+                            fed.military_power + deltas["federation.military_power"],
+                        ),
+                    )
+                if "federation.treasury" in deltas:
+                    fed.treasury = max(0, fed.treasury + deltas["federation.treasury"])
+            except Exception as e:
+                logger.error("Game state bridge failed: %s", e)
+                result["game_state_deltas"] = {"error": str(e)}
+                result["errors"].append(f"game_state_bridge: {e}")
 
         try:
-            result["faction_cascade"] = process_faction_cascade(
-                faction_actions_list, npc_list
+            game_state.save_to_db(snapshot_type="auto")
+        except Exception:
+            logger.warning("Auto-save after autonomous tick failed")
+
+        with _auto_tick_lock:
+            _auto_tick_status["last_result"] = result
+
+    except Exception as e:
+        logger.error("Background autonomous tick failed: %s", e)
+        with _auto_tick_lock:
+            _auto_tick_status["last_error"] = str(e)
+    finally:
+        with _auto_tick_lock:
+            _auto_tick_status["running"] = False
+            _auto_tick_status["last_end"] = time.time()
+
+
+@app.post("/simulation/tick")
+async def simulation_tick_endpoint():
+    with _tick_lock:
+        if _tick_status["running"]:
+            return JSONResponse(
+                status_code=409,
+                content={
+                    "status": "already_running",
+                    "started_at": _tick_status["last_start"],
+                },
             )
-        except Exception as e:
-            logger.error("Faction cascade failed: %s", e)
-            result["faction_cascade"] = {"error": str(e)}
-            result["errors"].append(f"faction_cascade: {e}")
+    tick_id = f"tick_{int(time.time() * 1000)}"
+    thread = threading.Thread(target=_run_tick_background, daemon=True)
+    thread.start()
+    return JSONResponse(
+        status_code=202,
+        content={"status": "started", "tick_id": tick_id},
+    )
 
-        try:
-            result["cascade_summary"] = get_cascade_summary()
-        except Exception as e:
-            logger.error("Cascade summary failed: %s", e)
-            result["cascade_summary"] = {"error": str(e)}
-            result["errors"].append(f"cascade_summary: {e}")
 
-    # Step 4.5: Generate and apply game events
-    if SIMULATION_ENGINE_AVAILABLE:
-        try:
-            from simulation_engine import generate_and_apply_events
+@app.get("/simulation/tick/status")
+async def simulation_tick_status():
+    with _tick_lock:
+        status = dict(_tick_status)
+    if status["running"]:
+        result = {
+            "status": "running",
+            "started_at": status["last_start"],
+            "elapsed": time.time() - status["last_start"],
+        }
+    elif status["last_error"]:
+        result = {
+            "status": "failed",
+            "error": status["last_error"],
+            "started_at": status["last_start"],
+            "ended_at": status["last_end"],
+            "duration": status["last_end"] - status["last_start"]
+            if status["last_start"] and status["last_end"]
+            else None,
+        }
+    elif status["last_result"]:
+        result = {
+            "status": "completed",
+            "started_at": status["last_start"],
+            "ended_at": status["last_end"],
+            "duration": status["last_end"] - status["last_start"]
+            if status["last_start"] and status["last_end"]
+            else None,
+            "result": status["last_result"],
+        }
+    else:
+        result = {"status": "idle"}
+    return result
 
-            result["game_events"] = generate_and_apply_events(max_events=3)
-        except Exception as e:
-            logger.error("Game events generation failed: %s", e)
-            result["game_events"] = {"error": str(e)}
-            result["errors"].append(f"game_events: {e}")
 
-    # Step 4: Apply game state deltas from simulation engine
-    if SIMULATION_ENGINE_AVAILABLE and game_state.game_state_v2:
-        try:
-            bridge_result = bridge_world_state_to_game_state()
-            deltas = bridge_result.get("deltas", {})
-            result["game_state_deltas"] = deltas
-            fed = game_state.game_state_v2.federation
+@app.post("/simulation/autonomous/tick")
+async def autonomous_simulation_tick():
+    """Autonomous simulation tick: fire-and-forget with background thread.
 
-            # Apply each delta with clamping
-            if "federation.morale" in deltas:
-                fed.morale = max(
-                    0.0, min(1.0, fed.morale + deltas["federation.morale"])
-                )
-            if "federation.stability" in deltas:
-                fed.stability = max(
-                    0.0, min(1.0, fed.stability + deltas["federation.stability"])
-                )
-            if "federation.technological_level" in deltas:
-                fed.technological_level = max(
-                    0.0,
-                    min(
-                        1.0,
-                        fed.technological_level
-                        + deltas["federation.technological_level"],
-                    ),
-                )
-            if "federation.military_power" in deltas:
-                fed.military_power = max(
-                    0.0,
-                    min(1.0, fed.military_power + deltas["federation.military_power"]),
-                )
-            if "federation.treasury" in deltas:
-                fed.treasury = max(0, fed.treasury + deltas["federation.treasury"])
-        except Exception as e:
-            logger.error("Game state bridge failed: %s", e)
-            result["game_state_deltas"] = {"error": str(e)}
-            result["errors"].append(f"game_state_bridge: {e}")
+    Returns HTTP 202 immediately. The tick runs in a background thread.
+    Poll /simulation/autonomous/status for results.
+    """
+    with _auto_tick_lock:
+        if _auto_tick_status["running"]:
+            return JSONResponse(
+                status_code=409,
+                content={
+                    "status": "already_running",
+                    "started_at": _auto_tick_status["last_start"],
+                },
+            )
+    tick_id = f"auto_tick_{int(time.time() * 1000)}"
+    thread = threading.Thread(target=_run_autonomous_tick_background, daemon=True)
+    thread.start()
+    return JSONResponse(
+        status_code=202,
+        content={"status": "started", "tick_id": tick_id},
+    )
 
-    try:
-        game_state.save_to_db(snapshot_type="auto")
-    except Exception:
-        logger.warning("Auto-save after autonomous tick failed")
 
+@app.get("/simulation/autonomous/status")
+async def autonomous_tick_status():
+    with _auto_tick_lock:
+        status = dict(_auto_tick_status)
+    if status["running"]:
+        result = {
+            "status": "running",
+            "started_at": status["last_start"],
+            "elapsed": time.time() - status["last_start"],
+        }
+    elif status["last_error"]:
+        result = {
+            "status": "failed",
+            "error": status["last_error"],
+            "started_at": status["last_start"],
+            "ended_at": status["last_end"],
+            "duration": status["last_end"] - status["last_start"]
+            if status["last_start"] and status["last_end"]
+            else None,
+        }
+    elif status["last_result"]:
+        result = {
+            "status": "completed",
+            "started_at": status["last_start"],
+            "ended_at": status["last_end"],
+            "duration": status["last_end"] - status["last_start"]
+            if status["last_start"] and status["last_end"]
+            else None,
+            "result": status["last_result"],
+        }
+    else:
+        result = {"status": "idle"}
     return result
 
 

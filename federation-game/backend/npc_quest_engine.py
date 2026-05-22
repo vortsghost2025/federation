@@ -363,26 +363,35 @@ class NPCQuestEngine:
         quest_id: str,
         chain_meta: Optional[Dict[str, Any]] = None,
     ) -> Tuple[bool, str]:
-        """
-        Accept a quest on behalf of an NPC and persist to Redis.
+        """Accept a quest on behalf of an NPC and persist to Redis.
+
+        Does NOT mutate the shared QuestSystem in-memory state.
+        Reads the quest template from QuestSystem.quests and writes
+        an independent copy to Redis per-NPC keys.
 
         Returns (success, message).
         """
-        success, message = self.quest_system.accept_quest(
-            char_id, quest_id, current_turn=0
-        )
-        if not success:
-            return False, message
-
         quest = self.quest_system.quests.get(quest_id)
         if quest is None:
-            return False, f"Quest {quest_id} vanished after accept"
+            return False, f"Quest '{quest_id}' not found in library"
+
+        if quest.status not in [QuestStatus.AVAILABLE, QuestStatus.LOCKED]:
+            return (
+                False,
+                f"Quest '{quest.title}' is not available (status={quest.status.value})",
+            )
 
         try:
             r = self._get_redis()
             active_key = f"npc_quests:active:{char_id}"
+
+            existing = r.hget(active_key, quest_id)
+            if existing is not None:
+                return False, f"Quest '{quest_id}' already active for NPC {char_id}"
+
             quest_dict = self._quest_to_dict(quest)
             quest_dict = self._scale_quest_for_npc(quest_dict)
+            quest_dict["status"] = QuestStatus.ACCEPTED.value
             if chain_meta:
                 quest_dict["chain_id"] = chain_meta.get("chain_id", "")
                 quest_dict["chain_position"] = chain_meta.get("chain_position", 0)
@@ -395,8 +404,11 @@ class NPCQuestEngine:
 
             progress_key = f"npc_quests:progress:{char_id}:{quest_id}"
             pipe = r.pipeline()
-            for obj in quest.objectives:
-                pipe.hset(progress_key, obj.objective_id, 0)
+            for obj_data in quest_dict.get("objectives", []):
+                obj_id = obj_data.get("objective_id", "")
+                if obj_id:
+                    pipe.hset(progress_key, obj_id, 0)
+            pipe.hset(progress_key, "_tick_count", 0)
             pipe.execute()
 
             self._init_stats(char_id)
@@ -419,7 +431,7 @@ class NPCQuestEngine:
             )
             return False, f"Redis error: {exc}"
 
-        return True, message
+        return True, f"Accepted quest: {quest.title}"
 
     def progress_quest(
         self,
@@ -511,13 +523,70 @@ class NPCQuestEngine:
 
         Returns (success, message, rewards_dict or None).
         """
-        success, message, rewards = self.quest_system.complete_quest(
-            char_id, quest_id, current_turn=0
-        )
-        if not success:
-            return False, message, None
+        quest_data = None
+        try:
+            r = self._get_redis()
+            active_key = f"npc_quests:active:{char_id}"
+            quest_json = r.hget(active_key, quest_id)
+            if not quest_json:
+                return (
+                    False,
+                    f"Quest '{quest_id}' not found in active quests for {char_id}",
+                    None,
+                )
+            quest_data = json.loads(quest_json)
+        except redis.RedisError as exc:
+            logger.error(
+                "Redis error reading quest %s for %s: %s", quest_id, char_id, exc
+            )
+            return False, f"Redis error reading quest", None
+        except (json.JSONDecodeError, TypeError) as exc:
+            logger.error(
+                "Data error reading quest %s for %s: %s", quest_id, char_id, exc
+            )
+            return False, f"Data error reading quest", None
 
-        rewards_dict = rewards.to_dict() if rewards else {}
+        if quest_data.get("status") != QuestStatus.ACCEPTED.value:
+            return (
+                False,
+                f"Quest is not in progress (status={quest_data.get('status')})",
+                None,
+            )
+
+        all_mandatory_complete = True
+        incomplete_names = []
+        for obj_data in quest_data.get("objectives", []):
+            if not obj_data.get("optional", False):
+                current = int(obj_data.get("current_progress", 0))
+                target = obj_data.get("target", 1)
+                if current < target:
+                    all_mandatory_complete = False
+                    incomplete_names.append(
+                        obj_data.get(
+                            "description", obj_data.get("objective_id", "unknown")
+                        )
+                    )
+
+        if not all_mandatory_complete:
+            return (
+                False,
+                f"Cannot complete quest. Incomplete objectives: {', '.join(incomplete_names)}",
+                None,
+            )
+
+        quest_rewards_raw = quest_data.get("rewards", {})
+        rewards = QuestReward(
+            resources=int(quest_rewards_raw.get("resources", 0)),
+            reputation=float(quest_rewards_raw.get("reputation", 0.0)),
+            morale_boost=float(quest_rewards_raw.get("morale_boost", 0.0)),
+            stability_boost=float(quest_rewards_raw.get("stability_boost", 0.0)),
+            tech_points=int(quest_rewards_raw.get("tech_points", 0)),
+            unlocked_quests=quest_rewards_raw.get("unlocked_quests", []),
+            unlocked_features=quest_rewards_raw.get("unlocked_features", []),
+            special_rewards=quest_rewards_raw.get("special_rewards", {}),
+        )
+
+        rewards_dict = rewards.to_dict()
 
         try:
             r = self._get_redis()
@@ -525,11 +594,11 @@ class NPCQuestEngine:
             completed_key = f"npc_quests:completed:{char_id}"
             progress_key = f"npc_quests:progress:{char_id}:{quest_id}"
 
-            quest_json = r.hget(active_key, quest_id)
-            if quest_json:
-                r.lpush(completed_key, quest_json)
-                r.hdel(active_key, quest_id)
-
+            quest_data["status"] = QuestStatus.COMPLETED.value
+            completed_json = json.dumps(quest_data, default=str)
+            r.lpush(completed_key, completed_json)
+            r.hdel(active_key, quest_id)
+    
             r.delete(progress_key)
 
             if rewards:
@@ -554,16 +623,7 @@ class NPCQuestEngine:
 
             logger.info("NPC %s completed quest %s", char_id, quest_id)
 
-            stored_quest_data = None
-            if quest_json:
-                try:
-                    stored_quest_data = json.loads(quest_json)
-                except (json.JSONDecodeError, TypeError):
-                    stored_quest_data = None
-
-            chain_id = ""
-            if stored_quest_data and isinstance(stored_quest_data, dict):
-                chain_id = stored_quest_data.get("chain_id", "")
+            chain_id = quest_data.get("chain_id", "") if quest_data else ""
 
             chain_key = quest_id
             if chain_id:
@@ -673,8 +733,10 @@ class NPCQuestEngine:
             logger.error(
                 "Redis error completing quest %s for %s: %s", quest_id, char_id, exc
             )
+            return False, f"Redis error completing quest", None
 
-        return True, message, rewards_dict
+        quest_title = quest_data.get("title", quest_id) if quest_data else quest_id
+        return True, f"Quest completed: {quest_title}!", rewards_dict
 
     def abandon_quest(
         self, char_id: str, quest_id: str, reason: str = "timeout"
@@ -684,23 +746,34 @@ class NPCQuestEngine:
 
         Returns (success, message).
         """
-        success, message = self.quest_system.abandon_quest(
-            char_id, quest_id, current_turn=0
-        )
-        if not success:
-            return False, message
-
+        quest_title = quest_id
         try:
             r = self._get_redis()
             active_key = f"npc_quests:active:{char_id}"
+            quest_json = r.hget(active_key, quest_id)
+            if not quest_json:
+                return (
+                    False,
+                    f"Quest '{quest_id}' not found in active quests for {char_id}",
+                )
+
+            quest_data = json.loads(quest_json)
+            quest_title = quest_data.get("title", quest_id)
+
+            if quest_data.get("status") != QuestStatus.ACCEPTED.value:
+                return (
+                    False,
+                    f"Quest '{quest_title}' is not in progress (status={quest_data.get('status')})",
+                )
+
+            quest_data["status"] = QuestStatus.ABANDONED.value
+            updated_json = json.dumps(quest_data)
+
             failed_key = f"npc_quests:failed:{char_id}"
             progress_key = f"npc_quests:progress:{char_id}:{quest_id}"
 
-            quest_json = r.hget(active_key, quest_id)
-            if quest_json:
-                r.lpush(failed_key, quest_json)
-                r.hdel(active_key, quest_id)
-
+            r.lpush(failed_key, updated_json)
+            r.hdel(active_key, quest_id)
             r.delete(progress_key)
 
             self._incr_stat(char_id, "quests_failed")
@@ -722,7 +795,7 @@ class NPCQuestEngine:
                 "Redis error abandoning quest %s for %s: %s", quest_id, char_id, exc
             )
 
-        return True, message
+        return True, f"Abandoned quest: {quest_title}"
 
     def tick_npc_quests(self, npc_list: List[Dict[str, Any]]) -> Dict[str, int]:
         """

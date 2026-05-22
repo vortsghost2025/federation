@@ -9,6 +9,7 @@ import logging
 import random
 import time
 from typing import Dict, List, Optional, Any
+from nvidia_nim_client import _run_async
 
 logger = logging.getLogger(__name__)
 
@@ -346,11 +347,13 @@ class FactionDiplomacyEngine:
                 f"Be specific about what this means for the factions involved. "
                 f"No preamble, no quotes, just the announcement."
             )
-            response = self.nim_client.call(
-                system_prompt="You are a Federation news announcer. Write brief, formal announcements.",
-                user_prompt=prompt,
-                max_tokens=120,
-                temperature=0.8,
+            response = _run_async(
+                self.nim_client.call(
+                    system_prompt="You are a Federation news announcer. Write brief, formal announcements.",
+                    user_prompt=prompt,
+                    max_tokens=120,
+                    temperature=0.8,
+                )
             )
             if response and len(response.strip()) > 10:
                 cleaned = response.strip()
@@ -427,7 +430,7 @@ def _get_diplomacy_engine(redis_client=None):
     global _diplomacy_engine
     if _diplomacy_engine is None:
         try:
-            from nvidia_nim_client import get_nim_client
+            from nvidia_nim_client import get_nim_client, _run_async
 
             nim = get_nim_client()
         except Exception:

@@ -121,10 +121,12 @@ def _call_llm(
     # Priority 1: NVIDIA NIM (free, fast, returns proper content field)
     if LLM_USE_NIM:
         try:
-            from nvidia_nim_client import get_nim_client
+            from nvidia_nim_client import get_nim_client, _run_async
 
-            result = get_nim_client().call(
-                system_prompt, user_prompt, max_tokens, temperature
+            result = _run_async(
+                get_nim_client().call(
+                    system_prompt, user_prompt, max_tokens, temperature
+                )
             )
             if result:
                 result = _clean_llm_output(result)
