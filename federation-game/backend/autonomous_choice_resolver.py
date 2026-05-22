@@ -675,10 +675,12 @@ class AutonomousChoiceResolver:
         )
 
         try:
-            from nvidia_nim_client import get_nim_client
+            from nvidia_nim_client import get_nim_client, _run_async
 
-            raw = get_nim_client().call(
-                system_prompt, user_prompt, max_tokens=100, temperature=0.7
+            raw = _run_async(
+                get_nim_client().call(
+                    system_prompt, user_prompt, max_tokens=100, temperature=0.7
+                )
             )
             cleaned = _clean_justification(raw)
             if cleaned:

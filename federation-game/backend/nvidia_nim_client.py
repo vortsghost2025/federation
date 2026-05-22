@@ -16,10 +16,13 @@ Architecture:
   npc_autonomy._call_llm() -> NimClient.call() -> OpenAI SDK -> NVIDIA NIM
 """
 
+import asyncio
 import logging
 import os
 import time
 from typing import Dict, List, Optional
+
+import httpx
 
 logger = logging.getLogger(__name__)
 
@@ -94,7 +97,15 @@ MAX_CALLS_PER_KEY_PER_MINUTE = 15
 class _KeyState:
     """Track rate-limit state for a single API key."""
 
-    __slots__ = ("key", "last_used", "call_count", "cooldown_until", "errors")
+    __slots__ = (
+        "key",
+        "last_used",
+        "call_count",
+        "cooldown_until",
+        "errors",
+        "consecutive_failures",
+        "circuit_break_until",
+    )
 
     def __init__(self, key: str):
         self.key = key
@@ -102,10 +113,17 @@ class _KeyState:
         self.call_count: int = 0
         self.cooldown_until: float = 0.0
         self.errors: int = 0
+        self.consecutive_failures: int = 0
+        self.circuit_break_until: float = 0.0
+
+    CIRCUIT_BREAKER_THRESHOLD = 3
+    CIRCUIT_BREAKER_SECONDS = 60
 
     def is_available(self) -> bool:
         now = time.time()
         if now < self.cooldown_until:
+            return False
+        if now < self.circuit_break_until:
             return False
         if now - self.last_used > 60:
             self.call_count = 0
@@ -125,6 +143,18 @@ class _KeyState:
 
     def mark_error(self) -> None:
         self.errors += 1
+        self.consecutive_failures += 1
+        if self.consecutive_failures >= self.CIRCUIT_BREAKER_THRESHOLD:
+            self.circuit_break_until = time.time() + self.CIRCUIT_BREAKER_SECONDS
+            logger.warning(
+                "NIM key %s... circuit breaker tripped (%d consecutive failures), blocking %ds",
+                self.key[:12],
+                self.consecutive_failures,
+                self.CIRCUIT_BREAKER_SECONDS,
+            )
+
+    def mark_success(self) -> None:
+        self.consecutive_failures = 0
 
     def reset_cycle(self) -> None:
         self.call_count = 0
@@ -161,14 +191,15 @@ class NimClient:
             logger.warning("NimClient: No NIM API keys configured")
 
     def _get_openai_client(self, api_key: str):
-        """Lazy-create an OpenAI client for a given key."""
         if api_key not in self._openai_clients:
             try:
-                from openai import OpenAI
+                from openai import AsyncOpenAI
 
-                self._openai_clients[api_key] = OpenAI(
+                self._openai_clients[api_key] = AsyncOpenAI(
                     base_url=NIM_BASE_URL,
                     api_key=api_key,
+                    timeout=httpx.Timeout(15.0, connect=5.0),
+                    max_retries=2,
                 )
             except ImportError:
                 logger.error("openai package not installed")
@@ -205,19 +236,15 @@ class NimClient:
         logger.warning("NimClient: All keys rate-limited or exhausted")
         return None
 
-    def call(
+    async def call(
         self,
         system_prompt: str,
         user_prompt: str,
         max_tokens: int = 80,
         temperature: float = 0.8,
-    ) -> str:
-        """Call the LLM with automatic key rotation and model fallback.
-
-        Returns the generated text string, or "" if all attempts fail.
-        """
+    ) -> Optional[str]:
         if not self.keys:
-            return ""
+            return None
 
         messages = [
             {"role": "system", "content": system_prompt},
@@ -230,7 +257,6 @@ class NimClient:
             mt = min(max_tokens, model_cfg["max_tokens_default"])
             tp = model_cfg.get("top_p_default", 0.9)
 
-            # Try up to 2 keys per model
             for _attempt in range(2):
                 ks = self._next_available_key()
                 if ks is None:
@@ -241,24 +267,27 @@ class NimClient:
                     continue
 
                 try:
-                    resp = client.chat.completions.create(
-                        model=model_id,
-                        messages=messages,
-                        max_tokens=mt,
-                        temperature=temperature,
-                        top_p=tp,
-                        stream=False,
-                        timeout=timeout,
+                    resp = await asyncio.wait_for(
+                        client.chat.completions.create(
+                            model=model_id,
+                            messages=messages,
+                            max_tokens=mt,
+                            temperature=temperature,
+                            top_p=tp,
+                            stream=False,
+                            timeout=timeout,
+                        ),
+                        timeout=20.0,
                     )
 
                     ks.mark_used()
+                    ks.mark_success()
                     self._cycle_calls += 1
                     self._total_calls += 1
 
                     msg = resp.choices[0].message
                     content = msg.content
 
-                    # Thinking model fallback: extract from reasoning_content
                     if (
                         not content
                         and hasattr(msg, "reasoning_content")
@@ -272,14 +301,14 @@ class NimClient:
                         ]
                         if sentences:
                             content = sentences[-1]
-                            if content.startswith(
-                                ("The user", "So we", "Let me", "We need")
-                            ):
-                                content = (
-                                    ". ".join(sentences[-2:])
-                                    if len(sentences) >= 2
-                                    else sentences[-1]
-                                )
+                        if content.startswith(
+                            ("The user", "So we", "Let me", "We need")
+                        ):
+                            content = (
+                                ". ".join(sentences[-2:])
+                                if len(sentences) >= 2
+                                else sentences[-1]
+                            )
 
                     if content:
                         content = content.strip().strip('"').strip("'")
@@ -295,6 +324,11 @@ class NimClient:
 
                     logger.debug("NimClient: %s returned empty content", model_id)
 
+                except asyncio.TimeoutError:
+                    ks.mark_error()
+                    logger.warning("NimClient: %s call timed out (20s limit)", model_id)
+                    self._total_failures += 1
+
                 except Exception as exc:
                     exc_str = str(exc).lower()
                     ks.mark_error()
@@ -304,9 +338,9 @@ class NimClient:
                         logger.warning("NimClient: %s timed out", model_id)
                     else:
                         logger.warning("NimClient: %s error: %s", model_id, exc)
+                    self._total_failures += 1
 
-        self._total_failures += 1
-        return ""
+        return None
 
     def get_stats(self) -> Dict:
         """Return usage statistics."""
@@ -333,3 +367,25 @@ def get_nim_client() -> NimClient:
     if _client is None:
         _client = NimClient()
     return _client
+
+
+def _run_async(coro):
+    """Run an async coroutine from sync context safely.
+
+    If an event loop is already running (e.g. inside FastAPI),
+    runs the coroutine in a separate thread to avoid blocking.
+    Otherwise, uses asyncio.run() directly.
+    """
+    import asyncio
+
+    try:
+        loop = asyncio.get_running_loop()
+    except RuntimeError:
+        loop = None
+    if loop and loop.is_running():
+        import concurrent.futures
+
+        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+            return pool.submit(asyncio.run, coro).result()
+    else:
+        return asyncio.run(coro)

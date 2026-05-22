@@ -268,6 +268,57 @@ def _safe_json(resp, name):
         return None
 
 
+CONNECTION_TIMEOUT = 10
+
+
+def _call_endpoint(path, name, read_timeout, retries=1, retry_delay=5):
+    """Call a backend endpoint with connection/read timeout split,
+    retry on timeout, and error categorization.
+    Returns (resp, error_category) where error_category is one of:
+      None        — success
+      'timeout'   — request timed out (after retries)
+      'unreachable' — backend not accepting connections
+      'server_error' — backend returned 5xx
+      'client_error' — backend returned 4xx
+    """
+    last_category = None
+    for attempt in range(1 + retries):
+        try:
+            resp = requests.post(
+                f"{BACKEND_URL}{path}",
+                json={},
+                timeout=(CONNECTION_TIMEOUT, read_timeout),
+            )
+            status = resp.status_code
+            if status >= 500:
+                return resp, "server_error"
+            elif status == 409:
+                # Conflict (already running) — let caller decide
+                return resp, None
+            elif status >= 400:
+                return resp, "client_error"
+            return resp, None
+        except requests.exceptions.ConnectionError:
+            last_category = "unreachable"
+            if attempt < retries:
+                log.warning(
+                    f"  {name}: backend unreachable, retrying in {retry_delay}s..."
+                )
+                time.sleep(retry_delay)
+        except requests.exceptions.Timeout:
+            last_category = "timeout"
+            if attempt < retries:
+                log.warning(
+                    f"  {name}: timeout ({read_timeout}s read), retrying in {retry_delay}s..."
+                )
+                time.sleep(retry_delay)
+        except Exception as e:
+            last_category = "unexpected"
+            log.error(f"  {name}: unexpected error — {e}")
+            return None, last_category
+    return None, last_category
+
+
 def run_tick():
     """Execute one game tick: advance NPC, political, and
     history-arc systems."""
@@ -278,52 +329,60 @@ def run_tick():
     history_data = {}
     political_data = []
 
+    # Fire-and-forget endpoints return 202 immediately (background thread)
+    # Sync endpoints still block until done
     endpoints = [
-        ("/npcs/advance-turn", "NPC system", 60),
-        ("/simulation/tick", "NPC autonomy", 45),
-        ("/political/process-turn", "Political engine", 30),
-        ("/history-arc/advance", "History arc", 30),
-        ("/simulation/autonomous/tick", "Autonomous simulation", 120),
-        ("/cognition/tick", "LLM cognition", 60),
-        ("/narrator/generate", "Narrator", 45),
+        ("/npcs/advance-turn", "NPC system", 120, False),
+        ("/simulation/tick", "NPC autonomy", 15, True),
+        ("/political/process-turn", "Political engine", 60, False),
+        ("/history-arc/advance", "History arc", 60, False),
+        ("/simulation/autonomous/tick", "Autonomous simulation", 15, True),
+        ("/cognition/tick", "LLM cognition", 120, False),
+        ("/narrator/generate", "Narrator", 90, False),
     ]
 
-    for path, name, timeout_s in endpoints:
-        try:
-            resp = requests.post(
-                f"{BACKEND_URL}{path}",
-                json={},
-                timeout=timeout_s,
-            )
+    for path, name, read_timeout, is_async in endpoints:
+        resp, err = _call_endpoint(path, name, read_timeout)
+        if err is None:
             status = resp.status_code
+            if is_async and status == 202:
+                # Fire-and-forget: backend started the tick in background
+                log.info(f" {name}: 202 (started in background)")
+                continue
+            if is_async and status == 409:
+                # Already running from previous tick
+                log.info(f" {name}: 409 (already running)")
+                continue
             log.info(f" {name}: {status}")
-            if status == 200:
-                data = _safe_json(resp, name)
-                if data is not None:
-                    if path == "/history-arc/advance":
-                        history_data = data
-                    elif path == "/political/process-turn":
-                        political_data = data.get("details") or []
-            elif status >= 400:
-                log.warning(f" {name} error {status}: {resp.text[:100]}")
-
-        except requests.exceptions.ConnectionError:
-            log.error(f" {name}: backend unreachable")
-        except requests.exceptions.Timeout:
-            log.error(f" {name}: timeout ({timeout_s}s)")
-        except Exception as e:
-            log.error(f" {name}: {e}")
+            data = _safe_json(resp, name)
+            if data is not None:
+                if path == "/history-arc/advance":
+                    history_data = data
+                if path == "/political/process-turn":
+                    political_data = data.get("details") or []
+        elif err == "timeout":
+            log.error(f" {name}: TIMEOUT after {read_timeout}s read (+ 1 retry)")
+        elif err == "unreachable":
+            log.error(f" {name}: BACKEND UNREACHABLE (connection refused)")
+        elif err == "server_error":
+            log.error(f" {name}: BACKEND ERROR {resp.status_code} — {resp.text[:120]}")
+        elif err == "client_error":
+            log.warning(f" {name}: client error {resp.status_code} — {resp.text[:120]}")
+        else:
+            log.error(f" {name}: failed ({err})")
 
     # ── Auto-save ──────────────────────────────────────
-    try:
-        resp = requests.post(
-            f"{BACKEND_URL}/state/save",
-            json={"snapshot_type": "auto"},
-            timeout=10,
-        )
+    resp, err = _call_endpoint("/state/save", "Auto-save", 30, retries=0)
+    if err is None:
         log.info(f"  Auto-save: {resp.status_code}")
-    except Exception as e:
-        log.warning(f"  Auto-save failed: {e}")
+    elif err == "timeout":
+        log.error(f"  Auto-save: TIMEOUT after 30s read")
+    elif err == "unreachable":
+        log.error(f"  Auto-save: BACKEND UNREACHABLE")
+    elif err == "server_error":
+        log.error(f"  Auto-save: BACKEND ERROR {resp.status_code}")
+    else:
+        log.warning(f"  Auto-save failed: {err}")
 
     # ── Publish tick to Redis ──────────────────────────
     try:
