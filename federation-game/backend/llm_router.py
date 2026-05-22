@@ -78,6 +78,104 @@ NIM_RATE_LIMIT_WINDOW = 60  # seconds
 OPENROUTER_API_KEY = os.environ.get("OPENROUTER_API_KEY", "")
 OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1/chat/completions"
 
+# ── Ollama (Local GPU via Tailscale) ──────────────────────────────────
+OLLAMA_BASE_URL = os.environ.get("OLLAMA_BASE_URL", "http://100.95.92.117:11434/v1")
+OLLAMA_MODEL = os.environ.get("OLLAMA_MODEL", "qwen2.5-coder:7b")
+OLLAMA_TIMEOUT = int(os.environ.get("OLLAMA_TIMEOUT", "15"))
+_ollama_available: Optional[bool] = None  # None = not checked yet
+_ollama_last_check: float = 0.0
+OLLAMA_CHECK_INTERVAL = 60.0  # re-check availability every 60s
+
+_ollama_calls = 0
+_ollama_failures = 0
+
+
+def _check_ollama_available() -> bool:
+    """Check if Ollama is reachable. Caches result for OLLAMA_CHECK_INTERVAL seconds."""
+    global _ollama_available, _ollama_last_check
+    now = time.time()
+    if (
+        _ollama_available is not None
+        and (now - _ollama_last_check) < OLLAMA_CHECK_INTERVAL
+    ):
+        return _ollama_available
+    try:
+        base = OLLAMA_BASE_URL.replace("/v1", "")
+        req = urllib.request.Request(f"{base}/api/tags", method="GET")
+        with urllib.request.urlopen(req, timeout=3) as resp:
+            data = json.loads(resp.read().decode("utf-8"))
+            models = [m.get("name", "") for m in data.get("models", [])]
+            if any(OLLAMA_MODEL in m for m in models):
+                _ollama_available = True
+            else:
+                logger.warning(
+                    "Ollama reachable but model %s not found (available: %s)",
+                    OLLAMA_MODEL,
+                    models[:5],
+                )
+                _ollama_available = False
+    except Exception as e:
+        logger.debug("Ollama not reachable at %s: %s", OLLAMA_BASE_URL, e)
+        _ollama_available = False
+    _ollama_last_check = now
+    return _ollama_available
+
+
+def _call_ollama(
+    messages: List[Dict],
+    max_tokens: int = 200,
+    temperature: float = 0.8,
+) -> Tuple[bool, str, float]:
+    """Call Ollama via OpenAI-compatible API. Returns (success, content, latency_ms)."""
+    global _ollama_calls, _ollama_failures
+    if not _check_ollama_available():
+        return False, "Ollama not available", 0
+
+    payload = json.dumps(
+        {
+            "model": OLLAMA_MODEL,
+            "messages": messages,
+            "max_tokens": max_tokens,
+            "temperature": temperature,
+            "stream": False,
+        }
+    ).encode("utf-8")
+
+    headers = {"Content-Type": "application/json"}
+    req = urllib.request.Request(
+        f"{OLLAMA_BASE_URL}/chat/completions",
+        data=payload,
+        headers=headers,
+        method="POST",
+    )
+    start = time.time()
+    try:
+        with urllib.request.urlopen(req, timeout=OLLAMA_TIMEOUT) as resp:
+            body = json.loads(resp.read().decode("utf-8"))
+            _ollama_calls += 1
+            choices = body.get("choices") or [{}]
+            message = choices[0].get("message") or {}
+            content = message.get("content") or ""
+            if not isinstance(content, str):
+                content = str(content)
+            latency_ms = (time.time() - start) * 1000
+            _record_call("ollama", None, OLLAMA_MODEL, "", True, latency_ms)
+            _record_provider_result("ollama", True)
+            return True, content.strip(), latency_ms
+    except Exception as e:
+        _ollama_calls += 1
+        _ollama_failures += 1
+        latency_ms = (time.time() - start) * 1000
+        err_msg = f"Ollama error: {str(e)[:200]}"
+        logger.debug(err_msg)
+        _record_call("ollama", None, OLLAMA_MODEL, "", False, latency_ms, err_msg)
+        _record_provider_result("ollama", False)
+        # Mark unavailable so we don't retry immediately
+        global _ollama_available
+        _ollama_available = False
+        return False, err_msg, latency_ms
+
+
 # Circuit breaker — if a provider fails N times in a window, skip it
 CIRCUIT_BREAKER_THRESHOLD = 3  # consecutive failures to trip
 CIRCUIT_BREAKER_WINDOW = 300  # seconds (5 min)
@@ -574,6 +672,37 @@ def route_call(
         {"role": "user", "content": user_prompt},
     ]
 
+    # Tier 0: Local Ollama (cheap, fast, unlimited) — try first if available
+    # Use primary tier's max_tokens/temperature as defaults for Ollama
+    primary_config = config.get("primary", {})
+    ollama_mt = (
+        max_tokens if max_tokens is not None else primary_config.get("max_tokens", 200)
+    )
+    ollama_temp = (
+        temperature
+        if temperature is not None
+        else primary_config.get("temperature", 0.8)
+    )
+
+    if _check_ollama_available() and not _is_circuit_open("ollama"):
+        result["attempts"] += 1
+        ok, content, latency = _call_ollama(messages, ollama_mt, ollama_temp)
+        if ok and content:
+            result["success"] = True
+            result["content"] = content
+            result["provider"] = "ollama"
+            result["model"] = OLLAMA_MODEL
+            result["latency_ms"] = latency
+            return result
+        else:
+            result["errors"].append(f"ollama/{OLLAMA_MODEL}: {content[:150]}")
+            result["latency_ms"] += latency
+            logger.debug(
+                "Ollama tier failed for %s, falling back to NIM: %s",
+                task_class,
+                content[:80],
+            )
+
     # Try each tier: primary → fallback_nim → fallback_openrouter
     for tier_name in ("primary", "fallback_nim", "fallback_openrouter"):
         tier_config = config.get(tier_name)
@@ -680,13 +809,16 @@ def get_router_stats() -> Dict:
     stats = {
         "nim_keys_available": len(NIM_KEYS),
         "openrouter_configured": bool(OPENROUTER_API_KEY),
+        "ollama_available": _check_ollama_available(),
+        "ollama_calls": _ollama_calls,
+        "ollama_failures": _ollama_failures,
         "task_classes": list(TASK_MODELS.keys()),
         "recent_calls": {},
         "recent_errors": {},
     }
 
     # Count recent calls per provider (last 60s)
-    for provider in ("nim", "openrouter"):
+    for provider in ("nim", "openrouter", "ollama"):
         try:
             if provider == "nim":
                 total = 0
@@ -696,6 +828,10 @@ def get_router_stats() -> Dict:
                     r.zremrangebyscore(counter_key, 0, now - 60)
                     total += r.zcard(counter_key)
                 stats["recent_calls"]["nim"] = total
+            elif provider == "ollama":
+                counter_key = "llm_call_log:ollama"
+                r.zremrangebyscore(counter_key, 0, now - 60)
+                stats["recent_calls"]["ollama"] = r.zcard(counter_key)
             else:
                 counter_key = "llm_call_log:openrouter"
                 r.zremrangebyscore(counter_key, 0, now - 60)
@@ -704,7 +840,7 @@ def get_router_stats() -> Dict:
             stats["recent_calls"][provider] = -1
 
     # Recent errors
-    for provider in ("nim", "openrouter"):
+    for provider in ("nim", "openrouter", "ollama"):
         try:
             errors = r.zrevrange(f"llm_errors:{provider}", 0, 4)
             stats["recent_errors"][provider] = len(errors)

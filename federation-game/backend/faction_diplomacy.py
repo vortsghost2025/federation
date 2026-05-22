@@ -357,6 +357,7 @@ class FactionDiplomacyEngine:
                     user_prompt=prompt,
                     max_tokens=120,
                     temperature=0.8,
+                    priority="cloud",
                 )
             )
             if response and len(response.strip()) > 10:
