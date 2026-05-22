@@ -1541,7 +1541,7 @@ def build_creatures() -> List[Creature]:
 # ============================================================================
 
 
-def build_npc_system() -> NPCSystem:
+def build_npc_system(redis_client=None) -> NPCSystem:
     """Factory function to build the complete NPC system"""
     system = NPCSystem()
 
@@ -1557,6 +1557,24 @@ def build_npc_system() -> NPCSystem:
     for char in all_characters:
         system.register_character(char)
 
+    # Load NPC relationships from Redis if available
+    if redis_client is not None:
+        try:
+            for char_id, char in system.characters.items():
+                rkey = f"npc_relationships:{char_id}"
+                raw = redis_client.hgetall(rkey)
+                if raw:
+                    char.relationship_to_other_characters = {
+                        k.decode() if isinstance(k, bytes) else k: float(v)
+                        for k, v in raw.items()
+                    }
+        except Exception as exc:
+            import logging
+
+            logging.getLogger(__name__).warning(
+                "build_npc_system relationship load failed: %s", exc
+            )
+
     # Register companions
     companions = build_companion_candidates()
     for comp in companions:
@@ -1571,10 +1589,14 @@ def build_npc_system() -> NPCSystem:
 
 
 def persist_npc_traits_to_redis(redis_client, npc_system) -> int:
-    """Write all NPC personality traits to Redis HASHes for persistence.
+    """Write all NPC personality traits and relationships to Redis HASHes for persistence.
 
     For each NPC, writes a HASH to key ``npc_traits:{char_id}`` with fields:
     loyalty, ambition, wisdom, charisma, cunning (float strings).
+
+    For each NPC, writes a HASH to key ``npc_relationships:{char_id}`` with fields:
+    target_char_id -> float string (0-100 scale).
+
     Keys expire after 7 days (604800 seconds).
 
     Returns:
@@ -1590,6 +1612,16 @@ def persist_npc_traits_to_redis(redis_client, npc_system) -> int:
             mapping = {field: str(getattr(char, field)) for field in TRAIT_FIELDS}
             pipe.hset(key, mapping=mapping)
             pipe.expire(key, TTL_SECONDS)
+
+            if char.relationship_to_other_characters:
+                rkey = f"npc_relationships:{char_id}"
+                rmap = {
+                    tid: str(val)
+                    for tid, val in char.relationship_to_other_characters.items()
+                }
+                pipe.hset(rkey, mapping=rmap)
+                pipe.expire(rkey, TTL_SECONDS)
+
             count += 1
         pipe.execute()
     except Exception as exc:
