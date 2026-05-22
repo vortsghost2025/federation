@@ -52,9 +52,29 @@ if not logger.handlers:
 
 MAX_LOG_ENTRIES = 200
 MAX_ACTIVE_QUESTS_PER_NPC = 3
-MAX_QUEST_AGE_TICKS = 15
-ABANDON_CHANCE = 0.30
+MAX_QUEST_AGE_TICKS = 50
+ABANDON_CHANCE = 0.10
 SETBACK_CHANCE = 0.05
+MAX_QUEST_AGE_HARD_CAP = 80
+NPC_OBJECTIVE_SCALE = (
+    0.1  # NPCs get 10% of original targets (designed for interactive, not 1/tick)
+)
+
+# Skill-to-faction keyword mapping for proper cross-referencing
+SKILL_FACTION_KEYWORDS: Dict[str, List[str]] = {
+    "diplomacy": ["diplomatic", "diplomacy"],
+    "negotiation": ["diplomatic", "negotiation"],
+    "military": ["military"],
+    "tactics": ["military"],
+    "research": ["research", "scientific"],
+    "technology": ["research", "technological"],
+    "culture": ["cultural"],
+    "consciousness": ["consciousness"],
+    "prophecy": ["prophecy"],
+    "exploration": ["discovery", "exploration"],
+    "economics": ["economic"],
+    "preservation": ["stability", "preservation"],
+}
 
 PERSONALITY_OBJECTIVE_MAP: Dict[str, List[ObjectiveType]] = {
     "strategist": [ObjectiveType.DIPLOMATIC, ObjectiveType.ECONOMIC],
@@ -196,6 +216,19 @@ class NPCQuestEngine:
         scored.sort(key=lambda t: t[0], reverse=True)
         return scored[0][1] if scored else None
 
+    def _scale_quest_for_npc(self, quest_data: Dict) -> Dict:
+        """Scale objective targets down for autonomous NPC progression.
+
+        The quest library was designed for interactive gameplay with high targets
+        (75, 100, 1000, 5000). NPCs progress ~1-2 per tick, so these are
+        impossible within MAX_QUEST_AGE_TICKS. Scale by NPC_OBJECTIVE_SCALE.
+        """
+        for obj in quest_data.get("objectives", []):
+            original_target = obj.get("target", 1)
+            if original_target > 5:
+                obj["target"] = max(3, int(original_target * NPC_OBJECTIVE_SCALE))
+        return quest_data
+
     def accept_quest(self, char_id: str, quest_id: str) -> Tuple[bool, str]:
         """
         Accept a quest on behalf of an NPC and persist to Redis.
@@ -215,7 +248,9 @@ class NPCQuestEngine:
         try:
             r = self._get_redis()
             active_key = f"npc_quests:active:{char_id}"
-            quest_json = json.dumps(self._quest_to_dict(quest), default=str)
+            quest_dict = self._quest_to_dict(quest)
+            quest_dict = self._scale_quest_for_npc(quest_dict)
+            quest_json = json.dumps(quest_dict, default=str)
 
             r.hset(active_key, quest_id, quest_json)
 
@@ -513,44 +548,68 @@ class NPCQuestEngine:
                             summary["quests_abandoned"] += 1
                             continue
 
-                    # Setback check
-                    if random.random() < SETBACK_CHANCE:
+                    # Hard age cap — force resolve quests that survived soft timeout too long
+                    if tick_count > MAX_QUEST_AGE_HARD_CAP:
+                        # Check if all mandatory objectives are done for auto-complete
+                        all_done = True
+                        for obj_data in quest_data.get("objectives", []):
+                            if not obj_data.get("optional", False):
+                                if int(
+                                    obj_data.get("current_progress", 0)
+                                ) < obj_data.get("target", 1):
+                                    all_done = False
+                                    break
+                        if all_done:
+                            self.complete_quest(char_id, qid)
+                            summary["quests_completed"] += 1
+                        else:
+                            self.abandon_quest(char_id, qid, reason="max_age_exceeded")
+                            summary["quests_abandoned"] += 1
                         continue
 
-                    # Calculate progress amount
-                    progress_amount = 1
-                    quest_faction_str = (quest_data.get("faction_affiliation") or "none").lower()
-                    if any(
-                        s in quest_faction_str for s in [(sk or "").lower() for sk in skills]
-                    ):
-                        progress_amount += 1
+                        # Setback check
+                        if random.random() < SETBACK_CHANCE:
+                            continue
 
-                    # Ambition bonus: chance of extra progress proportional to ambition
-                    if ambition > 0.7 and random.random() < ambition * 0.4:
-                        progress_amount += 1
-
-                    # Progress each objective type present in the quest
-                    objective_types_seen = set()
-                    for obj_data in quest_data.get("objectives", []):
-                        obj_type_val = obj_data.get("objective_type", "")
-                        if obj_type_val and obj_type_val not in objective_types_seen:
-                            objective_types_seen.add(obj_type_val)
-                            try:
-                                obj_type = ObjectiveType(obj_type_val)
-                            except ValueError:
-                                continue
-
-                            result = self.progress_quest(
-                                char_id, qid, obj_type, progress_amount
+                        # Calculate progress amount
+                        progress_amount = 1
+                        quest_faction_str = (
+                            quest_data.get("faction_affiliation") or "none"
+                        ).lower()
+                        # Proper skill-faction keyword matching (fixes substring bug)
+                        for sk in skills or []:
+                            keywords = SKILL_FACTION_KEYWORDS.get(
+                                (sk or "").lower(), [(sk or "").lower()]
                             )
-                            if result["objectives_progressed"] > 0:
-                                summary["quests_progressed"] += 1
-
-                            # (d) Auto-complete
-                            if result["quest_completed"]:
-                                self.complete_quest(char_id, qid)
-                                summary["quests_completed"] += 1
+                            if any(kw in quest_faction_str for kw in keywords):
+                                progress_amount += 1
                                 break
+                        # Ambition bonus: chance of extra progress proportional to ambition
+                        if ambition > 0.7 and random.random() < ambition * 0.4:
+                            progress_amount += 1
+
+                        # Progress each objective type present in the quest
+                        objective_types_seen = set()
+                        for obj_data in quest_data.get("objectives", []):
+                            obj_type_val = obj_data.get("objective_type", "")
+                            if obj_type_val and obj_type_val not in objective_types_seen:
+                                objective_types_seen.add(obj_type_val)
+                                try:
+                                    obj_type = ObjectiveType(obj_type_val)
+                                except ValueError:
+                                    continue
+
+                                result = self.progress_quest(
+                                    char_id, qid, obj_type, progress_amount
+                                )
+                                if result["objectives_progressed"] > 0:
+                                    summary["quests_progressed"] += 1
+
+                                # (d) Auto-complete
+                                if result["quest_completed"]:
+                                    self.complete_quest(char_id, qid)
+                                    summary["quests_completed"] += 1
+                                    break
 
                 summary["npcs_processed"] += 1
 
