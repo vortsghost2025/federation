@@ -5529,6 +5529,19 @@ async def simulation_faction_treaties(limit: int = 50):
         return {"treaties": [], "count": 0, "error": str(e)}
 
 
+@app.get("/simulation/diplomacy-summary")
+async def simulation_diplomacy_summary():
+    """Faction diplomacy summary: active treaties, history, ideology affinities."""
+    try:
+        from faction_diplomacy import _get_diplomacy_engine
+
+        _r = _get_observer_redis()
+        engine = _get_diplomacy_engine(_r)
+        return {"status": "ok", "diplomacy": engine.get_diplomacy_summary(_r)}
+    except Exception as e:
+        return {"status": "error", "error": str(e), "diplomacy": None}
+
+
 @app.get("/simulation/nim-stats")
 async def simulation_nim_stats():
     """NVIDIA NIM LLM client usage statistics."""

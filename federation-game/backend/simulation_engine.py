@@ -24,6 +24,7 @@ from faction_dynamics import get_faction_context_for_npc, KNOWN_FACTIONS
 from npc_autonomy import _get_redis as _get_npc_redis
 from npc_quest_engine import NPCQuestEngine
 from faction_tech_research import FactionTechBridge
+from faction_diplomacy import _get_diplomacy_engine
 from faction_ai import FACTION_IDEOLOGY
 from quests import (
     create_quest_library as _create_quest_library,
@@ -1628,6 +1629,211 @@ def check_era_advancement(npc_list: List[Dict]) -> Dict:
     return result
 
 
+def evolve_npc_relationships(npc_list: List[Dict], r) -> int:
+    """Evolve NPC-to-NPC relationships based on quests, faction voting, treaties, and decay.
+
+    Steps:
+        a) Quest completion effects — same-faction bond, cross-faction hostility
+        b) Faction voting alignment — same vote = bond, different = friction
+        c) Faction stance propagation — treaties = bond, conflicts = hostility
+        d) Natural decay — all scores drift toward 50.0 (neutral)
+        e) Persistence — write to npc_relationships:{char_id} HASH via pipeline
+
+    Returns:
+        Number of relationship pairs updated.
+    """
+    if not npc_list:
+        return 0
+
+    REL_KEY_PREFIX = "npc_relationships:"
+    QUEST_KEY_PREFIX = "npc_quests:completed:"
+    DECAY_TOWARD = 50.0
+    DECAY_RATE = 0.02
+    MIN_VAL = 0.0
+    MAX_VAL = 100.0
+
+    char_ids = [n["char_id"] for n in npc_list if n.get("char_id")]
+    faction_map = {
+        n["char_id"]: n.get("affiliation", "") for n in npc_list if n.get("char_id")
+    }
+
+    existing_rels: Dict[str, Dict[str, float]] = {}
+    for cid in char_ids:
+        raw = r.hgetall(f"{REL_KEY_PREFIX}{cid}")
+        if raw:
+            existing_rels[cid] = {k: float(v) for k, v in raw.items()}
+        else:
+            existing_rels[cid] = {}
+
+    delta: Dict[str, Dict[str, float]] = {cid: {} for cid in char_ids}
+
+    # a) Quest completion effects
+    for npc in npc_list:
+        cid = npc.get("char_id", "")
+        faction = npc.get("affiliation", "")
+        if not cid:
+            continue
+        try:
+            completed_raw = r.lrange(f"{QUEST_KEY_PREFIX}{cid}", 0, 1)
+            for entry in completed_raw:
+                quest = json.loads(entry)
+                qtype = quest.get("quest_type", "")
+                qfaction = quest.get("faction_id", faction)
+                for other_cid in char_ids:
+                    if other_cid == cid:
+                        continue
+                    other_faction = faction_map.get(other_cid, "")
+                    if other_faction == qfaction:
+                        delta[cid].setdefault(other_cid, 0.0)
+                        delta[cid][other_cid] += 0.1
+                    elif qtype in ("confront_rival", "investigate"):
+                        delta[cid].setdefault(other_cid, 0.0)
+                        delta[cid][other_cid] -= 0.1
+        except (json.JSONDecodeError, TypeError):
+            pass
+
+    # b) Faction voting alignment
+    try:
+        resolutions_raw = r.zrevrange("choice_resolutions", 0, 2)
+        faction_votes_by_res: List[Dict[str, str]] = []
+        for entry in resolutions_raw:
+            res = json.loads(entry)
+            fv = res.get("faction_votes", {})
+            faction_choice: Dict[str, str] = {}
+            for fid, fdata in fv.items():
+                choice_id = (
+                    fdata.get("choice_id", "") if isinstance(fdata, dict) else ""
+                )
+                if choice_id:
+                    faction_choice[fid] = choice_id
+            if faction_choice:
+                faction_votes_by_res.append(faction_choice)
+    except (json.JSONDecodeError, TypeError):
+        faction_votes_by_res = []
+
+    processed_pairs: set = set()
+    for npc_a in npc_list:
+        cid_a = npc_a.get("char_id", "")
+        fac_a = npc_a.get("affiliation", "")
+        if not cid_a or not fac_a:
+            continue
+        for npc_b in npc_list:
+            cid_b = npc_b.get("char_id", "")
+            fac_b = npc_b.get("affiliation", "")
+            if not cid_b or not fac_b or cid_a == cid_b:
+                continue
+            pair_key = tuple(sorted([cid_a, cid_b]))
+            if pair_key in processed_pairs:
+                continue
+            processed_pairs.add(pair_key)
+            for fv_map in faction_votes_by_res:
+                choice_a = fv_map.get(fac_a)
+                choice_b = fv_map.get(fac_b)
+                if choice_a and choice_b:
+                    if choice_a == choice_b:
+                        delta[cid_a].setdefault(cid_b, 0.0)
+                        delta[cid_b].setdefault(cid_a, 0.0)
+                        delta[cid_a][cid_b] += 0.15
+                        delta[cid_b][cid_a] += 0.15
+                    else:
+                        delta[cid_a].setdefault(cid_b, 0.0)
+                        delta[cid_b].setdefault(cid_a, 0.0)
+                        delta[cid_a][cid_b] -= 0.05
+                        delta[cid_b][cid_a] -= 0.05
+
+    # c) Faction stance propagation
+    treaties_raw = r.hgetall("faction_treaties_active") or {}
+    treaty_pairs: set = set()
+    for tkey in treaties_raw:
+        parts = tkey.split(":")
+        if len(parts) >= 2:
+            treaty_pairs.add(tuple(sorted([parts[0], parts[1]])))
+
+    conflict_pairs: set = set()
+    try:
+        conflicts_raw = r.zrevrange("faction_conflicts", 0, 49)
+        for entry in conflicts_raw:
+            cdata = json.loads(entry)
+            fa = cdata.get("faction_a", "") or cdata.get("attacker", "")
+            fb = cdata.get("faction_b", "") or cdata.get("defender", "")
+            if fa and fb:
+                conflict_pairs.add(tuple(sorted([fa, fb])))
+    except (json.JSONDecodeError, TypeError):
+        pass
+
+    stance_processed: set = set()
+    for npc_a in npc_list:
+        cid_a = npc_a.get("char_id", "")
+        fac_a = npc_a.get("affiliation", "")
+        if not cid_a or not fac_a:
+            continue
+        for npc_b in npc_list:
+            cid_b = npc_b.get("char_id", "")
+            fac_b = npc_b.get("affiliation", "")
+            if not cid_b or not fac_b or cid_a == cid_b:
+                continue
+            pair_key = tuple(sorted([cid_a, cid_b]))
+            if pair_key in stance_processed:
+                continue
+            stance_processed.add(pair_key)
+            fac_pair = tuple(sorted([fac_a, fac_b]))
+            if fac_pair in treaty_pairs:
+                delta[cid_a].setdefault(cid_b, 0.0)
+                delta[cid_b].setdefault(cid_a, 0.0)
+                delta[cid_a][cid_b] += 0.05
+                delta[cid_b][cid_a] += 0.05
+            if fac_pair in conflict_pairs:
+                delta[cid_a].setdefault(cid_b, 0.0)
+                delta[cid_b].setdefault(cid_a, 0.0)
+                delta[cid_a][cid_b] -= 0.1
+                delta[cid_b][cid_a] -= 0.1
+
+    # d) Natural decay toward neutral
+    for cid in char_ids:
+        for target_id, current_val in existing_rels[cid].items():
+            if target_id not in char_ids:
+                continue
+            if current_val > DECAY_TOWARD:
+                delta[cid].setdefault(target_id, 0.0)
+                delta[cid][target_id] -= DECAY_RATE
+            elif current_val < DECAY_TOWARD:
+                delta[cid].setdefault(target_id, 0.0)
+                delta[cid][target_id] += DECAY_RATE
+
+    # e) Persistence
+    updated_pairs = 0
+    pipe = r.pipeline(transaction=False)
+    for cid in char_ids:
+        rel_key = f"{REL_KEY_PREFIX}{cid}"
+        merged = dict(existing_rels[cid])
+        has_changes = False
+        for target_id, d in delta[cid].items():
+            if target_id not in char_ids:
+                continue
+            old = merged.get(target_id, DECAY_TOWARD)
+            new_val = max(MIN_VAL, min(MAX_VAL, round(old + d, 2)))
+            if (
+                abs(new_val - DECAY_TOWARD) < 0.01
+                and target_id not in existing_rels[cid]
+            ):
+                continue
+            merged[target_id] = new_val
+            pipe.hset(rel_key, target_id, str(new_val))
+            has_changes = True
+            updated_pairs += 1
+        if has_changes:
+            pipe.expire(rel_key, 604800)
+    if updated_pairs > 0:
+        pipe.execute()
+
+    logger.info(
+        "[Relationship Evolution] Updated %d relationship pairs across %d NPCs",
+        updated_pairs,
+        len(npc_list),
+    )
+    return updated_pairs
+
+
 def autonomous_tick(npc_list: List[Dict], tick_decisions: List[Dict]) -> Dict:
     """
     THE MASTER FUNCTION. Runs all simulation subsystems in the correct
@@ -1801,6 +2007,22 @@ def autonomous_tick(npc_list: List[Dict], tick_decisions: List[Dict]) -> Dict:
         result["step7_npc_quests"] = {"errors": [str(exc)]}
         result["errors"].append(f"step7: {exc}")
 
+    # Step 7.5: Evolve NPC relationships
+    try:
+        step_start = time.time()
+        rel_count = evolve_npc_relationships(npc_list, r)
+        result["step7_5_relationship_evolution"] = {
+            "pairs_updated": rel_count,
+            "duration_ms": round((time.time() - step_start) * 1000, 1),
+        }
+        logger.info(
+            "[Tick Step 7.5] Relationship evolution: %d pairs updated", rel_count
+        )
+    except Exception as exc:
+        logger.error("Step 7.5 (relationship evolution) failed: %s", exc)
+        result["step7_5_relationship_evolution"] = {"errors": [str(exc)]}
+        result["errors"].append(f"step7_5: {exc}")
+
     # Step 8: Faction autonomous tech research
     try:
         step_start = time.time()
@@ -1830,6 +2052,23 @@ def autonomous_tick(npc_list: List[Dict], tick_decisions: List[Dict]) -> Dict:
         logger.error("Step 8 (faction tech research) failed: %s", exc)
         result["step8_faction_tech"] = {"errors": [str(exc)]}
         result["errors"].append(f"step8: {exc}")
+
+    # Step 8.5: Faction diplomacy cycle
+    try:
+        step_start = time.time()
+        diplomacy_engine = _get_diplomacy_engine(r)
+        if world_state is None:
+            world_state = _read_world_state(r)
+        result["step8_5_diplomacy"] = diplomacy_engine.run_diplomacy_cycle(
+            r, world_state
+        )
+        result["step8_5_diplomacy"]["duration_ms"] = round(
+            (time.time() - step_start) * 1000, 1
+        )
+    except Exception as exc:
+        logger.error("Step 8.5 (faction diplomacy) failed: %s", exc)
+        result["step8_5_diplomacy"] = {"errors": [str(exc)]}
+        result["errors"].append(f"step8_5: {exc}")
 
     # Step 9: Narration — generate dramatic prose summarizing this tick
     # Runs AFTER all world state changes so it can narrate what actually happened.
@@ -1911,6 +2150,12 @@ def autonomous_tick(npc_list: List[Dict], tick_decisions: List[Dict]) -> Dict:
             "techs_researching": result.get("step8_faction_tech", {}).get(
                 "research_advanced", 0
             ),
+            "diplomacy_proposals": result.get("step8_5_diplomacy", {})
+            .get("proposals", [])
+            .__len__(),
+            "diplomacy_expirations": result.get("step8_5_diplomacy", {})
+            .get("expirations", [])
+            .__len__(),
             "cognition_leaders": result.get("step1_5_cognition", {}).get(
                 "leaders_cognized", 0
             ),
