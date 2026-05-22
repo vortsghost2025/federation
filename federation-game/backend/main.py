@@ -113,7 +113,7 @@ except ImportError:
     SIMULATION_ENGINE_AVAILABLE = False
 
 try:
-    from faction_ai import run_all_factions, resolve_pending_items
+    from faction_ai import run_all_factions, resolve_pending_items, FACTION_IDEOLOGY
 
     FACTION_AI_AVAILABLE = True
 except ImportError:
@@ -4022,6 +4022,7 @@ def _run_tick_background():
                     "name": character.name,
                     "archetype": character.personality_type.value,
                     "affiliation": character.affiliation,
+                    "ideology": FACTION_IDEOLOGY.get(character.affiliation, "diplomatic") if character.affiliation else None,
                     "title": character.title,
                     "description": getattr(character, "description", ""),
                 }
