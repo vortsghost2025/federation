@@ -148,6 +148,17 @@ try:
 except ImportError:
     LLM_ROUTER_AVAILABLE = False
 
+try:
+    from npc_memory import (
+        get_memories,
+        get_memory_summary,
+        generate_reflective_summary,
+    )
+
+    NPC_MEMORY_AVAILABLE = True
+except ImportError:
+    NPC_MEMORY_AVAILABLE = False
+
 
 logger = logging.getLogger(__name__)
 app = FastAPI(title="Federation Game API", version="1.0.0")
@@ -3936,6 +3947,37 @@ async def npc_absence_report(char_id: str, player_id: str = "player_1"):
     return report
 
 
+@app.get("/npcs/{char_id}/memories")
+async def npc_memories(char_id: str, limit: int = 20, offset: int = 0):
+    if not NPC_MEMORY_AVAILABLE:
+        raise HTTPException(status_code=503, detail="NPC memory system unavailable")
+    if char_id not in game_state.npc_system.characters:
+        raise HTTPException(status_code=404, detail="Character not found")
+    memories = get_memories(char_id, limit=limit, offset=offset)
+    return {"char_id": char_id, "memories": memories, "count": len(memories)}
+
+
+@app.get("/npcs/{char_id}/memory-summary")
+async def npc_memory_summary_endpoint(char_id: str):
+    if not NPC_MEMORY_AVAILABLE:
+        raise HTTPException(status_code=503, detail="NPC memory system unavailable")
+    if char_id not in game_state.npc_system.characters:
+        raise HTTPException(status_code=404, detail="Character not found")
+    summary = get_memory_summary(char_id)
+    return {"char_id": char_id, "summary": summary}
+
+
+@app.post("/npcs/{char_id}/generate-memory-summary")
+async def npc_generate_memory_summary(char_id: str):
+    if not NPC_MEMORY_AVAILABLE:
+        raise HTTPException(status_code=503, detail="NPC memory system unavailable")
+    if char_id not in game_state.npc_system.characters:
+        raise HTTPException(status_code=404, detail="Character not found")
+    npc_name = game_state.npc_system.characters[char_id].name
+    result = generate_reflective_summary(char_id, npc_name)
+    return {"char_id": char_id, "result": result}
+
+
 @app.get("/world/events")
 async def world_events(limit: int = 10):
     events = get_world_events(limit=limit)
@@ -4539,6 +4581,48 @@ async def simulation_npc_quest_detail(char_id: str):
         return engine.get_npc_quest_summary(char_id)
     except Exception as e:
         return {"char_id": char_id, "error": str(e)}
+
+
+@app.get("/npcs/{char_id}/quest-chains")
+async def get_npc_quest_chains(char_id: str):
+    """Get quest chain progress for an NPC."""
+    try:
+        from npc_quest_engine import NPCQuestEngine
+        from quests import create_quest_library
+
+        _r = _get_observer_redis()
+        qs = create_quest_library()
+        engine = NPCQuestEngine(quest_system=qs, redis_client=_r)
+
+        pattern = f"npc_quests:chain_progress:{char_id}:*"
+        keys = [
+            k.decode() if isinstance(k, bytes) else k
+            for k in _r.scan_iter(match=pattern)
+        ]
+
+        chains = []
+        for key in keys:
+            data = _r.hgetall(key)
+            if not data:
+                continue
+            decoded = {
+                k.decode() if isinstance(k, bytes) else k: v.decode()
+                if isinstance(v, bytes)
+                else v
+                for k, v in data.items()
+            }
+            chains.append(
+                {
+                    "chain_id": decoded.get("chain_id", ""),
+                    "current_position": int(decoded.get("current_position", 0)),
+                    "total": int(decoded.get("chain_total", 0)),
+                    "status": decoded.get("status", "active"),
+                }
+            )
+
+        return {"char_id": char_id, "chains": chains}
+    except Exception as e:
+        return {"char_id": char_id, "chains": [], "error": str(e)}
 
 
 # ============================================================================
