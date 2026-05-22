@@ -48,6 +48,27 @@ DEFAULT_MODEL = "openrouter/free"
 # LLM priority: NVIDIA NIM (free, fast) -> OpenRouter (free, fallback)
 LLM_USE_NIM = True  # Toggle NIM integration
 
+# Significance gate — decision categories mapped to LLM priority
+# High: always attempt LLM call (most interesting NPC moments)
+# Medium: attempt LLM if budget available (NimClient handles cycle cap)
+# Low: skip LLM entirely, use template (routine/idle moments)
+SIGNIFICANCE_PRIORITY = {
+    "confront_rival": "high",
+    "investigate": "high",
+    "advance_goal": "high",
+    "seek_resources": "high",
+    "react_to_events": "high",
+    "self_improve": "medium",
+    "explore": "medium",
+    "political_vote": "medium",
+    "help_ally": "medium",
+    "socialize": "low",
+    "rest": "low",
+}
+
+# Categories that should skip LLM entirely (save budget for meaningful moments)
+LOW_SIGNIFICANCE_CUTOFF = "low"
+
 MAX_THOUGHTS = 10
 MAX_ACTIONS = 8
 MAX_WORLD_EVENTS = 50
@@ -160,6 +181,7 @@ def generate_thought(
     title: str,
     description: str,
     mood: str = "",
+    significance: str = "medium",
 ) -> Optional[Dict]:
     system = f"""You are {char_name}, {title}. {description}
 Archetype: {archetype}. Affiliation: {affiliation}.
@@ -173,9 +195,12 @@ Examples:
 - "Another day, another scheme. The Ambassador thinks she's clever, but I see three moves ahead."
 - "The void feels restless tonight. Something stirs in the deeper currents."""
 
-    thought_text = _call_llm(
-        system, "What is on your mind right now?", max_tokens=80, temperature=0.95
-    )
+    # Significance gate: low-priority moments skip LLM entirely (save budget)
+    thought_text = ""
+    if significance != LOW_SIGNIFICANCE_CUTOFF:
+        thought_text = _call_llm(
+            system, "What is on your mind right now?", max_tokens=80, temperature=0.95
+        )
     if not thought_text:
         template_thoughts = {
             "scholar": "The data patterns suggest something unusual is forming in the research grids...",
@@ -723,7 +748,9 @@ def simulation_tick(npc_list: List[Dict]) -> Dict[str, Any]:
                     broadcast_decision_event(decision, affiliation)
                 except Exception:
                     logger.debug("Decision broadcast failed for NPC decision event")
+                # Significance gate: prioritize LLM calls for meaningful moments
                 category = decision.get("category", "")
+                sig = SIGNIFICANCE_PRIORITY.get(category, "medium")
                 if category in (
                     "advance_goal",
                     "investigate",
@@ -739,6 +766,7 @@ def simulation_tick(npc_list: List[Dict]) -> Dict[str, Any]:
                         title,
                         description,
                         mood=new_mood,
+                        significance=sig,
                     )
                     if thought:
                         results["thoughts"].append(thought)
@@ -756,6 +784,7 @@ def simulation_tick(npc_list: List[Dict]) -> Dict[str, Any]:
                         title,
                         description,
                         mood=new_mood,
+                        significance=sig,
                     )
                     if thought:
                         results["thoughts"].append(thought)
@@ -768,6 +797,7 @@ def simulation_tick(npc_list: List[Dict]) -> Dict[str, Any]:
                         title,
                         description,
                         mood=new_mood,
+                        significance=sig,
                     )
                     if thought:
                         results["thoughts"].append(thought)
@@ -777,19 +807,20 @@ def simulation_tick(npc_list: List[Dict]) -> Dict[str, Any]:
                     )
                     if action:
                         results["actions"].append(action)
-            else:
-                if random.random() < 0.5:
-                    thought = generate_thought(
-                        char_id,
-                        char_name,
-                        archetype,
-                        affiliation,
-                        title,
-                        description,
-                        mood=new_mood,
-                    )
-                    if thought:
-                        results["thoughts"].append(thought)
+                else:
+                    if random.random() < 0.5:
+                        thought = generate_thought(
+                            char_id,
+                            char_name,
+                            archetype,
+                            affiliation,
+                            title,
+                            description,
+                            mood=new_mood,
+                            significance=sig,
+                        )
+                        if thought:
+                            results["thoughts"].append(thought)
             r = _get_redis()
             opinion_keys = list(r.scan_iter(f"npc_opinion:{char_id}:*"))
             for okey in opinion_keys[:2]:
