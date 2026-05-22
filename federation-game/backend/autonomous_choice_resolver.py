@@ -25,6 +25,45 @@ from faction_ai import FACTION_IDEOLOGY
 
 logger = logging.getLogger(__name__)
 
+_META_PREAMLES = (
+    "okay,",
+    "sure,",
+    "well,",
+    "certainly,",
+    "alright,",
+    "here",
+    "as an ai",
+    "i am",
+    "the chronicler",
+)
+_SYSTEM_LEAK_MARKERS = (
+    "system prompt",
+    "you are",
+    "instructions:",
+    "as the chronicler of",
+)
+
+
+def _clean_justification(raw: str) -> str:
+    """Strip quotes, meta-preamble words, and system-prompt leaks from LLM output."""
+    text = raw.strip()
+    if not text:
+        return ""
+    text = text.strip("\"'`")
+    lower = text.lower()
+    for prefix in _META_PREAMLES:
+        if lower.startswith(prefix):
+            idx = len(prefix)
+            while idx < len(text) and text[idx] in " ,:;-":
+                idx += 1
+            text = text[idx:]
+            lower = text.lower()
+    for marker in _SYSTEM_LEAK_MARKERS:
+        if marker in lower:
+            return ""
+    return text.strip()
+
+
 REDIS_URL = os.environ.get("REDIS_URL", "redis://redis:6379/0")
 
 _redis_client = None
@@ -567,6 +606,88 @@ class AutonomousChoiceResolver:
             "consequences_applied": consequences_applied,
         }
 
+    def _template_justification(self, resolution: Dict) -> str:
+        """Build a template fallback justification from vote data."""
+        chosen_id = resolution.get("chosen_choice_id")
+        tally = resolution.get("vote_tally", {})
+        votes = resolution.get("faction_votes", {})
+
+        if not chosen_id or not tally:
+            return "No choice was selected."
+
+        winning_ideology = ""
+        for _fid, v in votes.items():
+            if v.get("choice_id") == chosen_id:
+                winning_ideology = v.get("ideology", "stability")
+                break
+
+        vote_count = tally.get(chosen_id, 0)
+
+        runner_up_id = None
+        sorted_choices = sorted(tally.items(), key=lambda x: x[1], reverse=True)
+        for cid, _cnt in sorted_choices:
+            if cid != chosen_id:
+                runner_up_id = cid
+                break
+
+        if runner_up_id is None:
+            runner_up_id = "alternatives"
+
+        ideology = winning_ideology if winning_ideology else "stability"
+        return (
+            f"The {ideology} coalition of {vote_count} factions chose "
+            f"{chosen_id} over {runner_up_id}, driven by {ideology} priorities."
+        )
+
+    def _generate_justification(self, event: GameEvent, resolution: Dict) -> str:
+        """Generate a brief narrative justification for the winning choice.
+
+        Makes ONE LLM call per resolution. Falls back to a template
+        justification if the LLM call fails or returns empty.
+        """
+        chosen_id = resolution.get("chosen_choice_id")
+        if chosen_id is None:
+            return ""
+
+        faction_votes = resolution.get("faction_votes", {})
+        tally = resolution.get("vote_tally", {})
+
+        vote_lines = []
+        for fid, v in faction_votes.items():
+            vote_lines.append(
+                f"- {fid}: chose {v.get('choice_id')} (ideology: {v.get('ideology')})"
+            )
+        votes_text = "\n".join(vote_lines) if vote_lines else "No votes recorded."
+        tally_text = ", ".join(f"{cid}: {cnt}" for cid, cnt in tally.items())
+
+        system_prompt = (
+            "You are the chronicler of an autonomous AI civilization. "
+            "Briefly explain why a faction voted the way it did. "
+            "Write 1-2 sentences in a narrative style. "
+            "Do not include meta-commentary or preamble."
+        )
+        user_prompt = (
+            f"Event: {event.name}\n"
+            f"Winning choice: {chosen_id}\n"
+            f"Vote tally: {tally_text}\n"
+            f"Faction votes:\n{votes_text}\n\n"
+            f"Why did the {chosen_id} choice win?"
+        )
+
+        try:
+            from nvidia_nim_client import get_nim_client
+
+            raw = get_nim_client().call(
+                system_prompt, user_prompt, max_tokens=100, temperature=0.7
+            )
+            cleaned = _clean_justification(raw)
+            if cleaned:
+                return cleaned
+        except Exception as exc:
+            logger.warning("LLM justification failed, using template: %s", exc)
+
+        return self._template_justification(resolution)
+
     def resolve_and_apply(
         self, event: GameEvent, faction_ideologies: Dict[str, str], redis_client=None
     ) -> Dict:
@@ -590,6 +711,9 @@ class AutonomousChoiceResolver:
 
         # Step 1: resolve which choice wins
         resolution = self.resolve_event(event, faction_ideologies)
+
+        # Step 1b: generate LLM justification for why the winning choice won
+        resolution["justification"] = self._generate_justification(event, resolution)
 
         # Step 2: if a choice won, find it and apply consequences
         chosen_choice = None

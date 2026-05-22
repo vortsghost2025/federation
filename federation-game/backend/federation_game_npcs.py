@@ -1570,6 +1570,37 @@ def build_npc_system() -> NPCSystem:
     return system
 
 
+def persist_npc_traits_to_redis(redis_client, npc_system) -> int:
+    """Write all NPC personality traits to Redis HASHes for persistence.
+
+    For each NPC, writes a HASH to key ``npc_traits:{char_id}`` with fields:
+    loyalty, ambition, wisdom, charisma, cunning (float strings).
+    Keys expire after 7 days (604800 seconds).
+
+    Returns:
+        Number of NPCs persisted.
+    """
+    TRAIT_FIELDS = ("loyalty", "ambition", "wisdom", "charisma", "cunning")
+    TTL_SECONDS = 604800
+    count = 0
+    try:
+        pipe = redis_client.pipeline(transaction=False)
+        for char_id, char in npc_system.characters.items():
+            key = f"npc_traits:{char_id}"
+            mapping = {field: str(getattr(char, field)) for field in TRAIT_FIELDS}
+            pipe.hset(key, mapping=mapping)
+            pipe.expire(key, TTL_SECONDS)
+            count += 1
+        pipe.execute()
+    except Exception as exc:
+        import logging
+
+        logging.getLogger(__name__).warning(
+            "persist_npc_traits_to_redis failed: %s", exc
+        )
+    return count
+
+
 # ============================================================================
 # TESTING / DEMO
 # ============================================================================

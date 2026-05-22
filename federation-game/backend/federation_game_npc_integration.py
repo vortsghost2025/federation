@@ -29,7 +29,11 @@ Default: disabled (opt-in).
 import json
 import logging
 from typing import Dict, List, Any, Optional
-from federation_game_npcs import build_npc_system, Character
+from federation_game_npcs import (
+    build_npc_system,
+    Character,
+    persist_npc_traits_to_redis,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -77,6 +81,11 @@ class NPCSystemAdapter:
             advisors = candidates[:3]
             self.faction_advisors[fid] = advisors
 
+        self.faction_advisor_ids: Dict[str, str] = {}
+        for fid, advisors in self.faction_advisors.items():
+            if advisors:
+                self.faction_advisor_ids[fid] = advisors[0].char_id
+
         # Compute per-faction static morale delta from advisors (fallback)
         self.faction_morale_delta: Dict[str, float] = {}
         for fid, advisors in self.faction_advisors.items():
@@ -93,6 +102,14 @@ class NPCSystemAdapter:
                 delta += adv.wisdom * 0.003
             self.faction_identity_delta[fid] = delta
 
+        try:
+            import redis as _redis
+
+            _r = _redis.Redis(host="redis", port=6379, decode_responses=True)
+            persist_npc_traits_to_redis(_r, self.npc_system)
+        except Exception as exc:
+            logger.debug("Could not persist NPC traits to Redis on init: %s", exc)
+
         self.summary_data = {
             "enabled": True,
             "total_advisors": sum(len(v) for v in self.faction_advisors.values()),
@@ -101,6 +118,47 @@ class NPCSystemAdapter:
             },
             "dynamic_deltas": False,
         }
+
+    def _read_trait_deltas_from_redis(self, r) -> bool:
+        """Refresh faction_morale_delta / faction_identity_delta from Redis.
+
+        For each faction, reads the primary advisor's trait HASH from Redis
+        (key ``npc_traits:{char_id}``) and recomputes deltas:
+          - morale_delta  = ((loyalty + charisma) / 2) * 0.005
+          - identity_delta = wisdom * 0.003
+
+        Returns True if any Redis trait data was found.
+        """
+        found_any = False
+        for fid in self.faction_morale_delta:
+            advisor_id = self.faction_advisor_ids.get(fid)
+            if advisor_id is None:
+                continue
+            try:
+                data = r.hgetall(f"npc_traits:{advisor_id}")
+                if not data:
+                    continue
+                parsed = {}
+                for k, v in data.items():
+                    key = k if isinstance(k, str) else k.decode()
+                    val = v if isinstance(v, str) else v.decode()
+                    try:
+                        parsed[key] = float(val)
+                    except (ValueError, TypeError):
+                        pass
+                if not parsed:
+                    continue
+                loyalty = parsed.get("loyalty", 0.0)
+                charisma = parsed.get("charisma", 0.0)
+                wisdom = parsed.get("wisdom", 0.0)
+                self.faction_morale_delta[fid] = ((loyalty + charisma) / 2) * 0.005
+                self.faction_identity_delta[fid] = wisdom * 0.003
+                found_any = True
+            except Exception as exc:
+                logger.debug(
+                    "Failed to read traits for advisor %s: %s", advisor_id, exc
+                )
+        return found_any
 
     def _read_world_state(self, redis_client) -> Optional[Dict[str, Any]]:
         """Read the world_state hash from Redis. Returns None on failure."""
@@ -191,6 +249,8 @@ class NPCSystemAdapter:
 
         result: Dict[str, Dict[str, float]] = {}
         try:
+            self._read_trait_deltas_from_redis(redis_client)
+
             world = self._read_world_state(redis_client)
             if world is None:
                 return {}

@@ -705,6 +705,7 @@ def generate_and_apply_events(max_events: int = 3) -> Dict:
                             "consequences_applied": len(
                                 resolution.get("consequences_applied", [])
                             ),
+                            "justification": resolution.get("justification", ""),
                         }
                     )
                     for ce in resolution.get("consequences_applied", []):
