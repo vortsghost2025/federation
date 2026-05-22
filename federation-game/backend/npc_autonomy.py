@@ -45,6 +45,9 @@ OPENROUTER_API_KEY = os.environ.get("OPENROUTER_API_KEY", "")
 OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
 DEFAULT_MODEL = "openrouter/free"
 
+# LLM priority: NVIDIA NIM (free, fast) -> OpenRouter (free, fallback)
+LLM_USE_NIM = True  # Toggle NIM integration
+
 MAX_THOUGHTS = 10
 MAX_ACTIONS = 8
 MAX_WORLD_EVENTS = 50
@@ -61,12 +64,55 @@ def _get_redis():
     return _redis_client
 
 
+def _clean_llm_output(text: str) -> str:
+    """Strip leaked system-prompt residue and meta-preambles from LLM output."""
+    if not text:
+        return ""
+    # Reject outputs that leak the instruction prompt
+    leak_markers = [
+        "produce a single internal thought",
+        "1-2 sentences",
+        "roleplay as",
+        "the user is asking",
+        "you are asking me",
+        "as a language model",
+        "as an ai",
+    ]
+    lower = text.lower()
+    for marker in leak_markers:
+        if marker in lower:
+            return ""
+    # Strip common meta-preambles ("Okay, ", "Sure, ", "Well, ")
+    for prefix in ("Okay, ", "Sure, ", "Well, ", "Alright, "):
+        if text.startswith(prefix):
+            text = text[len(prefix) :]
+    # Strip leading/trailing quotes
+    text = text.strip().strip('"').strip("'").strip()
+    return text
+
+
 def _call_llm(
     system_prompt: str,
     user_prompt: str,
     max_tokens: int = 150,
     temperature: float = 0.9,
 ) -> str:
+    # Priority 1: NVIDIA NIM (free, fast, returns proper content field)
+    if LLM_USE_NIM:
+        try:
+            from nvidia_nim_client import get_nim_client
+
+            result = get_nim_client().call(
+                system_prompt, user_prompt, max_tokens, temperature
+            )
+            if result:
+                result = _clean_llm_output(result)
+                if result:
+                    return result
+        except Exception as exc:
+            logger.warning("NIM call failed, falling back to OpenRouter: %s", exc)
+
+    # Priority 2: OpenRouter free tier (existing code, unchanged)
     if not OPENROUTER_API_KEY:
         return ""
     messages = [
