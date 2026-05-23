@@ -6,7 +6,10 @@ __pycache__/
 *.pyc
 config.py
 .env
+.env.*
+*.local.env
 connection_bridge/.env
+secrets/
 *.db
 federation_saves/
 ensemble_storage/
@@ -124,3 +127,16 @@ vps-compose-backup.yml
 
 # Worker image with embedded credentials — never commit
 federation-game/backend/worker_b64.txt
+
+# ===== SECRETS VAULT — NEVER COMMIT =====
+.secrets/
+.secrets/**
+papers/
+S:/papers/
+Untitled.txt
+# Patterns matching any API key material anywhere in the repo
+**/api-keys*
+**/api_keys*
+**/*credentials*
+**/*secret*key*
+**/*_token*
