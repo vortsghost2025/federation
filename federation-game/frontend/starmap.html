@@ -42,6 +42,7 @@ body{background:#0a0a1a;color:#e0e0e0;font-family:'Courier New',monospace;overfl
 #detail-row .dl{color:#78909c;min-width:100px}
 #detail-row .dv{color:#e0e0e0}
 #detail-thought{color:#ab47bc;font-style:italic;font-size:16px;margin-top:8px;line-height:1.5;padding:6px 8px;background:rgba(171,71,188,0.08);border-radius:4px}
+#detail-livesim:hover{background:rgba(79,195,247,0.3);border-color:#4fc3f7}
 
 /* View toggle — TV-scale */
 #view-toggle{position:fixed;top:72px;left:12px;z-index:10;display:flex;gap:4px;margin-top:40px}
@@ -163,6 +164,7 @@ body{background:#0a0a1a;color:#e0e0e0;font-family:'Courier New',monospace;overfl
 <div id="detail-cat"></div>
 <div id="detail-rows"></div>
 <div id="detail-thought"></div>
+<a id="detail-livesim" href="#" target="_blank" style="display:none;margin-top:10px;padding:10px 18px;background:rgba(79,195,247,0.15);border:1px solid rgba(79,195,247,0.4);border-radius:6px;color:#4fc3f7;font-size:18px;font-family:'Courier New',monospace;text-decoration:none;letter-spacing:1px;text-transform:uppercase;text-align:center;display:block;transition:background 0.2s">🧬 View in Live Sim</a>
 </div>
 
 <!-- Faction tooltip -->
@@ -189,8 +191,8 @@ body{background:#0a0a1a;color:#e0e0e0;font-family:'Courier New',monospace;overfl
 
 <!-- Label mode toggle -->
 <div id="label-toggle">
-<button class="lt-btn active" data-labels="factions" onclick="setLabelMode('factions')">Factions Only</button>
-<button class="lt-btn" data-labels="important" onclick="setLabelMode('important')">Important NPCs</button>
+<button class="lt-btn" data-labels="factions" onclick="setLabelMode('factions')">Factions Only</button>
+<button class="lt-btn active" data-labels="important" onclick="setLabelMode('important')">Important NPCs</button>
 <button class="lt-btn" data-labels="all" onclick="setLabelMode('all')">All Labels</button>
 </div>
 
@@ -323,7 +325,7 @@ let W, H;
 let sidebarW = 420;
 let lastUpdate = 0;
 let currentView = 'territory'; // 'territory' | 'network' | 'crisis'
-let labelMode = 'factions'; // 'factions' | 'important' | 'all' — label display priority
+let labelMode = 'important'; // 'factions' | 'important' | 'all' — label display priority
 
 // Faction layout angles (8 factions in a circle)
 const FACTION_ORDER = [
@@ -407,9 +409,8 @@ currentView = v;
 document.querySelectorAll('.vt-btn').forEach(b => {
 b.classList.toggle('active', b.dataset.view === v);
 });
-// Auto-set label mode defaults per view
-if (v === 'territory' && labelMode !== 'all') setLabelMode('factions');
-else if (v === 'network' && labelMode === 'factions') setLabelMode('important');
+// Auto-set label mode defaults per view — only upgrade, never downgrade
+if (v === 'network' && labelMode === 'factions') setLabelMode('important');
 else if (v === 'crisis' && labelMode === 'factions') setLabelMode('important');
 buildMapRead(); // update panel when mode changes
 }
@@ -1080,27 +1081,30 @@ labelAlpha: 0.6
 // --- Label priority system ---
 // Priority levels: 0=hidden, 1=low(ordinary), 2=medium(crisis/event), 3=high(selected/important), 4=critical(hovered)
 function getLabelPriority(node) {
-const isHovered = hoveredNode === node;
-const isSelected = selectedNode === node;
-if (isHovered || isSelected) return 4;
+  const isHovered = hoveredNode === node;
+  const isSelected = selectedNode === node;
+  if (isHovered || isSelected) return 4;
 
-// Always show in 'all' mode
-if (labelMode === 'all') {
-// But still give higher priority to important nodes for collision resolution
-if (isNodeImportant(node)) return 3;
-if (isNodeCrisisRelevant(node)) return 2;
-return 1;
-}
+  // Faction-affiliated NPCs are ALWAYS visible (you need to know who belongs where)
+  const hasFaction = !!node.faction;
 
-// 'important' mode: show faction leaders, active event NPCs, crisis NPCs, extreme moods
-if (labelMode === 'important') {
-if (isNodeImportant(node)) return 3;
-if (isNodeCrisisRelevant(node)) return 2;
-return 0; // hide ordinary NPCs
-}
+  // Always show in 'all' mode
+  if (labelMode === 'all') {
+    if (isNodeImportant(node)) return 3;
+    if (isNodeCrisisRelevant(node)) return 2;
+    return hasFaction ? 2 : 1; // faction members get higher base priority
+  }
 
-// 'factions' mode: only show hovered/selected (priority 4, already handled above)
-return 0;
+  // 'important' mode: show faction members, faction leaders, active NPCs, crisis NPCs, extreme moods
+  if (labelMode === 'important') {
+    if (isNodeImportant(node)) return 3;
+    if (hasFaction) return 2; // all faction members visible
+    if (isNodeCrisisRelevant(node)) return 2;
+    return 0; // hide unaffiliated ordinary NPCs (companions, neutrals, unknowns)
+  }
+
+  // 'factions' mode: only show hovered/selected (priority 4, already handled above)
+  return 0;
 }
 
 function isNodeImportant(node) {
@@ -1647,6 +1651,16 @@ function showDetail(node) {
   if (npc.action_type) rows += `<div id="detail-row"><span class="dl">Type</span><span class="dv">${npc.action_type}</span></div>`;
   document.getElementById('detail-rows').innerHTML = rows;
   document.getElementById('detail-thought').textContent = npc.latest_thought || '';
+
+  // Live Sim link — opens simulation.html focused on this NPC's faction
+  const liveSimLink = document.getElementById('detail-livesim');
+  if (node.faction) {
+    liveSimLink.href = `/simulation.html?faction=${encodeURIComponent(node.faction)}&npc=${encodeURIComponent(node.id)}`;
+    liveSimLink.style.display = 'block';
+  } else {
+    liveSimLink.href = `/simulation.html?npc=${encodeURIComponent(node.id)}`;
+    liveSimLink.style.display = 'block';
+  }
 }
 
 function onSearch(e) {
