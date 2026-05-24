@@ -1,12 +1,18 @@
-"""Federation Star Map API - aggregated visualization data endpoint."""
+"""Federation Star Map API - aggregated visualization data endpoint.
+
+Rewrite v3: Extracted NPC building into standalone functions to avoid
+bytecode caching / indentation corruption that caused 0 NPCs returned.
+Each NPC is built in its own function call with its own try/except,
+so one failure cannot prevent the rest from being appended.
+"""
 
 import json
 import logging
 import os
 from fastapi import APIRouter
+from typing import Any, Dict, List, Optional
 
 logger = logging.getLogger(__name__)
-from typing import Any, Dict, List, Optional
 
 try:
     import redis
@@ -28,38 +34,10 @@ def _get_redis():
 router = APIRouter(prefix="/map", tags=["map"])
 
 
-def _safe_json_parse(raw: Optional[str]) -> Any:
-    if raw is None:
-        return None
-    try:
-        return json.loads(raw)
-    except (json.JSONDecodeError, TypeError):
-        return None
+# ---------------------------------------------------------------------------
+# Static data (module-level, not inside any function)
+# ---------------------------------------------------------------------------
 
-
-def _zset_latest(r, key: str) -> Optional[Any]:
-    """Get the most recent entry from a ZSET (highest score = latest)."""
-    try:
-        items = r.zrevrange(key, 0, 0)
-        if items:
-            return _safe_json_parse(items[0])
-    except Exception:
-        pass  # Redis key missing or corrupt; return None as fallback
-    return None
-
-
-def _list_first(r, key: str) -> Optional[Any]:
-    """Get the first element from a LIST."""
-    try:
-        items = r.lrange(key, 0, 0)
-        if items:
-            return _safe_json_parse(items[0])
-    except Exception:
-        pass  # Redis key missing or corrupt; return None as fallback
-    return None
-
-
-# Mood-to-color mapping for the star map visual
 MOOD_COLORS = {
     "inspired": "#ffd700",
     "contemplative": "#4fc3f7",
@@ -100,7 +78,6 @@ MOOD_COLORS = {
     "alarmed": "#ff3d00",
 }
 
-# Faction color mapping
 FACTION_COLORS = {
     "research_division": "#4fc3f7",
     "military_command": "#ef5350",
@@ -112,12 +89,219 @@ FACTION_COLORS = {
     "preservation_society": "#8d6e63",
 }
 
+STATIC_FACTION_MAP = {
+    "char_001": "research_division",
+    "char_002": "military_command",
+    "char_003": "consciousness_collective",
+    "char_004": "diplomatic_corps",
+    "char_005": "exploration_initiative",
+    "char_101": "diplomatic_corps",
+    "char_102": "military_command",
+    "char_103": "cultural_ministry",
+    "char_104": "research_division",
+    "char_105": "consciousness_collective",
+    "char_106": "economic_council",
+    "char_107": "exploration_initiative",
+    "char_108": "preservation_society",
+}
+
+
+# ---------------------------------------------------------------------------
+# JSON helpers
+# ---------------------------------------------------------------------------
+
+
+def _safe_json_parse(raw):
+    # type: (Optional[str]) -> Any
+    if raw is None:
+        return None
+    try:
+        return json.loads(raw)
+    except (json.JSONDecodeError, TypeError):
+        return None
+
+
+def _zset_latest(r, key):
+    # type: (Any, str) -> Optional[Any]
+    """Get the most recent entry from a ZSET (highest score = latest)."""
+    try:
+        items = r.zrevrange(key, 0, 0)
+        if items:
+            return _safe_json_parse(items[0])
+    except Exception:
+        pass
+    return None
+
+
+def _list_first(r, key):
+    # type: (Any, str) -> Optional[Any]
+    """Get the first element from a LIST."""
+    try:
+        items = r.lrange(key, 0, 0)
+        if items:
+            return _safe_json_parse(items[0])
+    except Exception:
+        pass
+    return None
+
+
+# ---------------------------------------------------------------------------
+# NPC category from ID prefix
+# ---------------------------------------------------------------------------
+
+
+def _category_from_id(cid):
+    # type: (str) -> str
+    if cid.startswith("char_0") or cid.startswith("char_1"):
+        return "federation_leader"
+    if cid.startswith("char_2"):
+        return "rival"
+    if cid.startswith("char_3"):
+        return "neutral"
+    if cid.startswith("char_4"):
+        return "enigma"
+    if cid.startswith("comp_"):
+        return "companion"
+    return "unknown"
+
+
+# ---------------------------------------------------------------------------
+# Build a single NPC entry (extracted from the loop to avoid
+# bytecode-caching / indentation-skip bug)
+# ---------------------------------------------------------------------------
+
+
+def _build_npc_entry(r, cid):
+    # type: (Any, str) -> Dict[str, Any]
+    """Build one enriched NPC dict. Never raises - returns minimal entry on error."""
+    entry = {"id": cid}
+
+    # Mood
+    try:
+        mood = r.get("npc_mood:" + cid)
+        entry["mood"] = mood if mood else None
+        entry["mood_color"] = MOOD_COLORS.get(mood, "#9e9e9e")
+    except Exception:
+        entry["mood"] = None
+        entry["mood_color"] = "#9e9e9e"
+
+    # Last active
+    try:
+        raw_ts = r.get("npc_last_active:" + cid)
+        entry["last_active"] = int(raw_ts) if raw_ts else None
+    except Exception:
+        entry["last_active"] = None
+
+    # Latest decision
+    latest_decision = _zset_latest(r, "npc_decisions:" + cid)
+    if latest_decision:
+        entry["name"] = latest_decision.get("char_name", cid)
+        entry["archetype"] = latest_decision.get("category", "unknown")
+        entry["latest_decision"] = latest_decision.get("description", "")
+        entry["action_taken"] = latest_decision.get("action_taken", "")
+        entry["decision_mood"] = latest_decision.get("mood", "")
+        entry["decision_score"] = latest_decision.get("score", 0)
+    else:
+        entry["name"] = cid
+        entry["latest_decision"] = None
+
+    # Latest action
+    latest_action = _zset_latest(r, "npc_actions:" + cid)
+    if latest_action:
+        if "name" not in entry or entry["name"] == cid:
+            entry["name"] = latest_action.get("char_name", cid)
+        entry["latest_action"] = latest_action.get("description", "")
+        entry["action_type"] = latest_action.get("action_type", "")
+    else:
+        entry["latest_action"] = None
+
+    # Latest thought
+    latest_thought = _zset_latest(r, "npc_thoughts:" + cid)
+    if latest_thought:
+        if "name" not in entry or entry["name"] == cid:
+            entry["name"] = latest_thought.get("char_name", cid)
+        entry["latest_thought"] = latest_thought.get("thought", "")
+    else:
+        entry["latest_thought"] = None
+
+    # Goal
+    latest_goal = _list_first(r, "npc_goals:" + cid)
+    if latest_goal:
+        entry["goal"] = latest_goal.get("description", "")
+        entry["goal_status"] = latest_goal.get("status", "")
+    else:
+        entry["goal"] = None
+
+    # Category
+    entry["category"] = _category_from_id(cid)
+
+    # Relationships
+    try:
+        raw_rels = r.hgetall("npc_relationships:" + cid)
+        rels = {}
+        for other_id, score in raw_rels.items():
+            try:
+                rels[other_id] = float(score)
+            except (ValueError, TypeError):
+                pass
+        entry["relationships"] = rels
+    except Exception:
+        entry["relationships"] = {}
+
+    return entry
+
+
+# ---------------------------------------------------------------------------
+# Affiliation enrichment (separate function, separate try/except)
+# ---------------------------------------------------------------------------
+
+
+def _enrich_affiliation(r, entry, profile_map):
+    # type: (Any, Dict[str, Any], Dict[str, Any]) -> None
+    """Add affiliation to an NPC entry from multiple fallback sources."""
+    cid = entry.get("id", "")
+    affiliation = None
+
+    # Source 1: npc_profiles bulk blob
+    if cid in profile_map:
+        prof = profile_map[cid]
+        affiliation = prof.get("affiliation")
+        if prof.get("title"):
+            entry["title"] = prof.get("title")
+        if prof.get("archetype"):
+            entry["archetype"] = prof.get("archetype", entry.get("archetype"))
+        if not entry.get("name") or entry["name"] == cid:
+            entry["name"] = prof.get("name", cid)
+
+    # Source 2: npc_faction_context:{cid} Redis key
+    if not affiliation:
+        try:
+            fc_raw = r.get("npc_faction_context:" + cid)
+            if fc_raw:
+                fc_data = _safe_json_parse(fc_raw)
+                if fc_data and fc_data.get("faction"):
+                    affiliation = fc_data["faction"]
+        except Exception:
+            pass
+
+    # Source 3: Static fallback
+    if not affiliation and cid in STATIC_FACTION_MAP:
+        affiliation = STATIC_FACTION_MAP[cid]
+
+    if affiliation:
+        entry["affiliation"] = affiliation
+
+
+# ---------------------------------------------------------------------------
+# Main endpoint
+# ---------------------------------------------------------------------------
+
 
 @router.get("/data")
 async def get_map_data():
     """Aggregate all visualization data for the star map frontend."""
     r = _get_redis()
-    result: Dict[str, Any] = {
+    result = {
         "world_state": {},
         "npcs": [],
         "factions": {},
@@ -131,14 +315,14 @@ async def get_map_data():
         for k, v in stored.items():
             if k.startswith("_"):
                 continue
-        try:
-            result["world_state"][k] = int(float(v))
-        except (ValueError, TypeError):
-            result["world_state"][k] = v
+            try:
+                result["world_state"][k] = int(float(v))
+            except (ValueError, TypeError):
+                result["world_state"][k] = v
     except Exception:
-        logger.debug(f"Unexpected error parsing world_state key '{k}'; skipped")
+        logger.debug("Unexpected error parsing world_state")
 
-    # --- NPCs ---
+    # --- NPCs (each built in its own function call) ---
     try:
         mood_keys = r.keys("npc_mood:*")
         npc_ids = [k.replace("npc_mood:", "") for k in mood_keys]
@@ -146,127 +330,39 @@ async def get_map_data():
 
         enriched = []
         for cid in npc_ids:
-            entry = {"id": cid}
-
-            # Mood
             try:
-                mood = r.get(f"npc_mood:{cid}")
-                entry["mood"] = mood if mood else None
-                entry["mood_color"] = MOOD_COLORS.get(mood, "#9e9e9e")
+                entry = _build_npc_entry(r, cid)
+                enriched.append(entry)
             except Exception:
-                entry["mood"] = None
-                entry["mood_color"] = "#9e9e9e"
+                logger.debug("Failed to build NPC entry for %s", cid)
 
-            # Last active
-            try:
-                raw_ts = r.get(f"npc_last_active:{cid}")
-                entry["last_active"] = int(raw_ts) if raw_ts else None
-            except Exception:
-                entry["last_active"] = None
-
-            # Latest decision
-            latest_decision = _zset_latest(r, f"npc_decisions:{cid}")
-            if latest_decision:
-                entry["name"] = latest_decision.get("char_name", cid)
-                entry["archetype"] = latest_decision.get("category", "unknown")
-                entry["latest_decision"] = latest_decision.get("description", "")
-                entry["action_taken"] = latest_decision.get("action_taken", "")
-                entry["decision_mood"] = latest_decision.get("mood", "")
-                entry["decision_score"] = latest_decision.get("score", 0)
-            else:
-                entry["name"] = cid
-                entry["latest_decision"] = None
-
-            # Latest action
-            latest_action = _zset_latest(r, f"npc_actions:{cid}")
-            if latest_action:
-                if "name" not in entry or entry["name"] == cid:
-                    entry["name"] = latest_action.get("char_name", cid)
-                entry["latest_action"] = latest_action.get("description", "")
-                entry["action_type"] = latest_action.get("action_type", "")
-            else:
-                entry["latest_action"] = None
-
-            # Latest thought
-            latest_thought = _zset_latest(r, f"npc_thoughts:{cid}")
-            if latest_thought:
-                if "name" not in entry or entry["name"] == cid:
-                    entry["name"] = latest_thought.get("char_name", cid)
-                entry["latest_thought"] = latest_thought.get("thought", "")
-            else:
-                entry["latest_thought"] = None
-
-            # Goal
-            latest_goal = _list_first(r, f"npc_goals:{cid}")
-            if latest_goal:
-                entry["goal"] = latest_goal.get("description", "")
-                entry["goal_status"] = latest_goal.get("status", "")
-            else:
-                entry["goal"] = None
-
-            # NPC category from ID prefix
-            if cid.startswith("char_1"):
-                entry["category"] = "federation_leader"
-            elif cid.startswith("char_2"):
-                entry["category"] = "rival"
-            elif cid.startswith("char_3"):
-                entry["category"] = "neutral"
-            elif cid.startswith("char_4"):
-                entry["category"] = "enigma"
-            elif cid.startswith("comp_"):
-                entry["category"] = "companion"
-            else:
-                entry["category"] = "unknown"
-
-            # Relationships
-            try:
-                raw_rels = r.hgetall(f"npc_relationships:{cid}")
-                rels = {}
-                for other_id, score in raw_rels.items():
-                    try:
-                        rels[other_id] = float(score)
-                    except (ValueError, TypeError):
-                        pass  # Skip non-numeric relationship score
-                entry["relationships"] = rels
-            except Exception:
-                entry["relationships"] = {}
-
-            enriched.append(entry)
-
-        # Enrich with affiliation/title from npc_profiles (if stored)
+        # Affiliation enrichment (separate pass)
         try:
             npc_profiles_raw = r.get("npc_profiles")
+            profile_map = {}
             if npc_profiles_raw:
                 npc_profiles = _safe_json_parse(npc_profiles_raw)
                 if isinstance(npc_profiles, list):
                     profile_map = {
                         p.get("id"): p for p in npc_profiles if isinstance(p, dict)
                     }
-                    for entry in enriched:
-                        prof = profile_map.get(entry["id"])
-                        if prof:
-                            entry["affiliation"] = prof.get("affiliation")
-                            entry["title"] = prof.get("title")
-                            entry["archetype"] = prof.get(
-                                "archetype", entry.get("archetype")
-                            )
-                            if not entry.get("name") or entry["name"] == entry["id"]:
-                                entry["name"] = prof.get("name", entry["id"])
         except Exception:
-            logger.debug(
-                f"NPC profile enrichment failed for {entry.get('id', 'unknown')}"
-            )
+            profile_map = {}
+
+        for entry in enriched:
+            try:
+                _enrich_affiliation(r, entry, profile_map)
+            except Exception:
+                pass
 
         result["npcs"] = enriched
-    except Exception:
-        logger.warning(
-            "NPC enrichment section failed; NPCs may be incomplete in map data"
-        )
+    except Exception as npc_err:
+        logger.warning("NPC enrichment section failed: %s", npc_err)
 
     # --- Factions ---
     try:
         stored_dynamics = r.hgetall("faction_dynamics")
-        factions: Dict[str, Any] = {}
+        factions = {}
         for faction_id, data in stored_dynamics.items():
             parsed = _safe_json_parse(data)
             if parsed is None:
@@ -286,15 +382,14 @@ async def get_map_data():
                 "stances": {},
             }
             try:
-                stance_data = r.hgetall(f"faction_stances:{faction_id}")
+                stance_data = r.hgetall("faction_stances:" + faction_id)
                 for target_fid, stance_raw in stance_data.items():
                     stance_parsed = _safe_json_parse(stance_raw)
                     if stance_parsed is not None:
                         faction_entry["stances"][target_fid] = stance_parsed
             except Exception:
-                logger.debug(f"Faction stance parsing failed for {faction_id}")
+                logger.debug("Faction stance parsing failed for %s", faction_id)
             factions[faction_id] = faction_entry
-
         result["factions"] = factions
     except Exception:
         logger.warning("Faction section failed; factions may be incomplete in map data")
@@ -302,7 +397,7 @@ async def get_map_data():
     # --- Events (latest 50) ---
     try:
         raw_events = r.zrevrange("npc_world_events", 0, 49)
-        events: List[Dict] = []
+        events = []
         for item in raw_events:
             parsed = _safe_json_parse(item)
             if parsed is not None:
@@ -314,22 +409,20 @@ async def get_map_data():
     # --- Broadcast Events (latest 20) ---
     try:
         raw_broadcasts = r.zrevrange("npc_broadcast_events", 0, 19)
-        broadcasts: List[Dict] = []
+        broadcasts = []
         for item in raw_broadcasts:
             parsed = _safe_json_parse(item)
             if parsed is not None:
                 broadcasts.append(parsed)
         result["broadcasts"] = broadcasts
     except Exception:
-        logger.warning(
-            "Broadcast events section failed; broadcasts may be incomplete in map data"
-        )
+        logger.warning("Broadcast events section failed; broadcasts may be incomplete")
 
     # --- Worker Status ---
     try:
         result["worker"] = r.hgetall("worker:status")
     except Exception:
-        pass  # Worker status unavailable; omit from map data
+        pass
 
     # --- History State ---
     try:
@@ -337,6 +430,6 @@ async def get_map_data():
         if history_raw:
             result["history"] = _safe_json_parse(history_raw)
     except Exception:
-        pass  # History state unavailable; omit from map data
+        pass
 
     return result

@@ -43,20 +43,44 @@ body{background:#0a0a1a;color:#e0e0e0;font-family:'Courier New',monospace;overfl
 #detail-row .dv{color:#e0e0e0}
 #detail-thought{color:#ab47bc;font-style:italic;font-size:11px;margin-top:6px;line-height:1.4;padding:4px 6px;background:rgba(171,71,188,0.08);border-radius:4px}
 
-/* Faction legend */
-#faction-legend{position:fixed;bottom:12px;right:332px;background:rgba(10,10,26,0.92);border:1px solid rgba(79,195,247,0.2);border-radius:6px;padding:8px 12px;z-index:10;font-size:11px;display:none}
-#faction-legend.show{display:block}
-.fl-row{display:flex;align-items:center;gap:6px;margin-bottom:2px}
-.fl-dot{width:8px;height:8px;border-radius:50%}
-.fl-name{color:#b0b0b0}
+/* View toggle */
+#view-toggle{position:fixed;top:52px;left:12px;z-index:10;display:flex;gap:2px;margin-top:32px}
+.vt-btn{background:rgba(10,10,26,0.9);border:1px solid rgba(79,195,247,0.3);color:#78909c;padding:5px 10px;border-radius:6px;font-size:11px;font-family:'Courier New',monospace;cursor:pointer;transition:all 0.2s;letter-spacing:1px;text-transform:uppercase}
+.vt-btn:hover{border-color:#4fc3f7;color:#4fc3f7}
+.vt-btn.active{background:rgba(79,195,247,0.15);border-color:#4fc3f7;color:#4fc3f7;box-shadow:0 0 8px rgba(79,195,247,0.2)}
+
+/* Map legend */
+#map-legend{position:fixed;bottom:12px;right:332px;background:rgba(10,10,26,0.94);border:1px solid rgba(79,195,247,0.25);border-radius:8px;padding:12px 14px;z-index:10;font-size:11px;max-width:220px}
+#map-legend h3{color:#4fc3f7;font-size:11px;letter-spacing:2px;text-transform:uppercase;margin-bottom:8px;border-bottom:1px solid rgba(79,195,247,0.15);padding-bottom:4px}
+.ml-section{margin-bottom:8px}
+.ml-section-title{color:#78909c;font-size:10px;text-transform:uppercase;letter-spacing:1px;margin-bottom:3px}
+.ml-row{display:flex;align-items:center;gap:6px;margin-bottom:2px;line-height:1.5}
+.ml-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+.ml-line{width:18px;height:2px;flex-shrink:0;border-radius:1px}
+.ml-zone{width:14px;height:14px;border-radius:3px;flex-shrink:0;border:1px solid}
+.ml-name{color:#b0b0b0;white-space:nowrap}
+
+/* Faction tooltip */
+#faction-tip{position:fixed;display:none;background:rgba(10,10,26,0.97);border:1px solid rgba(79,195,247,0.4);border-radius:8px;padding:12px 14px;z-index:25;min-width:200px;pointer-events:none;box-shadow:0 4px 20px rgba(0,0,0,0.6)}
+#faction-tip.show{display:block}
+#ft-name{font-size:14px;font-weight:bold;margin-bottom:6px}
+#ft-row{display:flex;justify-content:space-between;gap:12px;font-size:11px;margin-bottom:3px}
+#ft-row .ftl{color:#78909c}
+#ft-row .ftv{color:#e0e0e0;text-align:right}
+#ft-status{margin-top:6px;padding:4px 8px;border-radius:4px;font-size:10px;text-transform:uppercase;letter-spacing:1px;display:inline-block}
+.ft-influence{background:rgba(79,195,247,0.1);color:#4fc3f7;border:1px solid rgba(79,195,247,0.3)}
+.ft-contested{background:rgba(255,152,0,0.1);color:#ffa726;border:1px solid rgba(255,152,0,0.3)}
+.ft-neutral{background:rgba(120,144,156,0.1);color:#78909c;border:1px solid rgba(120,144,156,0.3)}
+
+/* Search */
+#search-box{position:fixed;top:52px;left:12px;z-index:10}
+#search-input{background:rgba(10,10,26,0.9);border:1px solid rgba(79,195,247,0.3);color:#e0e0e0;padding:6px 10px;border-radius:6px;font-size:12px;font-family:'Courier New',monospace;width:180px;outline:none}
+#search-input:focus{border-color:#4fc3f7;box-shadow:0 0 8px rgba(79,195,247,0.2)}
 
 /* Zoom controls */
 #zoom-ctrl{position:fixed;bottom:12px;left:50%;transform:translateX(-50%);display:flex;gap:4px;z-index:10}
 #zoom-ctrl button{width:36px;height:36px;background:rgba(10,10,26,0.9);border:1px solid rgba(79,195,247,0.3);color:#4fc3f7;border-radius:6px;font-size:18px;cursor:pointer;transition:background 0.2s}
 #zoom-ctrl button:hover{background:rgba(79,195,247,0.15)}
-#search-box{position:fixed;top:52px;left:12px;z-index:10}
-#search-input{background:rgba(10,10,26,0.9);border:1px solid rgba(79,195,247,0.3);color:#e0e0e0;padding:6px 10px;border-radius:6px;font-size:12px;font-family:'Courier New',monospace;width:180px;outline:none}
-#search-input:focus{border-color:#4fc3f7;box-shadow:0 0 8px rgba(79,195,247,0.2)}
 
 /* Audio toggle */
 #audio-toggle{background:none;border:1px solid rgba(79,195,247,0.2);border-radius:3px;color:#4fc3f7;font-size:14px;cursor:pointer;padding:2px 8px;display:flex;align-items:center;justify-content:center;transition:color 0.2s,border-color 0.2s;margin-left:4px;height:24px;line-height:1}
@@ -89,49 +113,63 @@ body{background:#0a0a1a;color:#e0e0e0;font-family:'Courier New',monospace;overfl
 
 <!-- World state bar -->
 <div id="worldbar">
-  <div class="wb-item"><span class="wb-label">Tension</span><div class="wb-bar"><div class="wb-fill" id="wb-tension" style="background:#ef5350"></div></div><span class="wb-val" id="wv-tension">0</span></div>
-  <div class="wb-item"><span class="wb-label">Stability</span><div class="wb-bar"><div class="wb-fill" id="wb-stability" style="background:#66bb6a"></div></div><span class="wb-val" id="wv-stability">0</span></div>
-  <div class="wb-item"><span class="wb-label">Morale</span><div class="wb-bar"><div class="wb-fill" id="wb-morale" style="background:#ffd700"></div></div><span class="wb-val" id="wv-morale">0</span></div>
-  <div class="wb-item"><span class="wb-label">Threat</span><div class="wb-bar"><div class="wb-fill" id="wb-threat" style="background:#f44336"></div></div><span class="wb-val" id="wv-threat">0</span></div>
-  <div class="wb-item"><span class="wb-label">Anomaly</span><div class="wb-bar"><div class="wb-fill" id="wb-anomaly" style="background:#ab47bc"></div></div><span class="wb-val" id="wv-anomaly">0</span></div>
-  <div id="tick-indicator"><div id="tick-dot"></div><span id="tick-label">TICK 0</span></div>
+<div class="wb-item"><span class="wb-label">Tension</span><div class="wb-bar"><div class="wb-fill" id="wb-tension" style="background:#ef5350"></div></div><span class="wb-val" id="wv-tension">0</span></div>
+<div class="wb-item"><span class="wb-label">Stability</span><div class="wb-bar"><div class="wb-fill" id="wb-stability" style="background:#66bb6a"></div></div><span class="wb-val" id="wv-stability">0</span></div>
+<div class="wb-item"><span class="wb-label">Morale</span><div class="wb-bar"><div class="wb-fill" id="wb-morale" style="background:#ffd700"></div></div><span class="wb-val" id="wv-morale">0</span></div>
+<div class="wb-item"><span class="wb-label">Threat</span><div class="wb-bar"><div class="wb-fill" id="wb-threat" style="background:#f44336"></div></div><span class="wb-val" id="wv-threat">0</span></div>
+<div class="wb-item"><span class="wb-label">Anomaly</span><div class="wb-bar"><div class="wb-fill" id="wb-anomaly" style="background:#ab47bc"></div></div><span class="wb-val" id="wv-anomaly">0</span></div>
+<div id="tick-indicator"><div id="tick-dot"></div><span id="tick-label">TICK 0</span></div>
 <nav style="margin-left:auto;display:flex;gap:2px">
 <a href="/bridge.html" style="color:#78909c;font-size:10px;text-decoration:none;padding:6px 10px;letter-spacing:1px;text-transform:uppercase;transition:color 0.2s">Bridge</a>
 <a href="/starmap.html" style="color:#4fc3f7;font-size:10px;text-decoration:none;padding:6px 10px;letter-spacing:1px;text-transform:uppercase">Star Map</a>
 <a href="/" style="color:#78909c;font-size:10px;text-decoration:none;padding:6px 10px;letter-spacing:1px;text-transform:uppercase;transition:color 0.2s">Simulator</a>
-  <a href="/simulation.html" style="color:#78909c;font-size:10px;text-decoration:none;padding:6px 10px;letter-spacing:1px;text-transform:uppercase;transition:color 0.2s">Live Sim</a>
-  <a href="/adult.html" style="color:#78909c;font-size:10px;text-decoration:none;padding:6px 10px;letter-spacing:1px;text-transform:uppercase;transition:color 0.2s">Control</a>
-  <a href="/earth.html" style="color:#78909c;font-size:10px;text-decoration:none;padding:6px 10px;letter-spacing:1px;text-transform:uppercase;transition:color 0.2s">Earth</a>
-  <button class="help-btn" onclick="toggleHelp()" aria-label="How to read this map" title="How to read this map">?</button>
-  <button id="audio-toggle" title="Toggle audio (M)" aria-label="Toggle audio on/off">&#9835;</button>
+<a href="/simulation.html" style="color:#78909c;font-size:10px;text-decoration:none;padding:6px 10px;letter-spacing:1px;text-transform:uppercase;transition:color 0.2s">Live Sim</a>
+<a href="/adult.html" style="color:#78909c;font-size:10px;text-decoration:none;padding:6px 10px;letter-spacing:1px;text-transform:uppercase;transition:color 0.2s">Control</a>
+<a href="/earth.html" style="color:#78909c;font-size:10px;text-decoration:none;padding:6px 10px;letter-spacing:1px;text-transform:uppercase;transition:color 0.2s">Earth</a>
+<button class="help-btn" onclick="toggleHelp()" aria-label="How to read this map" title="How to read this map">?</button>
+<button id="audio-toggle" title="Toggle audio (M)" aria-label="Toggle audio on/off">&#9835;</button>
 </nav>
-  </div>
+</div>
 
 <!-- Event sidebar -->
 <div id="sidebar">
-  <h2>Live Events</h2>
-  <div id="event-list"></div>
+<h2>Live Events</h2>
+<div id="event-list"></div>
 </div>
 
 <!-- NPC detail panel -->
 <div id="detail">
-  <div id="detail-name"></div>
-  <div id="detail-cat"></div>
-  <div id="detail-rows"></div>
-  <div id="detail-thought"></div>
+<div id="detail-name"></div>
+<div id="detail-cat"></div>
+<div id="detail-rows"></div>
+<div id="detail-thought"></div>
 </div>
 
-<!-- Faction legend -->
-<div id="faction-legend"></div>
+<!-- Faction tooltip -->
+<div id="faction-tip">
+<div id="ft-name"></div>
+<div id="ft-body"></div>
+</div>
+
+<!-- Map legend -->
+<div id="map-legend"></div>
+
+<!-- View toggle -->
+<div id="view-toggle">
+<button class="vt-btn active" data-view="territory" onclick="setView('territory')">Territory</button>
+<button class="vt-btn" data-view="network" onclick="setView('network')">Network</button>
+<button class="vt-btn" data-view="crisis" onclick="setView('crisis')">Crisis</button>
+</div>
 
 <!-- Search -->
 <div id="search-box"><input id="search-input" type="text" placeholder="Search NPC..."></div>
 
 <!-- Zoom controls -->
 <div id="zoom-ctrl">
-  <button id="zoom-in" title="Zoom in">+</button>
-  <button id="zoom-out" title="Zoom out">-</button>
-  <button id="zoom-reset" title="Reset view">R</button>
+<button id="zoom-in" title="Zoom in">+</button>
+<button id="zoom-out" title="Zoom out">-</button>
+<button id="zoom-reset" title="Reset view">R</button>
+<button id="zoom-fit" title="Fit all factions in view" style="font-size:12px;width:auto;padding:0 10px">FIT</button>
 </div>
 
 <!-- Help Overlay -->
@@ -145,40 +183,54 @@ body{background:#0a0a1a;color:#e0e0e0;font-family:'Courier New',monospace;overfl
 <p>This is a <strong>spatial visualization</strong> of the Federation simulation — 39 AI characters (NPCs) running autonomously across 8 factions. Each glowing dot is a living character thinking, deciding, and acting every few seconds.</p>
 </div>
 
-<h3>The Map Layout</h3>
+<h3>Faction Territory Regions</h3>
 <div class="help-section">
 <ul>
-<li><strong>8 faction clusters</strong> arranged in a circle — each cluster contains the NPCs belonging to that faction. The cluster label appears below it.</li>
-<li><strong>Center point</strong> (pulsing cyan dot) — The Federation core, the gravitational center of the society.</li>
-<li><strong>Outer scattered dots</strong> — Characters not belonging to any major faction (rogues, enigmas, independents).</li>
+<li><strong>Colored bubbles</strong> — Each faction has an <em>influence zone</em> shown as a translucent colored bubble. This is the faction's home sector, where its members operate. It represents influence, not hard ownership.</li>
+<li><strong>Bubble size</strong> — Scales with the number of NPCs in that faction. More members = larger influence area.</li>
+<li><strong>Bubble border</strong> — Dashed when influence is low (cohesion &lt; 40), solid when stable (cohesion 40+).</li>
+<li><strong>Grey space between bubbles</strong> — Neutral / unclaimed space. No faction controls it yet.</li>
+<li><strong>Overlapping bubbles</strong> — Contested or shared influence zones. Two factions are operating in close proximity.</li>
 </ul>
 </div>
 
-<h3>What the Dots Mean</h3>
+<h3>NPC Dots — Who Belongs Where</h3>
 <div class="help-section">
 <ul>
-<li><strong>Dot size</strong> — How recently the NPC was active. Bigger = more recent action. Small dim dots haven't acted in a while.</li>
-<li><strong>Dot color</strong> — The NPC's current mood:
-  <span class="color-swatch" style="background:#81C784"></span>Positive (happy, inspired),
-  <span class="color-swatch" style="background:#00BCD4"></span>Thinking (contemplative, curious),
-  <span class="color-swatch" style="background:#FF9800"></span>Uneasy (anxious, suspicious),
-  <span class="color-swatch" style="background:#F44336"></span>Negative (frustrated, aggressive),
-  <span class="color-swatch" style="background:#9e9e9e"></span>Unknown/Idle
-</li>
-<li><strong>Pulsing ring</strong> — The NPC took an action very recently (highly active).</li>
-<li><strong>Red outline</strong> — This NPC is a rival (hostile to the Federation).</li>
-<li><strong>Gold outline</strong> — This NPC is a companion (friendly to the player/Federation core).</li>
+<li><strong>Dot border color</strong> — Shows faction affiliation. A dot with a <span class="color-swatch" style="background:#ef5350"></span>red border belongs to Military Command. A <span class="color-swatch" style="background:#4fc3f7"></span>blue border = Research Division, etc.</li>
+<li><strong>Grey border</strong> — Unaffiliated NPC (companion, neutral, enigma, rival, or unknown).</li>
+<li><strong>Dot fill color</strong> — Current mood (see below).</li>
+<li><strong>Dot size</strong> — How recently the NPC was active. Bigger = more recent.</li>
+</ul>
+</div>
+
+<h3>What the Dot Colors Mean (Mood)</h3>
+<div class="help-section">
+<ul>
+<li><span class="color-swatch" style="background:#81C784"></span>Positive (happy, inspired)</li>
+<li><span class="color-swatch" style="background:#00BCD4"></span>Thinking (contemplative, curious)</li>
+<li><span class="color-swatch" style="background:#FF9800"></span>Uneasy (anxious, suspicious)</li>
+<li><span class="color-swatch" style="background:#F44336"></span>Negative (frustrated, aggressive)</li>
+<li><span class="color-swatch" style="background:#9e9e9e"></span>Unknown/Idle</li>
 </ul>
 </div>
 
 <h3>Lines Between Dots</h3>
 <div class="help-section">
 <ul>
-<li><span class="color-swatch" style="background:#66bb6a"></span><strong>Green lines</strong> — Positive relationship (trust, friendship, alliance). Thicker = stronger bond.</li>
-<li><span class="color-swatch" style="background:#ef5350"></span><strong>Red lines</strong> — Negative relationship (rivalry, distrust, hatred). Thicker = more intense conflict.</li>
+<li><span class="color-swatch" style="background:#66bb6a"></span><strong>Green lines</strong> — Positive relationship (trust, alliance). Thicker = stronger.</li>
+<li><span class="color-swatch" style="background:#ef5350"></span><strong>Red lines</strong> — Negative relationship (rivalry, hostility). Thicker = more intense.</li>
 <li><strong>No line</strong> — Weak or no significant relationship.</li>
 </ul>
-<p>These lines show who knows whom and how they feel about each other. A dense web of green lines inside a faction cluster means that faction is tight-knit. Red lines between clusters mean those factions are hostile.</p>
+</div>
+
+<h3>View Modes (Top-Left Buttons)</h3>
+<div class="help-section">
+<ul>
+<li><strong>Territory</strong> — Emphasizes faction regions, dims relationship lines. Best for understanding who controls what.</li>
+<li><strong>Network</strong> — Emphasizes relationship lines, dims territory fills. Best for seeing who knows whom and how they relate.</li>
+<li><strong>Crisis</strong> — Highlights conflict lines (red), anomaly/low-cohesion zones, and rival/enigma nodes. Best for spotting trouble.</li>
+</ul>
 </div>
 
 <h3>Controls</h3>
@@ -186,31 +238,32 @@ body{background:#0a0a1a;color:#e0e0e0;font-family:'Courier New',monospace;overfl
 <ul>
 <li><strong>Scroll wheel</strong> — Zoom in/out</li>
 <li><strong>Click + drag</strong> on empty space — Pan the map</li>
-<li><strong>Click a dot</strong> — Select an NPC, see details in the bottom-left panel (mood, goal, latest decision, latest thought)</li>
+<li><strong>Click a dot</strong> — Select an NPC, see details (mood, goal, latest decision, thought)</li>
+<li><strong>Hover over a faction bubble</strong> — See faction info tooltip (name, cohesion, NPC count, status)</li>
 <li><strong>Double-click a dot</strong> — Zoom in and center on that NPC</li>
-<li><strong>Search box</strong> (top-left) — Type an NPC name to find and focus on them</li>
-<li><strong>Zoom buttons</strong> (bottom center) — + / - / R (reset)</li>
+<li><strong>Search box</strong> (top-left) — Type an NPC name to find and focus</li>
+<li><strong>Zoom buttons</strong> (bottom center) — + / - / R (reset) / FIT</li>
 </ul>
 </div>
 
 <h3>Right Sidebar — Live Events</h3>
 <div class="help-section">
-<p>A scrolling feed of what's happening right now. Each event shows the character name, action type, and description. This is the same data as the Live Sim page's event feed, but in a compact format.</p>
+<p>A scrolling feed of what's happening right now. Each event shows the character name, action type, and description.</p>
 </div>
 
-<h3>Top Bar — World State</h3>
+<h3>Map Legend (Bottom-Right)</h3>
 <div class="help-section">
-<p>Same world health metrics as the Live Sim page: Tension, Stability, Morale, Threat, Anomaly. The tick indicator shows whether the simulation is running and how many cycles have completed.</p>
+<p>A persistent legend shows faction colors, zone types, and line meanings. Always visible so you never lose context.</p>
 </div>
 
 <h3>What to Watch For</h3>
 <div class="help-section">
 <ul>
-<li><strong>A faction cluster where all dots turn orange/red</strong> — That faction is in crisis or conflict.</li>
-<li><strong>Red lines appearing between two clusters</strong> — Factions are turning hostile toward each other.</li>
-<li><strong>Dots shrinking</strong> — NPCs becoming inactive, possibly due to low morale or resources.</li>
-<li><strong>Many dots pulsing simultaneously</strong> — A cascade event just happened, triggering many NPC reactions at once.</li>
-<li><strong>A cluster drifting apart</strong> (dots spreading wider) — Faction cohesion is dropping; members are diverging.</li>
+<li><strong>All dots in a bubble turning orange/red</strong> — Faction in crisis.</li>
+<li><strong>Red lines between two bubbles</strong> — Factions turning hostile.</li>
+<li><strong>Dots shrinking</strong> — NPCs becoming inactive.</li>
+<li><strong>Many dots pulsing</strong> — Cascade event just happened.</li>
+<li><strong>Bubble border turning dashed</strong> — Faction cohesion dropping below 40.</li>
 </ul>
 </div>
 </div>
@@ -222,17 +275,20 @@ const POLL_MS = 5000;
 
 // --- State ---
 let mapData = null;
-let nodes = [];       // {id, name, x, y, radius, color, npc, vx, vy, category, faction}
-let stars = [];       // background stars
+let nodes = [];
+let factionZones = []; // {fid, fcx, fcy, zoneR, color, fdata, groupSize}
+let stars = [];
 let zoom = 1;
 let panX = 0, panY = 0;
 let dragging = false, dragStartX, dragStartY, panStartX, panStartY;
 let hoveredNode = null;
 let selectedNode = null;
+let hoveredFaction = null;
 let canvas, ctx;
 let W, H;
 let sidebarW = 320;
 let lastUpdate = 0;
+let currentView = 'territory'; // 'territory' | 'network' | 'crisis'
 
 // Faction layout angles (8 factions in a circle)
 const FACTION_ORDER = [
@@ -240,6 +296,27 @@ const FACTION_ORDER = [
   'consciousness_collective', 'cultural_ministry', 'economic_council',
   'exploration_initiative', 'preservation_society'
 ];
+
+// Faction display names for tooltips
+const FACTION_DISPLAY = {
+  research_division: 'Research Division',
+  military_command: 'Military Command',
+  diplomatic_corps: 'Diplomatic Corps',
+  consciousness_collective: 'Consciousness Collective',
+  cultural_ministry: 'Cultural Ministry',
+  economic_council: 'Economic Council',
+  exploration_initiative: 'Exploration Initiative',
+  preservation_society: 'Preservation Society'
+};
+
+// Category colors for unaffiliated NPCs
+const CATEGORY_COLORS = {
+  companion: '#ffd700',
+  rival: '#ef5350',
+  neutral: '#78909c',
+  enigma: '#ab47bc',
+  unknown: '#546e7a'
+};
 
 function init() {
   canvas = document.getElementById('starmap');
@@ -255,9 +332,14 @@ function init() {
   document.getElementById('zoom-in').addEventListener('click', () => { zoom = Math.min(4, zoom * 1.3); });
   document.getElementById('zoom-out').addEventListener('click', () => { zoom = Math.max(0.3, zoom / 1.3); });
   document.getElementById('zoom-reset').addEventListener('click', () => { zoom = 1; panX = 0; panY = 0; });
+  document.getElementById('zoom-fit').addEventListener('click', () => {
+    const factionRadius = Math.min(W, H) * 0.35;
+    const needed = factionRadius * 2.6;
+    zoom = Math.max(0.3, Math.min(W, H) / needed);
+    panX = 0; panY = 0;
+  });
   document.getElementById('search-input').addEventListener('input', onSearch);
 
-  // Generate background stars
   for (let i = 0; i < 400; i++) {
     stars.push({
       x: Math.random() * 3000 - 500,
@@ -284,6 +366,14 @@ function resize() {
   ctx.setTransform(devicePixelRatio, 0, 0, devicePixelRatio, 0, 0);
 }
 
+// --- View toggle ---
+function setView(v) {
+  currentView = v;
+  document.querySelectorAll('.vt-btn').forEach(b => {
+    b.classList.toggle('active', b.dataset.view === v);
+  });
+}
+
 // --- Data fetch ---
 async function fetchData() {
   try {
@@ -298,6 +388,16 @@ async function fetchData() {
   }
 }
 
+function hashStr(s) {
+  let h = 0;
+  for (let i = 0; i < s.length; i++) h = ((h << 5) - h + s.charCodeAt(i)) | 0;
+  return h;
+}
+function seededRand(seed) {
+  let s = seed | 0;
+  return function() { s = (s * 1103515245 + 12345) & 0x7fffffff; return s / 0x7fffffff; };
+}
+
 // --- Build node positions ---
 function buildNodes() {
   if (!mapData) return;
@@ -306,47 +406,44 @@ function buildNodes() {
   const now = Date.now() / 1000;
   const cx = W / 2;
   const cy = H / 2;
-  const factionRadius = Math.min(W, H) * 0.32;
+  const factionRadius = Math.min(W, H) * 0.35;
+  const npcLocalRadius = 80;
 
-  // Group NPCs by faction (from affiliation) or category
   const factionGroups = {};
   FACTION_ORDER.forEach(f => factionGroups[f] = []);
-  const rivalGroup = [];
-  const neutralGroup = [];
-  const enigmaGroup = [];
-  const companionGroup = [];
-  const unknownGroup = [];
+  const rivalGroup = [], neutralGroup = [], enigmaGroup = [], companionGroup = [], unknownGroup = [];
 
   for (const npc of npcs) {
     const aff = npc.affiliation;
     if (aff && factionGroups[aff]) {
       factionGroups[aff].push(npc);
-    } else if (npc.category === 'rival') {
-      rivalGroup.push(npc);
-    } else if (npc.category === 'neutral') {
-      neutralGroup.push(npc);
-    } else if (npc.category === 'enigma') {
-      enigmaGroup.push(npc);
-    } else if (npc.category === 'companion') {
-      companionGroup.push(npc);
-    } else {
-      unknownGroup.push(npc);
-    }
+    } else if (npc.category === 'rival') { rivalGroup.push(npc); }
+    else if (npc.category === 'neutral') { neutralGroup.push(npc); }
+    else if (npc.category === 'enigma') { enigmaGroup.push(npc); }
+    else if (npc.category === 'companion') { companionGroup.push(npc); }
+    else { unknownGroup.push(npc); }
   }
 
   nodes = [];
+  factionZones = [];
 
-  // Place faction NPCs in clusters
   FACTION_ORDER.forEach((fid, i) => {
     const angle = (i / FACTION_ORDER.length) * Math.PI * 2 - Math.PI / 2;
     const fcx = cx + Math.cos(angle) * factionRadius;
     const fcy = cy + Math.sin(angle) * factionRadius;
     const group = factionGroups[fid];
-    const spread = Math.max(40, group.length * 12);
+    const spread = Math.max(npcLocalRadius, group.length * 14);
+    const zoneR = Math.max(npcLocalRadius, group.length * 14) + 20;
+    const fdata = factions[fid] || {};
+    const color = fdata.color || '#333';
+
+    // Store zone for hover detection
+    factionZones.push({ fid, fcx, fcy, zoneR, color, fdata, groupSize: group.length });
 
     group.forEach((npc, j) => {
+      const rng = seededRand(hashStr(npc.id || npc.name || (fid + j)));
       const subAngle = (j / group.length) * Math.PI * 2;
-      const subR = spread * (0.3 + Math.random() * 0.7);
+      const subR = spread * (0.3 + rng() * 0.7);
       const x = fcx + Math.cos(subAngle) * subR;
       const y = fcy + Math.sin(subAngle) * subR;
       const age = npc.last_active ? (now - npc.last_active) : 9999;
@@ -354,79 +451,90 @@ function buildNodes() {
       const radius = 5 + activity * 8;
 
       nodes.push({
-        id: npc.id, name: npc.name || npc.id, x, y, radius, 
+        id: npc.id, name: npc.name || npc.id, x, y, radius,
         color: npc.mood_color || '#9e9e9e',
         npc, category: npc.category || 'unknown', faction: fid,
-        activity, age
+        activity, age,
+        factionColor: color
       });
     });
   });
 
-  // Place rivals in outer hostile zone
+  // Rivals
   const rivalAngle = -Math.PI * 0.15;
   const rivalDist = factionRadius * 1.35;
   rivalGroup.forEach((npc, j) => {
     const spread = Math.max(30, rivalGroup.length * 10);
+    const rng = seededRand(hashStr(npc.id || npc.name || ('rival' + j)));
     const a = rivalAngle + (j - rivalGroup.length/2) * 0.2;
-    const r = rivalDist + (Math.random() - 0.5) * spread;
+    const r = rivalDist + (rng() - 0.5) * spread;
     nodes.push({
       id: npc.id, name: npc.name || npc.id,
       x: cx + Math.cos(a) * r, y: cy + Math.sin(a) * r,
       radius: 7, color: npc.mood_color || '#ef5350',
       npc, category: 'rival', faction: null,
-      activity: 0.5, age: 999
+      activity: 0.5, age: 999,
+      factionColor: CATEGORY_COLORS.rival
     });
   });
 
-  // Place neutrals scattered
+  // Neutrals
   neutralGroup.forEach((npc, j) => {
-    const a = Math.random() * Math.PI * 2;
-    const r = factionRadius * (0.6 + Math.random() * 0.6);
+    const rng = seededRand(hashStr(npc.id || npc.name || ('neutral' + j)));
+    const a = rng() * Math.PI * 2;
+    const r = factionRadius * (0.3 + rng() * 0.5);
     nodes.push({
       id: npc.id, name: npc.name || npc.id,
       x: cx + Math.cos(a) * r, y: cy + Math.sin(a) * r,
       radius: 4, color: npc.mood_color || '#78909c',
       npc, category: 'neutral', faction: null,
-      activity: 0.3, age: 999
+      activity: 0.3, age: 999,
+      factionColor: CATEGORY_COLORS.neutral
     });
   });
 
-  // Place enigmas in scattered locations
+  // Enigmas
   enigmaGroup.forEach((npc, j) => {
-    const a = Math.random() * Math.PI * 2;
-    const r = factionRadius * (0.8 + Math.random() * 0.5);
+    const rng = seededRand(hashStr(npc.id || npc.name || ('enigma' + j)));
+    const a = rng() * Math.PI * 2;
+    const r = factionRadius * (0.8 + rng() * 0.5);
     nodes.push({
       id: npc.id, name: npc.name || npc.id,
       x: cx + Math.cos(a) * r, y: cy + Math.sin(a) * r,
       radius: 5, color: npc.mood_color || '#ab47bc',
       npc, category: 'enigma', faction: null,
-      activity: 0.4, age: 999
+      activity: 0.4, age: 999,
+      factionColor: CATEGORY_COLORS.enigma
     });
   });
 
-  // Place companions near center
+  // Companions
   companionGroup.forEach((npc, j) => {
-    const a = (j / companionGroup.length) * Math.PI * 2;
-    const r = 40 + Math.random() * 60;
+    const rng = seededRand(hashStr(npc.id || npc.name || ('comp' + j)));
+    const a = (j / Math.max(1, companionGroup.length)) * Math.PI * 2;
+    const r = 40 + rng() * 60;
     nodes.push({
       id: npc.id, name: npc.name || npc.id,
       x: cx + Math.cos(a) * r, y: cy + Math.sin(a) * r,
       radius: 6, color: npc.mood_color || '#ffd700',
       npc, category: 'companion', faction: null,
-      activity: 0.7, age: 999
+      activity: 0.7, age: 999,
+      factionColor: CATEGORY_COLORS.companion
     });
   });
 
-  // Unknowns at center-ish
+  // Unknowns
   unknownGroup.forEach((npc, j) => {
-    const a = Math.random() * Math.PI * 2;
-    const r = Math.random() * 80;
+    const rng = seededRand(hashStr(npc.id || npc.name || ('unk' + j)));
+    const a = rng() * Math.PI * 2;
+    const r = factionRadius * (0.15 + rng() * 0.4);
     nodes.push({
       id: npc.id, name: npc.name || npc.id,
       x: cx + Math.cos(a) * r, y: cy + Math.sin(a) * r,
       radius: 4, color: '#9e9e9e',
       npc, category: 'unknown', faction: null,
-      activity: 0.2, age: 999
+      activity: 0.2, age: 999,
+      factionColor: CATEGORY_COLORS.unknown
     });
   });
 }
@@ -437,14 +545,12 @@ function updateUI() {
   const ws = mapData.world_state || {};
   const worker = mapData.worker || {};
 
-  // World state bars
   setBar('tension', ws.tension_level, 100, '#ef5350');
   setBar('stability', ws.stability, 100, '#66bb6a');
   setBar('morale', ws.morale, 100, '#ffd700');
   setBar('threat', ws.threat_level, 100, '#f44336');
   setBar('anomaly', ws.anomaly_activity, 100, '#ab47bc');
 
-  // Tick indicator
   const tickCount = worker.tick_count || 0;
   const status = worker.status || 'unknown';
   const dot = document.getElementById('tick-dot');
@@ -458,23 +564,52 @@ function updateUI() {
   for (const ev of events) {
     const moodColor = ev.mood ? (mapData.npcs.find(n => n.mood === ev.mood)?.mood_color || '#9e9e9e') : '#9e9e9e';
     html += `<div class="ev-item">
-      <span class="ev-mood" style="background:${moodColor}"></span>
-      <span class="ev-char">${ev.char_name || 'Unknown'}</span>
-      <span class="ev-type">${ev.action_type || ''}</span>
-      <div class="ev-desc">${ev.description || ''}</div>
-    </div>`;
+<span class="ev-mood" style="background:${moodColor}"></span>
+<span class="ev-char">${ev.char_name || 'Unknown'}</span>
+<span class="ev-type">${ev.action_type || ''}</span>
+<div class="ev-desc">${ev.description || ''}</div>
+</div>`;
   }
   el.innerHTML = html;
 
-  // Faction legend
-  const fl = document.getElementById('faction-legend');
+  // Map legend — always visible
+  buildLegend();
+}
+
+function buildLegend() {
   const factions = mapData.factions || {};
-  let fhtml = '';
-  for (const [fid, fdata] of Object.entries(factions)) {
-    fhtml += `<div class="fl-row"><div class="fl-dot" style="background:${fdata.color}"></div><span class="fl-name">${fdata.display_name || fid}</span></div>`;
+  const ml = document.getElementById('map-legend');
+  let html = '<h3>Map Legend</h3>';
+
+  // Factions
+  html += '<div class="ml-section"><div class="ml-section-title">Factions</div>';
+  for (const fid of FACTION_ORDER) {
+    const fdata = factions[fid];
+    if (!fdata) continue;
+    html += `<div class="ml-row"><div class="ml-dot" style="background:${fdata.color}"></div><span class="ml-name">${fdata.display_name || fid}</span></div>`;
   }
-  fl.innerHTML = fhtml;
-  fl.classList.add('show');
+  html += '</div>';
+
+  // Zone types
+  html += '<div class="ml-section"><div class="ml-section-title">Zone Types</div>';
+  html += '<div class="ml-row"><div class="ml-zone" style="background:rgba(79,195,247,0.15);border-color:rgba(79,195,247,0.5)"></div><span class="ml-name">Faction influence area</span></div>';
+  html += '<div class="ml-row"><div class="ml-zone" style="background:rgba(120,144,156,0.08);border-color:rgba(120,144,156,0.3)"></div><span class="ml-name">Neutral / unclaimed</span></div>';
+  html += '<div class="ml-row"><div class="ml-zone" style="background:rgba(255,152,0,0.12);border-color:rgba(255,152,0,0.4)"></div><span class="ml-name">Contested / overlap</span></div>';
+  html += '</div>';
+
+  // Line types
+  html += '<div class="ml-section"><div class="ml-section-title">Relationship Lines</div>';
+  html += '<div class="ml-row"><div class="ml-line" style="background:#66bb6a"></div><span class="ml-name">Support / alliance</span></div>';
+  html += '<div class="ml-row"><div class="ml-line" style="background:#ef5350"></div><span class="ml-name">Conflict / hostility</span></div>';
+  html += '</div>';
+
+  // NPC borders
+  html += '<div class="ml-section"><div class="ml-section-title">NPC Dot Borders</div>';
+  html += '<div class="ml-row"><div class="ml-dot" style="background:#9e9e9e;border:2px solid #4fc3f7"></div><span class="ml-name">Faction member (border = faction color)</span></div>';
+  html += '<div class="ml-row"><div class="ml-dot" style="background:#9e9e9e;border:2px solid #546e7a"></div><span class="ml-name">Unaffiliated (grey border)</span></div>';
+  html += '</div>';
+
+  ml.innerHTML = html;
 }
 
 function setBar(name, val, max, color) {
@@ -485,12 +620,106 @@ function setBar(name, val, max, color) {
   if (vl) vl.textContent = val || 0;
 }
 
+// --- Faction zone hover detection ---
+function getFactionZoneAt(sx, sy) {
+  const {x, y} = screenToWorld(sx, sy);
+  for (const z of factionZones) {
+    const dx = x - z.fcx, dy = y - z.fcy;
+    if (dx*dx + dy*dy < z.zoneR * z.zoneR) return z;
+  }
+  return null;
+}
+
+function showFactionTip(zone, mx, my) {
+  const tip = document.getElementById('faction-tip');
+  const fdata = zone.fdata;
+  const cohesion = fdata.cohesion || 50;
+  const statusLabel = cohesion < 40 ? 'contested' : 'influence';
+  const statusClass = cohesion < 40 ? 'ft-contested' : 'ft-influence';
+
+  document.getElementById('ft-name').textContent = FACTION_DISPLAY[zone.fid] || zone.fid;
+  document.getElementById('ft-name').style.color = zone.color;
+
+  let body = '';
+  body += `<div id="ft-row"><span class="ftl">NPCs</span><span class="ftv">${zone.groupSize}</span></div>`;
+  body += `<div id="ft-row"><span class="ftl">Cohesion</span><span class="ftv">${cohesion}</span></div>`;
+  body += `<div id="ft-row"><span class="ftl">Influence</span><span class="ftv">${fdata.influence || 0}</span></div>`;
+  body += `<div id="ft-row"><span class="ftl">Standing</span><span class="ftv">${fdata.standing || 0}</span></div>`;
+  body += `<div id="ft-row"><span class="ftl">Vigilance</span><span class="ftv">${fdata.vigilance || 0}</span></div>`;
+
+  // Stances toward other factions (show top 3)
+  const stances = fdata.stances || {};
+  const stanceEntries = Object.entries(stances).slice(0, 3);
+  if (stanceEntries.length > 0) {
+    body += '<div style="border-top:1px solid rgba(255,255,255,0.1);margin-top:6px;padding-top:6px">';
+    body += '<div id="ft-row" style="color:#78909c;font-size:10px;text-transform:uppercase;letter-spacing:1px">Key Stances</div>';
+    for (const [targetId, stance] of stanceEntries) {
+      const stanceLabel = stance.stance || stance.attitude || 'neutral';
+      const stanceColor = stanceLabel === 'hostile' ? '#ef5350' : (stanceLabel === 'allied' || stanceLabel === 'friendly' ? '#66bb6a' : '#ffa726');
+      body += `<div id="ft-row"><span class="ftl" style="font-size:10px">${FACTION_DISPLAY[targetId] || targetId}</span><span class="ftv" style="color:${stanceColor};font-size:10px">${stanceLabel}</span></div>`;
+    }
+    body += '</div>';
+  }
+
+  body += `<div style="margin-top:8px"><span id="ft-status" class="${statusClass}">${statusLabel} sector</span></div>`;
+
+  document.getElementById('ft-body').innerHTML = body;
+
+  // Position tooltip
+  let tx = mx + 16, ty = my - 10;
+  if (tx + 220 > W) tx = mx - 220;
+  if (ty + 200 > H) ty = my - 200;
+  if (ty < 0) ty = 10;
+  tip.style.left = tx + 'px';
+  tip.style.top = ty + 'px';
+  tip.classList.add('show');
+}
+
+function hideFactionTip() {
+  document.getElementById('faction-tip').classList.remove('show');
+}
+
+// --- View-dependent rendering params ---
+function getViewParams() {
+  if (currentView === 'territory') {
+    return {
+      zoneFillAlpha: 0.12,
+      zoneBorderAlpha: 0.5,
+      zoneBorderWidth: 2.5,
+      lineAlphaScale: 0.25,
+      npcFactionBorder: 2.5,
+      labelSize: 12,
+      labelAlpha: 0.9
+    };
+  } else if (currentView === 'network') {
+    return {
+      zoneFillAlpha: 0.03,
+      zoneBorderAlpha: 0.15,
+      zoneBorderWidth: 1,
+      lineAlphaScale: 1.0,
+      npcFactionBorder: 1.5,
+      labelSize: 10,
+      labelAlpha: 0.5
+    };
+  } else { // crisis
+    return {
+      zoneFillAlpha: 0.06,
+      zoneBorderAlpha: 0.3,
+      zoneBorderWidth: 1.5,
+      lineAlphaScale: 0.6,
+      npcFactionBorder: 2,
+      labelSize: 10,
+      labelAlpha: 0.6
+    };
+  }
+}
+
 // --- Drawing ---
 function draw() {
   const t = performance.now();
+  const vp = getViewParams();
   ctx.clearRect(0, 0, W, H);
 
-  // Dark space background
   ctx.fillStyle = '#0a0a1a';
   ctx.fillRect(0, 0, W, H);
 
@@ -508,31 +737,83 @@ function draw() {
     ctx.fill();
   }
 
-  // Faction zone circles (subtle)
-  if (mapData && mapData.factions) {
-    const cx = W / 2, cy = H / 2;
-    const factionRadius = Math.min(W, H) * 0.32;
-    FACTION_ORDER.forEach((fid, i) => {
-      const angle = (i / FACTION_ORDER.length) * Math.PI * 2 - Math.PI / 2;
-      const fcx = cx + Math.cos(angle) * factionRadius;
-      const fcy = cy + Math.sin(angle) * factionRadius;
-      const fdata = mapData.factions[fid];
-      const color = fdata ? fdata.color : '#333';
-      ctx.beginPath();
-      ctx.arc(fcx, fcy, 60, 0, Math.PI * 2);
-      ctx.strokeStyle = color + '33';
-      ctx.lineWidth = 1;
-      ctx.stroke();
-      ctx.fillStyle = color + '0a';
-      ctx.fill();
+  // Faction territory zones — prominent colored bubbles
+  for (const z of factionZones) {
+    const fdata = z.fdata;
+    const cohesion = fdata ? (fdata.cohesion || 50) : 50;
+    const isHovered = hoveredFaction === z;
 
-      // Faction label
-      ctx.fillStyle = color + '88';
-      ctx.font = '9px Courier New';
-      ctx.textAlign = 'center';
-      ctx.fillText((fdata ? fdata.display_name : fid).toUpperCase(), fcx, fcy + 75);
-    });
+    // Check for overlapping zones (contested)
+    let isContested = false;
+    for (const z2 of factionZones) {
+      if (z2.fid === z.fid) continue;
+      const dx = z.fcx - z2.fcx, dy = z.fcy - z2.fcy;
+      const dist = Math.sqrt(dx*dx + dy*dy);
+      if (dist < z.zoneR + z2.zoneR - 30) { isContested = true; break; }
+    }
+
+    // Fill
+    const fillAlpha = isHovered ? vp.zoneFillAlpha * 2 : vp.zoneFillAlpha;
+    ctx.beginPath();
+    ctx.arc(z.fcx, z.fcy, z.zoneR, 0, Math.PI * 2);
+    ctx.fillStyle = hexToRgba(z.color, fillAlpha);
+    ctx.fill();
+
+    // Border — solid for stable factions, dashed for low cohesion
+    const borderAlpha = isHovered ? Math.min(1, vp.zoneBorderAlpha * 1.8) : vp.zoneBorderAlpha;
+    ctx.beginPath();
+    if (cohesion < 40) {
+      ctx.setLineDash([8, 6]);
+    } else {
+      ctx.setLineDash([]);
+    }
+    ctx.arc(z.fcx, z.fcy, z.zoneR, 0, Math.PI * 2);
+    ctx.strokeStyle = hexToRgba(z.color, borderAlpha);
+    ctx.lineWidth = isHovered ? vp.zoneBorderWidth + 1 : vp.zoneBorderWidth;
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    // Contested overlay indicator
+    if (isContested) {
+      ctx.beginPath();
+      ctx.arc(z.fcx, z.fcy, z.zoneR + 4, 0, Math.PI * 2);
+      ctx.strokeStyle = 'rgba(255,152,0,0.15)';
+      ctx.lineWidth = 1;
+      ctx.setLineDash([4, 4]);
+      ctx.stroke();
+      ctx.setLineDash([]);
+    }
+
+    // Faction label — large and legible
+    ctx.fillStyle = hexToRgba(z.color, isHovered ? 1.0 : vp.labelAlpha);
+    ctx.font = `bold ${vp.labelSize}px Courier New`;
+    ctx.textAlign = 'center';
+    const displayName = (fdata ? fdata.display_name : z.fid).toUpperCase();
+    ctx.fillText(displayName, z.fcx, z.fcy + z.zoneR + 16);
+
+    // Sub-label: sector type
+    const sectorType = cohesion < 40 ? 'CONTESTED' : 'INFLUENCE ZONE';
+    ctx.fillStyle = hexToRgba(z.color, isHovered ? 0.7 : 0.35);
+    ctx.font = `9px Courier New`;
+    ctx.fillText(sectorType, z.fcx, z.fcy + z.zoneR + 28);
   }
+
+  // Center zone — neutral / Federation core
+  const cx = W / 2, cy = H / 2;
+  const centerR = 70;
+  ctx.beginPath();
+  ctx.arc(cx, cy, centerR, 0, Math.PI * 2);
+  ctx.fillStyle = 'rgba(120,144,156,0.04)';
+  ctx.fill();
+  ctx.strokeStyle = 'rgba(120,144,156,0.12)';
+  ctx.lineWidth = 1;
+  ctx.setLineDash([6, 4]);
+  ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.fillStyle = 'rgba(120,144,156,0.4)';
+  ctx.font = '9px Courier New';
+  ctx.textAlign = 'center';
+  ctx.fillText('NEUTRAL / FEDERATION CORE', cx, cy + centerR + 14);
 
   // Relationship lines
   if (mapData) {
@@ -544,18 +825,40 @@ function draw() {
       for (const [otherId, score] of Object.entries(rels)) {
         const other = nodeMap[otherId];
         if (!other) continue;
-        if (node.id > otherId) continue; // draw each line once
+        if (node.id > otherId) continue;
 
         const strength = Math.abs(score) / 100;
         if (strength < 0.1) continue;
+
+        const dx = node.x - other.x, dy = node.y - other.y;
+        const dist = Math.sqrt(dx*dx + dy*dy);
+        const maxDist = Math.min(W, H) * 0.6;
+        const distFade = dist > maxDist ? 0.3 : (dist > maxDist * 0.5 ? 0.6 : 1.0);
+
         const isPositive = score > 50;
-        const lineColor = isPositive ? `rgba(102,187,106,${strength * 0.4})` : `rgba(239,83,80,${strength * 0.4})`;
+        const isConflict = score < -30;
+
+        // Crisis view: only show conflict lines
+        if (currentView === 'crisis' && !isConflict && strength < 0.4) continue;
+
+        const baseAlpha = strength * 0.4 * distFade * vp.lineAlphaScale;
+
+        let lineColor;
+        if (isPositive) {
+          lineColor = `rgba(102,187,106,${baseAlpha})`;
+        } else if (isConflict) {
+          // Crisis view makes conflict lines pulse
+          const crisisPulse = currentView === 'crisis' ? (0.7 + 0.3 * Math.sin(t * 0.005)) : 1.0;
+          lineColor = `rgba(239,83,80,${baseAlpha * crisisPulse})`;
+        } else {
+          lineColor = `rgba(255,152,0,${baseAlpha * 0.6})`;
+        }
 
         ctx.beginPath();
         ctx.moveTo(node.x, node.y);
         ctx.lineTo(other.x, other.y);
         ctx.strokeStyle = lineColor;
-        ctx.lineWidth = Math.max(0.5, strength * 2);
+        ctx.lineWidth = Math.max(0.5, strength * 2 * distFade);
         ctx.stroke();
       }
     }
@@ -568,10 +871,13 @@ function draw() {
     const isSelected = selectedNode === node;
     const r = node.radius * (isHovered ? 1.4 : 1);
 
+    // Crisis view: highlight rivals and enigmas with pulse
+    const isCrisisHighlight = currentView === 'crisis' && (node.category === 'rival' || node.category === 'enigma');
+
     // Glow
     const glowR = r * 3;
     const glow = ctx.createRadialGradient(node.x, node.y, r * 0.5, node.x, node.y, glowR);
-    glow.addColorStop(0, node.color + '44');
+    glow.addColorStop(0, node.color + (isCrisisHighlight ? '66' : '44'));
     glow.addColorStop(1, node.color + '00');
     ctx.beginPath();
     ctx.arc(node.x, node.y, glowR, 0, Math.PI * 2);
@@ -579,10 +885,10 @@ function draw() {
     ctx.fill();
 
     // Activity pulse ring
-    if (node.activity > 0.5) {
+    if (node.activity > 0.5 || isCrisisHighlight) {
       ctx.beginPath();
       ctx.arc(node.x, node.y, r + 4 + pulse * 3, 0, Math.PI * 2);
-      ctx.strokeStyle = node.color + '44';
+      ctx.strokeStyle = isCrisisHighlight ? 'rgba(239,83,80,0.5)' : (node.color + '44');
       ctx.lineWidth = 1;
       ctx.stroke();
     }
@@ -596,22 +902,30 @@ function draw() {
     ctx.fillStyle = grad;
     ctx.fill();
 
-    // Category ring
-    if (node.category === 'rival') {
-      ctx.strokeStyle = '#ef5350';
-      ctx.lineWidth = 2;
+    // Faction affiliation border (colored ring around dot)
+    if (node.faction && node.factionColor) {
+      ctx.strokeStyle = node.factionColor;
+      ctx.lineWidth = vp.npcFactionBorder;
       ctx.stroke();
-    } else if (node.category === 'companion') {
-      ctx.strokeStyle = '#ffd700';
-      ctx.lineWidth = 1.5;
+    } else {
+      // Unaffiliated: grey ring, thicker for companions, thinner for others
+      const catColor = CATEGORY_COLORS[node.category] || CATEGORY_COLORS.unknown;
+      ctx.strokeStyle = currentView === 'crisis' && node.category === 'rival'
+        ? '#ef5350' : catColor;
+      ctx.lineWidth = node.category === 'companion' ? 2 : 1;
       ctx.stroke();
-    } else if (isSelected) {
+    }
+
+    // Selected highlight
+    if (isSelected) {
+      ctx.beginPath();
+      ctx.arc(node.x, node.y, r + 3, 0, Math.PI * 2);
       ctx.strokeStyle = '#4fc3f7';
       ctx.lineWidth = 2;
       ctx.stroke();
     }
 
-    // Name label (only at reasonable zoom or hovered)
+    // Name label
     if (isHovered || isSelected || zoom > 1.2) {
       ctx.fillStyle = isHovered ? '#ffffff' : '#b0b0b0';
       ctx.font = `${isHovered ? '12' : '10'}px Courier New`;
@@ -620,8 +934,7 @@ function draw() {
     }
   }
 
-  // Center marker (player/federation core)
-  const cx = W / 2, cy = H / 2;
+  // Center marker (Federation core)
   ctx.beginPath();
   ctx.arc(cx, cy, 3, 0, Math.PI * 2);
   ctx.fillStyle = '#4fc3f7';
@@ -633,8 +946,18 @@ function draw() {
   ctx.stroke();
 
   ctx.restore();
-
   requestAnimationFrame(draw);
+}
+
+// hex color to rgba string
+function hexToRgba(hex, alpha) {
+  let c = hex.replace('#', '');
+  if (c.length === 3) c = c[0]+c[0]+c[1]+c[1]+c[2]+c[2];
+  const num = parseInt(c, 16);
+  const r = (num >> 16) & 0xff;
+  const g = (num >> 8) & 0xff;
+  const b = num & 0xff;
+  return `rgba(${r},${g},${b},${alpha})`;
 }
 
 function lighten(hex, amt) {
@@ -675,7 +998,23 @@ function onMouseMove(e) {
 
   const node = getNodeAt(mx, my);
   hoveredNode = node;
-  canvas.style.cursor = node ? 'pointer' : 'grab';
+
+  // Check faction zone hover (only if not hovering an NPC)
+  if (!node) {
+    const zone = getFactionZoneAt(mx, my);
+    hoveredFaction = zone ? zone.fid : null;
+    if (zone) {
+      showFactionTip(zone, mx, my);
+      canvas.style.cursor = 'pointer';
+    } else {
+      hideFactionTip();
+      canvas.style.cursor = 'grab';
+    }
+  } else {
+    hoveredFaction = null;
+    hideFactionTip();
+    canvas.style.cursor = 'pointer';
+  }
 }
 
 function onMouseDown(e) {
@@ -719,7 +1058,6 @@ function onDblClick(e) {
   const my = e.clientY - rect.top;
   const node = getNodeAt(mx, my);
   if (node) {
-    // Center on node
     panX = W/2 - node.x * zoom;
     panY = H/2 - node.y * zoom;
     zoom = 2;
@@ -732,10 +1070,12 @@ function showDetail(node) {
 
   panel.classList.add('show');
   document.getElementById('detail-name').textContent = node.name;
-  document.getElementById('detail-cat').textContent = node.category.replace('_', ' ').toUpperCase() + (node.faction ? ' · ' + node.faction.replace('_', ' ').toUpperCase() : '');
+  const factionLabel = node.faction ? ' · ' + (FACTION_DISPLAY[node.faction] || node.faction.replace(/_/g,' ')).toUpperCase() : '';
+  document.getElementById('detail-cat').textContent = node.category.replace(/_/g,' ').toUpperCase() + factionLabel;
 
   const npc = node.npc;
   let rows = '';
+  if (npc.affiliation) rows += `<div id="detail-row"><span class="dl">Faction</span><span class="dv" style="color:${node.factionColor || '#4fc3f7'}">${FACTION_DISPLAY[npc.affiliation] || npc.affiliation}</span></div>`;
   if (npc.mood) rows += `<div id="detail-row"><span class="dl">Mood</span><span class="dv" style="color:${node.color}">${npc.mood}</span></div>`;
   if (npc.goal) rows += `<div id="detail-row"><span class="dl">Goal</span><span class="dv">${npc.goal}</span></div>`;
   if (npc.latest_decision) rows += `<div id="detail-row"><span class="dl">Decision</span><span class="dv">${npc.latest_decision}</span></div>`;
@@ -757,7 +1097,7 @@ function onSearch(e) {
   }
 }
 
-// --- Audio toggle (persists mute state across pages) ---
+// --- Audio toggle ---
 let isMuted = localStorage.getItem('federation-muted') === 'true';
 
 function toggleMute() {
@@ -777,7 +1117,6 @@ document.addEventListener('keydown', function(e) {
   if (e.key === 'm' || e.key === 'M') { toggleMute(); e.preventDefault(); }
 });
 
-// Audio toggle button init
 const audioBtn = document.getElementById('audio-toggle');
 if (isMuted) {
   audioBtn.classList.add('muted');
