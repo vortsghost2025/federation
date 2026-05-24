@@ -111,6 +111,13 @@ html,body{height:100%;overflow:hidden;background:#040810;color:var(--white);font
 .qh-stat-label{font-size:12px;color:var(--dim);text-transform:uppercase;letter-spacing:1px}
 .qh-type-list{display:flex;gap:4px;flex-wrap:wrap;margin-top:6px}
 .qh-type-tag{font-size:12px;padding:2px 6px;border-radius:3px;background:rgba(206,147,216,0.1);border:1px solid rgba(206,147,216,0.2);color:var(--violet)}
+/* RAW EVENTS COLLAPSIBLE */
+.raw-toggle{display:flex;align-items:center;gap:6px;padding:6px 10px;margin-top:10px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.06);border-radius:6px;cursor:pointer;color:var(--dim);font-size:13px;letter-spacing:1px;text-transform:uppercase;font-family:'Orbitron',sans-serif;font-weight:700;transition:border-color 0.3s,background 0.3s;user-select:none}
+.raw-toggle:hover{background:rgba(255,255,255,0.05);border-color:rgba(0,188,212,0.2)}
+.raw-toggle::before{content:'▸';transition:transform 0.3s}
+.raw-toggle.open::before{content:'▾'}
+.raw-events-wrap{max-height:0;overflow:hidden;transition:max-height 0.4s ease;opacity:0}
+.raw-events-wrap.open{max-height:2000px;opacity:1;margin-top:4px}
 .intro-box{background:rgba(0,188,212,0.06);border:1px solid rgba(0,188,212,0.15);border-radius:8px;padding:10px 12px;margin-bottom:12px;font-size:13px;line-height:1.5;color:var(--dim)}
 .intro-box strong{color:var(--cyan)}
 .intro-legend{display:flex;gap:12px;margin-top:8px;flex-wrap:wrap;font-size:13px}
@@ -272,43 +279,43 @@ html,body{height:100%;overflow:hidden;background:#040810;color:var(--white);font
 <span class="top-tick-val" id="tick-count">&mdash;</span>
 </div>
 <div class="top-metric">
-<span class="tm-label" title="How much conflict is brewing between factions. High = war likely, low = peace.">Tension</span>
+<span class="tm-label" title="How hot conflict is between factions. High = war likely, low = peace.">Tension</span>
 <span class="tm-val" id="val-tension">&mdash;</span>
 <div class="tm-bar" role="progressbar" aria-label="Tension level"><div class="tm-fill" id="bar-tension" style="width:0;background:var(--red)"></div></div>
 <span class="tm-sev" id="sev-tension"></span>
 </div>
 <div class="top-metric">
-<span class="tm-label" title="How abundant food, energy, and materials are. High = prosperity, low = desperation.">Resources</span>
+<span class="tm-label" title="How abundant food, energy, and materials are. High = prosperity, low = scarcity.">Resources</span>
 <span class="tm-val" id="val-resources">&mdash;</span>
 <div class="tm-bar" role="progressbar" aria-label="Resource level"><div class="tm-fill" id="bar-resources" style="width:0;background:var(--green)"></div></div>
 <span class="tm-sev" id="sev-resources"></span>
 </div>
 <div class="top-metric">
-<span class="tm-label" title="External danger level — anomalies, environmental hazards. High = the world itself is hostile.">Threat</span>
+<span class="tm-label" title="External and internal danger level. High = the world is hostile.">Threat</span>
 <span class="tm-val" id="val-threat">&mdash;</span>
 <div class="tm-bar" role="progressbar" aria-label="Threat level"><div class="tm-fill" id="bar-threat" style="width:0;background:var(--red)"></div></div>
 <span class="tm-sev" id="sev-threat"></span>
 </div>
 <div class="top-metric">
-<span class="tm-label" title="How well the social order holds. High = institutions function, low = chaos and power vacuums.">Stability</span>
+<span class="tm-label" title="How well the social order holds. High = institutions function, low = chaos.">Stability</span>
 <span class="tm-val" id="val-stability">&mdash;</span>
 <div class="tm-bar" role="progressbar" aria-label="Stability level"><div class="tm-fill" id="bar-stability" style="width:0;background:var(--cyan)"></div></div>
 <span class="tm-sev" id="sev-stability"></span>
 </div>
 <div class="top-metric">
-<span class="tm-label" title="Aggregate mood of all NPCs — social confidence. High = hope and cooperation, low = despair and rebellion.">Morale</span>
+<span class="tm-label" title="Social confidence of all NPCs. High = hope and cooperation, low = despair.">Morale</span>
 <span class="tm-val" id="val-morale">&mdash;</span>
 <div class="tm-bar" role="progressbar" aria-label="Morale level"><div class="tm-fill" id="bar-morale" style="width:0;background:var(--amber)"></div></div>
 <span class="tm-sev" id="sev-morale"></span>
 </div>
 <div class="top-metric">
-<span class="tm-label" title="How active void anomalies are — strange phenomena. High = reality instability, low = calm.">Anomaly</span>
+<span class="tm-label" title="Weirdness and system instability. High = reality breach, low = calm.">Anomaly</span>
 <span class="tm-val" id="val-anomaly">&mdash;</span>
 <div class="tm-bar" role="progressbar" aria-label="Anomaly level"><div class="tm-fill" id="bar-anomaly" style="width:0;background:var(--violet)"></div></div>
 <span class="tm-sev" id="sev-anomaly"></span>
 </div>
 <div class="cascade-gauge">
-<span class="cascade-label" title="How contagious events are — when one thing happens, does it chain into many others? High = dominos falling fast.">Cascade Temp</span>
+<span class="cascade-label" title="How hot reaction chains are — when one thing happens, do many follow? High = dominos falling fast.">Cascade Temp</span>
 <div class="cascade-bar" role="progressbar" aria-label="Cascade temperature"><div class="cascade-fill" id="cascade-fill" style="width:0;background:var(--green)"></div></div>
 <span class="cascade-pct" id="cascade-pct">0%</span>
 <span class="tm-sev" id="sev-cascade"></span>
@@ -444,7 +451,10 @@ html,body{height:100%;overflow:hidden;background:#040810;color:var(--white);font
 <section id="center" class="panel">
 <div class="section-title cyan">What Just Happened?</div>
 <div id="event-chains"></div>
+<div class="raw-toggle" id="raw-toggle" onclick="toggleRaw()" tabindex="0" role="button" aria-expanded="false">Raw Events</div>
+<div class="raw-events-wrap" id="raw-wrap">
 <div class="event-feed" id="event-feed"></div>
+</div>
 <div class="signal-lost" id="signal-lost-center">
 <span class="signal-lost-text">SIGNAL LOST</span>
 </div>
@@ -840,8 +850,13 @@ function renderEvents(events){
     })(grouped.chains[ci]);
   }
 
-  /* Render unchained events (non-cascade, non-game_event) */
-  feed.innerHTML = '';
+/* Render unchained events (non-cascade, non-game_event) */
+feed.innerHTML = '';
+var rawBtn=document.getElementById('raw-toggle'),rawWrap=document.getElementById('raw-wrap');
+/* Auto-open raw if no chains exist, otherwise default collapsed */
+if(grouped.chains.length===0){rawBtn.classList.add('open');rawWrap.classList.add('open');rawBtn.setAttribute('aria-expanded','true')}
+else{rawBtn.classList.remove('open');rawWrap.classList.remove('open');rawBtn.setAttribute('aria-expanded','false')}
+rawBtn.textContent='Raw Events ('+grouped.unchained.length+')';
   for (var i = 0; i < Math.min(grouped.unchained.length, 40); i++) {
     var ev = grouped.unchained[i];
     var el = document.createElement('div');
@@ -1115,6 +1130,7 @@ async function refresh(){
   for(var l2=0;l2<loadingEls.length;l2++)loadingEls[l2].classList.remove('loading-pulse');
 }
 
+function toggleRaw(){var btn=document.getElementById('raw-toggle'),wrap=document.getElementById('raw-wrap');btn.classList.toggle('open');wrap.classList.toggle('open');btn.setAttribute('aria-expanded',wrap.classList.contains('open'))}
 function toggleHelp(){var overlay=document.getElementById('help-overlay');overlay.classList.toggle('open');if(overlay.classList.contains('open')){overlay.focus();document.body.style.overflow='hidden'}else{document.body.style.overflow=''}}
 document.addEventListener('keydown',function(e){if(e.key==='Escape'){var overlay=document.getElementById('help-overlay');if(overlay.classList.contains('open'))toggleHelp()}});
 
