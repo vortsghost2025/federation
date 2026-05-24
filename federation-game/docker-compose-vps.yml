@@ -107,8 +107,6 @@ services:
     restart: unless-stopped
     env_file:
       - .env
-    environment:
-      - "NOTIFICATION_URLS=tgram://8908125951:AAEME7W8jlkh99AYIxM8IoIw_MlDznhajis/7312791490/"
     healthcheck:
       test:
         - CMD

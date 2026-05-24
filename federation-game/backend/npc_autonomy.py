@@ -2299,16 +2299,22 @@ def get_decision_log(char_id, limit=5):
 # --- PHASE 6C: NPC EVENT BROADCASTING ---
 
 DECISION_EVENT_MAP = {
-    "investigate": ("investigation_started", "public", 0.8),
-    "socialize": ("social_gathering", "faction", 0.4),
-    "advance_goal": ("goal_pursuit", "faction", 0.6),
+    "investigate": ("investigation_started", "public", 0.7),
+    "socialize": ("social_gathering", "public", 0.5),
+    "advance_goal": ("goal_pursuit", "public", 0.6),
     "confront_rival": ("conflict_erupted", "public", 0.9),
-    "help_ally": ("alliance_formed", "faction", 0.5),
-    "seek_resources": ("resource_acquisition", "public", 0.7),
-    "self_improve": ("training_undertaken", "private", 0.2),
+    "help_ally": ("alliance_formed", "public", 0.6),
+    "seek_resources": ("resource_acquisition", "public", 0.6),
+    "self_improve": ("training_undertaken", "faction", 0.4),
     "rest": ("rest_period", "private", 0.1),
     "explore": ("expedition_launched", "public", 0.8),
-    "react_to_events": ("event_reaction", "faction", 0.5),
+    "react_to_events": ("event_reaction", "public", 0.5),
+    "negotiate": ("negotiation_initiated", "public", 0.7),
+    "trade": ("trade_conducted", "public", 0.5),
+    "patrol": ("patrol_dispatched", "faction", 0.6),
+    "research": ("research_breakthrough", "public", 0.8),
+    "diplomacy": ("diplomatic_mission", "public", 0.7),
+    "sabotage": ("sabotage_detected", "public", 0.9),
 }
 
 MAX_BROADCAST_EVENTS = 100
