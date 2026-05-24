@@ -54,9 +54,24 @@ html,body{height:100%;overflow:hidden;background:#040810;color:var(--white);font
 .time-since{display:flex;align-items:center;gap:6px;padding:0 12px;border-left:1px solid var(--panel-border);margin-left:8px;white-space:nowrap}
 .time-since-label{color:var(--dim);font-size:13px;text-transform:uppercase;letter-spacing:1.5px}
 .time-since-val{font-family:'Orbitron',sans-serif;font-size:16px;color:var(--cyan)}
-.top-nav{margin-left:auto;display:flex;gap:4px;flex-shrink:0}
+.top-nav{margin-left:auto;display:flex;gap:4px;align-items:center;flex-shrink:0}
 .top-nav a{color:var(--dim);font-size:14px;text-decoration:none;padding:8px 12px;letter-spacing:1px;text-transform:uppercase;transition:color 0.2s;border-radius:4px}
 .top-nav a:hover,.top-nav a.active{color:var(--cyan);background:var(--cyan-dim)}
+.help-btn{background:none;border:1px solid rgba(0,188,212,0.3);color:var(--cyan);font-size:16px;cursor:pointer;padding:6px 10px;border-radius:6px;margin-left:8px;transition:background 0.2s,border-color 0.2s;line-height:1;font-weight:700}
+.help-btn:hover{background:var(--cyan-dim);border-color:var(--cyan)}
+.help-btn:focus-visible{outline:2px solid var(--cyan);outline-offset:2px}
+.help-overlay{display:none;position:fixed;inset:0;z-index:100;background:rgba(4,8,16,0.95);overflow-y:auto;padding:40px 20px}
+.help-overlay.open{display:block}
+.help-box{max-width:800px;margin:0 auto;background:rgba(8,12,20,0.98);border:1px solid var(--panel-border);border-radius:12px;padding:32px 36px}
+.help-box h2{font-family:'Orbitron',sans-serif;font-size:22px;color:var(--cyan);letter-spacing:3px;margin-bottom:20px}
+.help-box h3{font-family:'Orbitron',sans-serif;font-size:15px;color:var(--amber);letter-spacing:2px;margin:20px 0 10px 0;text-transform:uppercase}
+.help-box p,.help-box li{font-size:15px;line-height:1.7;color:var(--white);margin-bottom:8px}
+.help-box ul{padding-left:20px;margin-bottom:12px}
+.help-box li{margin-bottom:4px}
+.help-box .color-swatch{display:inline-block;width:14px;height:14px;border-radius:3px;vertical-align:middle;margin-right:6px}
+.help-close{position:sticky;top:0;float:right;background:none;border:1px solid var(--red);color:var(--red);font-size:18px;cursor:pointer;padding:6px 14px;border-radius:6px;font-weight:700;transition:background 0.2s}
+.help-close:hover{background:var(--red-dim)}
+.help-section{border-left:3px solid var(--cyan-dim);padding-left:16px;margin-bottom:16px}
 .section-title{font-family:'Orbitron',sans-serif;font-weight:700;font-size:14px;letter-spacing:2px;text-transform:uppercase;padding-bottom:8px;margin-bottom:10px;border-bottom:1px solid var(--panel-border)}
 .section-title.amber{color:var(--amber)}
 .section-title.cyan{color:var(--cyan)}
@@ -260,15 +275,109 @@ html,body{height:100%;overflow:hidden;background:#040810;color:var(--white);font
 <span class="time-since-label">Last Tick</span>
 <span class="time-since-val" id="time-since">&mdash;</span>
 </div>
-<nav class="top-nav" aria-label="Main navigation">
-<a href="bridge.html">Bridge</a>
-<a href="starmap.html">Starmap</a>
-<a href="/">Simulator</a>
-<a href="simulation.html" class="active">Live Sim</a>
-<a href="adult.html">Control</a>
-<a href="earth.html">Earth</a>
-</nav>
-</header>
+  <nav class="top-nav" aria-label="Main navigation">
+  <a href="bridge.html">Bridge</a>
+  <a href="starmap.html">Starmap</a>
+  <a href="/">Simulator</a>
+  <a href="simulation.html" class="active">Live Sim</a>
+  <a href="adult.html">Control</a>
+  <a href="earth.html">Earth</a>
+  <button class="help-btn" onclick="toggleHelp()" aria-label="How to read this page" title="How to read this page">?</button>
+  </nav>
+  </header>
+
+  <!-- HELP OVERLAY -->
+  <div class="help-overlay" id="help-overlay" role="dialog" aria-label="How to read this page">
+  <div class="help-box">
+  <button class="help-close" onclick="toggleHelp()">&#10005; Close</button>
+  <h2>How to Read This Page</h2>
+
+  <h3>What Is This?</h3>
+  <div class="help-section">
+  <p>This is a <strong>living simulation</strong> — 39 AI-controlled characters (NPCs) organized into 8 factions are running autonomously right now. No player is controlling them. They think, decide, act, and react to each other every few seconds (each cycle is called a <strong>tick</strong>).</p>
+  <p>Your job as a viewer is to <strong>watch civilization emerge</strong>. Factions form alliances, declare rivalries, research technology, pass laws, and respond to world events — all without human input.</p>
+  </div>
+
+  <h3>Top Bar — World Health</h3>
+  <div class="help-section">
+  <p>The colored bars across the top show the overall state of the simulated world (0–100 scale):</p>
+  <ul>
+  <li><span class="color-swatch" style="background:#F44336"></span><strong>Tension</strong> — How much conflict is brewing between factions. High = war is likely. Low = peace.</li>
+  <li><span class="color-swatch" style="background:#4CAF50"></span><strong>Resources</strong> — How abundant food, energy, and materials are. High = prosperity. Low = scarcity and desperation.</li>
+  <li><span class="color-swatch" style="background:#F44336"></span><strong>Threat</strong> — External danger level (anomalies, environmental hazards). High = the world itself is hostile.</li>
+  <li><span class="color-swatch" style="background:#00BCD4"></span><strong>Stability</strong> — How well the social order holds. High = institutions function. Low = chaos and power vacuums.</li>
+  <li><span class="color-swatch" style="background:#FF9800"></span><strong>Morale</strong> — Aggregate mood of all NPCs. High = hope and cooperation. Low = despair and rebellion.</li>
+  <li><span class="color-swatch" style="background:#CE93D8"></span><strong>Anomaly</strong> — How active the mysterious void anomalies are. High = strange phenomena. Low = calm.</li>
+  </ul>
+  <p><strong>Cascade Temperature</strong> — A measure of how "contagious" events are. At 92%, when one thing happens, it chains into many others (like dominos). Think of it as the simulation's reactivity gauge.</p>
+  </div>
+
+  <h3>Left Panel — Factions</h3>
+  <div class="help-section">
+  <p>Each card is one of the 8 factions. Key info:</p>
+  <ul>
+  <li><strong>Power number</strong> — How strong the faction is overall (influence + military + economy combined).</li>
+  <li><strong>Cohesion bar</strong> — How united the faction's members are. Green = united. Red = fractured, members disagree.</li>
+  <li><strong>Colored dots</strong> — The faction's stance toward each other faction:
+    <span class="color-swatch" style="background:#4CAF50"></span>Ally,
+    <span class="color-swatch" style="background:#FFC107"></span>Neutral,
+    <span class="color-swatch" style="background:#F44336"></span>Enemy
+  </li>
+  <li><strong>Action text</strong> — The most recent thing this faction did (explore, research, trade, attack, etc.).</li>
+  </ul>
+  <p><strong>Click a faction card</strong> to expand it and see: exact stance numbers toward every other faction, and a history of recent actions with their effects (like "+3 influence, -2 treasury").</p>
+  <p><strong>Faction Tech tab</strong> — Shows what technology each faction is currently researching, progress %, and completed technologies.</p>
+  </div>
+
+  <h3>Center Panel — Event Feed</h3>
+  <div class="help-section">
+  <p>A live stream of everything happening in the simulation, newest on top. Color-coded by source:</p>
+  <ul>
+  <li><span class="color-swatch" style="background:#00BCD4"></span><strong>System</strong> — World-level events (resource shifts, anomaly surges, era changes).</li>
+  <li><span class="color-swatch" style="background:#CE93D8"></span><strong>Cascade</strong> — Chain reactions. One event triggered another, which triggered another. "D2" = depth 2 (second link in the chain). These show the simulation is alive and interconnected.</li>
+  <li><span class="color-swatch" style="background:#FF9800"></span><strong>Faction</strong> — A faction took a deliberate action (declared a treaty, attacked, researched).</li>
+  <li><span class="color-swatch" style="background:#F44336"></span><strong>Broadcast</strong> — An NPC publicly announced something (a belief, a warning, a call to action).</li>
+  </ul>
+  </div>
+
+  <h3>Right Panel — NPCs</h3>
+  <div class="help-section">
+  <p>Each small card is one of the 39 autonomous characters. Key info:</p>
+  <ul>
+  <li><strong>Name</strong> — The character's identity.</li>
+  <li><strong>Mood badge</strong> — Their current emotional state, color-coded:
+    <span class="color-swatch" style="background:#81C784"></span>Positive (inspired, satisfied),
+    <span class="color-swatch" style="background:#00BCD4"></span>Thinking (contemplative, analytical),
+    <span class="color-swatch" style="background:#FF9800"></span>Uneasy (anxious, suspicious),
+    <span class="color-swatch" style="background:#F44336"></span>Negative (frustrated, aggressive)
+  </li>
+  <li><strong>Decision badge</strong> — What category of action they last chose (explore, research, trade, fight, etc.).</li>
+  <li><strong>Color dot</strong> — Which faction they belong to (matches the faction colors in the left panel).</li>
+  </ul>
+  <p><strong>Click an NPC card</strong> to expand it and see: their recent thoughts (what they're thinking about), recent decisions (what they chose to do and why), recent actions (what they actually did), corruption/rumor levels, and their relationships with other NPCs.</p>
+  <p><strong>NPC Quests tab</strong> — Shows quest activity: who accepted, completed, or abandoned quests.</p>
+  <p><strong>Choices tab</strong> — Shows the most common decisions factions are making, ranked by frequency.</p>
+  </div>
+
+  <h3>Bottom Bar — Era Progress</h3>
+  <div class="help-section">
+  <p>The simulation progresses through historical eras (like ages of civilization). The bar shows how far through the current era the world has progressed, and any triggers that caused era transitions.</p>
+  </div>
+
+  <h3>What to Watch For</h3>
+  <div class="help-section">
+  <ul>
+  <li><strong>Rising Tension + Falling Stability</strong> = A war or revolution is brewing.</li>
+  <li><strong>High Cascade Temperature</strong> = Small events spiral into big consequences. The simulation is very "reactive" right now.</li>
+  <li><strong>A faction's cohesion dropping</strong> = Its members are turning on each other. It might split.</li>
+  <li><strong>Two factions turning enemy (red dots)</strong> = Diplomatic breakdown. Watch for attacks.</li>
+  <li><strong>NPC moods shifting from green to orange/red</strong> = Something is making everyone unhappy — probably a resource crisis or threat surge.</li>
+  <li><strong>Lots of cascade events</strong> = The world is in a turbulent period. One thing leads to another.</li>
+  <li><strong>Anomaly activity rising</strong> = The void is waking up. Expect strange events.</li>
+  </ul>
+  </div>
+  </div>
+  </div>
 
 <section id="left" class="panel">
 <div class="intro-box">
@@ -1295,6 +1404,23 @@ await refreshFactionTech();
 await refreshChoices();
 for (var l2 = 0; l2 < loadingEls.length; l2++) loadingEls[l2].classList.remove('loading-pulse');
 }
+
+function toggleHelp() {
+  var overlay = document.getElementById('help-overlay');
+  overlay.classList.toggle('open');
+  if (overlay.classList.contains('open')) {
+    overlay.focus();
+    document.body.style.overflow = 'hidden';
+  } else {
+    document.body.style.overflow = '';
+  }
+}
+document.addEventListener('keydown', function(e) {
+  if (e.key === 'Escape') {
+    var overlay = document.getElementById('help-overlay');
+    if (overlay.classList.contains('open')) toggleHelp();
+  }
+});
 
 function init() {
 generateStarfield();

@@ -65,6 +65,22 @@ body{background:#0a0a1a;color:#e0e0e0;font-family:'Courier New',monospace;overfl
 #audio-toggle.muted:hover{border-color:#546e7a}
 #audio-toggle.muted::after{content:'';position:absolute;left:3px;right:3px;top:50%;height:2px;background:#ef5350;transform:rotate(-35deg);opacity:0.7}
 #audio-toggle:focus-visible{outline:2px solid #4fc3f7;outline-offset:2px}
+
+/* Help overlay */
+.help-btn{background:none;border:1px solid rgba(79,195,247,0.3);color:#4fc3f7;font-size:16px;cursor:pointer;padding:4px 10px;border-radius:6px;font-weight:700;transition:background 0.2s,border-color 0.2s;line-height:1}
+.help-btn:hover{background:rgba(79,195,247,0.15);border-color:#4fc3f7}
+.help-overlay{display:none;position:fixed;inset:0;z-index:100;background:rgba(10,10,26,0.96);overflow-y:auto;padding:40px 20px}
+.help-overlay.open{display:block}
+.help-box{max-width:760px;margin:0 auto;background:rgba(10,10,26,0.98);border:1px solid rgba(79,195,247,0.2);border-radius:12px;padding:32px 36px}
+.help-box h2{font-family:'Courier New',monospace;font-size:20px;color:#4fc3f7;letter-spacing:3px;margin-bottom:20px;text-transform:uppercase}
+.help-box h3{font-family:'Courier New',monospace;font-size:14px;color:#ffd700;letter-spacing:2px;margin:20px 0 10px 0;text-transform:uppercase}
+.help-box p,.help-box li{font-size:14px;line-height:1.7;color:#e0e0e0;margin-bottom:8px}
+.help-box ul{padding-left:20px;margin-bottom:12px}
+.help-box li{margin-bottom:4px}
+.help-box .color-swatch{display:inline-block;width:14px;height:14px;border-radius:3px;vertical-align:middle;margin-right:6px}
+.help-close{position:sticky;top:0;float:right;background:none;border:1px solid #f44336;color:#f44336;font-size:18px;cursor:pointer;padding:6px 14px;border-radius:6px;font-weight:700;transition:background 0.2s}
+.help-close:hover{background:rgba(244,67,54,0.15)}
+.help-section{border-left:3px solid rgba(79,195,247,0.15);padding-left:16px;margin-bottom:16px}
 </style>
 </head>
 <body>
@@ -83,10 +99,11 @@ body{background:#0a0a1a;color:#e0e0e0;font-family:'Courier New',monospace;overfl
 <a href="/bridge.html" style="color:#78909c;font-size:10px;text-decoration:none;padding:6px 10px;letter-spacing:1px;text-transform:uppercase;transition:color 0.2s">Bridge</a>
 <a href="/starmap.html" style="color:#4fc3f7;font-size:10px;text-decoration:none;padding:6px 10px;letter-spacing:1px;text-transform:uppercase">Star Map</a>
 <a href="/" style="color:#78909c;font-size:10px;text-decoration:none;padding:6px 10px;letter-spacing:1px;text-transform:uppercase;transition:color 0.2s">Simulator</a>
-<a href="/simulation.html" style="color:#78909c;font-size:10px;text-decoration:none;padding:6px 10px;letter-spacing:1px;text-transform:uppercase;transition:color 0.2s">Live Sim</a>
-<a href="/adult.html" style="color:#78909c;font-size:10px;text-decoration:none;padding:6px 10px;letter-spacing:1px;text-transform:uppercase;transition:color 0.2s">Control</a>
-<a href="/earth.html" style="color:#78909c;font-size:10px;text-decoration:none;padding:6px 10px;letter-spacing:1px;text-transform:uppercase;transition:color 0.2s">Earth</a>
-<button id="audio-toggle" title="Toggle audio (M)" aria-label="Toggle audio on/off">&#9835;</button>
+  <a href="/simulation.html" style="color:#78909c;font-size:10px;text-decoration:none;padding:6px 10px;letter-spacing:1px;text-transform:uppercase;transition:color 0.2s">Live Sim</a>
+  <a href="/adult.html" style="color:#78909c;font-size:10px;text-decoration:none;padding:6px 10px;letter-spacing:1px;text-transform:uppercase;transition:color 0.2s">Control</a>
+  <a href="/earth.html" style="color:#78909c;font-size:10px;text-decoration:none;padding:6px 10px;letter-spacing:1px;text-transform:uppercase;transition:color 0.2s">Earth</a>
+  <button class="help-btn" onclick="toggleHelp()" aria-label="How to read this map" title="How to read this map">?</button>
+  <button id="audio-toggle" title="Toggle audio (M)" aria-label="Toggle audio on/off">&#9835;</button>
 </nav>
   </div>
 
@@ -115,6 +132,88 @@ body{background:#0a0a1a;color:#e0e0e0;font-family:'Courier New',monospace;overfl
   <button id="zoom-in" title="Zoom in">+</button>
   <button id="zoom-out" title="Zoom out">-</button>
   <button id="zoom-reset" title="Reset view">R</button>
+</div>
+
+<!-- Help Overlay -->
+<div class="help-overlay" id="help-overlay" role="dialog" aria-label="How to read this map">
+<div class="help-box">
+<button class="help-close" onclick="toggleHelp()">&#10005; Close</button>
+<h2>How to Read This Map</h2>
+
+<h3>What Am I Looking At?</h3>
+<div class="help-section">
+<p>This is a <strong>spatial visualization</strong> of the Federation simulation — 39 AI characters (NPCs) running autonomously across 8 factions. Each glowing dot is a living character thinking, deciding, and acting every few seconds.</p>
+</div>
+
+<h3>The Map Layout</h3>
+<div class="help-section">
+<ul>
+<li><strong>8 faction clusters</strong> arranged in a circle — each cluster contains the NPCs belonging to that faction. The cluster label appears below it.</li>
+<li><strong>Center point</strong> (pulsing cyan dot) — The Federation core, the gravitational center of the society.</li>
+<li><strong>Outer scattered dots</strong> — Characters not belonging to any major faction (rogues, enigmas, independents).</li>
+</ul>
+</div>
+
+<h3>What the Dots Mean</h3>
+<div class="help-section">
+<ul>
+<li><strong>Dot size</strong> — How recently the NPC was active. Bigger = more recent action. Small dim dots haven't acted in a while.</li>
+<li><strong>Dot color</strong> — The NPC's current mood:
+  <span class="color-swatch" style="background:#81C784"></span>Positive (happy, inspired),
+  <span class="color-swatch" style="background:#00BCD4"></span>Thinking (contemplative, curious),
+  <span class="color-swatch" style="background:#FF9800"></span>Uneasy (anxious, suspicious),
+  <span class="color-swatch" style="background:#F44336"></span>Negative (frustrated, aggressive),
+  <span class="color-swatch" style="background:#9e9e9e"></span>Unknown/Idle
+</li>
+<li><strong>Pulsing ring</strong> — The NPC took an action very recently (highly active).</li>
+<li><strong>Red outline</strong> — This NPC is a rival (hostile to the Federation).</li>
+<li><strong>Gold outline</strong> — This NPC is a companion (friendly to the player/Federation core).</li>
+</ul>
+</div>
+
+<h3>Lines Between Dots</h3>
+<div class="help-section">
+<ul>
+<li><span class="color-swatch" style="background:#66bb6a"></span><strong>Green lines</strong> — Positive relationship (trust, friendship, alliance). Thicker = stronger bond.</li>
+<li><span class="color-swatch" style="background:#ef5350"></span><strong>Red lines</strong> — Negative relationship (rivalry, distrust, hatred). Thicker = more intense conflict.</li>
+<li><strong>No line</strong> — Weak or no significant relationship.</li>
+</ul>
+<p>These lines show who knows whom and how they feel about each other. A dense web of green lines inside a faction cluster means that faction is tight-knit. Red lines between clusters mean those factions are hostile.</p>
+</div>
+
+<h3>Controls</h3>
+<div class="help-section">
+<ul>
+<li><strong>Scroll wheel</strong> — Zoom in/out</li>
+<li><strong>Click + drag</strong> on empty space — Pan the map</li>
+<li><strong>Click a dot</strong> — Select an NPC, see details in the bottom-left panel (mood, goal, latest decision, latest thought)</li>
+<li><strong>Double-click a dot</strong> — Zoom in and center on that NPC</li>
+<li><strong>Search box</strong> (top-left) — Type an NPC name to find and focus on them</li>
+<li><strong>Zoom buttons</strong> (bottom center) — + / - / R (reset)</li>
+</ul>
+</div>
+
+<h3>Right Sidebar — Live Events</h3>
+<div class="help-section">
+<p>A scrolling feed of what's happening right now. Each event shows the character name, action type, and description. This is the same data as the Live Sim page's event feed, but in a compact format.</p>
+</div>
+
+<h3>Top Bar — World State</h3>
+<div class="help-section">
+<p>Same world health metrics as the Live Sim page: Tension, Stability, Morale, Threat, Anomaly. The tick indicator shows whether the simulation is running and how many cycles have completed.</p>
+</div>
+
+<h3>What to Watch For</h3>
+<div class="help-section">
+<ul>
+<li><strong>A faction cluster where all dots turn orange/red</strong> — That faction is in crisis or conflict.</li>
+<li><strong>Red lines appearing between two clusters</strong> — Factions are turning hostile toward each other.</li>
+<li><strong>Dots shrinking</strong> — NPCs becoming inactive, possibly due to low morale or resources.</li>
+<li><strong>Many dots pulsing simultaneously</strong> — A cascade event just happened, triggering many NPC reactions at once.</li>
+<li><strong>A cluster drifting apart</strong> (dots spreading wider) — Faction cohesion is dropping; members are diverging.</li>
+</ul>
+</div>
+</div>
 </div>
 
 <script>
@@ -687,6 +786,18 @@ if (isMuted) {
   audioBtn.setAttribute('aria-label', 'Audio on — click to mute');
 }
 audioBtn.addEventListener('click', function(e) { e.stopPropagation(); toggleMute(); });
+
+// --- Help overlay toggle ---
+function toggleHelp() {
+  const overlay = document.getElementById('help-overlay');
+  overlay.classList.toggle('open');
+}
+document.addEventListener('keydown', function(e) {
+  if (e.key === 'Escape') {
+    const overlay = document.getElementById('help-overlay');
+    if (overlay) overlay.classList.remove('open');
+  }
+});
 
 // --- Start ---
 init();
