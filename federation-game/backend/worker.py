@@ -224,12 +224,21 @@ def check_npc_broadcasts():
                 evt = json.loads(raw)
             except (json.JSONDecodeError, TypeError):
                 continue
-            if evt.get("significance", 0) >= 0.8 and evt.get("visibility") == "public":
-                char_name = evt.get("source_char_name", "Unknown")
-                desc = evt.get("description", "")
-                events.append(
-                    ("\U0001f514", "Critical NPC Decision", f"{char_name}: {desc}")
-                )
+        sig = evt.get("significance", 0)
+        vis = evt.get("visibility", "public")
+        if sig >= 0.5 and vis in ("public", "faction"):
+            char_name = evt.get("source_char_name", "Unknown")
+            desc = evt.get("description", "")
+            evt_type = evt.get("event_type", "decision")
+            # Choose emoji by significance tier
+            if sig >= 0.8:
+                emoji = "\U0001f514"  # 🔔 Critical
+            elif sig >= 0.6:
+                emoji = "\U0001f4e2"  # 📢 Notable
+            else:
+                emoji = "\U0001f4ac"  # 💬 Routine
+            vis_tag = f"[{vis}] " if vis == "faction" else ""
+            events.append((emoji, "NPC Decision", f"{vis_tag}{char_name}: {desc}"))
     except Exception as e:
         log.warning(f"Failed to query npc_broadcast_events: {e}")
     return events
@@ -241,7 +250,7 @@ def build_notification(game_events, npc_events):
     if not all_events:
         return None
 
-    all_events = all_events[:5]
+    all_events = all_events[:10]
 
     title = (
         f"\U0001f30c Federation Update "
