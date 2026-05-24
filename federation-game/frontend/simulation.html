@@ -69,6 +69,22 @@ html,body{height:100%;overflow:hidden;background:#040810;color:var(--white);font
 .sit-card-value strong{font-weight:700}
 .sit-risk{border-color:rgba(244,67,54,0.25)}
 .sit-watch{border-color:rgba(0,188,212,0.25)}
+/* WATCHLIST CARDS */
+.watchlist{display:flex;gap:8px;flex:2;overflow-x:auto;padding-bottom:2px}
+.watch-card{background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);border-radius:8px;padding:8px 12px;min-width:200px;max-width:280px;cursor:pointer;transition:border-color 0.3s,background 0.3s,box-shadow 0.3s;flex-shrink:0}
+.watch-card:hover{background:rgba(0,188,212,0.06);border-color:rgba(0,188,212,0.3);box-shadow:0 0 8px rgba(0,188,212,0.1)}
+.watch-card.highlight{background:rgba(0,188,212,0.1);border-color:rgba(0,188,212,0.5);box-shadow:0 0 12px rgba(0,188,212,0.2)}
+.wc-header{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:4px}
+.wc-title{font-family:'Orbitron',sans-serif;font-size:13px;font-weight:700;letter-spacing:1px;text-transform:uppercase}
+.wc-sev{font-family:'Orbitron',sans-serif;font-size:10px;font-weight:900;letter-spacing:1px;padding:2px 6px;border-radius:3px}
+.wc-current{font-size:14px;font-weight:700;margin-bottom:3px}
+.wc-meaning{font-size:12px;color:var(--dim);margin-bottom:3px;line-height:1.4}
+.wc-look{font-size:12px;color:var(--cyan);margin-bottom:2px;line-height:1.3}
+.wc-improve{font-size:12px;color:var(--green);font-style:italic;line-height:1.3}
+.wc-click-hint{font-size:11px;color:var(--dim);margin-top:4px;text-transform:uppercase;letter-spacing:1px;border-top:1px solid rgba(255,255,255,0.06);padding-top:4px}
+/* Panel highlight flash */
+.panel-highlight-flash{animation:panelFlash 1.5s ease}
+@keyframes panelFlash{0%,100%{box-shadow:none}30%{box-shadow:0 0 20px rgba(0,188,212,0.4),inset 0 0 10px rgba(0,188,212,0.1)}70%{box-shadow:0 0 10px rgba(0,188,212,0.2)}}
 /* SEVERITY BADGES */
 .sev-badge{display:inline-block;font-family:'Orbitron',sans-serif;font-size:10px;font-weight:900;letter-spacing:1px;padding:1px 5px;border-radius:3px;vertical-align:middle;margin-left:4px}
 .sev-critical{background:rgba(244,67,54,0.25);color:var(--sev-critical);border:1px solid rgba(244,67,54,0.4)}
@@ -345,10 +361,12 @@ html,body{height:100%;overflow:hidden;background:#040810;color:var(--white);font
 <div class="sit-card-label">Main Risk</div>
 <div class="sit-card-value" id="sit-risk-text">&mdash;</div>
 </div>
-<div class="sit-card sit-watch" id="sit-watch">
-<div class="sit-card-label">Recommended Watch</div>
-<div class="sit-card-value" id="sit-watch-text">&mdash;</div>
-</div>
+  <div class="sit-card sit-watch" id="sit-watch" style="flex:2.5">
+    <div class="sit-card-label">Watchlist <span style="font-weight:400;font-size:10px;letter-spacing:0.5px;color:var(--dim)">(click to highlight)</span></div>
+    <div class="watchlist" id="watchlist-cards">
+      <div class="sit-card-value" id="sit-watch-text">&mdash;</div>
+    </div>
+  </div>
 </div>
 
 <!-- HELP OVERLAY -->
@@ -609,15 +627,147 @@ function updateSituation(status) {
   }
   document.getElementById('sit-risk-text').innerHTML = riskText;
 
-  /* Recommended watch */
-  var watchParts = [];
-  if (metrics.morale < 40) watchParts.push('morale recovery');
-  if (metrics.stability < 40) watchParts.push('institutional stability');
-  if (cascadePct > 70) watchParts.push('cascade chain activity');
-  if (metrics.threat > 60) watchParts.push('threat response');
-  if (metrics.tension > 60) watchParts.push('diplomatic tensions');
-  if (!watchParts.length) watchParts.push('no immediate concerns');
-  document.getElementById('sit-watch-text').textContent = watchParts.join(', ');
+/* Recommended watch — actionable watchlist cards */
+var watchItems = [];
+var questData = lastData.quests || {};
+var npcData = lastData.npcs || [];
+var eventData = lastData.events || [];
+
+// Morale Recovery
+if (metrics.morale < 40) {
+  var msi = severityInfo('morale', metrics.morale);
+  var negMoods = 0; for(var ni=0;ni<npcData.length;ni++){var nm=npcData[ni].mood;if(typeof nm==='number'&&nm<0.3)negMoods++;else if(typeof nm==='string'&&(nm==='frustrated'||nm==='alarmed'||nm==='anxious'||nm==='worried'||nm==='melancholic'||nm==='paranoid'))negMoods++;}
+  watchItems.push({
+    id:'morale', title:'Morale Recovery', sevLabel:msi.label, sevCls:msi.cls,
+    current:'Morale '+Math.round(metrics.morale)+' / '+msi.label,
+    meaning:'Social cohesion '+(metrics.morale<20?'near collapse':'under strain')+'.',
+    lookAt:'Faction cohesion bars, '+negMoods+' NPC'+(negMoods!==1?'s':'')+' with negative moods, abandoned quests.',
+    improve:'Morale rises above 30 and abandoned quest rate falls.',
+    clickAction:'highlightMorale'
+  });
+}
+// Institutional Stability
+if (metrics.stability < 40) {
+  var ssi = severityInfo('stability', metrics.stability);
+  var abnd = questData.abandoned_count||questData.abandoned||0;
+  watchItems.push({
+    id:'stability', title:'Institutional Stability', sevLabel:ssi.label, sevCls:ssi.cls,
+    current:'Stability '+Math.round(metrics.stability)+' / '+ssi.label,
+    meaning:'Factions may stop coordinating or quests may fail.',
+    lookAt:'Faction cohesion, '+abnd+' abandoned quests, unresolved count.',
+    improve:'Stability rises above 50 and abandoned quest count drops.',
+    clickAction:'highlightStability'
+  });
+}
+// Cascade Chain Activity
+if (cascadePct > 70) {
+  var csi = severityInfo('cascade', cascadePct);
+  var chainCount = 0; var totalReactions = 0;
+  if(eventData && eventData.length){for(var ei=0;ei<eventData.length;ei++){if(eventData[ei].cascade_depth>0){chainCount++;totalReactions++}}}
+  watchItems.push({
+    id:'cascade', title:'Cascade Activity', sevLabel:csi.label, sevCls:csi.cls,
+    current:'Cascade '+Math.round(cascadePct)+'% / '+csi.label,
+    meaning:'NPC reactions are recursively spreading — dominos falling.',
+    lookAt:'What Just Happened? cascade cards, '+totalReactions+' chain reactions.',
+    improve:'Cascade temperature falls below 70% and chain reaction count decreases.',
+    clickAction:'highlightCascade'
+  });
+}
+// Threat Response
+if (metrics.threat > 60) {
+  var tsi = severityInfo('threat', metrics.threat);
+  var hostileEvents = 0; if(eventData&&eventData.length){for(var hi=0;hi<eventData.length;hi++){if(eventData[hi].event_type==='threat'||eventData[hi].severity==='high'||eventData[hi].is_hostile)hostileEvents++;}}
+  watchItems.push({
+    id:'threat', title:'Threat Response', sevLabel:tsi.label, sevCls:tsi.cls,
+    current:'Threat '+Math.round(metrics.threat)+' / '+tsi.label,
+    meaning:'Hostile/anomalous events are stressing the federation.',
+    lookAt:'Red crisis events, Military Command activity, conflict lines.',
+    improve:'Threat drops below 60 and hostile events decrease.',
+    clickAction:'highlightThreat'
+  });
+}
+// Diplomatic Tensions
+if (metrics.tension > 60) {
+  var tnsi = severityInfo('tension', metrics.tension);
+  watchItems.push({
+    id:'tension', title:'Diplomatic Tensions', sevLabel:tnsi.label, sevCls:tnsi.cls,
+    current:'Tension '+Math.round(metrics.tension)+' / '+tnsi.label,
+    meaning:'Faction conflicts are escalating — diplomatic breakdown risk.',
+    lookAt:'Enemy stance dots in faction cards, conflict event lines.',
+    improve:'Tension drops below 60 and faction stances improve.',
+    clickAction:'highlightTension'
+  });
+}
+
+// Build watch card HTML
+var wlContainer = document.getElementById('watchlist-cards');
+if (!watchItems.length) {
+  wlContainer.innerHTML = '<div class="sit-card-value" style="color:var(--green);font-size:14px">&#10003; No immediate concerns — all systems nominal</div>';
+} else {
+  var wHtml = '';
+  for (var wi=0; wi<watchItems.length; wi++) {
+    var w = watchItems[wi];
+    wHtml += '<div class="watch-card" data-watch-id="'+w.id+'" onclick="watchCardClick(\''+w.clickAction+'\')" tabindex="0" role="button" aria-label="'+w.title+': '+w.current+'">';
+    wHtml += '<div class="wc-header"><span class="wc-title">'+esc(w.title)+'</span><span class="wc-sev sev-badge '+w.sevCls+'">'+w.sevLabel+'</span></div>';
+    wHtml += '<div class="wc-current">'+esc(w.current)+'</div>';
+    wHtml += '<div class="wc-meaning">'+esc(w.meaning)+'</div>';
+    wHtml += '<div class="wc-look">Look at: '+esc(w.lookAt)+'</div>';
+    wHtml += '<div class="wc-improve">Improvement: '+esc(w.improve)+'</div>';
+    wHtml += '<div class="wc-click-hint">Click to highlight</div>';
+    wHtml += '</div>';
+  }
+  wlContainer.innerHTML = wHtml;
+}
+
+// Watch card click handlers
+window.watchCardClick = function(action) {
+  // Remove previous highlights
+  document.querySelectorAll('.panel-highlight-flash').forEach(function(el){el.classList.remove('panel-highlight-flash')});
+
+  switch(action) {
+    case 'highlightMorale':
+      // Switch to factions tab and flash cohesion bars + morale metric
+      switchLeftTab('factions');
+      flashEl('val-morale');
+      flashEl('left');
+      // Also switch to NPC quests to show abandoned
+      setTimeout(function(){switchRightTab('npc-quests');flashEl('quest-health')},300);
+      break;
+    case 'highlightStability':
+      switchLeftTab('factions');
+      flashEl('val-stability');
+      flashEl('left');
+      switchRightTab('npc-quests');
+      setTimeout(function(){flashEl('quest-health')},300);
+      break;
+    case 'highlightCascade':
+      // Flash the event chain area in center panel
+      flashEl('event-chains');
+      flashEl('center');
+      break;
+    case 'highlightThreat':
+      switchLeftTab('factions');
+      flashEl('val-threat');
+      // Find and flash Military Command card
+      var milCard = document.querySelector('[data-faction="military_command"]');
+      if(milCard){milCard.classList.add('panel-highlight-flash');setTimeout(function(){milCard.classList.remove('panel-highlight-flash')},1600)}
+      flashEl('center');
+      break;
+    case 'highlightTension':
+      switchLeftTab('factions');
+      flashEl('val-tension');
+      flashEl('left');
+      break;
+  }
+};
+
+function flashEl(id) {
+  var el = document.getElementById(id);
+  if (!el) return;
+  el.classList.add('panel-highlight-flash');
+  setTimeout(function(){el.classList.remove('panel-highlight-flash')}, 1600);
+}
+
 }
 
 var lastData={status:null,factions:null,npcs:null,events:null,quests:null,factionTech:null,choices:null};
