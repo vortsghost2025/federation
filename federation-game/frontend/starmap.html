@@ -9,102 +9,122 @@
 body{background:#0a0a1a;color:#e0e0e0;font-family:'Courier New',monospace;overflow:hidden;height:100vh;width:100vw}
 #starmap{position:absolute;top:0;left:0;width:100%;height:100%}
 
-/* World state bar */
-#worldbar{position:fixed;top:0;left:0;right:320px;height:48px;background:rgba(10,10,26,0.92);border-bottom:1px solid rgba(79,195,247,0.3);display:flex;align-items:center;padding:0 16px;gap:20px;z-index:10;font-size:13px}
-.wb-item{display:flex;align-items:center;gap:6px}
-.wb-label{color:#78909c;font-size:11px;text-transform:uppercase;letter-spacing:1px}
-.wb-bar{width:80px;height:8px;background:rgba(255,255,255,0.08);border-radius:4px;overflow:hidden}
-.wb-fill{height:100%;border-radius:4px;transition:width 1s ease}
-.wb-val{font-size:12px;min-width:28px;text-align:right}
-#tick-indicator{margin-left:auto;display:flex;align-items:center;gap:8px}
-#tick-dot{width:8px;height:8px;border-radius:50%;background:#4caf50;box-shadow:0 0 6px #4caf50}
-#tick-dot.stopped{background:#f44336;box-shadow:0 0 6px #f44336}
-#tick-label{font-size:11px;color:#78909c}
+/* World state bar — TV-scale */
+#worldbar{position:fixed;top:0;left:0;right:420px;height:72px;background:rgba(10,10,26,0.92);border-bottom:1px solid rgba(79,195,247,0.3);display:flex;align-items:center;padding:0 20px;gap:20px;z-index:10;font-size:20px}
+.wb-item{display:flex;align-items:center;gap:8px}
+.wb-label{color:#78909c;font-size:16px;text-transform:uppercase;letter-spacing:1px}
+.wb-bar{width:120px;height:10px;background:rgba(255,255,255,0.08);border-radius:5px;overflow:hidden}
+.wb-fill{height:100%;border-radius:5px;transition:width 1s ease}
+.wb-val{font-size:18px;min-width:36px;text-align:right}
+#tick-indicator{margin-left:auto;display:flex;align-items:center;gap:10px}
+#tick-dot{width:10px;height:10px;border-radius:50%;background:#4caf50;box-shadow:0 0 8px #4caf50}
+#tick-dot.stopped{background:#f44336;box-shadow:0 0 8px #f44336}
+#tick-label{font-size:16px;color:#78909c}
 
-/* Event sidebar */
-#sidebar{position:fixed;top:0;right:0;width:320px;height:100vh;background:rgba(10,10,26,0.95);border-left:1px solid rgba(79,195,247,0.2);overflow-y:auto;z-index:10;padding:56px 12px 12px 12px;font-size:12px}
-#sidebar::-webkit-scrollbar{width:4px}
+/* Event sidebar — TV-scale */
+#sidebar{position:fixed;top:0;right:0;width:420px;height:100vh;background:rgba(10,10,26,0.95);border-left:1px solid rgba(79,195,247,0.2);overflow-y:auto;z-index:10;padding:80px 16px 16px 16px;font-size:18px}
+#sidebar::-webkit-scrollbar{width:5px}
 #sidebar::-webkit-scrollbar-thumb{background:rgba(79,195,247,0.3);border-radius:2px}
-#sidebar h2{color:#4fc3f7;font-size:14px;margin:8px 0 8px 0;letter-spacing:2px;text-transform:uppercase;border-bottom:1px solid rgba(79,195,247,0.2);padding-bottom:6px}
-.ev-item{padding:6px 8px;margin-bottom:4px;border-left:2px solid #333;border-radius:0 3px 3px 0;background:rgba(255,255,255,0.02);transition:border-color 0.3s}
+#sidebar h2{color:#4fc3f7;font-size:22px;margin:12px 0 10px 0;letter-spacing:2px;text-transform:uppercase;border-bottom:1px solid rgba(79,195,247,0.2);padding-bottom:8px}
+.ev-item{padding:8px 10px;margin-bottom:6px;border-left:3px solid #333;border-radius:0 4px 4px 0;background:rgba(255,255,255,0.02);transition:border-color 0.3s}
 .ev-item:hover{border-left-color:#4fc3f7;background:rgba(79,195,247,0.05)}
-.ev-char{color:#4fc3f7;font-weight:bold;font-size:11px}
-.ev-type{color:#78909c;font-size:10px;margin-left:6px;text-transform:uppercase}
-.ev-desc{color:#b0b0b0;font-size:11px;margin-top:2px;line-height:1.3}
-.ev-mood{display:inline-block;width:6px;height:6px;border-radius:50%;margin-right:4px;vertical-align:middle}
+.ev-char{color:#4fc3f7;font-weight:bold;font-size:16px}
+.ev-type{color:#78909c;font-size:14px;margin-left:8px;text-transform:uppercase}
+.ev-desc{color:#b0b0b0;font-size:16px;margin-top:3px;line-height:1.4}
+.ev-mood{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:6px;vertical-align:middle}
 
-/* NPC detail panel */
-#detail{position:fixed;bottom:12px;left:12px;width:360px;max-height:260px;background:rgba(10,10,26,0.95);border:1px solid rgba(79,195,247,0.3);border-radius:8px;padding:14px;z-index:20;display:none;overflow-y:auto}
+/* NPC detail panel — TV-scale */
+#detail{position:fixed;bottom:12px;left:12px;width:520px;max-height:380px;background:rgba(10,10,26,0.95);border:1px solid rgba(79,195,247,0.3);border-radius:8px;padding:18px;z-index:20;display:none;overflow-y:auto}
 #detail.show{display:block}
-#detail-name{color:#ffd700;font-size:16px;font-weight:bold;margin-bottom:2px}
-#detail-cat{color:#78909c;font-size:11px;text-transform:uppercase;letter-spacing:1px;margin-bottom:8px}
-#detail-row{display:flex;gap:8px;margin-bottom:4px;font-size:12px}
-#detail-row .dl{color:#78909c;min-width:80px}
+#detail-name{color:#ffd700;font-size:26px;font-weight:bold;margin-bottom:3px}
+#detail-cat{color:#78909c;font-size:18px;text-transform:uppercase;letter-spacing:1px;margin-bottom:10px}
+#detail-row{display:flex;gap:10px;margin-bottom:6px;font-size:18px}
+#detail-row .dl{color:#78909c;min-width:100px}
 #detail-row .dv{color:#e0e0e0}
-#detail-thought{color:#ab47bc;font-style:italic;font-size:11px;margin-top:6px;line-height:1.4;padding:4px 6px;background:rgba(171,71,188,0.08);border-radius:4px}
+#detail-thought{color:#ab47bc;font-style:italic;font-size:16px;margin-top:8px;line-height:1.5;padding:6px 8px;background:rgba(171,71,188,0.08);border-radius:4px}
 
-/* View toggle */
-#view-toggle{position:fixed;top:52px;left:12px;z-index:10;display:flex;gap:2px;margin-top:32px}
-.vt-btn{background:rgba(10,10,26,0.9);border:1px solid rgba(79,195,247,0.3);color:#78909c;padding:5px 10px;border-radius:6px;font-size:11px;font-family:'Courier New',monospace;cursor:pointer;transition:all 0.2s;letter-spacing:1px;text-transform:uppercase}
+/* View toggle — TV-scale */
+#view-toggle{position:fixed;top:72px;left:12px;z-index:10;display:flex;gap:4px;margin-top:40px}
+.vt-btn{background:rgba(10,10,26,0.9);border:1px solid rgba(79,195,247,0.3);color:#78909c;padding:10px 20px;border-radius:6px;font-size:18px;font-family:'Courier New',monospace;cursor:pointer;transition:all 0.2s;letter-spacing:1px;text-transform:uppercase}
 .vt-btn:hover{border-color:#4fc3f7;color:#4fc3f7}
 .vt-btn.active{background:rgba(79,195,247,0.15);border-color:#4fc3f7;color:#4fc3f7;box-shadow:0 0 8px rgba(79,195,247,0.2)}
 
-/* Map legend */
-#map-legend{position:fixed;bottom:12px;right:332px;background:rgba(10,10,26,0.94);border:1px solid rgba(79,195,247,0.25);border-radius:8px;padding:12px 14px;z-index:10;font-size:11px;max-width:220px}
-#map-legend h3{color:#4fc3f7;font-size:11px;letter-spacing:2px;text-transform:uppercase;margin-bottom:8px;border-bottom:1px solid rgba(79,195,247,0.15);padding-bottom:4px}
-.ml-section{margin-bottom:8px}
-.ml-section-title{color:#78909c;font-size:10px;text-transform:uppercase;letter-spacing:1px;margin-bottom:3px}
-.ml-row{display:flex;align-items:center;gap:6px;margin-bottom:2px;line-height:1.5}
-.ml-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
-.ml-line{width:18px;height:2px;flex-shrink:0;border-radius:1px}
-.ml-zone{width:14px;height:14px;border-radius:3px;flex-shrink:0;border:1px solid}
+/* Map legend — TV-scale */
+#map-legend{position:fixed;bottom:12px;right:432px;background:rgba(10,10,26,0.94);border:1px solid rgba(79,195,247,0.25);border-radius:8px;padding:14px 16px;z-index:10;font-size:18px;max-width:340px}
+#map-legend h3{color:#4fc3f7;font-size:18px;letter-spacing:2px;text-transform:uppercase;margin-bottom:10px;border-bottom:1px solid rgba(79,195,247,0.15);padding-bottom:6px}
+.ml-section{margin-bottom:10px}
+.ml-section-title{color:#78909c;font-size:14px;text-transform:uppercase;letter-spacing:1px;margin-bottom:4px}
+.ml-row{display:flex;align-items:center;gap:8px;margin-bottom:3px;line-height:1.6}
+.ml-dot{width:14px;height:14px;border-radius:50%;flex-shrink:0}
+.ml-line{width:24px;height:3px;flex-shrink:0;border-radius:1px}
+.ml-zone{width:20px;height:20px;border-radius:4px;flex-shrink:0;border:1px solid}
 .ml-name{color:#b0b0b0;white-space:nowrap}
 
-/* Faction tooltip */
-#faction-tip{position:fixed;display:none;background:rgba(10,10,26,0.97);border:1px solid rgba(79,195,247,0.4);border-radius:8px;padding:12px 14px;z-index:25;min-width:200px;pointer-events:none;box-shadow:0 4px 20px rgba(0,0,0,0.6)}
+/* Faction tooltip — TV-scale */
+#faction-tip{position:fixed;display:none;background:rgba(10,10,26,0.97);border:1px solid rgba(79,195,247,0.4);border-radius:8px;padding:14px 16px;z-index:25;min-width:300px;pointer-events:none;box-shadow:0 4px 20px rgba(0,0,0,0.6)}
 #faction-tip.show{display:block}
-#ft-name{font-size:14px;font-weight:bold;margin-bottom:6px}
-#ft-row{display:flex;justify-content:space-between;gap:12px;font-size:11px;margin-bottom:3px}
+#ft-name{font-size:22px;font-weight:bold;margin-bottom:8px}
+#ft-row{display:flex;justify-content:space-between;gap:16px;font-size:18px;margin-bottom:4px}
 #ft-row .ftl{color:#78909c}
 #ft-row .ftv{color:#e0e0e0;text-align:right}
-#ft-status{margin-top:6px;padding:4px 8px;border-radius:4px;font-size:10px;text-transform:uppercase;letter-spacing:1px;display:inline-block}
+#ft-status{margin-top:8px;padding:6px 12px;border-radius:4px;font-size:14px;text-transform:uppercase;letter-spacing:1px;display:inline-block}
 .ft-influence{background:rgba(79,195,247,0.1);color:#4fc3f7;border:1px solid rgba(79,195,247,0.3)}
 .ft-contested{background:rgba(255,152,0,0.1);color:#ffa726;border:1px solid rgba(255,152,0,0.3)}
 .ft-neutral{background:rgba(120,144,156,0.1);color:#78909c;border:1px solid rgba(120,144,156,0.3)}
 
-/* Search */
-#search-box{position:fixed;top:52px;left:12px;z-index:10}
-#search-input{background:rgba(10,10,26,0.9);border:1px solid rgba(79,195,247,0.3);color:#e0e0e0;padding:6px 10px;border-radius:6px;font-size:12px;font-family:'Courier New',monospace;width:180px;outline:none}
+/* Search — TV-scale */
+#search-box{position:fixed;top:72px;left:12px;z-index:10}
+#search-input{background:rgba(10,10,26,0.9);border:1px solid rgba(79,195,247,0.3);color:#e0e0e0;padding:10px 14px;border-radius:6px;font-size:18px;font-family:'Courier New',monospace;width:280px;outline:none}
 #search-input:focus{border-color:#4fc3f7;box-shadow:0 0 8px rgba(79,195,247,0.2)}
 
-/* Zoom controls */
-#zoom-ctrl{position:fixed;bottom:12px;left:50%;transform:translateX(-50%);display:flex;gap:4px;z-index:10}
-#zoom-ctrl button{width:36px;height:36px;background:rgba(10,10,26,0.9);border:1px solid rgba(79,195,247,0.3);color:#4fc3f7;border-radius:6px;font-size:18px;cursor:pointer;transition:background 0.2s}
+/* Zoom controls — TV-scale */
+#zoom-ctrl{position:fixed;bottom:12px;left:50%;transform:translateX(-50%);display:flex;gap:6px;z-index:10}
+#zoom-ctrl button{width:52px;height:52px;background:rgba(10,10,26,0.9);border:1px solid rgba(79,195,247,0.3);color:#4fc3f7;border-radius:8px;font-size:26px;cursor:pointer;transition:background 0.2s}
 #zoom-ctrl button:hover{background:rgba(79,195,247,0.15)}
 
-/* Audio toggle */
-#audio-toggle{background:none;border:1px solid rgba(79,195,247,0.2);border-radius:3px;color:#4fc3f7;font-size:14px;cursor:pointer;padding:2px 8px;display:flex;align-items:center;justify-content:center;transition:color 0.2s,border-color 0.2s;margin-left:4px;height:24px;line-height:1}
+/* Audio toggle — TV-scale */
+#audio-toggle{background:none;border:1px solid rgba(79,195,247,0.2);border-radius:4px;color:#4fc3f7;font-size:20px;cursor:pointer;padding:4px 12px;display:flex;align-items:center;justify-content:center;transition:color 0.2s,border-color 0.2s;margin-left:6px;height:32px;line-height:1}
 #audio-toggle:hover{border-color:#4fc3f7;box-shadow:0 0 8px rgba(79,195,247,0.2)}
 #audio-toggle.muted{color:#546e7a;border-color:rgba(79,195,247,0.08);position:relative}
 #audio-toggle.muted:hover{border-color:#546e7a}
-#audio-toggle.muted::after{content:'';position:absolute;left:3px;right:3px;top:50%;height:2px;background:#ef5350;transform:rotate(-35deg);opacity:0.7}
+#audio-toggle.muted::after{content:'';position:absolute;left:4px;right:4px;top:50%;height:2px;background:#ef5350;transform:rotate(-35deg);opacity:0.7}
 #audio-toggle:focus-visible{outline:2px solid #4fc3f7;outline-offset:2px}
 
-/* Help overlay */
-.help-btn{background:none;border:1px solid rgba(79,195,247,0.3);color:#4fc3f7;font-size:16px;cursor:pointer;padding:4px 10px;border-radius:6px;font-weight:700;transition:background 0.2s,border-color 0.2s;line-height:1}
+/* Map Read panel — TV-scale */
+#map-read{position:fixed;top:140px;left:12px;width:400px;background:rgba(10,10,26,0.94);border:1px solid rgba(79,195,247,0.25);border-radius:8px;padding:14px 16px;z-index:10;font-size:20px;line-height:1.5;max-height:320px;overflow-y:auto}
+#map-read::-webkit-scrollbar{width:4px}
+#map-read::-webkit-scrollbar-thumb{background:rgba(79,195,247,0.3);border-radius:2px}
+#mr-title{color:#4fc3f7;font-size:18px;letter-spacing:2px;text-transform:uppercase;margin-bottom:8px;border-bottom:1px solid rgba(79,195,247,0.15);padding-bottom:6px;display:flex;align-items:center;gap:8px}
+#mr-title::before{content:'📡';font-size:18px}
+#mr-crisis{color:#ef5350;font-weight:bold;margin-bottom:6px;font-size:22px}
+#mr-crisis.ok{color:#66bb6a}
+#mr-crisis.warn{color:#ffa726}
+#mr-line{color:#b0b0b0;margin-bottom:4px;font-size:17px;line-height:1.5}
+#mr-line strong{color:#e0e0e0}
+#mr-line .fac-name{font-weight:bold}
+#mr-next{margin-top:8px;padding-top:8px;border-top:1px solid rgba(255,215,0,0.15);color:#ffd700;font-size:17px;font-style:italic}
+
+/* Label mode toggle — TV-scale */
+#label-toggle{position:fixed;top:72px;left:12px;z-index:10;display:flex;gap:4px;margin-top:90px}
+.lt-btn{background:rgba(10,10,26,0.9);border:1px solid rgba(79,195,247,0.3);color:#78909c;padding:8px 16px;border-radius:6px;font-size:15px;font-family:'Courier New',monospace;cursor:pointer;transition:all 0.2s;letter-spacing:1px;text-transform:uppercase}
+.lt-btn:hover{border-color:#4fc3f7;color:#4fc3f7}
+.lt-btn.active{background:rgba(79,195,247,0.15);border-color:#ffd700;color:#ffd700;box-shadow:0 0 8px rgba(255,215,0,0.2)}
+
+/* Help overlay — TV-scale */
+.help-btn{background:none;border:1px solid rgba(79,195,247,0.3);color:#4fc3f7;font-size:22px;cursor:pointer;padding:6px 14px;border-radius:6px;font-weight:700;transition:background 0.2s,border-color 0.2s;line-height:1}
 .help-btn:hover{background:rgba(79,195,247,0.15);border-color:#4fc3f7}
 .help-overlay{display:none;position:fixed;inset:0;z-index:100;background:rgba(10,10,26,0.96);overflow-y:auto;padding:40px 20px}
 .help-overlay.open{display:block}
-.help-box{max-width:760px;margin:0 auto;background:rgba(10,10,26,0.98);border:1px solid rgba(79,195,247,0.2);border-radius:12px;padding:32px 36px}
-.help-box h2{font-family:'Courier New',monospace;font-size:20px;color:#4fc3f7;letter-spacing:3px;margin-bottom:20px;text-transform:uppercase}
-.help-box h3{font-family:'Courier New',monospace;font-size:14px;color:#ffd700;letter-spacing:2px;margin:20px 0 10px 0;text-transform:uppercase}
-.help-box p,.help-box li{font-size:14px;line-height:1.7;color:#e0e0e0;margin-bottom:8px}
-.help-box ul{padding-left:20px;margin-bottom:12px}
-.help-box li{margin-bottom:4px}
-.help-box .color-swatch{display:inline-block;width:14px;height:14px;border-radius:3px;vertical-align:middle;margin-right:6px}
-.help-close{position:sticky;top:0;float:right;background:none;border:1px solid #f44336;color:#f44336;font-size:18px;cursor:pointer;padding:6px 14px;border-radius:6px;font-weight:700;transition:background 0.2s}
+.help-box{max-width:860px;margin:0 auto;background:rgba(10,10,26,0.98);border:1px solid rgba(79,195,247,0.2);border-radius:12px;padding:36px 40px}
+.help-box h2{font-family:'Courier New',monospace;font-size:28px;color:#4fc3f7;letter-spacing:3px;margin-bottom:24px;text-transform:uppercase}
+.help-box h3{font-family:'Courier New',monospace;font-size:20px;color:#ffd700;letter-spacing:2px;margin:24px 0 12px 0;text-transform:uppercase}
+.help-box p,.help-box li{font-size:20px;line-height:1.8;color:#e0e0e0;margin-bottom:10px}
+.help-box ul{padding-left:24px;margin-bottom:14px}
+.help-box li{margin-bottom:6px}
+.help-box .color-swatch{display:inline-block;width:18px;height:18px;border-radius:4px;vertical-align:middle;margin-right:8px}
+.help-close{position:sticky;top:0;float:right;background:none;border:1px solid #f44336;color:#f44336;font-size:22px;cursor:pointer;padding:8px 16px;border-radius:6px;font-weight:700;transition:background 0.2s}
 .help-close:hover{background:rgba(244,67,54,0.15)}
-.help-section{border-left:3px solid rgba(79,195,247,0.15);padding-left:16px;margin-bottom:16px}
+.help-section{border-left:3px solid rgba(79,195,247,0.15);padding-left:20px;margin-bottom:20px}
 </style>
 </head>
 <body>
@@ -119,13 +139,13 @@ body{background:#0a0a1a;color:#e0e0e0;font-family:'Courier New',monospace;overfl
 <div class="wb-item"><span class="wb-label">Threat</span><div class="wb-bar"><div class="wb-fill" id="wb-threat" style="background:#f44336"></div></div><span class="wb-val" id="wv-threat">0</span></div>
 <div class="wb-item"><span class="wb-label">Anomaly</span><div class="wb-bar"><div class="wb-fill" id="wb-anomaly" style="background:#ab47bc"></div></div><span class="wb-val" id="wv-anomaly">0</span></div>
 <div id="tick-indicator"><div id="tick-dot"></div><span id="tick-label">TICK 0</span></div>
-<nav style="margin-left:auto;display:flex;gap:2px">
-<a href="/bridge.html" style="color:#78909c;font-size:10px;text-decoration:none;padding:6px 10px;letter-spacing:1px;text-transform:uppercase;transition:color 0.2s">Bridge</a>
-<a href="/starmap.html" style="color:#4fc3f7;font-size:10px;text-decoration:none;padding:6px 10px;letter-spacing:1px;text-transform:uppercase">Star Map</a>
-<a href="/" style="color:#78909c;font-size:10px;text-decoration:none;padding:6px 10px;letter-spacing:1px;text-transform:uppercase;transition:color 0.2s">Simulator</a>
-<a href="/simulation.html" style="color:#78909c;font-size:10px;text-decoration:none;padding:6px 10px;letter-spacing:1px;text-transform:uppercase;transition:color 0.2s">Live Sim</a>
-<a href="/adult.html" style="color:#78909c;font-size:10px;text-decoration:none;padding:6px 10px;letter-spacing:1px;text-transform:uppercase;transition:color 0.2s">Control</a>
-<a href="/earth.html" style="color:#78909c;font-size:10px;text-decoration:none;padding:6px 10px;letter-spacing:1px;text-transform:uppercase;transition:color 0.2s">Earth</a>
+<nav style="margin-left:auto;display:flex;gap:4px">
+<a href="/bridge.html" style="color:#78909c;font-size:16px;text-decoration:none;padding:8px 14px;letter-spacing:1px;text-transform:uppercase;transition:color 0.2s">Bridge</a>
+<a href="/starmap.html" style="color:#4fc3f7;font-size:16px;text-decoration:none;padding:8px 14px;letter-spacing:1px;text-transform:uppercase">Star Map</a>
+<a href="/" style="color:#78909c;font-size:16px;text-decoration:none;padding:8px 14px;letter-spacing:1px;text-transform:uppercase;transition:color 0.2s">Simulator</a>
+<a href="/simulation.html" style="color:#78909c;font-size:16px;text-decoration:none;padding:8px 14px;letter-spacing:1px;text-transform:uppercase;transition:color 0.2s">Live Sim</a>
+<a href="/adult.html" style="color:#78909c;font-size:16px;text-decoration:none;padding:8px 14px;letter-spacing:1px;text-transform:uppercase;transition:color 0.2s">Control</a>
+<a href="/earth.html" style="color:#78909c;font-size:16px;text-decoration:none;padding:8px 14px;letter-spacing:1px;text-transform:uppercase;transition:color 0.2s">Earth</a>
 <button class="help-btn" onclick="toggleHelp()" aria-label="How to read this map" title="How to read this map">?</button>
 <button id="audio-toggle" title="Toggle audio (M)" aria-label="Toggle audio on/off">&#9835;</button>
 </nav>
@@ -161,6 +181,19 @@ body{background:#0a0a1a;color:#e0e0e0;font-family:'Courier New',monospace;overfl
 <button class="vt-btn" data-view="crisis" onclick="setView('crisis')">Crisis</button>
 </div>
 
+<!-- Map Read: plain-English situation summary -->
+<div id="map-read" aria-label="Situation summary" role="status">
+  <div id="mr-title">Map Read</div>
+  <div id="mr-body">Awaiting data…</div>
+</div>
+
+<!-- Label mode toggle -->
+<div id="label-toggle">
+<button class="lt-btn active" data-labels="factions" onclick="setLabelMode('factions')">Factions Only</button>
+<button class="lt-btn" data-labels="important" onclick="setLabelMode('important')">Important NPCs</button>
+<button class="lt-btn" data-labels="all" onclick="setLabelMode('all')">All Labels</button>
+</div>
+
 <!-- Search -->
 <div id="search-box"><input id="search-input" type="text" placeholder="Search NPC..."></div>
 
@@ -169,7 +202,7 @@ body{background:#0a0a1a;color:#e0e0e0;font-family:'Courier New',monospace;overfl
 <button id="zoom-in" title="Zoom in">+</button>
 <button id="zoom-out" title="Zoom out">-</button>
 <button id="zoom-reset" title="Reset view">R</button>
-<button id="zoom-fit" title="Fit all factions in view" style="font-size:12px;width:auto;padding:0 10px">FIT</button>
+<button id="zoom-fit" title="Fit all factions in view" style="font-size:16px;width:auto;padding:0 14px">FIT</button>
 </div>
 
 <!-- Help Overlay -->
@@ -186,11 +219,12 @@ body{background:#0a0a1a;color:#e0e0e0;font-family:'Courier New',monospace;overfl
 <h3>Faction Territory Regions</h3>
 <div class="help-section">
 <ul>
-<li><strong>Colored bubbles</strong> — Each faction has an <em>influence zone</em> shown as a translucent colored bubble. This is the faction's home sector, where its members operate. It represents influence, not hard ownership.</li>
-<li><strong>Bubble size</strong> — Scales with the number of NPCs in that faction. More members = larger influence area.</li>
-<li><strong>Bubble border</strong> — Dashed when influence is low (cohesion &lt; 40), solid when stable (cohesion 40+).</li>
-<li><strong>Grey space between bubbles</strong> — Neutral / unclaimed space. No faction controls it yet.</li>
-<li><strong>Overlapping bubbles</strong> — Contested or shared influence zones. Two factions are operating in close proximity.</li>
+<li><strong>Colored shapes</strong> — Each faction has an <em>influence zone</em> drawn as an irregular polygon shaped by where its members actually are. This represents influence, not hard ownership.</li>
+<li><strong>Shape = data</strong> — Territory expands toward faction NPCs and contracts where there are none. More spread-out members = larger, more irregular territory.</li>
+<li><strong>Border style</strong> — Dashed when influence is low (cohesion &lt; 40), solid when stable (cohesion 40+).</li>
+<li><strong>Fill gradient</strong> — Stronger (more opaque) near the faction core, lighter at the frontier edges.</li>
+<li><strong>Grey space between shapes</strong> — Neutral / unclaimed space. No faction controls it yet.</li>
+<li><strong>Orange dashed outline</strong> — Contested zone. Two faction influence polygons overlap in this area.</li>
 </ul>
 </div>
 
@@ -239,7 +273,7 @@ body{background:#0a0a1a;color:#e0e0e0;font-family:'Courier New',monospace;overfl
 <li><strong>Scroll wheel</strong> — Zoom in/out</li>
 <li><strong>Click + drag</strong> on empty space — Pan the map</li>
 <li><strong>Click a dot</strong> — Select an NPC, see details (mood, goal, latest decision, thought)</li>
-<li><strong>Hover over a faction bubble</strong> — See faction info tooltip (name, cohesion, NPC count, status)</li>
+<li><strong>Hover over a faction territory</strong> — See faction info tooltip (name, cohesion, NPC count, status)</li>
 <li><strong>Double-click a dot</strong> — Zoom in and center on that NPC</li>
 <li><strong>Search box</strong> (top-left) — Type an NPC name to find and focus</li>
 <li><strong>Zoom buttons</strong> (bottom center) — + / - / R (reset) / FIT</li>
@@ -259,11 +293,11 @@ body{background:#0a0a1a;color:#e0e0e0;font-family:'Courier New',monospace;overfl
 <h3>What to Watch For</h3>
 <div class="help-section">
 <ul>
-<li><strong>All dots in a bubble turning orange/red</strong> — Faction in crisis.</li>
-<li><strong>Red lines between two bubbles</strong> — Factions turning hostile.</li>
+<li><strong>All dots in a territory turning orange/red</strong> — Faction in crisis.</li>
+<li><strong>Red lines between two territories</strong> — Factions turning hostile.</li>
 <li><strong>Dots shrinking</strong> — NPCs becoming inactive.</li>
 <li><strong>Many dots pulsing</strong> — Cascade event just happened.</li>
-<li><strong>Bubble border turning dashed</strong> — Faction cohesion dropping below 40.</li>
+<li><strong>Territory border turning dashed</strong> — Faction cohesion dropping below 40.</li>
 </ul>
 </div>
 </div>
@@ -276,7 +310,7 @@ const POLL_MS = 5000;
 // --- State ---
 let mapData = null;
 let nodes = [];
-let factionZones = []; // {fid, fcx, fcy, zoneR, color, fdata, groupSize}
+let factionZones = []; // {fid, fcx, fcy, zoneR, color, fdata, groupSize, polygon:[], labelX, labelY}
 let stars = [];
 let zoom = 1;
 let panX = 0, panY = 0;
@@ -286,9 +320,10 @@ let selectedNode = null;
 let hoveredFaction = null;
 let canvas, ctx;
 let W, H;
-let sidebarW = 320;
+let sidebarW = 420;
 let lastUpdate = 0;
 let currentView = 'territory'; // 'territory' | 'network' | 'crisis'
+let labelMode = 'factions'; // 'factions' | 'important' | 'all' — label display priority
 
 // Faction layout angles (8 factions in a circle)
 const FACTION_ORDER = [
@@ -368,10 +403,23 @@ function resize() {
 
 // --- View toggle ---
 function setView(v) {
-  currentView = v;
-  document.querySelectorAll('.vt-btn').forEach(b => {
-    b.classList.toggle('active', b.dataset.view === v);
-  });
+currentView = v;
+document.querySelectorAll('.vt-btn').forEach(b => {
+b.classList.toggle('active', b.dataset.view === v);
+});
+// Auto-set label mode defaults per view
+if (v === 'territory' && labelMode !== 'all') setLabelMode('factions');
+else if (v === 'network' && labelMode === 'factions') setLabelMode('important');
+else if (v === 'crisis' && labelMode === 'factions') setLabelMode('important');
+buildMapRead(); // update panel when mode changes
+}
+
+// --- Label mode toggle ---
+function setLabelMode(mode) {
+labelMode = mode;
+document.querySelectorAll('.lt-btn').forEach(b => {
+b.classList.toggle('active', b.dataset.labels === mode);
+});
 }
 
 // --- Data fetch ---
@@ -396,6 +444,142 @@ function hashStr(s) {
 function seededRand(seed) {
   let s = seed | 0;
   return function() { s = (s * 1103515245 + 12345) & 0x7fffffff; return s / 0x7fffffff; };
+}
+
+// --- Convex hull & polygon algorithms ---
+
+// Gift-wrapping convex hull. Input: [{x,y},...], returns ordered hull vertices.
+function convexHull(points) {
+  if (points.length < 3) return points.slice();
+  // Find leftmost point
+  let start = 0;
+  for (let i = 1; i < points.length; i++) {
+    if (points[i].x < points[start].x || (points[i].x === points[start].x && points[i].y < points[start].y)) start = i;
+  }
+  const hull = [];
+  let current = start;
+  do {
+    hull.push(points[current]);
+    let next = 0;
+    for (let i = 1; i < points.length; i++) {
+      if (i === current) continue;
+      const cross = crossProduct(points[current], points[next], points[i]);
+      if (next === current || cross > 0 || (cross === 0 && dist2(points[current], points[i]) > dist2(points[current], points[next]))) {
+        next = i;
+      }
+    }
+    current = next;
+    if (hull.length > points.length) break; // safety
+  } while (current !== start);
+  return hull;
+}
+
+function crossProduct(o, a, b) {
+  return (a.x - o.x) * (b.y - o.y) - (a.y - o.y) * (b.x - o.x);
+}
+
+function dist2(a, b) {
+  const dx = a.x - b.x, dy = a.y - b.y;
+  return dx*dx + dy*dy;
+}
+
+// Expand hull outward by N pixels. Offsets each vertex along the average outward normal of its adjacent edges.
+function padPolygon(polygon, padding) {
+  if (polygon.length < 3) return polygon.slice();
+  const n = polygon.length;
+  const result = [];
+  for (let i = 0; i < n; i++) {
+    const prev = polygon[(i - 1 + n) % n];
+    const curr = polygon[i];
+    const next = polygon[(i + 1) % n];
+    // Edge normals (outward = rotate edge 90° clockwise)
+    const e1x = curr.x - prev.x, e1y = curr.y - prev.y;
+    const len1 = Math.sqrt(e1x*e1x + e1y*e1y) || 1;
+    const n1x = e1y / len1, n1y = -e1x / len1;
+    const e2x = next.x - curr.x, e2y = next.y - curr.y;
+    const len2 = Math.sqrt(e2x*e2x + e2y*e2y) || 1;
+    const n2x = e2y / len2, n2y = -e2x / len2;
+    // Average normal
+    let nx = (n1x + n2x) / 2, ny = (n1y + n2y) / 2;
+    const nlen = Math.sqrt(nx*nx + ny*ny) || 1;
+    nx /= nlen; ny /= nlen;
+    result.push({ x: curr.x + nx * padding, y: curr.y + ny * padding });
+  }
+  return result;
+}
+
+// Chaikin corner-cutting smoothing: inserts midpoints along each edge, rounds corners.
+function smoothPoly(polygon, iterations) {
+  if (polygon.length < 3 || iterations <= 0) return polygon;
+  let pts = polygon;
+  for (let iter = 0; iter < iterations; iter++) {
+    const next = [];
+    const n = pts.length;
+    for (let i = 0; i < n; i++) {
+      const curr = pts[i];
+      const nxt = pts[(i + 1) % n];
+      next.push({ x: curr.x * 0.75 + nxt.x * 0.25, y: curr.y * 0.75 + nxt.y * 0.25 });
+      next.push({ x: curr.x * 0.25 + nxt.x * 0.75, y: curr.y * 0.25 + nxt.y * 0.75 });
+    }
+    pts = next;
+  }
+  return pts;
+}
+
+// Ray-casting point-in-polygon test
+function pointInPolygon(px, py, polygon) {
+  if (!polygon || polygon.length < 3) return false;
+  let inside = false;
+  for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
+    const xi = polygon[i].x, yi = polygon[i].y;
+    const xj = polygon[j].x, yj = polygon[j].y;
+    if ((yi > py) !== (yj > py) && px < (xj - xi) * (py - yi) / (yj - yi) + xi) {
+      inside = !inside;
+    }
+  }
+  return inside;
+}
+
+// Bounding-box overlap check for faction polygons (fast, conservative)
+function polygonsOverlap(poly1, poly2) {
+  if (!poly1 || !poly2 || poly1.length < 3 || poly2.length < 3) return false;
+  const b1 = polyBounds(poly1), b2 = polyBounds(poly2);
+  if (b1.maxX < b2.minX || b2.maxX < b1.minX || b1.maxY < b2.minY || b2.maxY < b1.minY) return false;
+  // Sample test: check if any vertex of poly2 is inside poly1 (or vice versa)
+  for (let i = 0; i < poly2.length; i += Math.max(1, Math.floor(poly2.length / 8))) {
+    if (pointInPolygon(poly2[i].x, poly2[i].y, poly1)) return true;
+  }
+  for (let i = 0; i < poly1.length; i += Math.max(1, Math.floor(poly1.length / 8))) {
+    if (pointInPolygon(poly1[i].x, poly1[i].y, poly2)) return true;
+  }
+  return false;
+}
+
+function polyBounds(poly) {
+  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+  for (const p of poly) {
+    if (p.x < minX) minX = p.x;
+    if (p.y < minY) minY = p.y;
+    if (p.x > maxX) maxX = p.x;
+    if (p.y > maxY) maxY = p.y;
+  }
+  return { minX, minY, maxX, maxY };
+}
+
+function polyCentroid(poly) {
+  if (!poly || poly.length === 0) return { x: 0, y: 0 };
+  let sx = 0, sy = 0;
+  for (const p of poly) { sx += p.x; sy += p.y; }
+  return { x: sx / poly.length, y: sy / poly.length };
+}
+
+// Draw a polygon path on ctx (does not stroke/fill — caller does that)
+function tracePolygonPath(ctx, poly) {
+  if (!poly || poly.length < 3) return;
+  ctx.beginPath();
+  ctx.moveTo(poly[0].x, poly[0].y);
+  for (let i = 1; i < poly.length; i++) ctx.lineTo(poly[i].x, poly[i].y);
+  ctx.closePath();
 }
 
 // --- Build node positions ---
@@ -433,12 +617,12 @@ function buildNodes() {
     const fcy = cy + Math.sin(angle) * factionRadius;
     const group = factionGroups[fid];
     const spread = Math.max(npcLocalRadius, group.length * 14);
-    const zoneR = Math.max(npcLocalRadius, group.length * 14) + 20;
     const fdata = factions[fid] || {};
     const color = fdata.color || '#333';
 
-    // Store zone for hover detection
-    factionZones.push({ fid, fcx, fcy, zoneR, color, fdata, groupSize: group.length });
+    // Place faction NPCs first, collect their positions for polygon
+    const factionNodePositions = [{ x: fcx, y: fcy }]; // anchor = faction center
+    const factionNodes = [];
 
     group.forEach((npc, j) => {
       const rng = seededRand(hashStr(npc.id || npc.name || (fid + j)));
@@ -448,15 +632,59 @@ function buildNodes() {
       const y = fcy + Math.sin(subAngle) * subR;
       const age = npc.last_active ? (now - npc.last_active) : 9999;
       const activity = Math.max(0.2, 1 - age / 3600);
-      const radius = 5 + activity * 8;
+      const radius = 8 + activity * 12;
+      factionNodePositions.push({ x, y });
 
-      nodes.push({
+      const node = {
         id: npc.id, name: npc.name || npc.id, x, y, radius,
         color: npc.mood_color || '#9e9e9e',
         npc, category: npc.category || 'unknown', faction: fid,
         activity, age,
         factionColor: color
-      });
+      };
+      factionNodes.push(node);
+      nodes.push(node);
+    });
+
+    // Build territory polygon from NPC positions
+    let polygon = [];
+    let labelX = fcx, labelY = fcy;
+    let zoneR = Math.max(npcLocalRadius, group.length * 14) + 20; // fallback
+
+    if (factionNodePositions.length >= 3) {
+      // 3+ points: convex hull → pad → smooth
+      let hull = convexHull(factionNodePositions);
+      let padded = padPolygon(hull, 50);
+      polygon = smoothPoly(padded, 2);
+      const centroid = polyCentroid(polygon);
+      const bounds = polyBounds(polygon);
+      labelX = centroid.x;
+      labelY = bounds.maxY + 16;
+    } else if (factionNodePositions.length === 2) {
+      // 2 points: capsule (line between + padding)
+      const a = factionNodePositions[0], b = factionNodePositions[1];
+      const dx = b.x - a.x, dy = b.y - a.y;
+      const len = Math.sqrt(dx*dx + dy*dy) || 1;
+      const nx = -dy / len, ny = dx / len;
+      const pad = 50;
+      polygon = [
+        { x: a.x + nx * pad, y: a.y + ny * pad },
+        { x: b.x + nx * pad, y: b.y + ny * pad },
+        { x: b.x - nx * pad, y: b.y - ny * pad },
+        { x: a.x - nx * pad, y: a.y - ny * pad }
+      ];
+      polygon = smoothPoly(polygon, 2);
+      const bounds = polyBounds(polygon);
+      labelX = (a.x + b.x) / 2;
+      labelY = bounds.maxY + 16;
+    }
+    // 1 point or 0: polygon stays empty, use circle fallback (zoneR)
+
+    factionZones.push({
+      fid, fcx, fcy, zoneR, color, fdata,
+      groupSize: group.length,
+      polygon,     // array of {x,y} if hull computed, [] if fallback
+      labelX, labelY
     });
   });
 
@@ -471,7 +699,7 @@ function buildNodes() {
     nodes.push({
       id: npc.id, name: npc.name || npc.id,
       x: cx + Math.cos(a) * r, y: cy + Math.sin(a) * r,
-      radius: 7, color: npc.mood_color || '#ef5350',
+      radius: 11, color: npc.mood_color || '#ef5350',
       npc, category: 'rival', faction: null,
       activity: 0.5, age: 999,
       factionColor: CATEGORY_COLORS.rival
@@ -486,7 +714,7 @@ function buildNodes() {
     nodes.push({
       id: npc.id, name: npc.name || npc.id,
       x: cx + Math.cos(a) * r, y: cy + Math.sin(a) * r,
-      radius: 4, color: npc.mood_color || '#78909c',
+      radius: 6, color: npc.mood_color || '#78909c',
       npc, category: 'neutral', faction: null,
       activity: 0.3, age: 999,
       factionColor: CATEGORY_COLORS.neutral
@@ -501,7 +729,7 @@ function buildNodes() {
     nodes.push({
       id: npc.id, name: npc.name || npc.id,
       x: cx + Math.cos(a) * r, y: cy + Math.sin(a) * r,
-      radius: 5, color: npc.mood_color || '#ab47bc',
+      radius: 8, color: npc.mood_color || '#ab47bc',
       npc, category: 'enigma', faction: null,
       activity: 0.4, age: 999,
       factionColor: CATEGORY_COLORS.enigma
@@ -516,7 +744,7 @@ function buildNodes() {
     nodes.push({
       id: npc.id, name: npc.name || npc.id,
       x: cx + Math.cos(a) * r, y: cy + Math.sin(a) * r,
-      radius: 6, color: npc.mood_color || '#ffd700',
+      radius: 9, color: npc.mood_color || '#ffd700',
       npc, category: 'companion', faction: null,
       activity: 0.7, age: 999,
       factionColor: CATEGORY_COLORS.companion
@@ -531,7 +759,7 @@ function buildNodes() {
     nodes.push({
       id: npc.id, name: npc.name || npc.id,
       x: cx + Math.cos(a) * r, y: cy + Math.sin(a) * r,
-      radius: 4, color: '#9e9e9e',
+      radius: 6, color: '#9e9e9e',
       npc, category: 'unknown', faction: null,
       activity: 0.2, age: 999,
       factionColor: CATEGORY_COLORS.unknown
@@ -574,6 +802,9 @@ function updateUI() {
 
   // Map legend — always visible
   buildLegend();
+
+  // Map Read panel — update on every data fetch
+  buildMapRead();
 }
 
 function buildLegend() {
@@ -612,6 +843,132 @@ function buildLegend() {
   ml.innerHTML = html;
 }
 
+// --- Map Read: plain-English situation summary ---
+function buildMapRead() {
+  if (!mapData) return;
+  const ws = mapData.world_state || {};
+  const factions = mapData.factions || {};
+  const npcs = mapData.npcs || [];
+
+  // 1. Dominant crisis — score from world state
+  const threat = ws.threat_level || 0;
+  const morale = ws.morale || 50;
+  const anomaly = ws.anomaly_activity || 0;
+  const tension = ws.tension_level || 0;
+  const stability = ws.stability || 50;
+  const crisisScore = threat * 1.2 + (100 - morale) * 0.8 + anomaly * 0.9 + tension * 0.7 + (100 - stability) * 0.5;
+
+  let crisisText, crisisClass;
+  if (crisisScore > 180) { crisisText = 'CRITICAL — existential threat'; crisisClass = ''; }
+  else if (crisisScore > 120) { crisisText = 'Severe — multiple systems stressed'; crisisClass = ''; }
+  else if (crisisScore > 70) { crisisText = 'Elevated — tensions rising'; crisisClass = 'warn'; }
+  else if (crisisScore > 30) { crisisText = 'Moderate — manageable strain'; crisisClass = 'warn'; }
+  else { crisisText = 'Stable — no active crisis'; crisisClass = 'ok'; }
+
+  // What's driving it
+  const drivers = [];
+  if (threat > 60) drivers.push('threat is severe');
+  if (morale < 30) drivers.push('morale has collapsed');
+  if (anomaly > 50) drivers.push('anomalies are active');
+  if (tension > 60) drivers.push('tension is high');
+  if (stability < 30) drivers.push('stability is failing');
+  const driverText = drivers.length > 0 ? drivers.join(', ') + '.' : 'All systems nominal.';
+
+  // 2. Most active faction — by decisions_this_tick + events_this_tick + activity_rate
+  let mostActiveFaction = null, mostActiveScore = -1;
+  for (const [fid, fdata] of Object.entries(factions)) {
+    const score = (fdata.decisions_this_tick || 0) * 2 + (fdata.events_this_tick || 0) * 1.5 + (fdata.activity_rate || 0) * 0.5;
+    if (score > mostActiveScore) { mostActiveScore = score; mostActiveFaction = fid; }
+  }
+  const activeFactionName = mostActiveFaction ? (FACTION_DISPLAY[mostActiveFaction] || mostActiveFaction) : 'None';
+
+  // 3. Contested territories — already computed in draw() via polygonsOverlap
+  const contestedPairs = [];
+  for (let i = 0; i < factionZones.length; i++) {
+    for (let j = i + 1; j < factionZones.length; j++) {
+      const z1 = factionZones[i], z2 = factionZones[j];
+      let overlap = false;
+      if (z1.polygon.length >= 3 && z2.polygon.length >= 3) {
+        overlap = polygonsOverlap(z1.polygon, z2.polygon);
+      } else {
+        const dx = z1.fcx - z2.fcx, dy = z1.fcy - z2.fcy;
+        const dist = Math.sqrt(dx*dx + dy*dy);
+        if (dist < z1.zoneR + z2.zoneR - 30) overlap = true;
+      }
+      if (overlap) contestedPairs.push([FACTION_DISPLAY[z1.fid] || z1.fid, FACTION_DISPLAY[z2.fid] || z2.fid]);
+    }
+  }
+  let contestedText;
+  if (contestedPairs.length === 0) {
+    contestedText = 'No contested territories.';
+  } else if (contestedPairs.length <= 2) {
+    contestedText = contestedPairs.map(p => `${p[0]} vs ${p[1]}`).join('; ') + '.';
+  } else {
+    contestedText = contestedPairs.slice(0, 2).map(p => `${p[0]} vs ${p[1]}`).join('; ') + ` + ${contestedPairs.length - 2} more.`;
+  }
+
+  // 4. View mode description
+  const viewDescriptions = {
+    territory: 'Territory view — faction influence zones; overlaps = contested space.',
+    network: 'Network view — relationship lines; green = alliance, red = hostility.',
+    crisis: 'Crisis view — conflict lines, threats, and anomalies highlighted.'
+  };
+  const viewText = viewDescriptions[currentView] || '';
+
+  // 5. What to look at next — heuristic suggestions
+  const suggestions = [];
+  // Low-cohesion factions
+  for (const [fid, fdata] of Object.entries(factions)) {
+    if ((fdata.cohesion || 50) < 35) suggestions.push(`${FACTION_DISPLAY[fid] || fid} is fracturing (cohesion ${fdata.cohesion})`);
+  }
+  // Factions with very high threat involvement
+  if (threat > 60) {
+    // Find faction with most red relationship lines
+    let mostHostile = null, hostileCount = 0;
+    for (const [fid, fdata] of Object.entries(factions)) {
+      const stances = fdata.stances || {};
+      let hCount = 0;
+      for (const s of Object.values(stances)) { if (s.stance === 'hostile' || s.attitude === 'hostile') hCount++; }
+      if (hCount > hostileCount) { hostileCount = hCount; mostHostile = fid; }
+    }
+    if (mostHostile) suggestions.push(`${FACTION_DISPLAY[mostHostile] || mostHostile} has the most hostile stance pairs`);
+  }
+  // NPCs with extreme moods
+  const extremeMoodNpc = npcs.find(n => n.mood && (n.mood.includes('aggress') || n.mood.includes('furious') || n.mood.includes('enraged')));
+  if (extremeMoodNpc) suggestions.push(`${extremeMoodNpc.name || extremeMoodNpc.id} is in an extreme mood`);
+
+  // Fallback if no specific suggestions
+  if (suggestions.length === 0) {
+    if (crisisScore > 70) suggestions.push('Watch the red conflict lines between hostile factions');
+    else if (contestedPairs.length > 0) suggestions.push('Check the orange dashed borders — contested zones');
+    else suggestions.push('Map is calm — try Network view to see relationships');
+  }
+
+  // 6. Cascade chain — not available from /api/map/data, infer from events
+  const events = mapData.events || [];
+  const chainCounts = {};
+  for (const ev of events) {
+    if (ev.action_type && ev.action_type.includes('cascade')) {
+      const key = ev.action_type;
+      chainCounts[key] = (chainCounts[key] || 0) + 1;
+    }
+  }
+  const topChain = Object.entries(chainCounts).sort((a, b) => b[1] - a[1])[0];
+  const cascadeText = topChain ? `${topChain[0]} — ${topChain[1]} reactions this cycle.` : 'No cascade chains currently active.';
+
+  // --- Assemble panel HTML ---
+  let html = '';
+  html += `<div id="mr-crisis" class="${crisisClass}">${crisisText}</div>`;
+  html += `<div id="mr-line">${driverText}</div>`;
+  html += `<div id="mr-line"><strong>Cascades:</strong> ${cascadeText}</div>`;
+  html += `<div id="mr-line"><strong>Most active:</strong> <span class="fac-name" style="color:${factions[mostActiveFaction]?.color || '#4fc3f7'}">${activeFactionName}</span></div>`;
+  html += `<div id="mr-line"><strong>Contested:</strong> ${contestedText}</div>`;
+  html += `<div id="mr-line" style="color:#78909c;font-size:10px;margin-top:2px">${viewText}</div>`;
+  html += `<div id="mr-next">▸ ${suggestions[0]}</div>`;
+
+  document.getElementById('mr-body').innerHTML = html;
+}
+
 function setBar(name, val, max, color) {
   const pct = Math.min(100, Math.max(0, ((val || 0) / max) * 100));
   const fill = document.getElementById('wb-' + name);
@@ -624,8 +981,14 @@ function setBar(name, val, max, color) {
 function getFactionZoneAt(sx, sy) {
   const {x, y} = screenToWorld(sx, sy);
   for (const z of factionZones) {
-    const dx = x - z.fcx, dy = y - z.fcy;
-    if (dx*dx + dy*dy < z.zoneR * z.zoneR) return z;
+    if (z.polygon && z.polygon.length >= 3) {
+      // Polygon hit-test
+      if (pointInPolygon(x, y, z.polygon)) return z;
+    } else {
+      // Circle fallback for 0-1 NPC factions
+      const dx = x - z.fcx, dy = y - z.fcy;
+      if (dx*dx + dy*dy < z.zoneR * z.zoneR) return z;
+    }
   }
   return null;
 }
@@ -681,37 +1044,118 @@ function hideFactionTip() {
 
 // --- View-dependent rendering params ---
 function getViewParams() {
-  if (currentView === 'territory') {
-    return {
-      zoneFillAlpha: 0.12,
-      zoneBorderAlpha: 0.5,
-      zoneBorderWidth: 2.5,
-      lineAlphaScale: 0.25,
-      npcFactionBorder: 2.5,
-      labelSize: 12,
-      labelAlpha: 0.9
-    };
-  } else if (currentView === 'network') {
-    return {
-      zoneFillAlpha: 0.03,
-      zoneBorderAlpha: 0.15,
-      zoneBorderWidth: 1,
-      lineAlphaScale: 1.0,
-      npcFactionBorder: 1.5,
-      labelSize: 10,
-      labelAlpha: 0.5
-    };
-  } else { // crisis
-    return {
-      zoneFillAlpha: 0.06,
-      zoneBorderAlpha: 0.3,
-      zoneBorderWidth: 1.5,
-      lineAlphaScale: 0.6,
-      npcFactionBorder: 2,
-      labelSize: 10,
-      labelAlpha: 0.6
-    };
-  }
+if (currentView === 'territory') {
+return {
+zoneFillAlpha: 0.12,
+zoneBorderAlpha: 0.5,
+zoneBorderWidth: 3.5,
+lineAlphaScale: 0.25,
+npcFactionBorder: 3.5,
+labelSize: 18,
+labelAlpha: 0.9
+};
+} else if (currentView === 'network') {
+return {
+zoneFillAlpha: 0.03,
+zoneBorderAlpha: 0.15,
+zoneBorderWidth: 1.5,
+lineAlphaScale: 1.0,
+npcFactionBorder: 2.5,
+labelSize: 16,
+labelAlpha: 0.5
+};
+} else { // crisis
+return {
+zoneFillAlpha: 0.06,
+zoneBorderAlpha: 0.3,
+zoneBorderWidth: 2.5,
+lineAlphaScale: 0.6,
+npcFactionBorder: 3,
+labelSize: 16,
+labelAlpha: 0.6
+};
+}
+}
+
+// --- Label priority system ---
+// Priority levels: 0=hidden, 1=low(ordinary), 2=medium(crisis/event), 3=high(selected/important), 4=critical(hovered)
+function getLabelPriority(node) {
+const isHovered = hoveredNode === node;
+const isSelected = selectedNode === node;
+if (isHovered || isSelected) return 4;
+
+// Always show in 'all' mode
+if (labelMode === 'all') {
+// But still give higher priority to important nodes for collision resolution
+if (isNodeImportant(node)) return 3;
+if (isNodeCrisisRelevant(node)) return 2;
+return 1;
+}
+
+// 'important' mode: show faction leaders, active event NPCs, crisis NPCs, extreme moods
+if (labelMode === 'important') {
+if (isNodeImportant(node)) return 3;
+if (isNodeCrisisRelevant(node)) return 2;
+return 0; // hide ordinary NPCs
+}
+
+// 'factions' mode: only show hovered/selected (priority 4, already handled above)
+return 0;
+}
+
+function isNodeImportant(node) {
+// Faction leaders (char_101-108) are always important
+const id = node.id || '';
+if (id.startsWith('char_1')) return true; // faction leaders
+// Historical figures (char_001-005) are important
+if (id.startsWith('char_0')) return true;
+// High activity nodes
+if (node.activity > 0.8) return true;
+// Extreme mood — check mood value if available
+const mood = node.npc && (node.npc.mood_score || node.npc.mood);
+if (typeof mood === 'number') {
+if (mood < 0.25 || mood > 0.85) return true;
+}
+return false;
+}
+
+function isNodeCrisisRelevant(node) {
+if (currentView === 'crisis') {
+// In crisis mode, rivals and enigmas are crisis-relevant
+if (node.category === 'rival' || node.category === 'enigma') return true;
+// NPCs with very low mood are crisis-relevant
+const mood = node.npc && (node.npc.mood_score || node.npc.mood);
+if (typeof mood === 'number' && mood < 0.3) return true;
+// NPCs in factions with low cohesion
+if (node.faction) {
+const zone = factionZones.find(z => z.fid === node.faction);
+if (zone && zone.fdata && (zone.fdata.cohesion || 50) < 40) return true;
+}
+}
+// NPCs mentioned in recent events
+const recentEvents = (mapData && mapData.events) || [];
+const recentCharIds = recentEvents.slice(0, 10).map(e => e.char_id).filter(Boolean);
+if (recentCharIds.includes(node.id)) return true;
+return false;
+}
+
+// Compute label bounding box for collision detection
+function computeLabelBBox(node, fontSize) {
+const textW = ctx.measureText(node.name).width;
+const labelY = node.y + node.radius + 18;
+return {
+x: node.x - textW / 2,
+y: labelY - fontSize,
+w: textW,
+h: fontSize + 4,
+priority: getLabelPriority(node),
+node: node
+};
+}
+
+// Simple AABB overlap check
+function labelsOverlap(a, b) {
+return a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y;
 }
 
 // --- Drawing ---
@@ -737,65 +1181,116 @@ function draw() {
     ctx.fill();
   }
 
-  // Faction territory zones — prominent colored bubbles
+  // Faction territory zones — data-shaped polygons
   for (const z of factionZones) {
     const fdata = z.fdata;
     const cohesion = fdata ? (fdata.cohesion || 50) : 50;
     const isHovered = hoveredFaction === z;
 
-    // Check for overlapping zones (contested)
+    // Check for overlapping polygons (contested)
     let isContested = false;
     for (const z2 of factionZones) {
       if (z2.fid === z.fid) continue;
-      const dx = z.fcx - z2.fcx, dy = z.fcy - z2.fcy;
-      const dist = Math.sqrt(dx*dx + dy*dy);
-      if (dist < z.zoneR + z2.zoneR - 30) { isContested = true; break; }
+      if (z.polygon.length >= 3 && z2.polygon.length >= 3) {
+        if (polygonsOverlap(z.polygon, z2.polygon)) { isContested = true; break; }
+      } else {
+        // Fallback: circle overlap check for zones without polygons
+        const dx = z.fcx - z2.fcx, dy = z.fcy - z2.fcy;
+        const dist = Math.sqrt(dx*dx + dy*dy);
+        if (dist < z.zoneR + z2.zoneR - 30) { isContested = true; break; }
+      }
     }
 
-    // Fill
     const fillAlpha = isHovered ? vp.zoneFillAlpha * 2 : vp.zoneFillAlpha;
-    ctx.beginPath();
-    ctx.arc(z.fcx, z.fcy, z.zoneR, 0, Math.PI * 2);
-    ctx.fillStyle = hexToRgba(z.color, fillAlpha);
-    ctx.fill();
-
-    // Border — solid for stable factions, dashed for low cohesion
     const borderAlpha = isHovered ? Math.min(1, vp.zoneBorderAlpha * 1.8) : vp.zoneBorderAlpha;
-    ctx.beginPath();
-    if (cohesion < 40) {
-      ctx.setLineDash([8, 6]);
-    } else {
-      ctx.setLineDash([]);
-    }
-    ctx.arc(z.fcx, z.fcy, z.zoneR, 0, Math.PI * 2);
-    ctx.strokeStyle = hexToRgba(z.color, borderAlpha);
-    ctx.lineWidth = isHovered ? vp.zoneBorderWidth + 1 : vp.zoneBorderWidth;
-    ctx.stroke();
-    ctx.setLineDash([]);
+    const borderW = isHovered ? vp.zoneBorderWidth + 1 : vp.zoneBorderWidth;
 
-    // Contested overlay indicator
-    if (isContested) {
-      ctx.beginPath();
-      ctx.arc(z.fcx, z.fcy, z.zoneR + 4, 0, Math.PI * 2);
-      ctx.strokeStyle = 'rgba(255,152,0,0.15)';
-      ctx.lineWidth = 1;
-      ctx.setLineDash([4, 4]);
+    if (z.polygon.length >= 3) {
+      // --- POLYGON TERRITORY ---
+      // Fill with gradient: stronger near faction anchor, lighter at edges
+      const centroid = polyCentroid(z.polygon);
+      const bounds = polyBounds(z.polygon);
+      const gradRadius = Math.max(bounds.maxX - bounds.minX, bounds.maxY - bounds.minY) * 0.7;
+      const grad = ctx.createRadialGradient(z.fcx, z.fcy, 0, z.fcx, z.fcy, gradRadius);
+      grad.addColorStop(0, hexToRgba(z.color, fillAlpha * 1.5));
+      grad.addColorStop(1, hexToRgba(z.color, fillAlpha * 0.4));
+      tracePolygonPath(ctx, z.polygon);
+      ctx.fillStyle = grad;
+      ctx.fill();
+
+      // Border — solid for stable, dashed for low cohesion
+      if (cohesion < 40) {
+        ctx.setLineDash([8, 6]);
+      } else {
+        ctx.setLineDash([]);
+      }
+      tracePolygonPath(ctx, z.polygon);
+      ctx.strokeStyle = hexToRgba(z.color, borderAlpha);
+      ctx.lineWidth = borderW;
       ctx.stroke();
       ctx.setLineDash([]);
+
+      // Contested overlay: orange dashed outline on polygon
+      if (isContested) {
+        tracePolygonPath(ctx, z.polygon);
+        ctx.strokeStyle = 'rgba(255,152,0,0.2)';
+        ctx.lineWidth = 1.5;
+        ctx.setLineDash([4, 4]);
+        ctx.stroke();
+        ctx.setLineDash([]);
+      }
+
+      // Faction label — at computed label position below polygon
+      ctx.fillStyle = hexToRgba(z.color, isHovered ? 1.0 : vp.labelAlpha);
+      ctx.font = `bold ${vp.labelSize}px Courier New`;
+      ctx.textAlign = 'center';
+      const displayName = (fdata ? fdata.display_name : z.fid).toUpperCase();
+      ctx.fillText(displayName, z.labelX, z.labelY);
+
+// Sub-label: sector type
+const sectorType = cohesion < 40 ? 'CONTESTED' : 'INFLUENCE ZONE';
+ctx.fillStyle = hexToRgba(z.color, isHovered ? 0.7 : 0.35);
+ctx.font = '14px Courier New';
+ctx.fillText(sectorType, z.labelX, z.labelY + 18);
+    } else {
+      // --- CIRCLE FALLBACK (1 or 0 NPCs) ---
+      ctx.beginPath();
+      ctx.arc(z.fcx, z.fcy, z.zoneR, 0, Math.PI * 2);
+      ctx.fillStyle = hexToRgba(z.color, fillAlpha);
+      ctx.fill();
+
+      if (cohesion < 40) {
+        ctx.setLineDash([8, 6]);
+      } else {
+        ctx.setLineDash([]);
+      }
+      ctx.beginPath();
+      ctx.arc(z.fcx, z.fcy, z.zoneR, 0, Math.PI * 2);
+      ctx.strokeStyle = hexToRgba(z.color, borderAlpha);
+      ctx.lineWidth = borderW;
+      ctx.stroke();
+      ctx.setLineDash([]);
+
+      if (isContested) {
+        ctx.beginPath();
+        ctx.arc(z.fcx, z.fcy, z.zoneR + 4, 0, Math.PI * 2);
+        ctx.strokeStyle = 'rgba(255,152,0,0.15)';
+        ctx.lineWidth = 1;
+        ctx.setLineDash([4, 4]);
+        ctx.stroke();
+        ctx.setLineDash([]);
+      }
+
+      ctx.fillStyle = hexToRgba(z.color, isHovered ? 1.0 : vp.labelAlpha);
+      ctx.font = `bold ${vp.labelSize}px Courier New`;
+      ctx.textAlign = 'center';
+      const displayName = (fdata ? fdata.display_name : z.fid).toUpperCase();
+ctx.fillText(displayName, z.fcx, z.fcy + z.zoneR + 22);
+const sectorType = cohesion < 40 ? 'CONTESTED' : 'INFLUENCE ZONE';
+ctx.fillStyle = hexToRgba(z.color, isHovered ? 0.7 : 0.35);
+ctx.font = '14px Courier New';
+ctx.fillText(sectorType, z.fcx, z.fcy + z.zoneR + 40);
     }
-
-    // Faction label — large and legible
-    ctx.fillStyle = hexToRgba(z.color, isHovered ? 1.0 : vp.labelAlpha);
-    ctx.font = `bold ${vp.labelSize}px Courier New`;
-    ctx.textAlign = 'center';
-    const displayName = (fdata ? fdata.display_name : z.fid).toUpperCase();
-    ctx.fillText(displayName, z.fcx, z.fcy + z.zoneR + 16);
-
-    // Sub-label: sector type
-    const sectorType = cohesion < 40 ? 'CONTESTED' : 'INFLUENCE ZONE';
-    ctx.fillStyle = hexToRgba(z.color, isHovered ? 0.7 : 0.35);
-    ctx.font = `9px Courier New`;
-    ctx.fillText(sectorType, z.fcx, z.fcy + z.zoneR + 28);
   }
 
   // Center zone — neutral / Federation core
@@ -810,10 +1305,10 @@ function draw() {
   ctx.setLineDash([6, 4]);
   ctx.stroke();
   ctx.setLineDash([]);
-  ctx.fillStyle = 'rgba(120,144,156,0.4)';
-  ctx.font = '9px Courier New';
-  ctx.textAlign = 'center';
-  ctx.fillText('NEUTRAL / FEDERATION CORE', cx, cy + centerR + 14);
+ctx.fillStyle = 'rgba(120,144,156,0.4)';
+ctx.font = '14px Courier New';
+ctx.textAlign = 'center';
+ctx.fillText('NEUTRAL / FEDERATION CORE', cx, cy + centerR + 20);
 
   // Relationship lines
   if (mapData) {
@@ -858,7 +1353,7 @@ function draw() {
         ctx.moveTo(node.x, node.y);
         ctx.lineTo(other.x, other.y);
         ctx.strokeStyle = lineColor;
-        ctx.lineWidth = Math.max(0.5, strength * 2 * distFade);
+        ctx.lineWidth = Math.max(1, strength * 3 * distFade);
         ctx.stroke();
       }
     }
@@ -925,16 +1420,85 @@ function draw() {
       ctx.stroke();
     }
 
-    // Name label
-    if (isHovered || isSelected || zoom > 1.2) {
-      ctx.fillStyle = isHovered ? '#ffffff' : '#b0b0b0';
-      ctx.font = `${isHovered ? '12' : '10'}px Courier New`;
-      ctx.textAlign = 'center';
-      ctx.fillText(node.name, node.x, node.y + r + 14);
-    }
-  }
+// Name label — priority-based (replaces always-show)
+{
+const priority = getLabelPriority(node);
+if (priority > 0) {
+const fontSize = (isHovered || isSelected) ? 17 : (priority >= 3 ? 15 : 13);
+ctx.font = `${fontSize}px Courier New`;
+ctx.textAlign = 'center';
+const labelY = node.y + r + 18;
+// Store label for collision pass
+node._labelBox = {
+x: node.x - ctx.measureText(node.name).width / 2,
+y: labelY - fontSize,
+w: ctx.measureText(node.name).width,
+h: fontSize + 4,
+priority: priority
+};
+node._labelY = labelY;
+node._labelFontSize = fontSize;
+} else {
+node._labelBox = null;
+}
+}
+    } // end NPC node loop
 
-  // Center marker (Federation core)
+    // --- Label collision resolution & drawing pass ---
+    // Collect all visible labels
+    const allLabels = [];
+    for (const node of nodes) {
+        if (node._labelBox) {
+            allLabels.push({
+                box: node._labelBox,
+                node: node,
+                fontSize: node._labelFontSize,
+                y: node._labelY
+            });
+        }
+    }
+    // Sort by priority descending (highest priority first — gets drawn, blocks overlapping lower)
+    allLabels.sort((a, b) => b.box.priority - a.box.priority);
+
+    // Collision resolution: mark lower-priority labels that overlap higher-priority ones
+    const visibleLabels = [];
+    for (const lbl of allLabels) {
+        let blocked = false;
+        for (const placed of visibleLabels) {
+            if (labelsOverlap(lbl.box, placed.box)) {
+                blocked = true;
+                break;
+            }
+        }
+        if (!blocked) {
+            visibleLabels.push(lbl);
+        }
+    }
+
+    // Draw visible labels
+    for (const lbl of visibleLabels) {
+        const node = lbl.node;
+        const isHov = hoveredNode === node;
+        const isSel = selectedNode === node;
+        const priority = lbl.box.priority;
+
+        if (isHov) {
+            ctx.fillStyle = '#ffffff';
+        } else if (isSel) {
+            ctx.fillStyle = '#4fc3f7';
+        } else if (priority >= 3) {
+            ctx.fillStyle = 'rgba(230,230,230,0.92)';
+        } else if (priority >= 2) {
+            ctx.fillStyle = 'rgba(200,200,200,0.75)';
+        } else {
+            ctx.fillStyle = 'rgba(180,180,180,0.55)';
+        }
+        ctx.font = `${lbl.fontSize}px Courier New`;
+        ctx.textAlign = 'center';
+        ctx.fillText(node.name, node.x, lbl.y);
+    }
+
+    // Center marker (Federation core)
   ctx.beginPath();
   ctx.arc(cx, cy, 3, 0, Math.PI * 2);
   ctx.fillStyle = '#4fc3f7';
@@ -980,7 +1544,7 @@ function getNodeAt(sx, sy) {
   for (let i = nodes.length - 1; i >= 0; i--) {
     const n = nodes[i];
     const dx = x - n.x, dy = y - n.y;
-    if (dx*dx + dy*dy < (n.radius + 4) * (n.radius + 4)) return n;
+    if (dx*dx + dy*dy < (n.radius + 10) * (n.radius + 10)) return n;
   }
   return null;
 }
