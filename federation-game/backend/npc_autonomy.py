@@ -174,12 +174,18 @@ def _clean_llm_output(text: str) -> str:
     # Reject outputs that leak the instruction prompt
     leak_markers = [
         "produce a single internal thought",
+        "generate a single internal thought",
+        "we need to generate",
         "1-2 sentences",
+        "no quotes or attribution",
+        "just the thought itself",
+        "be specific and in-character",
         "roleplay as",
         "the user is asking",
         "you are asking me",
         "as a language model",
         "as an ai",
+        "what is on your mind right now",
     ]
     lower = text.lower()
     for marker in leak_markers:
@@ -192,6 +198,30 @@ def _clean_llm_output(text: str) -> str:
     # Strip leading/trailing quotes
     text = text.strip().strip('"').strip("'").strip()
     return text
+
+
+def _is_leaked_prompt(text: str) -> bool:
+    """Second-pass check: detect if LLM output is a paraphrase of the prompt itself."""
+    if not text:
+        return False
+    # These are the exact instruction phrases from the thought-generation prompt
+    # that small models sometimes echo back instead of generating a thought.
+    prompt_echo_markers = [
+        "we need to generate",
+        "generate a single internal thought",
+        "no quotes or attribution",
+        "just the thought itself",
+        "be specific and in-character",
+        "this character would have right now",
+        "reflect their personality",
+        "do not use quotes or attribution",
+        "what is on your mind right now",
+    ]
+    lower = text.lower()
+    for marker in prompt_echo_markers:
+        if marker in lower:
+            return True
+    return False
 
 
 def _call_llm(
@@ -323,33 +353,43 @@ Examples:
                 max_tokens=80,
                 temperature=0.95,
             )
-            # Store successful LLM result in cache
-            if thought_text:
-                try:
-                    r.set(cache_key, thought_text, ex=THOUGHT_CACHE_TTL)
-                    with _cache_stats_lock:
-                        _cache_stats["stores"] += 1
-                except Exception:
-                    logger.debug("Thought cache write failed for %s", char_id)
+        # Belt-and-suspenders: reject if _clean_llm_output missed a leak
+        # (small models sometimes paraphrase prompt instructions)
+        if thought_text and _is_leaked_prompt(thought_text):
+            logger.warning(
+                "Rejected leaked prompt in thought for %s: %.80s...",
+                char_id,
+                thought_text,
+            )
+            thought_text = ""
+
+        # Store successful LLM result in cache
+        if thought_text:
+            try:
+                r.set(cache_key, thought_text, ex=THOUGHT_CACHE_TTL)
+                with _cache_stats_lock:
+                    _cache_stats["stores"] += 1
+            except Exception:
+                logger.debug("Thought cache write failed for %s", char_id)
             with _cache_stats_lock:
                 _cache_stats["misses"] += 1
 
-        if not thought_text:
-            template_thoughts = {
-                "scholar": "The data patterns suggest something unusual is forming in the research grids...",
-                "warrior": "The perimeter feels unsteady. I should reinforce our defensive positions.",
-                "rogue": "Opportunities don't announce themselves. Time to do some reconnaissance...",
-                "mystic": "I sense a shift in the cosmic currents. Something approaches from beyond...",
-                "leader": "The council meeting approaches. I must prepare my arguments carefully.",
-                "sage": "Balance requires patience, but events press urgency upon us.",
-                "wanderer": "I feel the call of uncharted space again. The old restlessness returns.",
-                "hero": "Someone out there needs help. I can feel it in my bones.",
-                "deceiver": "The pieces on the board are shifting. Time to rearrange them to my advantage.",
-                "guardian": "The old protocols must be maintained. I sense complacency in the ranks.",
-            }
-            thought_text = template_thoughts.get(
-                archetype, "Something stirs in the void..."
-            )
+    if not thought_text:
+        template_thoughts = {
+            "scholar": "The data patterns suggest something unusual is forming in the research grids...",
+            "warrior": "The perimeter feels unsteady. I should reinforce our defensive positions.",
+            "rogue": "Opportunities don't announce themselves. Time to do some reconnaissance...",
+            "mystic": "I sense a shift in the cosmic currents. Something approaches from beyond...",
+            "leader": "The council meeting approaches. I must prepare my arguments carefully.",
+            "sage": "Balance requires patience, but events press urgency upon us.",
+            "wanderer": "I feel the call of uncharted space again. The old restlessness returns.",
+            "hero": "Someone out there needs help. I can feel it in my bones.",
+            "deceiver": "The pieces on the board are shifting. Time to rearrange them to my advantage.",
+            "guardian": "The old protocols must be maintained. I sense complacency in the ranks.",
+        }
+        thought_text = template_thoughts.get(
+            archetype, "Something stirs in the void..."
+        )
 
     thought = {
         "char_id": char_id,
