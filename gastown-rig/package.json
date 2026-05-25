@@ -1,0 +1,25 @@
+{
+  "name": "gastown-deploy",
+  "version": "1.0.0",
+  "description": "Federation deployment toolkit for Gastown rig → VPS via Tailscale SSH",
+  "type": "module",
+  "scripts": {
+    "setup": "node setup-keys.js",
+    "deploy": "node deploy.js",
+    "deploy:backend": "node deploy.js --target backend",
+    "deploy:worker": "node deploy.js --target worker",
+    "deploy:frontend": "node deploy.js --target frontend",
+    "deploy:html": "node deploy.js --target html",
+    "shell": "node shell.js",
+    "status": "node shell.js --cmd 'cd /docker/federation-game && docker compose ps'",
+    "restart:backend": "node shell.js --cmd 'cd /docker/federation-game && docker compose restart backend'",
+    "restart:worker": "node shell.js --cmd 'cd /docker/federation-game && docker compose build worker && docker compose up -d worker'",
+    "restart:frontend": "node shell.js --cmd 'cd /docker/federation-game && docker compose restart frontend'",
+    "logs:backend": "node shell.js --cmd 'cd /docker/federation-game && docker compose logs --tail=30 backend'",
+    "logs:worker": "node shell.js --cmd 'cd /docker/federation-game && docker compose logs --tail=30 worker'",
+    "test": "node shell.js --cmd 'hostname && docker ps --format \"{{.Names}} {{.Status}}\"'"
+  },
+  "dependencies": {
+    "ssh2": "^1.16.0"
+  }
+}
