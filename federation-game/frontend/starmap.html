@@ -94,19 +94,48 @@ body{background:#0a0a1a;color:#e0e0e0;font-family:'Courier New',monospace;overfl
 #audio-toggle.muted::after{content:'';position:absolute;left:4px;right:4px;top:50%;height:2px;background:#ef5350;transform:rotate(-35deg);opacity:0.7}
 #audio-toggle:focus-visible{outline:2px solid #4fc3f7;outline-offset:2px}
 
-/* Map Read panel — TV-scale */
-#map-read{position:fixed;top:140px;left:12px;width:400px;background:rgba(10,10,26,0.94);border:1px solid rgba(79,195,247,0.25);border-radius:8px;padding:14px 16px;z-index:10;font-size:20px;line-height:1.5;max-height:320px;overflow-y:auto}
+/* Map Read / Crisis Readout panel — TV-scale */
+#map-read{position:fixed;top:140px;left:12px;width:420px;background:rgba(10,10,26,0.96);border:1px solid rgba(79,195,247,0.3);border-radius:8px;padding:14px 16px;z-index:10;font-size:20px;line-height:1.5;max-height:calc(100vh - 160px);overflow-y:auto}
 #map-read::-webkit-scrollbar{width:4px}
 #map-read::-webkit-scrollbar-thumb{background:rgba(79,195,247,0.3);border-radius:2px}
 #mr-title{color:#4fc3f7;font-size:18px;letter-spacing:2px;text-transform:uppercase;margin-bottom:8px;border-bottom:1px solid rgba(79,195,247,0.15);padding-bottom:6px;display:flex;align-items:center;gap:8px}
-#mr-title::before{content:'📡';font-size:18px}
-#mr-crisis{color:#ef5350;font-weight:bold;margin-bottom:6px;font-size:22px}
+#mr-title::before{content:'\1F4CB';font-size:18px}
+#mr-crisis{color:#ef5350;font-weight:bold;margin-bottom:6px;font-size:24px;letter-spacing:1px}
 #mr-crisis.ok{color:#66bb6a}
 #mr-crisis.warn{color:#ffa726}
+#mr-headline{color:#e0e0e0;font-size:19px;font-weight:bold;margin-bottom:6px;line-height:1.4}
+#mr-why{color:#b0bec5;font-size:17px;margin-bottom:10px;line-height:1.5;padding-left:10px;border-left:3px solid rgba(255,167,38,0.4)}
+#mr-section{margin-top:10px;padding-top:8px;border-top:1px solid rgba(79,195,247,0.12)}
+#mr-section-title{color:#ffd700;font-size:16px;letter-spacing:2px;text-transform:uppercase;margin-bottom:6px;font-weight:bold}
+#mr-npc-row{color:#b0b0b0;font-size:16px;line-height:1.6;padding:2px 0;display:flex;align-items:baseline;gap:6px}
+#mr-npc-name{color:#4fc3f7;font-weight:bold;cursor:pointer;transition:color 0.2s}
+#mr-npc-name:hover{color:#ffd700}
+#mr-npc-role{color:#78909c;font-size:14px}
+#mr-fac-row{color:#b0b0b0;font-size:16px;line-height:1.6;padding:2px 0}
+#mr-fac-name{font-weight:bold}
+#mr-fac-tag{font-size:13px;letter-spacing:1px;text-transform:uppercase;padding:1px 6px;border-radius:3px;margin-left:6px}
+#mr-fac-tag.escalating{background:rgba(244,67,54,0.2);color:#ef5350;border:1px solid rgba(244,67,54,0.3)}
+#mr-fac-tag.helping{background:rgba(102,187,106,0.2);color:#66bb6a;border:1px solid rgba(102,187,106,0.3)}
+#mr-fac-tag.involved{background:rgba(79,195,247,0.15);color:#4fc3f7;border:1px solid rgba(79,195,247,0.2)}
+#mr-cascade-row{color:#b0b0b0;font-size:16px;line-height:1.6;padding:2px 0}
+#mr-cascade-target{color:#ffd700;font-weight:bold}
+#mr-cascade-reactors{color:#78909c;font-size:14px}
+#mr-event-row{color:#b0b0b0;font-size:15px;line-height:1.5;padding:3px 0;border-left:2px solid rgba(244,67,54,0.3);padding-left:8px;margin-bottom:4px}
+#mr-event-name{color:#e0e0e0;font-weight:bold}
+#mr-event-sev{font-size:12px;letter-spacing:1px;text-transform:uppercase;padding:1px 5px;border-radius:3px;margin-left:4px}
+#mr-event-sev.CRITICAL{background:rgba(244,67,54,0.25);color:#ef5350}
+#mr-event-sev.MAJOR{background:rgba(255,167,38,0.25);color:#ffa726}
+#mr-plain{color:#b0bec5;font-size:17px;line-height:1.6;margin-top:8px;padding:8px 10px;background:rgba(79,195,247,0.05);border-radius:4px;border-left:3px solid rgba(79,195,247,0.2)}
+#mr-actions{margin-top:10px;padding-top:8px;border-top:1px solid rgba(255,215,0,0.15);display:flex;flex-wrap:wrap;gap:6px}
+#mr-action-btn{background:rgba(79,195,247,0.1);border:1px solid rgba(79,195,247,0.3);color:#4fc3f7;padding:6px 12px;border-radius:5px;font-size:15px;font-family:'Courier New',monospace;cursor:pointer;transition:all 0.2s;letter-spacing:1px;text-transform:uppercase}
+#mr-action-btn:hover{background:rgba(79,195,247,0.2);border-color:#4fc3f7;box-shadow:0 0 8px rgba(79,195,247,0.15)}
+#mr-collapse{color:#78909c;font-size:14px;cursor:pointer;text-align:center;padding:6px 0;margin-top:6px;border-top:1px solid rgba(79,195,247,0.08);transition:color 0.2s}
+#mr-collapse:hover{color:#4fc3f7}
 #mr-line{color:#b0b0b0;margin-bottom:4px;font-size:17px;line-height:1.5}
 #mr-line strong{color:#e0e0e0}
 #mr-line .fac-name{font-weight:bold}
 #mr-next{margin-top:8px;padding-top:8px;border-top:1px solid rgba(255,215,0,0.15);color:#ffd700;font-size:17px;font-style:italic}
+#mr-highlighted{outline:2px solid #ffd700;outline-offset:2px;box-shadow:0 0 12px rgba(255,215,0,0.3)}
 
 /* Label mode toggle — TV-scale */
 #label-toggle{position:fixed;top:72px;left:12px;z-index:10;display:flex;gap:4px;margin-top:90px}
@@ -189,10 +218,10 @@ body{background:#0a0a1a;color:#e0e0e0;font-family:'Courier New',monospace;overfl
 <button class="vt-btn" data-view="crisis" onclick="setView('crisis')">Crisis</button>
 </div>
 
-<!-- Map Read: plain-English situation summary -->
-<div id="map-read" aria-label="Situation summary" role="status">
-  <div id="mr-title">Map Read</div>
-  <div id="mr-body">Awaiting data…</div>
+<!-- Crisis Readout panel — case-file view -->
+<div id="map-read" aria-label="Crisis Readout" role="status">
+  <div id="mr-title">Crisis Readout</div>
+  <div id="mr-body">Awaiting data&hellip;</div>
 </div>
 
 <!-- Label mode toggle -->
@@ -850,130 +879,195 @@ function buildLegend() {
   ml.innerHTML = html;
 }
 
-// --- Map Read: plain-English situation summary ---
+// --- Crisis Readout: case-file panel ---
+let crisisReadoutCollapsed = false;
+let crisisHighlightIds = []; // NPC IDs to highlight on canvas
+
 function buildMapRead() {
   if (!mapData) return;
+  const cr = mapData.crisis_readout;
   const ws = mapData.world_state || {};
   const factions = mapData.factions || {};
-  const npcs = mapData.npcs || [];
+  const body = document.getElementById('mr-body');
 
-  // 1. Dominant crisis — score from world state
-  const threat = ws.threat_level || 0;
-  const morale = ws.morale || 50;
-  const anomaly = ws.anomaly_activity || 0;
-  const tension = ws.tension_level || 0;
-  const stability = ws.stability || 50;
-  const crisisScore = threat * 1.2 + (100 - morale) * 0.8 + anomaly * 0.9 + tension * 0.7 + (100 - stability) * 0.5;
-
-  let crisisText, crisisClass;
-  if (crisisScore > 180) { crisisText = 'CRITICAL — existential threat'; crisisClass = ''; }
-  else if (crisisScore > 120) { crisisText = 'Severe — multiple systems stressed'; crisisClass = ''; }
-  else if (crisisScore > 70) { crisisText = 'Elevated — tensions rising'; crisisClass = 'warn'; }
-  else if (crisisScore > 30) { crisisText = 'Moderate — manageable strain'; crisisClass = 'warn'; }
-  else { crisisText = 'Stable — no active crisis'; crisisClass = 'ok'; }
-
-  // What's driving it
-  const drivers = [];
-  if (threat > 60) drivers.push('threat is severe');
-  if (morale < 30) drivers.push('morale has collapsed');
-  if (anomaly > 50) drivers.push('anomalies are active');
-  if (tension > 60) drivers.push('tension is high');
-  if (stability < 30) drivers.push('stability is failing');
-  const driverText = drivers.length > 0 ? drivers.join(', ') + '.' : 'All systems nominal.';
-
-  // 2. Most active faction — by decisions_this_tick + events_this_tick + activity_rate
-  let mostActiveFaction = null, mostActiveScore = -1;
-  for (const [fid, fdata] of Object.entries(factions)) {
-    const score = (fdata.decisions_this_tick || 0) * 2 + (fdata.events_this_tick || 0) * 1.5 + (fdata.activity_rate || 0) * 0.5;
-    if (score > mostActiveScore) { mostActiveScore = score; mostActiveFaction = fid; }
-  }
-  const activeFactionName = mostActiveFaction ? (FACTION_DISPLAY[mostActiveFaction] || mostActiveFaction) : 'None';
-
-  // 3. Contested territories — already computed in draw() via polygonsOverlap
-  const contestedPairs = [];
-  for (let i = 0; i < factionZones.length; i++) {
-    for (let j = i + 1; j < factionZones.length; j++) {
-      const z1 = factionZones[i], z2 = factionZones[j];
-      let overlap = false;
-      if (z1.polygon.length >= 3 && z2.polygon.length >= 3) {
-        overlap = polygonsOverlap(z1.polygon, z2.polygon);
-      } else {
-        const dx = z1.fcx - z2.fcx, dy = z1.fcy - z2.fcy;
-        const dist = Math.sqrt(dx*dx + dy*dy);
-        if (dist < z1.zoneR + z2.zoneR - 30) overlap = true;
-      }
-      if (overlap) contestedPairs.push([FACTION_DISPLAY[z1.fid] || z1.fid, FACTION_DISPLAY[z2.fid] || z2.fid]);
-    }
-  }
-  let contestedText;
-  if (contestedPairs.length === 0) {
-    contestedText = 'No contested territories.';
-  } else if (contestedPairs.length <= 2) {
-    contestedText = contestedPairs.map(p => `${p[0]} vs ${p[1]}`).join('; ') + '.';
-  } else {
-    contestedText = contestedPairs.slice(0, 2).map(p => `${p[0]} vs ${p[1]}`).join('; ') + ` + ${contestedPairs.length - 2} more.`;
+  // If no crisis readout data yet, fall back to basic readout
+  if (!cr || !cr.classification) {
+    const threat = ws.threat_level || 0;
+    const morale = ws.morale || 50;
+    const anomaly = ws.anomaly_activity || 0;
+    const tension = ws.tension_level || 0;
+    const stability = ws.stability || 50;
+    const crisisScore = threat * 1.2 + (100 - morale) * 0.8 + anomaly * 0.9 + tension * 0.7 + (100 - stability) * 0.5;
+    let crisisText, crisisClass;
+    if (crisisScore > 180) { crisisText = 'CRITICAL'; crisisClass = ''; }
+    else if (crisisScore > 120) { crisisText = 'SEVERE'; crisisClass = ''; }
+    else if (crisisScore > 70) { crisisText = 'ELEVATED'; crisisClass = 'warn'; }
+    else if (crisisScore > 30) { crisisText = 'MODERATE'; crisisClass = 'warn'; }
+    else { crisisText = 'STABLE'; crisisClass = 'ok'; }
+    body.innerHTML = `<div id="mr-crisis" class="${crisisClass}">${crisisText}</div><div id="mr-line">Loading crisis data&hellip;</div>`;
+    return;
   }
 
-  // 4. View mode description
-  const viewDescriptions = {
-    territory: 'Territory view — faction influence zones; overlaps = contested space.',
-    network: 'Network view — relationship lines; green = alliance, red = hostility.',
-    crisis: 'Crisis view — conflict lines, threats, and anomalies highlighted.'
-  };
-  const viewText = viewDescriptions[currentView] || '';
-
-  // 5. What to look at next — heuristic suggestions
-  const suggestions = [];
-  // Low-cohesion factions
-  for (const [fid, fdata] of Object.entries(factions)) {
-    if ((fdata.cohesion || 50) < 35) suggestions.push(`${FACTION_DISPLAY[fid] || fid} is fracturing (cohesion ${fdata.cohesion})`);
-  }
-  // Factions with very high threat involvement
-  if (threat > 60) {
-    // Find faction with most red relationship lines
-    let mostHostile = null, hostileCount = 0;
-    for (const [fid, fdata] of Object.entries(factions)) {
-      const stances = fdata.stances || {};
-      let hCount = 0;
-      for (const s of Object.values(stances)) { if (s.stance === 'hostile' || s.attitude === 'hostile') hCount++; }
-      if (hCount > hostileCount) { hostileCount = hCount; mostHostile = fid; }
-    }
-    if (mostHostile) suggestions.push(`${FACTION_DISPLAY[mostHostile] || mostHostile} has the most hostile stance pairs`);
-  }
-  // NPCs with extreme moods
-  const extremeMoodNpc = npcs.find(n => n.mood && (n.mood.includes('aggress') || n.mood.includes('furious') || n.mood.includes('enraged')));
-  if (extremeMoodNpc) suggestions.push(`${extremeMoodNpc.name || extremeMoodNpc.id} is in an extreme mood`);
-
-  // Fallback if no specific suggestions
-  if (suggestions.length === 0) {
-    if (crisisScore > 70) suggestions.push('Watch the red conflict lines between hostile factions');
-    else if (contestedPairs.length > 0) suggestions.push('Check the orange dashed borders — contested zones');
-    else suggestions.push('Map is calm — try Network view to see relationships');
-  }
-
-  // 6. Cascade chain — not available from /api/map/data, infer from events
-  const events = mapData.events || [];
-  const chainCounts = {};
-  for (const ev of events) {
-    if (ev.action_type && ev.action_type.includes('cascade')) {
-      const key = ev.action_type;
-      chainCounts[key] = (chainCounts[key] || 0) + 1;
-    }
-  }
-  const topChain = Object.entries(chainCounts).sort((a, b) => b[1] - a[1])[0];
-  const cascadeText = topChain ? `${topChain[0]} — ${topChain[1]} reactions this cycle.` : 'No cascade chains currently active.';
-
-  // --- Assemble panel HTML ---
+  // --- Classification badge ---
+  const clsColors = { STABLE: '#66bb6a', MODERATE: '#ffa726', ELEVATED: '#ff7043', SEVERE: '#ef5350', CRITICAL: '#f44336' };
+  const clsColor = clsColors[cr.classification] || '#4fc3f7';
   let html = '';
-  html += `<div id="mr-crisis" class="${crisisClass}">${crisisText}</div>`;
-  html += `<div id="mr-line">${driverText}</div>`;
-  html += `<div id="mr-line"><strong>Cascades:</strong> ${cascadeText}</div>`;
-  html += `<div id="mr-line"><strong>Most active:</strong> <span class="fac-name" style="color:${factions[mostActiveFaction]?.color || '#4fc3f7'}">${activeFactionName}</span></div>`;
-  html += `<div id="mr-line"><strong>Contested:</strong> ${contestedText}</div>`;
-  html += `<div id="mr-line" style="color:#78909c;font-size:10px;margin-top:2px">${viewText}</div>`;
-  html += `<div id="mr-next">▸ ${suggestions[0]}</div>`;
 
-  document.getElementById('mr-body').innerHTML = html;
+  // HEADLINE: classification + headline
+  html += `<div id="mr-crisis" style="color:${clsColor}">${cr.classification}</div>`;
+  if (cr.headline) html += `<div id="mr-headline">${cr.headline}</div>`;
+
+  // WHY IT MATTERS
+  if (cr.why_it_matters) {
+    html += `<div id="mr-why">${cr.why_it_matters}</div>`;
+  }
+
+  // INVOLVED NPCs
+  const involvedNpcs = cr.involved_npcs || [];
+  if (involvedNpcs.length > 0) {
+    html += `<div id="mr-section"><div id="mr-section-title">Involved</div>`;
+    for (const npc of involvedNpcs.slice(0, 8)) {
+      const facLabel = npc.faction ? (FACTION_DISPLAY[npc.faction] || npc.faction) : '';
+      const facColor = factions[npc.faction]?.color || '#78909c';
+      html += `<div id="mr-npc-row">`;
+      html += `<span id="mr-npc-name" onclick="crisisSelectNpc('${npc.id}')" title="Click to highlight on map">${npc.name}</span>`;
+      if (facLabel) html += `<span style="color:${facColor};font-size:14px">&middot; ${facLabel}</span>`;
+      if (npc.role) html += `<span id="mr-npc-role">${npc.role}</span>`;
+      html += `</div>`;
+    }
+    html += `</div>`;
+  }
+
+  // FACTIONS: escalating / helping / involved
+  const escalating = cr.escalating_factions || [];
+  const helping = cr.helping_factions || [];
+  const involvedFacs = cr.involved_factions || [];
+  if (escalating.length > 0 || helping.length > 0 || involvedFacs.length > 0) {
+    html += `<div id="mr-section"><div id="mr-section-title">Factions</div>`;
+    for (const fname of escalating) {
+      const fid = Object.keys(FACTION_DISPLAY).find(k => FACTION_DISPLAY[k] === fname) || fname;
+      const fColor = factions[fid]?.color || '#ef5350';
+      html += `<div id="mr-fac-row"><span id="mr-fac-name" style="color:${fColor}">${fname}</span><span id="mr-fac-tag" class="escalating">Escalating</span></div>`;
+    }
+    for (const fname of helping) {
+      const fid = Object.keys(FACTION_DISPLAY).find(k => FACTION_DISPLAY[k] === fname) || fname;
+      const fColor = factions[fid]?.color || '#66bb6a';
+      html += `<div id="mr-fac-row"><span id="mr-fac-name" style="color:${fColor}">${fname}</span><span id="mr-fac-tag" class="helping">Helping</span></div>`;
+    }
+    for (const fac of involvedFacs) {
+      const fname = fac.name || fac;
+      if (escalating.includes(fname) || helping.includes(fname)) continue;
+      const fid = Object.keys(FACTION_DISPLAY).find(k => FACTION_DISPLAY[k] === fname) || fname;
+      const fColor = factions[fid]?.color || '#4fc3f7';
+      const tag = fac.role || 'Involved';
+      html += `<div id="mr-fac-row"><span id="mr-fac-name" style="color:${fColor}">${fname}</span><span id="mr-fac-tag" class="involved">${tag}</span></div>`;
+    }
+    html += `</div>`;
+  }
+
+  // CASCADE CHAIN
+  const cascadeChain = cr.cascade_chain || [];
+  if (cascadeChain.length > 0) {
+    html += `<div id="mr-section"><div id="mr-section-title">Cascade Chain</div>`;
+    for (const link of cascadeChain) {
+      const reactors = (link.reactors || []).map(r => r.name).join(', ');
+      html += `<div id="mr-cascade-row"><span id="mr-cascade-target">${link.target}</span>`;
+      html += ` &larr; ${link.reaction_count} reactions`;
+      if (reactors) html += `<div id="mr-cascade-reactors">&nbsp;&nbsp;Reactors: ${reactors}</div>`;
+      html += `</div>`;
+    }
+    html += `</div>`;
+  }
+
+  // RECENT GAME EVENTS
+  const gameEvents = cr.recent_game_events || [];
+  if (gameEvents.length > 0) {
+    html += `<div id="mr-section"><div id="mr-section-title">Latest Events</div>`;
+    for (const ev of gameEvents.slice(0, 3)) {
+      const sev = ev.severity || 'MAJOR';
+      html += `<div id="mr-event-row"><span id="mr-event-name">${ev.name || 'Unknown event'}</span>`;
+      html += `<span id="mr-event-sev" class="${sev}">${sev}</span>`;
+      if (ev.description) html += `<div style="color:#78909c;font-size:14px;margin-top:2px">${ev.description.substring(0, 150)}</div>`;
+      html += `</div>`;
+    }
+    html += `</div>`;
+  }
+
+  // PLAIN ENGLISH
+  if (cr.plain_english) {
+    html += `<div id="mr-plain">${cr.plain_english}</div>`;
+  }
+
+  // ACTION BUTTONS
+  const actions = cr.actions || [];
+  if (actions.length > 0) {
+    html += `<div id="mr-actions">`;
+    if (involvedNpcs.length > 0) {
+      html += `<button id="mr-action-btn" onclick="crisisHighlightNpcs()">&#x1F50D; Highlight NPCs</button>`;
+    }
+    if (cascadeChain.length > 0) {
+      html += `<button id="mr-action-btn" onclick="crisisShowCrisisView()">&#x1F517; Crisis View</button>`;
+    }
+    if (escalating.length > 0 || involvedFacs.length > 0) {
+      html += `<button id="mr-action-btn" onclick="crisisShowTerritories()">&#x1F5FA; Territories</button>`;
+    }
+    html += `<button id="mr-action-btn" onclick="crisisOpenLiveSim()">&#x1F9EC; Live Sim</button>`;
+    html += `</div>`;
+  }
+
+  // COLLAPSE TOGGLE
+  html += `<div id="mr-collapse" onclick="toggleCrisisReadout()">${crisisReadoutCollapsed ? '&#x25BC; Expand' : '&#x25B2; Collapse'}</div>`;
+
+  body.innerHTML = html;
+}
+
+// --- Crisis Readout interactive actions ---
+
+function crisisSelectNpc(npcId) {
+  const node = nodes.find(n => n.id === npcId);
+  if (node) {
+    selectedNode = node;
+    showDetail(node);
+    panX = W / 2 - node.x * zoom;
+    panY = H / 2 - node.y * zoom;
+  }
+}
+
+function crisisHighlightNpcs() {
+  const cr = mapData?.crisis_readout;
+  if (!cr) return;
+  const ids = (cr.involved_npcs || []).map(n => n.id);
+  if (crisisHighlightIds.length > 0 && JSON.stringify(crisisHighlightIds) === JSON.stringify(ids)) {
+    // Toggle off
+    crisisHighlightIds = [];
+  } else {
+    crisisHighlightIds = ids;
+  }
+}
+
+function crisisShowCrisisView() {
+  setView('crisis');
+}
+
+function crisisShowTerritories() {
+  setView('territory');
+}
+
+function crisisOpenLiveSim() {
+  const cr = mapData?.crisis_readout;
+  const types = cr?.crisis_types || [];
+  const url = '/simulation.html' + (types.length > 0 ? '?crisis=' + encodeURIComponent(types[0]) : '');
+  window.open(url, '_blank');
+}
+
+function toggleCrisisReadout() {
+  crisisReadoutCollapsed = !crisisReadoutCollapsed;
+  const panel = document.getElementById('map-read');
+  if (crisisReadoutCollapsed) {
+    panel.style.maxHeight = '80px';
+  } else {
+    panel.style.maxHeight = 'calc(100vh - 160px)';
+  }
 }
 
 function setBar(name, val, max, color) {
@@ -1421,14 +1515,30 @@ ctx.fillText('NEUTRAL / FEDERATION CORE', cx, cy + centerR + 20);
       ctx.stroke();
     }
 
-    // Selected highlight
-    if (isSelected) {
-      ctx.beginPath();
-      ctx.arc(node.x, node.y, r + 3, 0, Math.PI * 2);
-      ctx.strokeStyle = '#4fc3f7';
-      ctx.lineWidth = 2;
-      ctx.stroke();
-    }
+// Selected highlight
+  if (isSelected) {
+    ctx.beginPath();
+    ctx.arc(node.x, node.y, r + 3, 0, Math.PI * 2);
+    ctx.strokeStyle = '#4fc3f7';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+  }
+
+  // Crisis Readout highlight — gold ring for involved NPCs
+  if (crisisHighlightIds.includes(node.id)) {
+    const crPulse = Math.sin(t * 0.004) * 0.4 + 0.6;
+    ctx.beginPath();
+    ctx.arc(node.x, node.y, r + 6 + crPulse * 3, 0, Math.PI * 2);
+    ctx.strokeStyle = `rgba(255,215,0,${0.5 + crPulse * 0.3})`;
+    ctx.lineWidth = 2;
+    ctx.stroke();
+    // Second outer glow
+    ctx.beginPath();
+    ctx.arc(node.x, node.y, r + 12 + crPulse * 4, 0, Math.PI * 2);
+    ctx.strokeStyle = `rgba(255,215,0,${0.15 + crPulse * 0.1})`;
+    ctx.lineWidth = 1;
+    ctx.stroke();
+  }
 
 // Name label — priority-based (replaces always-show)
 {
