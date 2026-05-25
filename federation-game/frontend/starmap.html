@@ -34,7 +34,7 @@ body{background:#0a0a1a;color:#e0e0e0;font-family:'Courier New',monospace;overfl
 .ev-mood{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:6px;vertical-align:middle}
 
 /* NPC detail panel — TV-scale */
-#detail{position:fixed;bottom:12px;left:12px;width:520px;max-height:380px;background:rgba(10,10,26,0.95);border:1px solid rgba(79,195,247,0.3);border-radius:8px;padding:18px;z-index:20;display:none;overflow-y:auto}
+#detail{position:fixed;bottom:12px;left:12px;width:520px;max-height:540px;background:rgba(10,10,26,0.95);border:1px solid rgba(79,195,247,0.3);border-radius:8px;padding:18px;z-index:20;display:none;overflow-y:auto}
 #detail.show{display:block}
 #detail-name{color:#ffd700;font-size:26px;font-weight:bold;margin-bottom:3px}
 #detail-cat{color:#78909c;font-size:18px;text-transform:uppercase;letter-spacing:1px;margin-bottom:10px}
@@ -42,6 +42,9 @@ body{background:#0a0a1a;color:#e0e0e0;font-family:'Courier New',monospace;overfl
 #detail-row .dl{color:#78909c;min-width:100px}
 #detail-row .dv{color:#e0e0e0}
 #detail-thought{color:#ab47bc;font-style:italic;font-size:16px;margin-top:8px;line-height:1.5;padding:6px 8px;background:rgba(171,71,188,0.08);border-radius:4px}
+#detail-lore-toggle{cursor:pointer;color:#ffd700;font-size:18px;margin-top:8px;padding:6px 8px;border:1px solid rgba(255,215,0,0.3);border-radius:4px;background:rgba(255,215,0,0.05);transition:background 0.2s,border-color 0.2s;user-select:none}
+#detail-lore-toggle:hover{background:rgba(255,215,0,0.12);border-color:#ffd700}
+#detail-lore{display:none;margin-top:6px;padding:10px 12px;font-size:18px;line-height:1.6;color:#e0c068;background:rgba(255,215,0,0.04);border-left:3px solid rgba(255,215,0,0.3);border-radius:0 4px 4px 0}
 #detail-livesim:hover{background:rgba(79,195,247,0.3);border-color:#4fc3f7}
 
 /* View toggle — TV-scale */
@@ -164,8 +167,10 @@ body{background:#0a0a1a;color:#e0e0e0;font-family:'Courier New',monospace;overfl
 <div id="detail-name"></div>
 <div id="detail-cat"></div>
 <div id="detail-rows"></div>
-<div id="detail-thought"></div>
-<a id="detail-livesim" href="#" target="_blank" style="display:none;margin-top:10px;padding:10px 18px;background:rgba(79,195,247,0.15);border:1px solid rgba(79,195,247,0.4);border-radius:6px;color:#4fc3f7;font-size:18px;font-family:'Courier New',monospace;text-decoration:none;letter-spacing:1px;text-transform:uppercase;text-align:center;display:block;transition:background 0.2s">🧬 View in Live Sim</a>
+  <div id="detail-thought"></div>
+  <div id="detail-lore-toggle" style="display:none" onclick="toggleLore()">&#x1F4D6; Lore &#x25B8;</div>
+  <div id="detail-lore"></div>
+  <a id="detail-livesim" href="#" target="_blank" style="display:none;margin-top:10px;padding:10px 18px;background:rgba(79,195,247,0.15);border:1px solid rgba(79,195,247,0.4);border-radius:6px;color:#4fc3f7;font-size:18px;font-family:'Courier New',monospace;text-decoration:none;letter-spacing:1px;text-transform:uppercase;text-align:center;display:block;transition:background 0.2s">🧬 View in Live Sim</a>
 </div>
 
 <!-- Faction tooltip -->
@@ -1634,34 +1639,64 @@ function onDblClick(e) {
 }
 
 function showDetail(node) {
-  const panel = document.getElementById('detail');
-  if (!node) { panel.classList.remove('show'); return; }
+    const panel = document.getElementById('detail');
+    if (!node) { panel.classList.remove('show'); return; }
 
-  panel.classList.add('show');
-  document.getElementById('detail-name').textContent = node.name;
-  const factionLabel = node.faction ? ' · ' + (FACTION_DISPLAY[node.faction] || node.faction.replace(/_/g,' ')).toUpperCase() : '';
-  document.getElementById('detail-cat').textContent = node.category.replace(/_/g,' ').toUpperCase() + factionLabel;
+    panel.classList.add('show');
+    document.getElementById('detail-name').textContent = node.name;
+    const factionLabel = node.faction ? ' · ' + (FACTION_DISPLAY[node.faction] || node.faction.replace(/_/g,' ')).toUpperCase() : '';
+    document.getElementById('detail-cat').textContent = node.category.replace(/_/g,' ').toUpperCase() + factionLabel;
 
-  const npc = node.npc;
-  let rows = '';
-  if (npc.affiliation) rows += `<div id="detail-row"><span class="dl">Faction</span><span class="dv" style="color:${node.factionColor || '#4fc3f7'}">${FACTION_DISPLAY[npc.affiliation] || npc.affiliation}</span></div>`;
-  if (npc.mood) rows += `<div id="detail-row"><span class="dl">Mood</span><span class="dv" style="color:${node.color}">${npc.mood}</span></div>`;
-  if (npc.goal) rows += `<div id="detail-row"><span class="dl">Goal</span><span class="dv">${npc.goal}</span></div>`;
-  if (npc.latest_decision) rows += `<div id="detail-row"><span class="dl">Decision</span><span class="dv">${npc.latest_decision}</span></div>`;
-  if (npc.latest_action) rows += `<div id="detail-row"><span class="dl">Action</span><span class="dv">${npc.latest_action}</span></div>`;
-  if (npc.action_type) rows += `<div id="detail-row"><span class="dl">Type</span><span class="dv">${npc.action_type}</span></div>`;
-  document.getElementById('detail-rows').innerHTML = rows;
-  document.getElementById('detail-thought').textContent = npc.latest_thought || '';
+    const npc = node.npc;
+    let rows = '';
+    if (npc.affiliation) rows += `<div id="detail-row"><span class="dl">Faction</span><span class="dv" style="color:${node.factionColor || '#4fc3f7'}">${FACTION_DISPLAY[npc.affiliation] || npc.affiliation}</span></div>`;
+    if (npc.mood) rows += `<div id="detail-row"><span class="dl">Mood</span><span class="dv" style="color:${node.color}">${npc.mood}</span></div>`;
+    if (npc.goal) rows += `<div id="detail-row"><span class="dl">Goal</span><span class="dv">${npc.goal}</span></div>`;
+    if (npc.latest_decision) rows += `<div id="detail-row"><span class="dl">Decision</span><span class="dv">${npc.latest_decision}</span></div>`;
+    if (npc.latest_action) rows += `<div id="detail-row"><span class="dl">Action</span><span class="dv">${npc.latest_action}</span></div>`;
+    if (npc.action_type) rows += `<div id="detail-row"><span class="dl">Type</span><span class="dv">${npc.action_type}</span></div>`;
+    document.getElementById('detail-rows').innerHTML = rows;
+    document.getElementById('detail-thought').textContent = npc.latest_thought || '';
 
-  // Live Sim link — opens simulation.html focused on this NPC's faction
-  const liveSimLink = document.getElementById('detail-livesim');
-  if (node.faction) {
-    liveSimLink.href = `/simulation.html?faction=${encodeURIComponent(node.faction)}&npc=${encodeURIComponent(node.id)}`;
-    liveSimLink.style.display = 'block';
-  } else {
-    liveSimLink.href = `/simulation.html?npc=${encodeURIComponent(node.id)}`;
-    liveSimLink.style.display = 'block';
-  }
+    // Lore section — expandable backstory
+    const loreToggle = document.getElementById('detail-lore-toggle');
+    const loreDiv = document.getElementById('detail-lore');
+    if (npc.lore) {
+        loreToggle.style.display = 'block';
+        loreDiv.textContent = npc.lore;
+        loreDiv.style.display = 'none';
+        loreToggle.innerHTML = '&#x1F4D6; Lore &#x25B8;';
+        loreOpen = false;
+    } else {
+        loreToggle.style.display = 'none';
+        loreDiv.textContent = '';
+        loreDiv.style.display = 'none';
+        loreOpen = false;
+    }
+
+    // Live Sim link — opens simulation.html focused on this NPC's faction
+    const liveSimLink = document.getElementById('detail-livesim');
+    if (node.faction) {
+        liveSimLink.href = `/simulation.html?faction=${encodeURIComponent(node.faction)}&npc=${encodeURIComponent(node.id)}`;
+        liveSimLink.style.display = 'block';
+    } else {
+        liveSimLink.href = `/simulation.html?npc=${encodeURIComponent(node.id)}`;
+        liveSimLink.style.display = 'block';
+    }
+}
+
+let loreOpen = false;
+function toggleLore() {
+    const loreDiv = document.getElementById('detail-lore');
+    const loreToggle = document.getElementById('detail-lore-toggle');
+    loreOpen = !loreOpen;
+    if (loreOpen) {
+        loreDiv.style.display = 'block';
+        loreToggle.innerHTML = '&#x1F4D6; Lore &#x25BE;';
+    } else {
+        loreDiv.style.display = 'none';
+        loreToggle.innerHTML = '&#x1F4D6; Lore &#x25B8;';
+    }
 }
 
 function onSearch(e) {
