@@ -1187,7 +1187,7 @@ class NimClient:
             )
             return result
 
-        elif priority == "heavy":
+elif priority == "heavy":
             # Tier 0: Ollama 7B (deeper reasoning, keep_alive=3m, concurrency-gated)
             result = await self._call_ollama(
                 system_prompt, user_prompt, max_tokens, temperature, heavy=True
@@ -1210,6 +1210,27 @@ class NimClient:
                 return result
 
             # Tier 3: NIM cloud (fallback)
+            result = await self._call_nim(
+                system_prompt, user_prompt, max_tokens, temperature
+            )
+            return result
+
+        elif priority == "cloud":
+            # Tier 1.5: Gemini Flash (free, fast, high quality)
+            result = await self._call_gemini(
+                system_prompt, user_prompt, max_tokens, temperature
+            )
+            if result is not None:
+                return result
+
+            # Tier 2.5: Grok/xAI (high quality)
+            result = await self._call_grok(
+                system_prompt, user_prompt, max_tokens, temperature
+            )
+            if result is not None:
+                return result
+
+            # Tier 2: NIM cloud (fallback)
             result = await self._call_nim(
                 system_prompt, user_prompt, max_tokens, temperature
             )
