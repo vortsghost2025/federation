@@ -2,7 +2,32 @@
 
 **A Star Trek consciousness simulation — not a game.**
 
-A persistent, turn-based federation management simulation with a full LCARS web interface, 12 interconnected subsystems, and 48+ API endpoints. Built as a single-page Star Trek experience with real-time WebSocket updates, rival AI federations, and a century-long narrative arc.
+## What This Actually Is
+
+Federation is a **persistent AI society simulator** disguised as a Star Trek LCARS game. Under the interface, 39+ NPC agents generate thoughts, moods, goals, faction decisions, memories, world events, and political consequences using Redis-backed autonomy plus local/remote LLM routing. The game mechanics are a readable surface for testing constitutional governance, drift, faction pressure, continuity, and multi-agent decision-making.
+
+A persistent, autonomous federation simulation with a full LCARS web interface, 12 interconnected subsystems, 48+ API endpoints, and 9 frontend views. Built as a Star Trek experience with real-time WebSocket updates, rival AI federations, and a century-long narrative arc — powered by 39 NPCs who think for themselves every 60 seconds.
+
+---
+
+## Current Runtime Capabilities
+
+These are not planned features. These are running right now on the VPS:
+
+| Capability | Status | Detail |
+|------------|--------|--------|
+| Autonomous NPC thoughts | ✅ Live | 39 NPCs generate thoughts, moods, goals every 60s tick via `npc_autonomy.py` + `npc_cognition.py` |
+| NPC memory & mood | ✅ Live | Each NPC tracks emotional state, recent memories, faction pressure — stored in Redis |
+| Faction dynamics | ✅ Live | 8 factions with ideology drift, territory control, inter-faction pressure per tick |
+| LLM router (multi-provider) | ✅ Live | Routes to Ollama 3B (local default), Cloudflare Workers AI, Together, NIM, Gemini, Grok, OpenRouter |
+| Redis-backed state | ✅ Live | All NPC state, tick results, faction data in Redis 7 — not in-memory Python |
+| DB snapshot persistence | ✅ Live | `game_snapshots` table in PostgreSQL — periodic saves, survives backend restart |
+| World-state decay & cascade | ✅ Live | Faction influence decay, mood drift, memory salience decay per tick cycle |
+| Worker tick pipeline | ✅ Live | `worker.py` runs full 7-phase tick pipeline every 60s (not a placeholder) |
+| 9 frontend views | ✅ Live | Starship, Adult Control, Starmap, Live Sim, Bridge, Earth, Constellation, Spectator, World Guide |
+| Observability stack | ✅ Live | Prometheus, Grafana, cAdvisor, redis-exporter, postgres-exporter, node-exporter |
+| Traefik routing | ✅ Live | Priority-based path routing with Let's Encrypt TLS termination |
+| Telegram notifications | ✅ Live | Broad-spectrum event notifications via Telegram bot |
 
 ---
 
@@ -34,13 +59,15 @@ The full-depth strategic interface. Faction politics, technology trees, NPC rela
 ## Architecture
 
 ```
-Browser ──► nginx (frontend) ──► FastAPI backend ──► Game Engine Modules
-   │              │                     │                   │
-   │          static HTML           48+ routes        9 Python modules
-   │          + /api/ proxy       + WebSocket          ~9,600 LOC
-   │                              + Pydantic models
-   │
-   └── WebSocket ◄── real-time broadcasts ──┘
+Browser ──► Traefik ──► nginx (frontend) ──► FastAPI backend ──► Game Engine Modules
+ │ │ │ │ │
+ │ static HTML /api/ proxy 48+ routes 9 Python modules
+ │ 9 views + WebSocket + LLM router ~5796 LOC main.py
+ │ │ │
+ │ └── WebSocket ◄── real-time broadcasts ──┘
+ │
+ └── Redis 7 ◄── NPC state, tick results, faction data
+ └── PostgreSQL 15 ◄── game_snapshots persistence
 ```
 
 ### Backend Stack
@@ -48,7 +75,7 @@ Browser ──► nginx (frontend) ──► FastAPI backend ──► Game Engi
 |-------|-----------|
 | API Server | FastAPI + Uvicorn (Python 3.11) |
 | Real-time | WebSocket (ConnectionManager broadcasts) |
-| Database | PostgreSQL 15-alpine (available, currently in-memory state) |
+| Database | PostgreSQL 15-alpine (`game_snapshots` table — periodic state persistence) |
 | Cache | Redis 7-alpine |
 | Reverse Proxy | Traefik with Let's Encrypt TLS |
 | Frontend | nginx:alpine serving static HTML |
@@ -76,7 +103,7 @@ All game logic lives in the repo root as Python modules. These are bind-mounted 
 | `federation_game_console.py` | 1,430 | 12-block architecture: core orchestration, REPL, chaos mode |
 | `federation_game_technology.py` | 1,709 | Technology tree with eras, research, unlocks |
 | `federation_game_factions.py` | 1,602 | 8 factions, ideology system, reputation, perks, achievements |
-| `federation_game_npcs.py` | 1,633 | 35+ characters, 8+ creatures, dialogue engine, companions |
+| `federation_game_npcs.py` | 1,633 | 39 characters (13 faction-affiliated), 8 creatures, dialogue engine, companions |
 | `federation_game_quests.py` | 1,063 | Branching quest system with objectives and rewards |
 | `federation_game_events.py` | 833 | Event card generation with governance-weighted choices |
 | `federation_game_state.py` | 679 | Game state model, victory/defeat conditions |
@@ -90,7 +117,7 @@ The backend instantiates these interconnected subsystems in a single `GameState`
 
 1. **FactionSystem** — 8 factions with ideologies, reputation, perks, quests, achievements
 2. **TimelineSystem** — 100-year timeline (2387–2487) with narrative arcs
-3. **NPCSystem** — 35+ named characters, 8+ creatures, dialogue trees, companions
+3. **NPCSystem** — 39 named characters (13 faction-affiliated), 8 creatures, autonomous thoughts, companions
 4. **QuestSystem** — Full quest library with branching objectives
 5. **TechTree** — Era-based technology progression with research projects
 6. **RivalFederationSimulator** — AI rival federations with their own behavior
@@ -135,9 +162,10 @@ docker-compose up --build
 docker compose restart backend
 ```
 
-**Frontend** (HTML is baked into the image, rebuild required):
+**Frontend** (HTML is bind-mounted into nginx via `public_html/`, just copy + restart):
 ```bash
-docker compose build frontend && docker compose up -d frontend
+# Copy updated HTML to the bind-mounted directory, then restart
+docker compose restart frontend
 ```
 
 ---
@@ -148,17 +176,30 @@ docker compose build frontend && docker compose up -d frontend
 federation/
 ├── federation-game/               # Docker-deployable game
 │   ├── frontend/
-│   │   ├── index.html             # Starship Simulator (LCARS, kid-friendly)
-│   │   ├── adult.html             # Adult Control Plane (full strategy)
-│   │   ├── nginx-default.conf     # Proxies /api/ to backend
+│ │ ├── index.html # Starship Simulator (LCARS, kid-friendly)
+│ │ ├── adult.html # Adult Control Plane (full strategy)
+│ │ ├── starmap.html # Interactive star map with faction territories + NPC labels
+│ │ ├── simulation.html # Live Sim viewer — NPC thoughts, faction events, news anchor
+│ │ ├── bridge.html # Bridge command interface
+│ │ ├── earth.html # Earth overview
+│ │ ├── constellation.html # Constellation viewer
+│ │ ├── spectator.html # Spectator mode
+│ │ ├── worldguide.html # World Guide — lore, NPC roster, faction descriptions
+│ │ ├── nginx-default.conf # Proxies /api/ to backend
 │   │   └── Dockerfile             # nginx:alpine, bakes HTML into image
 │   ├── backend/
-│   │   ├── main.py                # FastAPI shim (~335 LOC)
-│   │   ├── requirements.txt       # Python dependencies
+│ │ ├── main.py # FastAPI + 48 routes + WebSocket + LLM router (~5796 LOC)
+│ │ ├── worker.py # Tick pipeline — 7-phase cycle every 60s (~631 LOC)
+│ │ ├── npc_autonomy.py # NPC thought generation, mood, goals (~2422 LOC)
+│ │ ├── npc_cognition.py # NPC cognitive processing, memory (~LOC)
+│ │ ├── llm_router.py # Multi-provider LLM routing (Ollama/Cloudflare/Together/NIM/Gemini/Grok/OpenRouter)
+│ │ ├── map_endpoints.py # Starmap API — NPC positions, faction territories (~440 LOC)
+│ │ ├── federation_game_npcs.py # NPC/creature data — 39 NPCs, 8 creatures (~1696 LOC)
+│ │ ├── requirements.txt # Python dependencies
 │   │   └── Dockerfile             # Python 3.11 + uvicorn
 │   ├── nginx/
 │   │   └── nginx.conf             # Top-level nginx config
-│   └── docker-compose.yml         # Local dev compose (3 services)
+│ └── docker-compose.yml # Full stack (7+ containers with observability)
 ├── federation_game_console.py     # Game engine: orchestration (1,430 LOC)
 ├── federation_game_events.py      # Event card system (833 LOC)
 ├── federation_game_factions.py    # Faction system (1,602 LOC)
