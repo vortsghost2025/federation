@@ -1136,61 +1136,97 @@ class NimClient:
         For high-significance events that need deeper reasoning.
         The 7B model is loaded on-demand and auto-unloaded after keep_alive.
         """
+        result = None  # Will hold the final LLM response
+
         if priority == "local":
             # Tier 0: Local Ollama 3B (fastest, unlimited, free)
-            ollama_result = await self._call_ollama(
+            result = await self._call_ollama(
                 system_prompt, user_prompt, max_tokens, temperature
             )
-            if ollama_result is not None:
-                return ollama_result
+            if result is not None:
+                return result
 
             # Tier 0.5: Cloudflare Workers AI (free, fast, good for thoughts)
-            cf_result = await self._call_cloudflare(
+            result = await self._call_cloudflare(
                 system_prompt, user_prompt, max_tokens, temperature
             )
-            if cf_result is not None:
-                return cf_result
+            if result is not None:
+                return result
 
             # Tier 1.5: Together AI (free tier, better quality)
-            together_result = await self._call_together(
+            result = await self._call_together(
                 system_prompt, user_prompt, max_tokens, temperature
             )
-            if together_result is not None:
-                return together_result
+            if result is not None:
+                return result
 
             # Tier 2: NIM cloud (quality, rate-limited)
-            nim_result = await self._call_nim(
+            result = await self._call_nim(
                 system_prompt, user_prompt, max_tokens, temperature
             )
-            return nim_result
+            return result
+
+        elif priority == "cloud":
+            # Tier 0: Gemini Flash (free, fast, high quality)
+            result = await self._call_gemini(
+                system_prompt, user_prompt, max_tokens, temperature
+            )
+            if result is not None:
+                return result
+
+            # Tier 1: Grok/xAI (high quality)
+            result = await self._call_grok(
+                system_prompt, user_prompt, max_tokens, temperature
+            )
+            if result is not None:
+                return result
+
+            # Tier 2: NIM cloud (fallback)
+            result = await self._call_nim(
+                system_prompt, user_prompt, max_tokens, temperature
+            )
+            return result
 
         elif priority == "heavy":
             # Tier 0: Ollama 7B (deeper reasoning, keep_alive=3m, concurrency-gated)
-            ollama_result = await self._call_ollama(
+            result = await self._call_ollama(
                 system_prompt, user_prompt, max_tokens, temperature, heavy=True
             )
-            if ollama_result is not None:
-                return ollama_result
+            if result is not None:
+                return result
 
-            # Tier 1.5: Gemini Flash (free, fast, high quality)
-            gemini_result = await self._call_gemini(
+            # Tier 1: Gemini Flash (free, fast, high quality)
+            result = await self._call_gemini(
                 system_prompt, user_prompt, max_tokens, temperature
             )
-            if gemini_result is not None:
-                return gemini_result
+            if result is not None:
+                return result
 
-            # Tier 2.5: Grok/xAI (high quality)
-            grok_result = await self._call_grok(
+            # Tier 2: Grok/xAI (high quality)
+            result = await self._call_grok(
                 system_prompt, user_prompt, max_tokens, temperature
             )
-            if grok_result is not None:
-                return grok_result
+            if result is not None:
+                return result
 
-            # Tier 2: NIM cloud (fallback)
-            nim_result = await self._call_nim(
+            # Tier 3: NIM cloud (fallback)
+            result = await self._call_nim(
                 system_prompt, user_prompt, max_tokens, temperature
             )
-        return nim_result
+            return result
+
+        else:
+            # Unknown priority — fall through to local chain as safe default
+            logger.warning("Unknown priority '%s', defaulting to local chain", priority)
+            result = await self._call_ollama(
+                system_prompt, user_prompt, max_tokens, temperature
+            )
+            if result is not None:
+                return result
+            result = await self._call_nim(
+                system_prompt, user_prompt, max_tokens, temperature
+            )
+            return result
 
     def get_stats(self) -> Dict:
         """Return usage statistics."""
