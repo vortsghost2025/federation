@@ -134,7 +134,7 @@ def check_significant_events(history_data, political_data):
             (
                 "\U0001f3db\ufe0f",
                 "Era Transition",
-                f"The federation has entered the {era}",
+                f"The Federation has entered the {era}",
             )
         )
 
@@ -168,11 +168,18 @@ def check_significant_events(history_data, political_data):
             else str(action_data).lower()
         )
         if any(kw in action_text for kw in hostile_keywords):
+            # Human-readable action description instead of raw JSON
+            if isinstance(action_data, dict):
+                action_type = action_data.get("action", "hostile action")
+                target = action_data.get("target", "unknown target")
+                readable = f"{rival} launched {action_type} against {target}"
+            else:
+                readable = f"{rival} took hostile action: {str(action_data)[:100]}"
             events.append(
                 (
                     "\u2694\ufe0f",
                     "Rival Hostile Action",
-                    f"{rival}: {json.dumps(action_data)[:120]}",
+                    readable,
                 )
             )
             break
@@ -224,44 +231,233 @@ def check_npc_broadcasts():
                 evt = json.loads(raw)
             except (json.JSONDecodeError, TypeError):
                 continue
-        sig = evt.get("significance", 0)
-        vis = evt.get("visibility", "public")
-        if sig >= 0.5 and vis in ("public", "faction"):
-            char_name = evt.get("source_char_name", "Unknown")
-            desc = evt.get("description", "")
-            evt_type = evt.get("event_type", "decision")
-            # Choose emoji by significance tier
-            if sig >= 0.8:
-                emoji = "\U0001f514"  # 🔔 Critical
-            elif sig >= 0.6:
-                emoji = "\U0001f4e2"  # 📢 Notable
-            else:
-                emoji = "\U0001f4ac"  # 💬 Routine
-            vis_tag = f"[{vis}] " if vis == "faction" else ""
-            events.append((emoji, "NPC Decision", f"{vis_tag}{char_name}: {desc}"))
+            sig = evt.get("significance", 0)
+            vis = evt.get("visibility", "public")
+            if sig >= 0.5 and vis in ("public", "faction"):
+                char_name = evt.get("source_char_name", "Unknown")
+                desc = evt.get("description", "")
+                evt_type = evt.get("event_type", "decision")
+                # Choose emoji by significance tier
+                if sig >= 0.8:
+                    emoji = "\U0001f514"  # Critical
+                elif sig >= 0.6:
+                    emoji = "\U0001f4e2"  # Notable
+                else:
+                    emoji = "\U0001f4ac"  # Routine
+                vis_tag = f"[{vis}] " if vis == "faction" else ""
+                events.append((emoji, "NPC Decision", f"{vis_tag}{char_name}: {desc}"))
     except Exception as e:
         log.warning(f"Failed to query npc_broadcast_events: {e}")
     return events
 
 
+# ── Faction display map for notifications ────────────────────
+_FACTION_NAMES = {
+    "research_division": "Research Division",
+    "military_command": "Military Command",
+    "diplomatic_corps": "Diplomatic Corps",
+    "consciousness_collective": "Consciousness Collective",
+    "cultural_ministry": "Cultural Ministry",
+    "economic_council": "Economic Council",
+    "exploration_initiative": "Exploration Initiative",
+    "preservation_society": "Preservation Society",
+}
+
+# ── Last notification state (for throttling / change detection) ──
+_last_notification = {
+    "classification": None,
+    "headline": None,
+    "tick": 0,
+}
+
+
+def _fetch_crisis_readout():
+    """Fetch the crisis readout from the /map/data endpoint.
+    Returns the crisis_readout dict or None on failure."""
+    try:
+        resp = requests.get(f"{BACKEND_URL}/map/data", timeout=10)
+        if resp.status_code == 200:
+            data = resp.json()
+            cr = data.get("crisis_readout")
+            if cr and cr.get("classification"):
+                log.info(
+                    f"Crisis readout fetched: {cr.get('classification')} - {(cr.get('headline') or '')[:60]}"
+                )
+            else:
+                log.warning(
+                    f"Crisis readout missing classification: {list(cr.keys()) if cr else 'None'}"
+                )
+            return cr
+        else:
+            log.warning(f"Crisis readout fetch status: {resp.status_code}")
+    except Exception as e:
+        log.warning(f"Crisis readout fetch failed: {e}")
+    return None
+
+
 def build_notification(game_events, npc_events):
-    """Combine events into a single notification. Max 1 per tick."""
+    """Build a narrative-style notification using the Crisis Readout.
+
+    Instead of raw event dumps, this creates a short 'field report'
+    that gives you the causal picture: what's happening, who's
+    involved, and what to watch.
+
+    Falls back to the old event-list format if the crisis readout
+    is unavailable.
+    """
     all_events = game_events + npc_events
+    cr = _fetch_crisis_readout()
+
+    # ── If we have crisis readout data, build a narrative ──
+    if cr and cr.get("classification"):
+        return _build_narrative_notification(cr, all_events)
+
+    # ── Fallback: old-style event list ──
     if not all_events:
         return None
-
-    all_events = all_events[:10]
-
+    all_events = all_events[:5]
     title = (
         f"\U0001f30c Federation Update "
         f"({len(all_events)} event{'s' if len(all_events) > 1 else ''})"
     )
-
     lines = []
     for emoji, evt_title, detail in all_events:
-        lines.append(f"{emoji} **{evt_title}**: {detail}")
-
+        lines.append(f"{emoji} {evt_title}: {detail}")
     body = "\n".join(lines)
+    return title, body
+
+
+def _build_narrative_notification(cr, raw_events):
+    """Transform crisis readout into a short field report.
+
+    Format:
+        Title:  classification + headline
+        Body:
+          WHY:     causal drivers (why_it_matters)
+          WHO:     top 4-5 involved NPCs
+          FACTIONS: escalating vs helping
+          CHAIN:   cascade center
+          SYNTHESIS: plain_english
+          ALERTS:  up to 3 raw game events (if any)
+    """
+    cls = cr.get("classification", "STABLE")
+    headline = cr.get("headline", "No active crisis")
+    why = cr.get("why_it_matters", "")
+    involved = cr.get("involved_npcs", [])
+    escalating = cr.get("escalating_factions", [])
+    helping = cr.get("helping_factions", [])
+    cascade = cr.get("cascade_chain", [])
+    plain = cr.get("plain_english", "")
+
+    # ── Throttle: skip if same classification + headline as last tick ──
+    global _last_notification, tick_count
+    state_key = (cls, headline)
+    last_key = (
+        _last_notification["classification"],
+        _last_notification["headline"],
+    )
+    ticks_since_last = tick_count - _last_notification.get("tick", 0)
+
+    # Always send CRITICAL/SEVERE; throttle MODERATE/STABLE to every 5th tick
+    if cls in ("STABLE", "MODERATE") and state_key == last_key:
+        if ticks_since_last < 5:
+            return None
+    # For ELEVATED, throttle to every 3rd tick if unchanged
+    if cls == "ELEVATED" and state_key == last_key:
+        if ticks_since_last < 3:
+            return None
+
+    _last_notification["classification"] = cls
+    _last_notification["headline"] = headline
+    _last_notification["tick"] = tick_count
+
+    # ── Classification emoji ──
+    cls_emoji = {
+        "STABLE": "\u2705",  # white check mark
+        "MODERATE": "\U0001f7e1",  # yellow circle
+        "ELEVATED": "\U0001f7e0",  # orange circle
+        "SEVERE": "\U0001f534",  # red circle
+        "CRITICAL": "\U0001f6a8",  # police car light
+    }.get(cls, "\U0001f535")
+
+    # ── Title ──
+    title = f"{cls_emoji} {cls}: {headline}"
+
+    # ── Body ──
+    lines = []
+
+    # Why it matters
+    if why:
+        lines.append(f"\u2139\ufe0f {why}")
+
+    # Who's involved (top 5, with faction)
+    if involved:
+        who_parts = []
+        for npc in involved[:5]:
+            name = npc.get("name", "?")
+            fac = npc.get("faction", "")
+            fac_name = _FACTION_NAMES.get(
+                fac, fac.replace("_", " ").title() if fac else ""
+            )
+            if fac_name:
+                who_parts.append(f"{name} ({fac_name})")
+            else:
+                who_parts.append(name)
+        lines.append(f"\U0001f465 {', '.join(who_parts)}")
+
+    # Factions: escalating vs helping
+    fac_parts = []
+    if escalating:
+        fac_parts.append(f"\U0001f525 {', '.join(escalating[:3])} escalating")
+    if helping:
+        fac_parts.append(f"\U0001f6e1\ufe0f {', '.join(helping[:3])} stabilizing")
+    if fac_parts:
+        lines.append(" | ".join(fac_parts))
+
+    # Cascade center
+    if cascade:
+        top = cascade[0]
+        target = top.get("target", "?")
+        count = top.get("reaction_count", 0)
+        # Reactors can be strings ("Name (role)") or dicts ({"name": ...})
+        raw_reactors = (top.get("reactors") or [])[:3]
+        reactor_names = []
+        for r in raw_reactors:
+            if isinstance(r, dict):
+                reactor_names.append(r.get("name", "?"))
+            elif isinstance(r, str):
+                # Strip parenthetical role for brevity: "Name (role)" -> "Name"
+                name = r.split(" (")[0] if " (" in r else r
+                reactor_names.append(name)
+            else:
+                reactor_names.append(str(r))
+        reactors = ", ".join(reactor_names)
+        if reactors:
+            lines.append(
+                f"\U0001f517 {target} triggering {count} reactions ({reactors})"
+            )
+        else:
+            lines.append(
+                f"\U0001f517 {target} at the center of {count} cascade reactions"
+            )
+
+    # Plain English synthesis
+    if plain:
+        # Trim to 280 chars for readability on phone
+        trimmed = plain[:280]
+        if len(plain) > 280:
+            trimmed = trimmed.rsplit(".", 1)[0] + "."
+        lines.append(f"\U0001f4dd {trimmed}")
+
+    # Raw game events (if any) as short alerts
+    if raw_events:
+        alert_lines = []
+        for emoji, evt_title, detail in raw_events[:3]:
+            alert_lines.append(f"{emoji} {detail[:80]}")
+        if alert_lines:
+            lines.append(f"\u26a0\ufe0f ALERTS: {'; '.join(alert_lines)}")
+
+    body = "\n\n".join(lines)
     return title, body
 
 
