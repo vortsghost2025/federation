@@ -1,0 +1,125 @@
+GASTOWN_SIMULATION_SURFACE_CONTRACT.md
+1. Purpose
+For first-time visitors: The 100-year simulation page explains a persistent multi-agent governance simulation where autonomous NPC cognition systems make decisions across a 3,650-day timeline. It presents observable society-simulation behavior through a Star Trek-inspired LCARS interface, showing how individual NPC goals cascade into collective world-state changes.
+For technical reviewers: This surface contract defines the minimum viable specification for a simulation visualization page that consumes backend-engine data, demonstrates agent-like decision systems, and avoids overclaiming about consciousness or sentience. All assertions must be grounded in actual implemented behavior.
+For project operators: The page serves as a bridge between technical implementation and public presentation. It must clearly indicate what is live simulation output versus static documentation, maintain GPL/open-source framing, and provide navigation to supporting systems.
+2. Non-Conflict Boundary
+Files intentionally NOT touched by this specification task:
+- federation-game/frontend/simulation.html — owned by local agent
+- build_simulation_html.py — owned by local agent  
+- Any .env, mcp.json, or API configuration files
+- Docker configurations, nginx configs, or deployment scripts
+- Backend runtime files in simulation_engine.py path
+- Any files in public_html/ outside of reference context
+- GitHub Actions workflows, Hostinger deployment configs
+3. Page Contract
+The simulation.html page must contain at minimum:
+Identity Block
+- Page title: "100-Year Simulation | Federation"
+- LCARS-style header with orange/black visual language
+- Clear visual distinction between "simulation surface" and "game interface"
+100-Year Timeline Framing
+- Explicit statement: "3650 days of simulated NPC cognition"
+- Visual timeline indicator (e.g., day 1 → day 3650)
+- Clear demarcation: simulated time vs. real-world time
+Autonomous NPC Cognition Explanation
+This visualization shows agent-like NPC decision systems operating across a 100-year simulated span. Each NPC operates with memory, goals, and social behavior within defined parameters.
+Faction/Political Simulation Explanation
+- Link to faction dynamics system
+- Explanation of political engine influence on NPC decisions
+- Visual representation of power cascades
+World-State/Cascade Explanation
+- Clear indication that individual NPC actions aggregate into system-wide changes
+- Visual indicator of "world-state cascade" progression
+- Explanation that this is observable society-simulation behavior
+Governance/Constitutional Mechanics Explanation
+- Reference to constitutional/governance framework
+- Link to systems pages for deeper mechanics
+- Clear separation between simulation rules and political outcomes
+Bridge Links (LCARS-style buttons)
+- Earth (main systems hub)
+- Starmap (geospatial context)
+- Captain's Log (narrative output)
+- Lore Archive (backstory context)
+- Creature Codex (NPC catalog)
+- Rival Roster (faction overview)
+- GitHub (source code, GPL license)
+Status/Readiness Indicators
+- "Live simulation surface" vs "Static documentation" banner
+- Last update timestamp
+- Current simulation day indicator
+- Connection status to backend data
+Language Safety Requirements
+- Never use: "autonomous NPC consciousness," "proof of life," "sentient"
+- Use instead: "autonomous NPC cognition simulation," "simulated NPC cognition, memory, goals, and social behavior," "persistent multi-agent governance simulation"
+4. Visitor Interpretation Risks
+Risk	Potential Misinterpretation	Safer Wording
+Just a game	Visitors see LCARS/gaming aesthetic and dismiss as entertainment	"This is a governance simulation using a game-inspired interface for accessibility"
+Fake AI	Skepticism about "AI" claims	"Agent-like NPC decision systems with goal-oriented behavior"
+Consciousness overclaim	Assumptions about sentient NPCs	"Observed NPC behavior patterns within defined simulation parameters"
+Lore-heavy	Too much flavor text, unclear what's real	"Simulation parameters and observable behavior outputs"
+Tech-heavy	Too much mechanics, no narrative hook	"100-year story of autonomous NPCs navigating governance challenges"
+Impossible claims	Promises of consciousness/sentience	"Persistent multi-agent systems exhibiting emergent social patterns"
+5. Technical QA Matrix
+Check Name	Why It Matters	Manual Verification	Expected Result
+Console errors	JS/CSS issues break user experience	Open DevTools, reload page	No errors in console
+Desktop responsive	Primary viewing mode	Resize to 1200px+ width	Layout intact, no overflow
+Mobile responsive	Accessibility	Resize to 375px width	Content readable, nav accessible
+Nav button reach	User flow	Click each LCARS button	Links navigate correctly
+Canonical URLs	Link rot	Test each bridge link	Points to correct pages
+GitHub link	Attribution/license	Click GitHub button	Opens to federation repo
+Local file paths	Deployment safety	Check all href/src	No localhost:3000 or file:// paths
+Secrets exposed	Security risk	Inspect page source	No API keys or tokens visible
+Staging URLs	Broken links	Check all network requests	No staging-*.domain.com URLs
+Live vs static	User understanding	Read page copy	Clearly distinguishes simulation output from docs
+Impossible claims	Misrepresentation	Review all copy	Uses safe language per contract
+GPL framing	License compliance	Check footer/meta	GPL/open-source referenced
+6. Runtime/API Contract
+Known/Available Endpoints
+Based on repository structure (to be verified by local agent):
+- /api/simulation/status — current simulation state
+- /api/npc/list — NPC catalog with memory/goal summaries
+- /api/factions/status — faction power balance
+- /api/timeline/day/:n — historical snapshot by day
+- /api/constitution — governance rules reference
+Speculative Future Endpoints
+- /api/world-state — aggregated world metrics
+- /api/cascade/:chain_id — specific event cascades
+- /api/export/day/:n — data export for analysis
+- /api/events/live — WebSocket for real-time updates
+Endpoints Requiring Auth/Rate Limiting
+- /api/admin/stop — simulation control (admin only)
+- /api/admin/reset — hard reset (admin only)
+- /api/npc/create — NPC generation (admin only)
+- Any write endpoints — never from public frontend without auth
+7. Evidence Checklist for the Local Agent
+When implementation is complete, the local agent must provide:
+- [ ] Git diff summary: git diff --stat output showing changed files
+- [ ] Files changed: List of modified files with line counts
+- [ ] Exact commands run: Shell commands used during build/test
+- [ ] Local verification result: Console output from npm run dev or equivalent
+- [ ] Live URL verification: Link to deployed page with confirmation of functionality
+- [ ] Screenshot/visual confirmation: Images showing desktop and mobile views
+- [ ] Docker/frontend rebuild: Note if docker-compose build or frontend rebuild required
+- [ ] Config/API-key/MCP changes: Explicit confirmation no sensitive files modified
+- [ ] Commit hash: Final commit SHA from implementation branch
+8. Suggested Final Copy Blocks
+A. Short Hero Subtitle
+A 100-year simulation of autonomous NPC cognition and governance dynamics
+B. "What This Actually Is" Paragraph
+This is a persistent multi-agent governance simulation running across 3,650 simulated days. Autonomous NPC cognition systems make decisions based on memory, goals, and social behavior within defined parameters. What you observe here is society-simulation behavior—not game fiction, not claimed consciousness, but testable agent interactions within a governance experiment.
+C. "Why This Matters" Paragraph
+This simulation surface serves as proof that decentralized agent systems can model complex social dynamics. Each NPC operates with goal-oriented behavior, and their collective decisions create observable patterns of governance, conflict, and cooperation. The 100-year span allows emergent behaviors to surface, demonstrating how simple rules can create complex societal outcomes.
+/agents                    
+Switch agent
+/compact                   
+Compact session
+/connect                   
+▣  Code · Auto Free · 4m 35s
+Connect provider
+/copy                      
+Copy session transcript
+Code 
+·
+Auto Free
+Kilo Gateway
