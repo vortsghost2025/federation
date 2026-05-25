@@ -1,0 +1,118 @@
+name: Deploy to VPS
+
+on:
+  workflow_dispatch:
+    inputs:
+      target:
+        description: "What to deploy"
+        required: true
+        default: "backend"
+        type: choice
+        options:
+          - backend
+          - worker
+          - frontend
+          - html-only
+          - all
+      html_file:
+        description: "Specific HTML file (for html-only target)"
+        required: false
+        type: string
+      skip_validate:
+        description: "Skip Python validation (dangerous)"
+        required: false
+        type: boolean
+        default: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Tailscale
+        run: |
+          curl -fsSL https://tailscale.com/install.sh | sh
+          sudo tailscaled --state=/tmp/tailscale.state --socket=/tmp/tailscaled.sock &
+          sleep 3
+          sudo tailscale up --authkey=${{ secrets.TS_AUTHKEY }} --hostname=gh-actions-deploy --accept-routes
+
+      - name: Verify Tailscale Connection
+        run: |
+          ping -c 2 ${{ secrets.VPS_TAILSCALE_IP }} || echo "Ping failed (may be blocked, continuing)"
+
+      - name: Setup SSH Key
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.VPS_SSH_KEY }}" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          ssh-keyscan -H ${{ secrets.VPS_TAILSCALE_IP }} >> ~/.ssh/known_hosts 2>/dev/null
+
+      - name: Test SSH Connection
+        run: |
+          ssh -o ConnectTimeout=10 root@${{ secrets.VPS_TAILSCALE_IP }} "hostname && echo SSH_WORKS"
+
+      - name: Deploy Backend
+        if: inputs.target == 'backend' || inputs.target == 'all'
+        run: |
+          echo "📦 Deploying backend Python files..."
+          scp federation-game/backend/*.py root@${{ secrets.VPS_TAILSCALE_IP }}:/docker/federation-game/backend/
+          if [ "${{ inputs.skip_validate }}" != "true" ]; then
+            echo "🔍 Validating Python files..."
+            ssh root@${{ secrets.VPS_TAILSCALE_IP }} "python3 -c \"import py_compile; import glob; files=glob.glob('/docker/federation-game/backend/*.py'); [py_compile.compile(f, doraise=True) for f in files]; print(f'All {len(files)} files valid')\""
+          fi
+          echo "🔄 Restarting backend..."
+          ssh root@${{ secrets.VPS_TAILSCALE_IP }} "cd /docker/federation-game && docker compose restart backend"
+          echo "✅ Backend deployed"
+
+      - name: Deploy Worker
+        if: inputs.target == 'worker' || inputs.target == 'all'
+        run: |
+          echo "📦 Deploying worker Python files..."
+          scp federation-game/backend/*.py root@${{ secrets.VPS_TAILSCALE_IP }}:/docker/federation-game/backend/
+          if [ "${{ inputs.skip_validate }}" != "true" ]; then
+            echo "🔍 Validating Python files..."
+            ssh root@${{ secrets.VPS_TAILSCALE_IP }} "python3 -c \"import py_compile; import glob; files=glob.glob('/docker/federation-game/backend/*.py'); [py_compile.compile(f, doraise=True) for f in files]; print(f'All {len(files)} files valid')\""
+          fi
+          echo "🔄 Building and restarting worker..."
+          ssh root@${{ secrets.VPS_TAILSCALE_IP }} "cd /docker/federation-game && docker compose build worker && docker compose up -d worker"
+          echo "✅ Worker deployed"
+
+      - name: Deploy Frontend (all HTML)
+        if: inputs.target == 'frontend' || inputs.target == 'all'
+        run: |
+          echo "📦 Deploying all HTML files..."
+          scp federation-game/frontend/*.html root@${{ secrets.VPS_TAILSCALE_IP }}:/docker/federation-game/public_html/
+          scp federation-game/frontend/*.html root@${{ secrets.VPS_TAILSCALE_IP }}:/docker/federation-game/frontend/
+          echo "🔄 Restarting frontend..."
+          ssh root@${{ secrets.VPS_TAILSCALE_IP }} "cd /docker/federation-game && docker compose restart frontend"
+          echo "✅ Frontend deployed"
+
+      - name: Deploy Single HTML File
+        if: inputs.target == 'html-only' && inputs.html_file != ''
+        run: |
+          FILE="${{ inputs.html_file }}"
+          echo "📦 Deploying ${FILE}..."
+          scp "federation-game/frontend/${FILE}" root@${{ secrets.VPS_TAILSCALE_IP }}:/docker/federation-game/public_html/
+          scp "federation-game/frontend/${FILE}" root@${{ secrets.VPS_TAILSCALE_IP }}:/docker/federation-game/frontend/
+          echo "🔄 Restarting frontend..."
+          ssh root@${{ secrets.VPS_TAILSCALE_IP }} "cd /docker/federation-game && docker compose restart frontend"
+          echo "✅ ${FILE} deployed"
+
+      - name: Verify Deployment
+        if: always()
+        run: |
+          echo "🏥 Container status:"
+          ssh root@${{ secrets.VPS_TAILSCALE_IP }} "cd /docker/federation-game && docker compose ps --format 'table {{.Name}}\t{{.Status}}'" || true
+          echo ""
+          echo "🌐 HTTP check:"
+          curl -s -o /dev/null -w "HTTP %{http_code}" https://federation-game.deliberatefederation.cloud/ || true
+          echo ""
+
+      - name: Disconnect Tailscale
+        if: always()
+        run: |
+          sudo tailscale down 2>/dev/null || true
