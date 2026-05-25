@@ -680,6 +680,348 @@ def _enrich_affiliation(r, entry, profile_map):
 
 
 # ---------------------------------------------------------------------------
+# Crisis Readout — structured case-file analysis
+# ---------------------------------------------------------------------------
+
+CRISIS_TYPE_MAP = {
+    "anomaly": "Reality instability / anomaly event",
+    "threat": "External military / hostile threat",
+    "morale": "Morale collapse / societal despair",
+    "tension": "Faction tension / political conflict",
+    "stability": "Governance failure / instability",
+    "diplomatic": "Diplomatic crisis between factions",
+    "technological": "Technological breakthrough or disruption",
+    "natural_disaster": "Natural disaster / cosmic hazard",
+}
+
+REACTION_ROLE_MAP = {
+    "endorsement": "endorsing",
+    "cooperation": "cooperating with",
+    "celebration": "celebrating",
+    "satisfaction": "satisfied by",
+    "observation": "observing",
+    "indifference": "ignoring",
+    "defiance": "defying",
+    "condemnation": "condemning",
+    "suspicion": "suspicious of",
+    "fear": "fearing",
+    "anger": "angered by",
+    "support": "supporting",
+    "protest": "protesting",
+}
+
+
+def _build_crisis_readout(world_state, npcs, factions, events, broadcasts):
+    # type: (Dict, List, Dict, List, List) -> Dict[str, Any]
+    """Build a structured crisis case-file from raw map data."""
+    readout = {
+        "classification": "STABLE",
+        "severity": 0,
+        "crisis_types": [],
+        "headline": "No active crisis detected.",
+        "why_it_matters": "",
+        "involved_npcs": [],
+        "involved_factions": [],
+        "escalating_factions": [],
+        "helping_factions": [],
+        "cascade_chain": [],
+        "recent_game_events": [],
+        "key_broadcasts": [],
+        "plain_english": "The Federation is operating within normal parameters.",
+        "actions": [],
+    }
+
+    threat = int(world_state.get("threat_level", 0))
+    morale = int(world_state.get("morale", 50))
+    anomaly = int(world_state.get("anomaly_activity", 0))
+    tension = int(world_state.get("tension_level", 0))
+    stability = int(world_state.get("stability", 50))
+    resources = int(world_state.get("resource_abundance", 50))
+
+    # 1. Classification + severity score
+    severity = 0
+    crisis_types = []
+    if anomaly >= 70:
+        severity += anomaly * 1.2
+        crisis_types.append("anomaly")
+    if threat >= 70:
+        severity += threat * 1.1
+        crisis_types.append("threat")
+    if morale <= 15:
+        severity += (100 - morale) * 0.9
+        crisis_types.append("morale")
+    if tension >= 60:
+        severity += tension * 0.7
+        crisis_types.append("tension")
+    if stability <= 30:
+        severity += (100 - stability) * 0.6
+        crisis_types.append("stability")
+
+    readout["severity"] = round(severity, 1)
+    readout["crisis_types"] = crisis_types
+
+    if severity > 250:
+        readout["classification"] = "CRITICAL"
+    elif severity > 150:
+        readout["classification"] = "SEVERE"
+    elif severity > 80:
+        readout["classification"] = "ELEVATED"
+    elif severity > 30:
+        readout["classification"] = "MODERATE"
+
+    # 2. Headline
+    type_labels = [str(CRISIS_TYPE_MAP.get(t, t)) for t in crisis_types]
+    if len(type_labels) == 0:
+        readout["headline"] = "No active crisis. Federation is stable."
+    elif len(type_labels) == 1:
+        readout["headline"] = type_labels[0]
+    else:
+        readout["headline"] = " + ".join(type_labels[:2])
+        if len(type_labels) > 2:
+            readout["headline"] += " + more"
+
+    # 3. Why it matters
+    why_parts = []
+    if anomaly >= 70:
+        why_parts.append(
+            "Anomaly activity at %d/100 is causing reality instability." % anomaly
+        )
+    if threat >= 70:
+        why_parts.append(
+            "Threat level at %d/100 indicates active hostile pressure." % threat
+        )
+    if morale <= 15:
+        why_parts.append("Morale at %d/100 is near collapse." % morale)
+    if tension >= 60:
+        why_parts.append("Tension at %d/100 signals faction conflict risk." % tension)
+    if stability <= 30:
+        why_parts.append("Stability at %d/100 means governance is failing." % stability)
+    if resources >= 80:
+        why_parts.append(
+            "Resource abundance at %d/100 provides some buffer." % resources
+        )
+    readout["why_it_matters"] = (
+        " ".join(why_parts) if why_parts else "All systems nominal."
+    )
+
+    # 4. Involved NPCs — from cascade reactions + game events
+    involved_npc_ids = set()
+    npc_roles = {}  # npc_id -> list of roles
+
+    for ev in events:
+        if ev.get("event_type") == "cascade_reaction":
+            src = ev.get("source_char_id", "")
+            tgt = ev.get("target_char_id", "")
+            rtype = ev.get("reaction_type", "")
+            if src:
+                involved_npc_ids.add(src)
+                role = REACTION_ROLE_MAP.get(rtype, rtype)
+                npc_roles.setdefault(src, []).append(
+                    role + " " + (ev.get("target_char_name", tgt))
+                )
+            if tgt:
+                involved_npc_ids.add(tgt)
+        elif ev.get("event_type") == "game_event":
+            pass  # game events are system-level, not NPC-specific
+
+    for b in broadcasts:
+        src = b.get("source_char_id", "")
+        if src:
+            involved_npc_ids.add(src)
+            npc_roles.setdefault(src, []).append(b.get("event_type", "action"))
+
+    # Sort by involvement count
+    npc_involvement = []
+    npc_map = {n.get("id"): n for n in npcs}
+    for nid in involved_npc_ids:
+        n = npc_map.get(nid, {})
+        npc_involvement.append(
+            {
+                "id": nid,
+                "name": n.get("name", nid),
+                "faction": n.get("affiliation", None),
+                "category": n.get("category", "unknown"),
+                "mood": n.get("mood", None),
+                "roles": npc_roles.get(nid, [])[:3],
+                "involvement_count": len(npc_roles.get(nid, [])),
+            }
+        )
+    npc_involvement.sort(key=lambda x: x["involvement_count"], reverse=True)
+    readout["involved_npcs"] = npc_involvement[:10]
+
+    # 5. Involved factions — from NPC affiliations + direct faction data
+    faction_involvement = {}
+    for n in npc_involvement:
+        fid = n.get("faction")
+        if fid:
+            faction_involvement[fid] = (
+                faction_involvement.get(fid, 0) + n["involvement_count"]
+            )
+
+    # Also add factions with low cohesion or high vigilance
+    for fid, fdata in factions.items():
+        cohesion = fdata.get("cohesion", 50)
+        vigilance = fdata.get("vigilance", 0)
+        if cohesion < 35 or vigilance > 40:
+            faction_involvement[fid] = faction_involvement.get(fid, 0) + 5
+
+    faction_entries = []
+    for fid, score in sorted(
+        faction_involvement.items(), key=lambda x: x[1], reverse=True
+    ):
+        fdata = factions.get(fid, {})
+        stance_summary = []
+        stances = fdata.get("stances", {})
+        for target_fid, stance_data in stances.items():
+            stance = (
+                stance_data.get("stance", stance_data.get("attitude", "neutral"))
+                if isinstance(stance_data, dict)
+                else "neutral"
+            )
+            if stance in ("hostile", "suspicious"):
+                stance_summary.append("hostile toward " + target_fid.replace("_", " "))
+            elif stance in ("allied", "friendly", "cooperative"):
+                stance_summary.append("allied with " + target_fid.replace("_", " "))
+        faction_entries.append(
+            {
+                "id": fid,
+                "name": fdata.get("display_name", fid.replace("_", " ").title()),
+                "involvement_score": score,
+                "cohesion": fdata.get("cohesion", 50),
+                "vigilance": fdata.get("vigilance", 0),
+                "avg_mood": fdata.get("avg_mood", 0.5),
+                "stance_summary": stance_summary[:3],
+            }
+        )
+    readout["involved_factions"] = faction_entries[:8]
+
+    # 6. Escalating vs helping factions
+    escalating = []
+    helping = []
+    for fe in faction_entries:
+        is_hostile = any("hostile" in s for s in fe.get("stance_summary", []))
+        low_mood = fe.get("avg_mood", 0.5) < 0.3
+        if is_hostile or low_mood:
+            escalating.append(fe["name"])
+        is_allied = any("allied" in s for s in fe.get("stance_summary", []))
+        high_mood = fe.get("avg_mood", 0.5) > 0.6
+        if is_allied or high_mood:
+            helping.append(fe["name"])
+    readout["escalating_factions"] = escalating[:4]
+    readout["helping_factions"] = helping[:4]
+
+    # 7. Cascade chain — top NPCs in cascade reactions
+    chain_sources = {}
+    for ev in events:
+        if ev.get("event_type") == "cascade_reaction":
+            tgt_name = ev.get("target_char_name", ev.get("target_char_id", ""))
+            rtype = ev.get("reaction_type", "")
+            key = tgt_name
+            chain_sources.setdefault(key, []).append(
+                ev.get("source_char_name", ev.get("source_char_id", ""))
+                + " ("
+                + rtype
+                + ")"
+            )
+    cascade_chain = []
+    for target, reactors in sorted(
+        chain_sources.items(), key=lambda x: len(x[1]), reverse=True
+    )[:5]:
+        cascade_chain.append(
+            {
+                "target": target,
+                "reactors": reactors[:5],
+                "reaction_count": len(reactors),
+            }
+        )
+    readout["cascade_chain"] = cascade_chain
+
+    # 8. Recent game events
+    game_events = []
+    for ev in events:
+        if ev.get("event_type") == "game_event":
+            game_events.append(
+                {
+                    "name": ev.get("name", "Unknown event"),
+                    "type": ev.get("game_event_type", ""),
+                    "severity": ev.get("severity", "MODERATE"),
+                    "description": ev.get("description", "")[:200],
+                }
+            )
+    readout["recent_game_events"] = game_events[:5]
+
+    # 9. Key broadcasts
+    key_broadcasts = []
+    for b in broadcasts[:5]:
+        key_broadcasts.append(
+            {
+                "source": b.get("source_char_name", b.get("source_char_id", "")),
+                "faction": b.get("source_affiliation", b.get("faction", None)),
+                "type": b.get("event_type", ""),
+                "description": b.get("description", "")[:200],
+            }
+        )
+    readout["key_broadcasts"] = key_broadcasts
+
+    # 10. Plain English synthesis
+    if readout["classification"] == "STABLE":
+        readout["plain_english"] = (
+            "The Federation is operating within normal parameters."
+        )
+    else:
+        parts = []
+        parts.append(
+            "The Federation is in a %s crisis." % readout["classification"].lower()
+        )
+        if crisis_types:
+            parts.append(
+                "Primary drivers: %s." % ", ".join(str(t) for t in type_labels[:3])
+            )
+        if escalating:
+            parts.append(
+                "%s %s escalating tensions."
+                % (
+                    ", ".join(escalating[:2]),
+                    "are" if len(escalating) > 1 else "is",
+                )
+            )
+        if helping:
+            parts.append(
+                "%s %s working to stabilize the situation."
+                % (
+                    ", ".join(helping[:2]),
+                    "are" if len(helping) > 1 else "is",
+                )
+            )
+        if cascade_chain:
+            top = cascade_chain[0]
+            parts.append(
+                "%s is the center of a cascade reaction involving %d others."
+                % (
+                    top["target"],
+                    top["reaction_count"],
+                )
+            )
+        if game_events:
+            parts.append("Latest event: %s." % game_events[0]["name"])
+        readout["plain_english"] = " ".join(parts)
+
+    # 11. Actionable next steps
+    actions = []
+    if crisis_types:
+        actions.append("Highlight involved NPCs on the map")
+    if cascade_chain:
+        actions.append("Show cascade chain timeline")
+    if faction_entries:
+        actions.append("Show affected faction territories")
+    if game_events:
+        actions.append("Open Live Sim filtered to this crisis")
+    readout["actions"] = actions
+
+    return readout
+
+
+# ---------------------------------------------------------------------------
 # Main endpoint
 # ---------------------------------------------------------------------------
 
@@ -818,5 +1160,17 @@ async def get_map_data():
             result["history"] = _safe_json_parse(history_raw)
     except Exception:
         pass
+
+    # --- Crisis Readout ---
+    try:
+        result["crisis_readout"] = _build_crisis_readout(
+            result.get("world_state", {}),
+            result.get("npcs", []),
+            result.get("factions", {}),
+            result.get("events", []),
+            result.get("broadcasts", []),
+        )
+    except Exception:
+        logger.debug("Crisis readout generation failed")
 
     return result
