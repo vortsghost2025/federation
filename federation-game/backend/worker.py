@@ -268,6 +268,7 @@ _last_notification = {
     "classification": None,
     "headline": None,
     "tick": 0,
+    "timestamp": 0,  # epoch seconds — for 10-min dedupe
 }
 
 
@@ -328,17 +329,17 @@ def build_notification(game_events, npc_events):
 
 
 def _build_narrative_notification(cr, raw_events):
-    """Transform crisis readout into a short field report.
+    """Transform crisis readout into a tiered field report.
 
-    Format:
-        Title:  classification + headline
-        Body:
-          WHY:     causal drivers (why_it_matters)
-          WHO:     top 4-5 involved NPCs
-          FACTIONS: escalating vs helping
-          CHAIN:   cascade center
-          SYNTHESIS: plain_english
-          ALERTS:  up to 3 raw game events (if any)
+    Tier logic (from gameplay6.txt):
+      STABLE/MODERATE — skip entirely unless subscribed (no Telegram)
+      ELEVATED — one concise alert: why + suggested action
+      SEVERE/CRITICAL — headline + why + 2-4 key actors + action
+
+    Anti-spam (10-min dedupe):
+      Same headline + classification = skip for 10 minutes
+      Severity INCREASES = always send immediately
+      Multiple events in one tick = summarize top 3 by severity
     """
     cls = cr.get("classification", "STABLE")
     headline = cr.get("headline", "No active crisis")
@@ -349,32 +350,34 @@ def _build_narrative_notification(cr, raw_events):
     cascade = cr.get("cascade_chain", [])
     plain = cr.get("plain_english", "")
 
-    # ── Throttle: skip if same classification + headline as last tick ──
+    # ── Throttle: 10-min dedupe on same headline ──
     global _last_notification, tick_count
+    now = time.time()
     state_key = (cls, headline)
-    last_key = (
-        _last_notification["classification"],
-        _last_notification["headline"],
-    )
-    ticks_since_last = tick_count - _last_notification.get("tick", 0)
+    last_cls = _last_notification["classification"]
+    last_key = (last_cls, _last_notification["headline"])
+    last_ts = _last_notification.get("timestamp", 0)
+    mins_since = (now - last_ts) / 60 if last_ts else 999
 
-    # Always send CRITICAL/SEVERE; throttle MODERATE/STABLE to every 5th tick
-    if cls in ("STABLE", "MODERATE") and state_key == last_key:
-        if ticks_since_last < 5:
-            return None
-    # For ELEVATED, throttle to every 3rd tick if unchanged
-    if cls == "ELEVATED" and state_key == last_key:
-        if ticks_since_last < 3:
-            return None
+    # Severity increased? Always send.
+    _SEV_ORDER = {"STABLE": 0, "MODERATE": 1, "ELEVATED": 2, "SEVERE": 3, "CRITICAL": 4}
+    severity_increased = _SEV_ORDER.get(cls, 0) > _SEV_ORDER.get(last_cls, 0)
+
+    # STABLE/MODERATE: never send Telegram
+    if cls in ("STABLE", "MODERATE"):
+        return None
+
+    # Same state within 10 minutes and severity didn't increase = skip
+    if state_key == last_key and not severity_increased and mins_since < 10:
+        return None
 
     _last_notification["classification"] = cls
     _last_notification["headline"] = headline
     _last_notification["tick"] = tick_count
+    _last_notification["timestamp"] = now
 
     # ── Classification emoji ──
     cls_emoji = {
-        "STABLE": "\u2705",  # white check mark
-        "MODERATE": "\U0001f7e1",  # yellow circle
         "ELEVATED": "\U0001f7e0",  # orange circle
         "SEVERE": "\U0001f534",  # red circle
         "CRITICAL": "\U0001f6a8",  # police car light
@@ -383,81 +386,58 @@ def _build_narrative_notification(cr, raw_events):
     # ── Title ──
     title = f"{cls_emoji} {cls}: {headline}"
 
-    # ── Body ──
+    # ── Build body by tier ──
     lines = []
 
-    # Why it matters
+    # Why it matters (all tiers get this, trimmed)
     if why:
-        lines.append(f"\u2139\ufe0f {why}")
-
-    # Who's involved (top 5, with faction)
-    if involved:
-        who_parts = []
-        for npc in involved[:5]:
-            name = npc.get("name", "?")
-            fac = npc.get("faction", "")
-            fac_name = _FACTION_NAMES.get(
-                fac, fac.replace("_", " ").title() if fac else ""
-            )
-            if fac_name:
-                who_parts.append(f"{name} ({fac_name})")
-            else:
-                who_parts.append(name)
-        lines.append(f"\U0001f465 {', '.join(who_parts)}")
-
-    # Factions: escalating vs helping
-    fac_parts = []
-    if escalating:
-        fac_parts.append(f"\U0001f525 {', '.join(escalating[:3])} escalating")
-    if helping:
-        fac_parts.append(f"\U0001f6e1\ufe0f {', '.join(helping[:3])} stabilizing")
-    if fac_parts:
-        lines.append(" | ".join(fac_parts))
-
-    # Cascade center
-    if cascade:
-        top = cascade[0]
-        target = top.get("target", "?")
-        count = top.get("reaction_count", 0)
-        # Reactors can be strings ("Name (role)") or dicts ({"name": ...})
-        raw_reactors = (top.get("reactors") or [])[:3]
-        reactor_names = []
-        for r in raw_reactors:
-            if isinstance(r, dict):
-                reactor_names.append(r.get("name", "?"))
-            elif isinstance(r, str):
-                # Strip parenthetical role for brevity: "Name (role)" -> "Name"
-                name = r.split(" (")[0] if " (" in r else r
-                reactor_names.append(name)
-            else:
-                reactor_names.append(str(r))
-        reactors = ", ".join(reactor_names)
-        if reactors:
-            lines.append(
-                f"\U0001f517 {target} triggering {count} reactions ({reactors})"
-            )
-        else:
-            lines.append(
-                f"\U0001f517 {target} at the center of {count} cascade reactions"
-            )
-
-    # Plain English synthesis
-    if plain:
-        # Trim to 280 chars for readability on phone
-        trimmed = plain[:280]
-        if len(plain) > 280:
+        trimmed = why[:200]
+        if len(why) > 200:
             trimmed = trimmed.rsplit(".", 1)[0] + "."
-        lines.append(f"\U0001f4dd {trimmed}")
+        lines.append(trimmed)
+    elif plain:
+        trimmed = plain[:200]
+        if len(plain) > 200:
+            trimmed = trimmed.rsplit(".", 1)[0] + "."
+        lines.append(trimmed)
 
-    # Raw game events (if any) as short alerts
-    if raw_events:
-        alert_lines = []
-        for emoji, evt_title, detail in raw_events[:3]:
-            alert_lines.append(f"{emoji} {detail[:80]}")
-        if alert_lines:
-            lines.append(f"\u26a0\ufe0f ALERTS: {'; '.join(alert_lines)}")
+    # ── SEVERE/CRITICAL only: key actors + factions ──
+    if cls in ("SEVERE", "CRITICAL"):
+        actor_parts = []
+        # 2-4 NPCs with faction
+        for npc in involved[:3]:
+            if isinstance(npc, dict):
+                name = npc.get("name", "?")
+                fac = npc.get("faction", "")
+                fac_name = _FACTION_NAMES.get(
+                    fac, fac.replace("_", " ").title() if fac else ""
+                )
+                actor_parts.append(f"{name} ({fac_name})" if fac_name else name)
+        if actor_parts:
+            lines.append(f"\U0001f465 {', '.join(actor_parts)}")
 
-    body = "\n\n".join(lines)
+        # Faction roles — compact
+        fac_bits = []
+        if escalating and isinstance(escalating, list):
+            fac_bits.append(
+                f"\U0001f525 {', '.join(str(f) for f in escalating[:2])} escalating"
+            )
+        if helping and isinstance(helping, list):
+            fac_bits.append(
+                f"\U0001f6e1\ufe0f {', '.join(str(f) for f in helping[:2])} stabilizing"
+            )
+        if fac_bits:
+            lines.append(" | ".join(fac_bits))
+
+    # ── Suggested action ──
+    if cls == "CRITICAL":
+        lines.append("\U0001f4f1 Open Crisis View on starmap for details")
+    elif cls == "SEVERE":
+        lines.append("\U0001f4f1 Check starmap for affected NPCs")
+    else:
+        lines.append("\U0001f4f1 Monitor on starmap")
+
+    body = "\n".join(lines)
     return title, body
 
 
@@ -750,9 +730,17 @@ def run_tick():
         if notification:
             title, body = notification
             send_notification(title, body)
-            log.info(f"  Events detected: {len(game_events + npc_events)}")
+            log.info(
+                f"  Notification sent ({len(game_events + npc_events)} raw events)"
+            )
         else:
-            log.info("  No significant events this tick")
+            total = len(game_events + npc_events)
+            if total > 0:
+                log.info(
+                    f"  Throttled: {total} events but notification suppressed (10-min dedupe)"
+                )
+            else:
+                log.info("  No significant events this tick")
     except Exception as e:
         log.warning(f"Event detection failed: {e}")
 
