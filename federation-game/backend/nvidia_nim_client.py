@@ -1213,6 +1213,8 @@ class NimClient:
             )
             return nim_result
 
+        return None
+
     def get_stats(self) -> Dict:
         """Return usage statistics."""
         lane_stats = _ollama_lane.stats()
