@@ -33,11 +33,27 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Fix Deployment Permissions
+        run: |
+          echo "Normalizing permissions on deployment directories..."
+          # Ensure the runner user (member of docker group) can write deployed files
+          # Directories must be 775 with group docker; files must be 664 with group docker
+          chgrp -R docker /docker/federation-game/backend/ 2>/dev/null || true
+          chmod -R g+rwX /docker/federation-game/backend/ 2>/dev/null || true
+          chgrp -R docker /docker/federation-game/public_html/ 2>/dev/null || true
+          chmod -R g+rwX /docker/federation-game/public_html/ 2>/dev/null || true
+          chgrp -R docker /docker/federation-game/frontend/ 2>/dev/null || true
+          chmod -R g+rwX /docker/federation-game/frontend/ 2>/dev/null || true
+          echo "Permissions normalized"
+
       - name: Deploy Backend
         if: inputs.target == 'backend' || inputs.target == 'all'
         run: |
           echo "Deploying backend Python files..."
           cp federation-game/backend/*.py /docker/federation-game/backend/
+          # Ensure group ownership and permissions on the new files
+          chgrp docker /docker/federation-game/backend/*.py
+          chmod 664 /docker/federation-game/backend/*.py
           if [ "${{ inputs.skip_validate }}" != "true" ]; then
             echo "Validating Python files..."
             python3 -c "import py_compile; import glob; files=glob.glob('/docker/federation-game/backend/*.py'); [py_compile.compile(f, doraise=True) for f in files]; print(f'All {len(files)} files valid')"
@@ -51,6 +67,9 @@ jobs:
         run: |
           echo "Deploying worker Python files..."
           cp federation-game/backend/*.py /docker/federation-game/backend/
+          # Ensure group ownership and permissions on the new files
+          chgrp docker /docker/federation-game/backend/*.py
+          chmod 664 /docker/federation-game/backend/*.py
           if [ "${{ inputs.skip_validate }}" != "true" ]; then
             echo "Validating Python files..."
             python3 -c "import py_compile; import glob; files=glob.glob('/docker/federation-game/backend/*.py'); [py_compile.compile(f, doraise=True) for f in files]; print(f'All {len(files)} files valid')"
@@ -65,6 +84,11 @@ jobs:
           echo "Deploying all HTML files..."
           cp federation-game/frontend/*.html /docker/federation-game/public_html/
           cp federation-game/frontend/*.html /docker/federation-game/frontend/
+          # Ensure group ownership and permissions on the new files
+          chgrp docker /docker/federation-game/public_html/*.html
+          chmod 664 /docker/federation-game/public_html/*.html
+          chgrp docker /docker/federation-game/frontend/*.html
+          chmod 664 /docker/federation-game/frontend/*.html
           echo "Restarting frontend..."
           cd /docker/federation-game && docker compose restart frontend
           echo "Frontend deployed"
@@ -76,6 +100,11 @@ jobs:
           echo "Deploying ${FILE}..."
           cp "federation-game/frontend/${FILE}" /docker/federation-game/public_html/
           cp "federation-game/frontend/${FILE}" /docker/federation-game/frontend/
+          # Ensure group ownership and permissions
+          chgrp docker "/docker/federation-game/public_html/${FILE}"
+          chmod 664 "/docker/federation-game/public_html/${FILE}"
+          chgrp docker "/docker/federation-game/frontend/${FILE}"
+          chmod 664 "/docker/federation-game/frontend/${FILE}"
           echo "Restarting frontend..."
           cd /docker/federation-game && docker compose restart frontend
           echo "${FILE} deployed"
