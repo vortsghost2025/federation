@@ -1164,6 +1164,27 @@ class NimClient:
             )
             return nim_result
 
+        elif priority == "cloud":
+            # Tier 1.5: Gemini Flash (free, fast, high quality)
+            gemini_result = await self._call_gemini(
+                system_prompt, user_prompt, max_tokens, temperature
+            )
+            if gemini_result is not None:
+                return gemini_result
+
+            # Tier 2.5: Grok/xAI (high quality)
+            grok_result = await self._call_grok(
+                system_prompt, user_prompt, max_tokens, temperature
+            )
+            if grok_result is not None:
+                return grok_result
+
+            # Tier 2: NIM cloud (fallback)
+            nim_result = await self._call_nim(
+                system_prompt, user_prompt, max_tokens, temperature
+            )
+            return nim_result
+
         elif priority == "heavy":
             # Tier 0: Ollama 7B (deeper reasoning, keep_alive=3m, concurrency-gated)
             ollama_result = await self._call_ollama(
@@ -1190,7 +1211,7 @@ class NimClient:
             nim_result = await self._call_nim(
                 system_prompt, user_prompt, max_tokens, temperature
             )
-        return nim_result
+            return nim_result
 
     def get_stats(self) -> Dict:
         """Return usage statistics."""
