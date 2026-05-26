@@ -11,8 +11,14 @@ import logging
 import os
 from fastapi import APIRouter
 from typing import Any, Dict, List, Optional
+from pydantic import BaseModel
 
 logger = logging.getLogger(__name__)
+
+try:
+    from llm_router import route_call
+except ImportError:
+    route_call = None
 
 try:
     import redis
@@ -1211,3 +1217,208 @@ async def get_map_data():
         logger.debug("Crisis readout generation failed")
 
     return result
+
+
+# ---------------------------------------------------------------------------
+# AI Assistant Endpoint
+# ---------------------------------------------------------------------------
+
+
+class AssistantQuery(BaseModel):
+    question: str
+
+
+def _build_sim_context(r) -> str:
+    """Read current simulation state from Redis and build a context summary."""
+    lines = []
+
+    # World state
+    try:
+        ws = r.hgetall("world_state")
+        if ws:
+            lines.append("=== WORLD STATE ===")
+            for k in (
+                "stability",
+                "morale",
+                "threat_level",
+                "tension_level",
+                "anomaly_activity",
+                "resource_abundance",
+                "treasury",
+            ):
+                v = ws.get(k, "?")
+                lines.append(f"  {k}: {v}")
+    except Exception:
+        pass
+
+    # NPC count and moods
+    try:
+        mood_keys = r.keys("npc_mood:*")
+        npc_ids = [
+            k.replace("npc_mood:", "")
+            for k in mood_keys
+            if not k.replace("npc_mood:", "").startswith("test_")
+        ]
+        lines.append(f"\n=== NPCS ({len(npc_ids)} active) ===")
+        for cid in npc_ids[:10]:
+            try:
+                mood = r.get(f"npc_mood:{cid}") or "?"
+                loc = r.get(f"npc_location:{cid}") or "?"
+                lines.append(f"  {cid}: mood={mood}, location={loc}")
+            except Exception:
+                pass
+        if len(npc_ids) > 10:
+            lines.append(f"  ... and {len(npc_ids) - 10} more")
+    except Exception:
+        pass
+
+    # Recent events (last 5)
+    try:
+        raw_events = r.zrevrange("npc_world_events", 0, 4)
+        if raw_events:
+            lines.append("\n=== RECENT EVENTS ===")
+            for item in raw_events:
+                parsed = _safe_json_parse(item)
+                if parsed:
+                    desc = parsed.get("description", parsed.get("event", str(parsed)))[
+                        :100
+                    ]
+                    lines.append(f"  {desc}")
+    except Exception:
+        pass
+
+    # Latest narration
+    try:
+        narration_raw = r.get("narration:latest")
+        if narration_raw:
+            narration = json.loads(narration_raw)
+            headline = narration.get("headline", "")
+            if headline:
+                lines.append(f"\n=== LATEST NARRATION ===")
+                lines.append(f"  Headline: {headline}")
+                for d in narration.get("developments", [])[:3]:
+                    lines.append(f"  Development: {d[:100]}")
+    except Exception:
+        pass
+
+    # Faction dynamics (top 4)
+    try:
+        fd = r.hgetall("faction_dynamics")
+        if fd:
+            lines.append("\n=== FACTION STATUS ===")
+            count = 0
+            for fid, data in fd.items():
+                if count >= 4:
+                    break
+                parsed = _safe_json_parse(data)
+                if parsed:
+                    name = parsed.get("display_name", fid)
+                    cohesion = parsed.get("cohesion", "?")
+                    influence = parsed.get("influence", "?")
+                    lines.append(
+                        f"  {name}: cohesion={cohesion}, influence={influence}"
+                    )
+                    count += 1
+    except Exception:
+        pass
+
+    # Quest summary
+    try:
+        quest_summary = r.get("quest_summary")
+        if quest_summary:
+            qs = json.loads(quest_summary)
+            lines.append(f"\n=== QUESTS ===")
+            lines.append(
+                f"  active: {qs.get('active', '?')}, completed: {qs.get('completed', '?')}, failed: {qs.get('failed', '?')}"
+            )
+    except Exception:
+        pass
+
+    return "\n".join(lines) if lines else "No simulation data available."
+
+
+_ASSISTANT_SYSTEM_PROMPT = """You are the FEDERATION ASSISTANT — an AI that
+helps the player understand what is happening in the Federation consciousness
+simulation. You have access to real-time simulation data and can explain events,
+NPC behavior, faction dynamics, quest progress, and world state trends.
+
+You speak clearly and concisely. You explain complex simulation mechanics in
+plain language. You are part analyst, part strategist, part storyteller.
+
+When answering questions:
+- Reference specific NPCs, factions, and events by name when relevant
+- Explain WHY things are happening, not just WHAT is happening
+- Give actionable insight when asked about strategy
+- Keep answers under 200 words unless the question requires depth
+- Never break the illusion that this is a living universe"""
+
+
+@router.post("/assistant")
+async def ask_assistant(query: AssistantQuery):
+    """Ask the AI assistant a question about the current simulation state.
+
+    Reads live sim context from Redis, builds a prompt, routes through the
+    LLM router, and returns the assistant's answer.
+    """
+    if not route_call:
+        return {
+            "status": "error",
+            "answer": "LLM router not available.",
+            "provider": "none",
+        }
+
+    question = query.question.strip()
+    if not question:
+        return {
+            "status": "error",
+            "answer": "Please ask a question.",
+            "provider": "none",
+        }
+
+    r = _get_redis()
+    context = _build_sim_context(r)
+
+    user_prompt = (
+        f"Here is the current state of the Federation simulation:\n\n"
+        f"{context}\n\n"
+        f"Player question: {question}\n\n"
+        f"Answer the player's question based on the simulation data above. "
+        f"If the data is insufficient, say so honestly."
+    )
+
+    try:
+        result = route_call(
+            task_class="narrator",
+            system_prompt=_ASSISTANT_SYSTEM_PROMPT,
+            user_prompt=user_prompt,
+            max_tokens=300,
+            temperature=0.7,
+        )
+        if result.get("success"):
+            return {
+                "status": "ok",
+                "answer": result["content"],
+                "provider": result.get("provider", "unknown"),
+                "model": result.get("model", "unknown"),
+            }
+        else:
+            errors = result.get("errors", [])
+            fallback = (
+                "The simulation's AI systems are currently offline. "
+                "All LLM providers failed to respond. "
+                f"Providers tried: {result.get('attempts', 0)}. "
+                "Try again in a few minutes."
+            )
+            return {
+                "status": "error",
+                "answer": fallback,
+                "provider": "none",
+                "errors": errors,
+            }
+    except Exception as exc:
+        logger.warning("Assistant endpoint error: %s", exc)
+        return {
+            "status": "error",
+            "answer": "An internal error occurred while processing your question.",
+            "provider": "none",
+        }
