@@ -124,6 +124,7 @@ html{height:auto;min-height:100vh}body{height:auto;min-height:100vh;overflow-x:h
 .sitroom-forewarning{font-size:0.8125rem;color:var(--amber);line-height:1.5;padding:8px 10px;margin-top:8px;background:rgba(255,152,0,0.06);border:1px solid rgba(255,152,0,0.12);border-radius:6px}
 .sitroom-forewarning::before{content:'\26A0 ';font-style:normal}
 .sitroom-quiet{font-size:0.9375rem;color:rgba(255,255,255,0.5);text-align:center;padding:20px 0}
+.cascade-summary-roster{cursor:pointer;transition:color 0.2s}.cascade-summary-roster:hover{color:var(--cyan)}
 .cascade-badge{font-family:'Orbitron',sans-serif;font-size:0.5625rem;font-weight:900;letter-spacing:0.5px;padding:1px 4px;border-radius:3px;margin-left:4px;vertical-align:middle}
 .cascade-badge.trigger{color:var(--red);background:rgba(244,67,54,0.15);border:1px solid rgba(244,67,54,0.3)}
 .cascade-badge.reactor{color:var(--violet);background:rgba(206,147,216,0.15);border:1px solid rgba(206,147,216,0.3)}
@@ -936,6 +937,7 @@ function moodColorOf(mood){if(mood==null)return '#78909C';var label=moodLabel(mo
 function cascadeColor(pct){if(pct<30)return '#4CAF50';if(pct<60)return '#FF9800';if(pct<85)return '#F44336';return '#E91E63'}
 function esc(s){if(s==null)return '';return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;')}
 function clamp(v,lo,hi){return Math.max(lo,Math.min(hi,v))}
+function timeAgo(isoStr){if(!isoStr)return '';var t=Date.parse(isoStr);if(isNaN(t))return String(isoStr);var diff=Date.now()-t;if(diff<0)diff=0;var s=Math.floor(diff/1000);if(s<60)return s+'s ago';var m=Math.floor(s/60);if(m<60)return m+'m ago';var h=Math.floor(m/60);if(h<24)return h+'h ago';var d=Math.floor(h/24);return d+'d ago'}
 
 async function apiFetch(endpoint,timeoutMs){var ctl=new AbortController();var timer=setTimeout(function(){ctl.abort()},timeoutMs||8000);try{var r=await fetch('/api'+endpoint,{headers:{'Accept':'application/json'},signal:ctl.signal});clearTimeout(timer);if(!r.ok)throw new Error(r.status);return await r.json()}catch(e){clearTimeout(timer);return null}}
 
@@ -1302,24 +1304,29 @@ if(npcByTone[dTone].length<5)npcByTone[dTone].push(dName);
 var dominantTone='neutral';var maxTone=0;
 for(var tn in toneCounts){if(toneCounts[tn]>maxTone){maxTone=toneCounts[tn];dominantTone=tn}}
 var toneEmoji={fear:'\uD83D\uDE31',conflict:'\u2694\uFE0F',caution:'\u26A0\uFE0F',support:'\uD83D\uDC4D',celebration:'\uD83C\uDF89',neutral:'\uD83D\uDD0D'};
-/* Build summary */
-pHtml += '<div class="cascade-summary" style="cursor:pointer" title="Click to expand/collapse domino details">';
-pHtml += '<span class="cascade-summary-icon">' + (toneEmoji[dominantTone]||'\uD83D\uDD0D') + '</span>';
-pHtml += '<span class="cascade-summary-text">' + dominoes.length + ' NPCs reacted</span>';
-var depthParts=[];
-for(var dd in depthCounts){depthParts.push('D'+dd+': '+depthCounts[dd])}
-pHtml += '<div class="cascade-summary-detail">Depth spread: ' + depthParts.join(', ') + ' &mdash; Dominant: ' + dominantTone + '</div>';
-/* Show key NPCs by tone */
-for(var tt in npcByTone){
-if(npcByTone[tt].length>0){
-pHtml += '<div class="cascade-summary-npcs">';
-for(var nn=0;nn<npcByTone[tt].length;nn++){
-pHtml += '<span class="cascade-summary-npc tone-'+tt+'">' + esc(npcByTone[tt][nn]) + '</span>';
-}
-pHtml += '</div>';
-}
-}
-pHtml += '</div>';
+  /* Build summary — clean Totals Bar with progressive disclosure */
+  /* Build tone spread string */
+  var toneSpreadParts = [];
+  var toneOrder = ['neutral','support','caution','fear','conflict','celebration'];
+  for (var to = 0; to < toneOrder.length; to++) {
+    var tKey = toneOrder[to];
+    if (toneCounts[tKey] > 0) {
+      toneSpreadParts.push(toneCounts[tKey] + ' ' + tKey.charAt(0).toUpperCase() + tKey.slice(1));
+    }
+  }
+  var toneSpreadStr = toneSpreadParts.join(', ') || '0 Neutral';
+  /* Determine cascade root type label */
+  var cascadeTypeLabel = 'Unknown Event';
+  if (rootEv) {
+    var rType = rootEv.event_type || rootEv.origin_event_type || rootEv.source_event_type || rootEv.cause || '';
+    if (rType) cascadeTypeLabel = rType.replace(/_/g, ' ').replace(/\b\w/g, function(c){return c.toUpperCase()});
+  }
+  pHtml += '<div class="cascade-summary" style="cursor:pointer" title="Click to expand/collapse domino details">';
+  pHtml += '<span class="cascade-summary-icon">' + (toneEmoji[dominantTone]||'\uD83D\uDD0D') + '</span>';
+  pHtml += '<span class="cascade-summary-text">' + dominoes.length + ' NPCs reacting to a <strong>' + esc(cascadeTypeLabel) + '</strong></span>';
+  pHtml += '<div class="cascade-summary-detail">Spread: ' + toneSpreadStr + '</div>';
+  pHtml += '<div class="cascade-summary-roster" style="font-size:0.75rem;color:var(--dim);margin-top:2px">Click to expand full roster</div>';
+  pHtml += '</div>';
 /* Still keep dominoes but collapsed — click to expand */
 pHtml += '<div class="pipeline-dominoes" style="max-height:0;overflow:hidden;opacity:0;transition:max-height 0.4s ease,opacity 0.3s ease" id="domino-expand">';
 for (var di2 = 0; di2 < Math.min(dominoes.length, 12); di2++) {
@@ -1535,7 +1542,7 @@ else if(evtLower.indexOf('abandon')!==-1||evtLower.indexOf('fail')!==-1){cls+=' 
 else{cls+=' quest-progress'}
 el.className=cls;el.dataset.charId=entry.char_id||'';
 var evtLabel=entry.event||'PROGRESS';
-el.innerHTML='<span class="quest-time">'+esc(String(entry.timestamp||''))+'</span><span class="quest-event '+eventClass+'">'+esc(evtLabel.toUpperCase())+'</span><span class="quest-body"><strong>'+esc(entry.char_id||'Unknown')+'</strong> \u2014 '+esc(entry.quest_id||'')+(entry.reason?' <span style="color:var(--dim)">('+esc(entry.reason)+')</span>':'')+'</span>';
+el.innerHTML='<span class="quest-time">'+timeAgo(entry.timestamp||'')+'</span><span class="quest-event '+eventClass+'">'+esc(evtLabel.toUpperCase())+'</span><span class="quest-body"><strong>'+esc(entry.char_id||'Unknown')+'</strong> \u2014 '+esc(entry.quest_id||'')+(entry.reason?' <span style="color:var(--dim)">('+esc(entry.reason)+')</span>':'')+'</span>';
 el.addEventListener('click',function(){loadQuestDetail(entry.char_id)});
 log.appendChild(el);
 })(entries[i],i);
@@ -1688,6 +1695,33 @@ function _sitCategorize(desc) {
   if (/security|reinforced|defenses|void gates|docking|blocked access|sweep|patrol|guard|perimeter/.test(d)) return 'defense';
   return 'other';
 }
+function _sitSubType(desc){
+  var d=(desc||'').toLowerCase();
+  if(/gathered intel|intel on|intel breach/.test(d))return{label:'Intel Breach',icon:'\uD83D\uDD0D'};
+  if(/planted disinformation|disinformation/.test(d))return{label:'Disinformation',icon:'\uD83D\uDEAB'};
+  if(/sabotage/.test(d))return{label:'Sabotage',icon:'\uD83D\uDCA3'};
+  if(/heist|stole|acquired a valuable/.test(d))return{label:'Heist',icon:'\uD83D\uDCB0'};
+  if(/under-the-table|insider|black market|illicit|smuggl/.test(d))return{label:'Black Market',icon:'\uD83D\uDCB8'};
+  if(/covert|secret|vanish/.test(d))return{label:'Covert Op',icon:'\uD83D\uDD75\uFE0F'};
+  if(/undermine/.test(d))return{label:'Undermining',icon:'\u2696\uFE0F'};
+  if(/spy|espionage|infiltrat|intercept|surveillance/.test(d))return{label:'Espionage',icon:'\uD83D\uDD0E'};
+  return{label:'Rogue Activity',icon:'\u2694\uFE0F'};
+}
+
+
+function _sitSubType(desc){
+  var d=(desc||'').toLowerCase();
+  if(/gathered intel|intel on|intel breach/.test(d))return{label:'Intel Breach',icon:'\uD83D\uDD0D'};
+  if(/planted disinformation|disinformation/.test(d))return{label:'Disinformation',icon:'\uD83D\uDEAB'};
+  if(/sabotage/.test(d))return{label:'Sabotage',icon:'\uD83D\uDCA3'};
+  if(/heist|stole|acquired a valuable/.test(d))return{label:'Heist',icon:'\uD83D\uDCB0'};
+  if(/under-the-table|insider|black market|illicit|smuggl/.test(d))return{label:'Black Market',icon:'\uD83D\uDCB8'};
+  if(/covert|secret|vanish/.test(d))return{label:'Covert Op',icon:'\uD83D\uDD75\uFE0F'};
+  if(/undermine/.test(d))return{label:'Undermining',icon:'\u2696\uFE0F'};
+  if(/spy|espionage|infiltrat|intercept|surveillance/.test(d))return{label:'Espionage',icon:'\uD83D\uDD0E'};
+  return{label:'Rogue Activity',icon:'\u2694\uFE0F'};
+}
+
 
 function _sitGroupByNpc(events) {
   var byNpc = {};
@@ -1834,52 +1868,97 @@ function renderSituationRoom() {
       buckets[cat].push(ev);
     }
 
-    // ── 6. UNDER THE SURFACE (scheming + espionage) ──
-    var schemers = buckets.scheming.concat(buckets.espionage);
-    if (schemers.length > 0) {
-      html += '<div class="sitroom-section">';
-      html += '<div class="sitroom-section-title">Under the Surface</div>';
-      var byNpc = _sitGroupByNpc(schemers);
-      var names = Object.keys(byNpc);
-      var sentences = [];
-      for (var n = 0; n < Math.min(names.length, 5); n++) {
-        var npcName = names[n];
-        var npcEvents = byNpc[npcName];
-        var actions = [];
-        for (var a = 0; a < Math.min(npcEvents.length, 3); a++) {
-          var evDesc = npcEvents[a].description || npcEvents[a].name || '';
-          // Strip "X " prefix if the description starts with the NPC name
-          evDesc = evDesc.replace(new RegExp('^' + npcName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\s*', 'i'), '');
-          if (evDesc) actions.push(evDesc);
-        }
-        if (actions.length > 0) {
-          sentences.push('<span class="npc-name">' + esc(npcName) + '</span> ' + _sitHtml(actions.join(', and ')).toLowerCase());
-        }
+  // ── 6. UNDER THE SURFACE — Rogue Activity Dashboard ──
+  var schemers = buckets.scheming.concat(buckets.espionage);
+  if (schemers.length > 0) {
+    html += '<div class="sitroom-section">';
+    html += '<div class="sitroom-section-title">Under the Surface</div>';
+    /* Group by action sub-type instead of by NPC */
+    var subTypes = {};
+    for (var st = 0; st < schemers.length; st++) {
+      var stEv = schemers[st];
+      var stDesc = stEv.description || stEv.name || '';
+      var subInfo = _sitSubType(stDesc);
+      var stKey = subInfo.label;
+      if (!subTypes[stKey]) subTypes[stKey] = {icon: subInfo.icon, label: subInfo.label, npcs: []};
+      /* Extract NPC name */
+      var stName = stEv.source_char_name || '';
+      if (!stName && stDesc) {
+        var stMatch = stDesc.match(/^([A-Z][A-Za-z\s]+?)(?:\s+(?:gathered|planted|acquired|set|stumbled|exchanged|published|conducted|led|enforced|blocked|increased|ordered|sensed|explored|returned|chart|discovered|sabotage|heist|vanish|smuggl|broke|repelled|rallied|issued|confront|challenged|intercept|infiltrat))/);
+        if (stMatch && stMatch[1].trim().length > 2 && stMatch[1].trim().length < 40) stName = stMatch[1].trim();
       }
-      html += '<div class="sitroom-text">' + sentences.join('. ') + '.</div>';
-      html += '</div>';
+      if (!stName && stEv.name) stName = stEv.name;
+      if (stName && subTypes[stKey].npcs.indexOf(stName) === -1) {
+        subTypes[stKey].npcs.push(stName);
+      }
     }
+    /* Render as a single dashboard line */
+    var rogueParts = [];
+    var stKeys = Object.keys(subTypes);
+    for (var sk = 0; sk < stKeys.length; sk++) {
+      var skInfo = subTypes[stKeys[sk]];
+      var npcCount = skInfo.npcs.length;
+      var npcList = skInfo.npcs.slice(0, 4).map(function(n){return '<span class="npc-name">' + esc(n) + '</span>';}).join(', ');
+      if (skInfo.npcs.length > 4) npcList += ' +' + (skInfo.npcs.length - 4) + ' more';
+      rogueParts.push(skInfo.icon + ' <strong>' + npcCount + ' ' + skInfo.label + (npcCount !== 1 ? 's' : '') + '</strong> (' + npcList + ')');
+    }
+    html += '<div class="sitroom-text">' + rogueParts.join(' <span style="color:var(--dim)">|</span> ') + '</div>';
+    html += '</div>';
+  }
 
-    // ── 7. KEY BROADCASTS (Who Is Moving) ──
-    var broadcasts = crisis.key_broadcasts || [];
-    if (broadcasts.length > 0) {
-      html += '<div class="sitroom-section">';
-      html += '<div class="sitroom-section-title">Who Is Moving</div>';
-      for (var b = 0; b < Math.min(broadcasts.length, 4); b++) {
-        var bc = broadcasts[b];
-        // key_broadcasts entries may be objects {source, faction, type, description} or strings
-        var bcText = '';
-        if (typeof bc === 'string') {
-          bcText = bc;
-        } else if (bc && typeof bc === 'object') {
-          bcText = (bc.source ? bc.source + ': ' : '') + (bc.description || bc.type || JSON.stringify(bc));
-        }
-        if (bcText) {
-          html += '<div class="sitroom-text" style="margin-bottom:3px">' + _sitHtml(esc(bcText)) + '</div>';
-        }
+  // ── 7. MOVEMENT & OPERATIONS ── (Destination Cards)
+  var broadcasts = crisis.key_broadcasts || [];
+  if (broadcasts.length > 0) {
+    html += '<div class="sitroom-section">';
+    html += '<div class="sitroom-section-title">Who Is Moving</div>';
+    /* Group broadcasts by type for destination cards */
+    var bcGroups = {};
+    var bcLabels = {
+      expedition_launched: {icon: '\uD83D\uDE80', label: 'Deep Space Migration'},
+      security_sweep: {icon: '\uD83D\uDEE1\uFE0F', label: 'Guarding Core Gates'},
+      covert_operation: {icon: '\uD83D\uDD75\uFE0F', label: 'Shadow Operations'},
+      anomaly_investigation: {icon: '\u2728', label: 'Anomaly Response'},
+      diplomatic_mission: {icon: '\uD83C\uDF0D', label: 'Diplomatic Corps'},
+      resource_extraction: {icon: '\u26CF\uFE0F', label: 'Resource Operations'},
+      patrol: {icon: '\uD83D\uDDE1\uFE0F', label: 'Patrol Duty'},
+      research_expedition: {icon: '\uD83D\uDD2C', label: 'Research Detail'}
+    };
+    for (var b = 0; b < broadcasts.length; b++) {
+      var bc = broadcasts[b];
+      var bcType = 'other';
+      var bcSource = '';
+      if (typeof bc === 'object' && bc !== null) {
+        bcType = bc.type || 'other';
+        bcSource = bc.source || '';
+      } else if (typeof bc === 'string') {
+        bcSource = bc.replace(/^([^:]+):.*/, '$1').trim();
+        var bcLow = bc.toLowerCase();
+        if (bcLow.indexOf('expedition') !== -1 || bcLow.indexOf('explore') !== -1) bcType = 'expedition_launched';
+        else if (bcLow.indexOf('security') !== -1 || bcLow.indexOf('sweep') !== -1) bcType = 'security_sweep';
+        else if (bcLow.indexOf('covert') !== -1 || bcLow.indexOf('shadow') !== -1) bcType = 'covert_operation';
+        else if (bcLow.indexOf('anomal') !== -1) bcType = 'anomaly_investigation';
+        else if (bcLow.indexOf('diplomat') !== -1) bcType = 'diplomatic_mission';
+        else if (bcLow.indexOf('resource') !== -1) bcType = 'resource_extraction';
+        else if (bcLow.indexOf('patrol') !== -1) bcType = 'patrol';
       }
+      if (!bcGroups[bcType]) bcGroups[bcType] = [];
+      bcGroups[bcType].push(bcSource);
+    }
+    /* Render grouped destination cards */
+    var bcTypeKeys = Object.keys(bcGroups);
+    for (var g = 0; g < bcTypeKeys.length; g++) {
+      var gKey = bcTypeKeys[g];
+      var gMeta = bcLabels[gKey] || {icon: '\uD83D\uDCCD', label: gKey.replace(/_/g, ' ').replace(/\b\w/g, function(c){return c.toUpperCase()})};
+      var gNpcs = bcGroups[gKey].filter(function(n){return n && n.length > 0});
+      if (gNpcs.length === 0) continue;
+      html += '<div class="sitroom-text" style="margin-bottom:5px">';
+      html += gMeta.icon + ' <strong>' + esc(gMeta.label) + ':</strong> ';
+      html += gNpcs.slice(0, 6).map(function(n){return '<span class="npc-name">' + esc(n) + '</span>';}).join(', ');
+      if (gNpcs.length > 6) html += ' +' + (gNpcs.length - 6) + ' more';
       html += '</div>';
     }
+    html += '</div>';
+  }
 
     // ── 8. EXPEDITIONS & DISCOVERIES ──
     if (buckets.exploration.length > 0) {
