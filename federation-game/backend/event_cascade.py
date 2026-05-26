@@ -219,6 +219,14 @@ def _store_cascade_event(event: Dict, target_key: str):
     r = _get_redis()
     score = event.get("ts", time.time())
     r.zadd(target_key, {json.dumps(event): score})
+    # Cap ZSET size to prevent unbounded growth
+    _MAX_ZSET_SIZES = {
+        "cascade_chains": 200,
+        "cascade_reactions": 500,
+        "faction_cascade_events": 200,
+    }
+    cap = _MAX_ZSET_SIZES.get(target_key, 500)
+    r.zremrangebyrank(target_key, 0, -(cap + 1))
     r.expire(target_key, CASCADE_REACTIONS_TTL)
 
 
@@ -311,22 +319,22 @@ def find_reactive_npcs(event: Dict, npc_list: List[Dict]) -> List[Dict]:
         if npc_id == source_id:
             continue
 
-        prob = random.uniform(0.05, 0.15)
-        npc_faction = npc.get("affiliation", npc.get("faction", ""))
+    prob = random.uniform(0.05, 0.15)
+    npc_faction = npc.get("affiliation", npc.get("faction", ""))
 
-        if npc_faction and source_faction and npc_faction == source_faction:
-            prob += 0.80
-        elif npc_faction and source_faction:
-            if _is_allied_faction(npc_faction, source_faction):
-                prob += 0.50
-            elif _is_rival_faction(npc_faction, source_faction):
-                prob += 0.60
+    if npc_faction and source_faction and npc_faction == source_faction:
+        prob += 0.30  # reduced from 0.80 — was creating near-certain reactions
+    elif npc_faction and source_faction:
+        if _is_allied_faction(npc_faction, source_faction):
+            prob += 0.20  # reduced from 0.50
+        elif _is_rival_faction(npc_faction, source_faction):
+            prob += 0.25  # reduced from 0.60
 
-        rel = _get_relationship(npc_id, source_id) if source_id else 50.0
-        if rel > 70:
-            prob += 0.70
-        elif rel < 30:
-            prob += 0.40
+    rel = _get_relationship(npc_id, source_id) if source_id else 50.0
+    if rel > 70:
+        prob += 0.25  # reduced from 0.70
+    elif rel < 30:
+        prob += 0.15  # reduced from 0.40
 
         archetype = npc.get("archetype", npc.get("role", ""))
         if archetype in _ARCHETYPE_REACT_BONUS:
@@ -357,9 +365,16 @@ def generate_reaction(event: Dict, reacting_npc: Dict) -> Optional[Dict]:
 
     rel = _get_relationship(npc_id, source_id) if source_id else 50.0
 
-    if rel > 55:  # lowered from 65 — more NPCs qualify as allies
+    # Relationship decay: pull toward 50 to prevent runaway drift
+    # Without this, ally relationships only increase and rival only decrease
+    if rel > 55:
+        rel -= 0.5  # gentle decay toward neutral
+    elif rel < 45:
+        rel += 0.5
+
+    if rel > 55:
         pool = _ALLY_REACTIONS
-    elif rel < 40:  # raised from 35 — fewer NPCs default to rival
+    elif rel < 40:
         pool = _RIVAL_REACTIONS
     else:
         pool = _NEUTRAL_REACTIONS
