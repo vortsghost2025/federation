@@ -216,31 +216,54 @@ def check_tick():
     current_tick = worker_status.get("tick_count", "unknown")
     last_tick_time = worker_status.get("last_tick", "unknown")
 
-    # Read last-seen tick from a temp key we maintain
+    # Use two Redis keys to track stall detection across cron runs:
+    # monitor:last_seen_tick — the tick count we saw last check
+    # monitor:stall_count — how many consecutive checks with the same tick
     last_seen_key = "monitor:last_seen_tick"
+    stall_count_key = "monitor:stall_count"
     last_seen = redis_get(last_seen_key)
 
-    # Update the last-seen key
-    redis_cmd("SET", last_seen_key, str(current_tick))
+    # Ticks take ~60s. With 1-min cron, seeing the same tick once is normal
+    # (we caught it mid-cycle). Only alert after 2+ consecutive same-tick checks
+    # meaning the tick hasn't advanced in 2+ minutes.
+    STALL_THRESHOLD = 2
 
     if last_seen is not None and last_seen == str(current_tick):
-        # Tick count unchanged since last check — simulation may be stalled
-        code = alert(
-            "TICK-WATCHDOG",
-            "CRITICAL",
-            "Simulation stalled — tick not advancing",
-            f"Tick count unchanged at {current_tick}. Last tick time: {last_tick_time}",
-            "Check worker: docker compose logs --tail=50 worker",
-        )
-        max_severity = max(max_severity, code)
-    elif status == 200 and (last_seen is None or last_seen != str(current_tick)):
-        # All clear
+        # Same tick as last check — increment stall counter
+        stall_val = redis_get(stall_count_key)
+        stall_count = int(stall_val) if stall_val and stall_val.isdigit() else 1
+        stall_count += 1
+        redis_cmd("SET", stall_count_key, str(stall_count))
+
+        if stall_count >= STALL_THRESHOLD:
+            code = alert(
+                "TICK-WATCHDOG",
+                "CRITICAL",
+                "Simulation stalled — tick not advancing",
+                f"Tick count unchanged at {current_tick} for {stall_count} consecutive checks. Last tick time: {last_tick_time}",
+                "Check worker: docker compose logs --tail=50 worker",
+            )
+            max_severity = max(max_severity, code)
+        else:
+            # One same-tick check is normal — don't alert yet
+            code = info(
+                "TICK-WATCHDOG",
+                f"Tick #{current_tick} same as last check (stall count {stall_count}/{STALL_THRESHOLD})",
+                f"Last tick time: {last_tick_time}. Waiting for next check to confirm.",
+            )
+            max_severity = max(max_severity, code)
+    else:
+        # Tick advanced — reset stall counter
+        redis_cmd("SET", stall_count_key, "0")
         code = info(
             "TICK-WATCHDOG",
             "Simulation running — tick advancing",
             f"Tick #{current_tick}, last tick at {last_tick_time}, healthz={status}",
         )
         max_severity = max(max_severity, code)
+
+    # Always update the last-seen key
+    redis_cmd("SET", last_seen_key, str(current_tick))
 
     return max_severity
 
@@ -419,9 +442,14 @@ def check_async():
         for tick_name, started_at in running_ticks:
             if started_at:
                 try:
-                    started_dt = datetime.fromisoformat(
-                        started_at.replace("Z", "+00:00")
-                    )
+                    # The API may return started_at as a float (Unix timestamp)
+                    # or as an ISO 8601 string — handle both
+                    if isinstance(started_at, (int, float)):
+                        started_dt = datetime.fromtimestamp(started_at, tz=timezone.utc)
+                    else:
+                        started_dt = datetime.fromisoformat(
+                            started_at.replace("Z", "+00:00")
+                        )
                     elapsed = (now - started_dt).total_seconds()
                     threshold = (
                         ASYNC_STALL_SECONDS
