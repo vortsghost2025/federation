@@ -10,6 +10,7 @@
     "deploy:worker": "node deploy.js --target worker",
     "deploy:frontend": "node deploy.js --target frontend",
     "deploy:html": "node deploy.js --target html",
+    "deploy:sim": "node deploy.js --target html --file simulation.html",
     "shell": "node shell.js",
     "status": "node shell.js --cmd 'cd /docker/federation-game && docker compose ps'",
     "restart:backend": "node shell.js --cmd 'cd /docker/federation-game && docker compose restart backend'",

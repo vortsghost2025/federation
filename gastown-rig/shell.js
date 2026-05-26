@@ -9,16 +9,16 @@
  * Environment:
  * VPS_HOST - VPS IP (default: 187.77.3.56)
  * VPS_USER - SSH user (default: root)
- * VPS_KEY_PATH - Path to SSH private key (default: ~/.ssh/id_rsa)
+ * VPS_KEY_PATH - Path to SSH private key (default: ~/.ssh/id_ed25519)
  */
-import { connect } from 'ssh2';
+import { Client } from 'ssh2';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { homedir } from 'node:os';
 
 const VPS_HOST = process.env.VPS_HOST || '187.77.3.56';
 const VPS_USER = process.env.VPS_USER || 'root';
-const VPS_KEY_PATH = process.env.VPS_KEY_PATH || join(homedir(), '.ssh', 'id_rsa');
+const VPS_KEY_PATH = process.env.VPS_KEY_PATH || join(homedir(), '.ssh', 'id_ed25519');
 
 // Parse --cmd argument
 const cmdIdx = process.argv.indexOf('--cmd');
@@ -37,7 +37,7 @@ try {
   process.exit(1);
 }
 
-const conn = new connect();
+const conn = new Client();
 conn.on('ready', () => {
   conn.exec(cmd, (err, stream) => {
     if (err) {
