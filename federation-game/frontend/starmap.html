@@ -26,8 +26,19 @@ body{background:#0a0a1a;color:#e0e0e0;font-family:'Courier New',monospace;overfl
 #sidebar::-webkit-scrollbar{width:5px}
 #sidebar::-webkit-scrollbar-thumb{background:rgba(79,195,247,0.3);border-radius:2px}
 #sidebar h2{color:#4fc3f7;font-size:1.375rem;margin:12px 0 10px 0;letter-spacing:2px;text-transform:uppercase;border-bottom:1px solid rgba(79,195,247,0.2);padding-bottom:8px}
-.ev-item{padding:8px 10px;margin-bottom:6px;border-left:3px solid #333;border-radius:0 4px 4px 0;background:rgba(255,255,255,0.02);transition:border-color 0.3s}
+.ev-bucket{margin-bottom:10px}
+.ev-bucket-header{display:flex;align-items:center;gap:6px;padding:6px 8px;background:rgba(255,255,255,0.03);border-radius:4px;cursor:pointer;user-select:none;transition:background 0.15s;font-size:1rem}
+.ev-bucket-header:hover{background:rgba(79,195,247,0.08)}
+.ev-bucket-icon{font-size:1.125rem}
+.ev-bucket-title{color:#e0e0e0;font-weight:bold;letter-spacing:0.5px}
+.ev-bucket-count{margin-left:auto;background:rgba(79,195,247,0.15);color:#4fc3f7;padding:1px 6px;border-radius:8px;font-size:0.75rem;font-weight:bold}
+.ev-bucket-arrow{color:#78909c;font-size:0.75rem;transition:transform 0.15s;margin-left:4px}
+.ev-bucket-arrow.open{transform:rotate(90deg)}
+.ev-bucket-body{padding:4px 0 4px 8px}
+.ev-bucket-body.collapsed{display:none}
+.ev-item{padding:4px 6px;margin-bottom:3px;border-left:2px solid #333;border-radius:0 3px 3px 0;background:rgba(255,255,255,0.02);font-size:0.875rem;line-height:1.3}
 .ev-item:hover{border-left-color:#4fc3f7;background:rgba(79,195,247,0.05)}
+.ev-item-repeat{color:#78909c;font-size:0.6875rem;margin-left:4px}
 .ev-char{color:#4fc3f7;font-weight:bold;font-size:1rem}
 .ev-type{color:#78909c;font-size:0.875rem;margin-left:8px;text-transform:uppercase}
 .ev-desc{color:#b0b0b0;font-size:1rem;margin-top:3px;line-height:1.4}
@@ -704,40 +715,42 @@ function buildNodes() {
     let labelX = fcx, labelY = fcy;
     let zoneR = Math.max(npcLocalRadius, group.length * 14) + 20; // fallback
 
-    if (factionNodePositions.length >= 3) {
+    // For factions with fewer than 3 points, generate synthetic boundary points
+    // around the anchor so they always get a real polygon, not a circle
+    let polyPoints = factionNodePositions.slice();
+    if (polyPoints.length < 3) {
+      const infl = fdata.influence || 20;
+      const baseR = Math.max(80, npcLocalRadius * (0.6 + (infl / 100) * 0.6));
+      const numPts = Math.max(4, 6 + Math.floor(infl / 15));
+      for (let pi = 0; pi < numPts; pi++) {
+        const pa = (pi / numPts) * Math.PI * 2 + (i * 0.3); // offset per faction for irregularity
+        const pr = baseR * (0.7 + seededRand(hashStr(fid + 'b' + pi))() * 0.6);
+        polyPoints.push({ x: fcx + Math.cos(pa) * pr, y: fcy + Math.sin(pa) * pr });
+      }
+      // Recompute zoneR from generated points for fallback safety
+      zoneR = baseR * 1.2;
+    }
+
+    if (polyPoints.length >= 3) {
       // 3+ points: convex hull → pad → smooth
-      let hull = convexHull(factionNodePositions);
-      let padded = padPolygon(hull, 50);
+      let hull = convexHull(polyPoints);
+      let padAmt = Math.max(30, 50 * (1 + ((fdata.influence||20) - 20) / 100));
+      let padded = padPolygon(hull, padAmt);
       polygon = smoothPoly(padded, 2);
       const centroid = polyCentroid(polygon);
       const bounds = polyBounds(polygon);
       labelX = centroid.x;
       labelY = bounds.maxY + 16;
-    } else if (factionNodePositions.length === 2) {
-      // 2 points: capsule (line between + padding)
-      const a = factionNodePositions[0], b = factionNodePositions[1];
-      const dx = b.x - a.x, dy = b.y - a.y;
-      const len = Math.sqrt(dx*dx + dy*dy) || 1;
-      const nx = -dy / len, ny = dx / len;
-      const pad = 50;
-      polygon = [
-        { x: a.x + nx * pad, y: a.y + ny * pad },
-        { x: b.x + nx * pad, y: b.y + ny * pad },
-        { x: b.x - nx * pad, y: b.y - ny * pad },
-        { x: a.x - nx * pad, y: a.y - ny * pad }
-      ];
-      polygon = smoothPoly(polygon, 2);
-      const bounds = polyBounds(polygon);
-      labelX = (a.x + b.x) / 2;
-      labelY = bounds.maxY + 16;
     }
-    // 1 point or 0: polygon stays empty, use circle fallback (zoneR)
 
     factionZones.push({
       fid, fcx, fcy, zoneR, color, fdata,
       groupSize: group.length,
       polygon,     // array of {x,y} if hull computed, [] if fallback
-      labelX, labelY
+      labelX, labelY,
+      zonePulse: Math.random() * Math.PI * 2,
+      historicalInfluence: fdata.influence || 20,
+      historicalCohesion: fdata.cohesion || 50
     });
   });
 
@@ -838,20 +851,79 @@ function updateUI() {
   dot.className = status === 'running' ? '' : 'stopped';
   document.getElementById('tick-label').textContent = `TICK ${tickCount} · ${status.toUpperCase()}`;
 
-  // Events sidebar
-  const events = (mapData.events || []).slice(0, 30);
+  // Events sidebar — categorized buckets
+  if (!window._evBucketState) {
+    window._evBucketState = {
+      'exploration': true, 'defensive': true, 'covert': true, 'anomalies': false, 'other': false
+    };
+  }
+  const categories = [
+    { key: 'exploration', icon: '🚀', title: 'Exploration & Discoveries',
+      match: at => /explore|discovery|expedition|chart/i.test(at) },
+    { key: 'defensive', icon: '🛡️', title: 'Defensive Holdings',
+      match: at => /patrol|fortification|guard|reinforce|defense|sweep|interdiction|block|security|alert/i.test(at) },
+    { key: 'covert', icon: '🕵️', title: 'Covert Operations',
+      match: at => /sabotage|undermine|deal|broker|intel|disinformation|manipulation|black market|heist|breach|intelligence/i.test(at) },
+    { key: 'anomalies', icon: '🌀', title: 'Anomalies',
+      match: at => /dream|consciousness|anomaly|vision|meditation|ritual|destabilization|void|reality|cosmic/i.test(at) },
+    { key: 'other', icon: '📋', title: 'Other', match: () => true }
+  ];
+  const rawEvents = (mapData.events || []).slice(0, 30);
   const el = document.getElementById('event-list');
   let html = '';
-  for (const ev of events) {
-    const moodColor = ev.mood ? (mapData.npcs.find(n => n.mood === ev.mood)?.mood_color || '#9e9e9e') : '#9e9e9e';
-    html += `<div class="ev-item">
+  for (const cat of categories) {
+    const bucketEvents = rawEvents.filter(ev => cat.match(ev.action_type || ''));
+    if (cat.key === 'other' && categories.slice(0, -1).some(c => rawEvents.filter(e => c.match(e.action_type || '')).length > 0)) {
+      // Remove items already claimed by previous buckets
+      let remaining = [...rawEvents];
+      for (const pc of categories.slice(0, -1)) {
+        remaining = remaining.filter(ev => !pc.match(ev.action_type || ''));
+      }
+      bucketEvents.length = 0;
+      bucketEvents.push(...remaining);
+    }
+    // Deduplicate
+    const seen = new Map();
+    const deduped = [];
+    for (const ev of bucketEvents) {
+      const key = (ev.char_name || '') + '|' + (ev.description || '');
+      if (seen.has(key)) {
+        seen.get(key).count++;
+      } else {
+        deduped.push({ ...ev, count: 1 });
+        seen.set(key, deduped[deduped.length - 1]);
+      }
+    }
+    const count = deduped.reduce((s, e) => s + e.count, 0);
+    const isOpen = window._evBucketState[cat.key];
+    html += `<div class="ev-bucket">
+<div class="ev-bucket-header" data-bucket="${cat.key}">
+<span class="ev-bucket-arrow${isOpen?' open':''}">&#9654;</span>
+<span class="ev-bucket-icon">${cat.icon}</span>
+<span class="ev-bucket-title">${cat.title}</span>
+<span class="ev-bucket-count">${count}</span>
+</div>
+<div class="ev-bucket-body${isOpen?'':' collapsed'}">`;
+    for (const ev of deduped) {
+      const moodColor = ev.mood ? (mapData.npcs.find(n => n.mood === ev.mood)?.mood_color || '#9e9e9e') : '#9e9e9e';
+      html += `<div class="ev-item">
 <span class="ev-mood" style="background:${moodColor}"></span>
 <span class="ev-char">${ev.char_name || 'Unknown'}</span>
 <span class="ev-type">${ev.action_type || ''}</span>
-<div class="ev-desc">${ev.description || ''}</div>
+<span class="ev-desc"> — ${ev.description || ''}</span>${ev.count > 1 ? `<span class="ev-item-repeat">(x${ev.count})</span>` : ''}
 </div>`;
+    }
+    html += `</div></div>`;
   }
   el.innerHTML = html;
+  // Collapse/expand toggle
+  el.querySelectorAll('.ev-bucket-header').forEach(hdr => {
+    hdr.addEventListener('click', function() {
+      const key = this.dataset.bucket;
+      window._evBucketState[key] = !window._evBucketState[key];
+      updateUI(); // re-render
+    });
+  });
 
   // Map legend — always visible
   buildLegend();
@@ -1302,40 +1374,69 @@ function draw() {
     ctx.fill();
   }
 
-  // Faction territory zones — data-shaped polygons
+  // Faction territory zones — data-shaped polygons with living growth
   for (const z of factionZones) {
     const fdata = z.fdata;
     const cohesion = fdata ? (fdata.cohesion || 50) : 50;
     const isHovered = hoveredFaction === z;
 
+    // Breathing offset for territory deformation
+    const breathAmp = 3 + (fdata.activity_rate || 0) * 6;
+    const breathPhase = z.zonePulse + t * 0.001 * (0.8 + (fdata.activity_rate || 0) * 0.4);
+    const breathOffset = Math.sin(breathPhase) * breathAmp;
+
+    // Deform polygon vertices by breathing offset along normal
+    let deformedPoly = [];
+    if (z.polygon.length >= 3) {
+      const n = z.polygon.length;
+      for (let i = 0; i < n; i++) {
+        const prev = z.polygon[(i - 1 + n) % n];
+        const curr = z.polygon[i];
+        const next = z.polygon[(i + 1) % n];
+        const e1x = curr.x - prev.x, e1y = curr.y - prev.y;
+        const len1 = Math.sqrt(e1x*e1x + e1y*e1y) || 1;
+        const n1x = e1y / len1, n1y = -e1x / len1;
+        const e2x = next.x - curr.x, e2y = next.y - curr.y;
+        const len2 = Math.sqrt(e2x*e2x + e2y*e2y) || 1;
+        const n2x = e2y / len2, n2y = -e2x / len2;
+        let nx = (n1x + n2x) / 2, ny = (n1y + n2y) / 2;
+        const nlen = Math.sqrt(nx*nx + ny*ny) || 1;
+        nx /= nlen; ny /= nlen;
+        deformedPoly.push({ x: curr.x + nx * breathOffset, y: curr.y + ny * breathOffset });
+      }
+    }
+
     // Check for overlapping polygons (contested)
     let isContested = false;
     for (const z2 of factionZones) {
       if (z2.fid === z.fid) continue;
-      if (z.polygon.length >= 3 && z2.polygon.length >= 3) {
-        if (polygonsOverlap(z.polygon, z2.polygon)) { isContested = true; break; }
+      const p1 = deformedPoly.length >= 3 ? deformedPoly : z.polygon;
+      const p2 = z2._deformedPoly && z2._deformedPoly.length >= 3 ? z2._deformedPoly : z2.polygon;
+      if (p1.length >= 3 && p2.length >= 3) {
+        if (polygonsOverlap(p1, p2)) { isContested = true; break; }
       } else {
-        // Fallback: circle overlap check for zones without polygons
         const dx = z.fcx - z2.fcx, dy = z.fcy - z2.fcy;
         const dist = Math.sqrt(dx*dx + dy*dy);
         if (dist < z.zoneR + z2.zoneR - 30) { isContested = true; break; }
       }
     }
+    z._deformedPoly = deformedPoly;
 
     const fillAlpha = isHovered ? vp.zoneFillAlpha * 2 : vp.zoneFillAlpha;
     const borderAlpha = isHovered ? Math.min(1, vp.zoneBorderAlpha * 1.8) : vp.zoneBorderAlpha;
     const borderW = isHovered ? vp.zoneBorderWidth + 1 : vp.zoneBorderWidth;
 
-    if (z.polygon.length >= 3) {
+    const renderPoly = z._deformedPoly && z._deformedPoly.length >= 3 ? z._deformedPoly : z.polygon;
+    if (renderPoly.length >= 3) {
       // --- POLYGON TERRITORY ---
       // Fill with gradient: stronger near faction anchor, lighter at edges
-      const centroid = polyCentroid(z.polygon);
-      const bounds = polyBounds(z.polygon);
+      const centroid = polyCentroid(renderPoly);
+      const bounds = polyBounds(renderPoly);
       const gradRadius = Math.max(bounds.maxX - bounds.minX, bounds.maxY - bounds.minY) * 0.7;
       const grad = ctx.createRadialGradient(z.fcx, z.fcy, 0, z.fcx, z.fcy, gradRadius);
       grad.addColorStop(0, hexToRgba(z.color, fillAlpha * 1.5));
       grad.addColorStop(1, hexToRgba(z.color, fillAlpha * 0.4));
-      tracePolygonPath(ctx, z.polygon);
+      tracePolygonPath(ctx, renderPoly);
       ctx.fillStyle = grad;
       ctx.fill();
 
@@ -1345,16 +1446,17 @@ function draw() {
       } else {
         ctx.setLineDash([]);
       }
-      tracePolygonPath(ctx, z.polygon);
+      tracePolygonPath(ctx, renderPoly);
       ctx.strokeStyle = hexToRgba(z.color, borderAlpha);
       ctx.lineWidth = borderW;
       ctx.stroke();
       ctx.setLineDash([]);
 
-      // Contested overlay: orange dashed outline on polygon
+      // Contested overlay: pulsing orange dashed outline
       if (isContested) {
-        tracePolygonPath(ctx, z.polygon);
-        ctx.strokeStyle = 'rgba(255,152,0,0.2)';
+        const contestAlpha = 0.15 + 0.15 * (0.5 + 0.5 * Math.sin(t * 0.003 + z.zonePulse));
+        tracePolygonPath(ctx, renderPoly);
+        ctx.strokeStyle = `rgba(255,152,0,${contestAlpha})`;
         ctx.lineWidth = 1.5;
         ctx.setLineDash([4, 4]);
         ctx.stroke();
@@ -1393,9 +1495,10 @@ ctx.fillText(sectorType, z.labelX, z.labelY + 18);
       ctx.setLineDash([]);
 
       if (isContested) {
+        const contestAlpha = 0.1 + 0.15 * (0.5 + 0.5 * Math.sin(t * 0.003 + z.zonePulse));
         ctx.beginPath();
         ctx.arc(z.fcx, z.fcy, z.zoneR + 4, 0, Math.PI * 2);
-        ctx.strokeStyle = 'rgba(255,152,0,0.15)';
+        ctx.strokeStyle = `rgba(255,152,0,${contestAlpha})`;
         ctx.lineWidth = 1;
         ctx.setLineDash([4, 4]);
         ctx.stroke();
@@ -1489,6 +1592,22 @@ ctx.fillText('NEUTRAL / FEDERATION CORE', cx, cy + centerR + 20);
 
     // Crisis view: highlight rivals and enigmas with pulse
     const isCrisisHighlight = currentView === 'crisis' && (node.category === 'rival' || node.category === 'enigma');
+
+    // High-activity NPC extra glow (pulses with faction breath)
+    if (node.activity > 0.7 && node.faction) {
+      const zone = factionZones.find(z => z.fid === node.faction);
+      if (zone) {
+        const bp = zone.zonePulse + t * 0.001 * (0.8 + node.activity * 0.4);
+        const glowSize = r * 3 + Math.sin(bp) * 4;
+        const aglow = ctx.createRadialGradient(node.x, node.y, r * 0.5, node.x, node.y, glowSize);
+        aglow.addColorStop(0, node.color + '33');
+        aglow.addColorStop(1, node.color + '00');
+        ctx.beginPath();
+        ctx.arc(node.x, node.y, glowSize, 0, Math.PI * 2);
+        ctx.fillStyle = aglow;
+        ctx.fill();
+      }
+    }
 
     // Glow
     const glowR = r * 3;
