@@ -103,6 +103,27 @@ html{height:auto;min-height:100vh}body{height:auto;min-height:100vh;overflow-x:h
 .npc-card.npc-leader .npc-name{font-size:1rem;color:var(--cyan);text-shadow:0 0 6px rgba(0,188,212,0.3)}
 .npc-card.npc-leader .npc-leader-badge{display:inline-block;font-family:'Orbitron',sans-serif;font-size:0.5625rem;font-weight:900;letter-spacing:1px;padding:1px 5px;border-radius:3px;color:var(--amber);background:rgba(255,152,0,0.12);border:1px solid rgba(255,152,0,0.25);margin-left:6px;vertical-align:middle;text-transform:uppercase}
 .npc-leader-badge{display:none}
+
+/* ═══ SITUATION ROOM ═══ */
+.sitroom{background:linear-gradient(135deg,rgba(0,188,212,0.04),rgba(206,147,216,0.04));border:1px solid rgba(0,188,212,0.15);border-radius:10px;padding:14px 18px;margin-bottom:14px;position:relative;overflow:hidden}
+.sitroom::before{content:'';position:absolute;top:0;left:0;width:3px;height:100%;background:linear-gradient(180deg,var(--cyan),var(--violet));border-radius:3px 0 0 3px}
+.sitroom-label{font-family:'Orbitron',sans-serif;font-size:0.5625rem;font-weight:900;letter-spacing:2px;color:var(--cyan);text-transform:uppercase;margin-bottom:10px;display:flex;align-items:center;gap:8px}
+.sitroom-label::after{content:'';flex:1;height:1px;background:linear-gradient(90deg,rgba(0,188,212,0.3),transparent)}
+.sitroom-headline{font-size:1.125rem;font-weight:700;color:var(--white);line-height:1.4;margin-bottom:10px;padding-left:10px}
+.sitroom-section{margin-bottom:10px;padding-left:10px}
+.sitroom-section-title{font-family:'Orbitron',sans-serif;font-size:0.5rem;font-weight:700;letter-spacing:1.5px;color:var(--amber);text-transform:uppercase;margin-bottom:4px}
+.sitroom-text{font-size:0.9375rem;color:rgba(255,255,255,0.85);line-height:1.55}
+.sitroom-text strong{color:var(--white);font-weight:600}
+.sitroom-text .npc-name{color:var(--cyan);font-weight:600}
+.sitroom-text .faction-name{font-weight:600}
+.sitroom-text .danger{color:var(--red);font-weight:600}
+.sitroom-text .good{color:var(--green);font-weight:600}
+.sitroom-text .sneaky{color:var(--amber);font-weight:600}
+.sitroom-voice{font-size:0.8125rem;color:rgba(255,255,255,0.6);line-height:1.5;font-style:italic;padding:6px 10px;margin:6px 0 6px 10px;border-left:2px solid rgba(0,188,212,0.25)}
+.sitroom-voice .speaker{font-style:normal;font-weight:700;color:var(--cyan)}
+.sitroom-forewarning{font-size:0.8125rem;color:var(--amber);line-height:1.5;padding:8px 10px;margin-top:8px;background:rgba(255,152,0,0.06);border:1px solid rgba(255,152,0,0.12);border-radius:6px}
+.sitroom-forewarning::before{content:'\26A0 ';font-style:normal}
+.sitroom-quiet{font-size:0.9375rem;color:rgba(255,255,255,0.5);text-align:center;padding:20px 0}
 .cascade-badge{font-family:'Orbitron',sans-serif;font-size:0.5625rem;font-weight:900;letter-spacing:0.5px;padding:1px 4px;border-radius:3px;margin-left:4px;vertical-align:middle}
 .cascade-badge.trigger{color:var(--red);background:rgba(244,67,54,0.15);border:1px solid rgba(244,67,54,0.3)}
 .cascade-badge.reactor{color:var(--violet);background:rgba(206,147,216,0.15);border:1px solid rgba(206,147,216,0.3)}
@@ -527,6 +548,11 @@ html{height:auto;min-height:100vh}body{height:auto;min-height:100vh;overflow-x:h
 
 <section id="center" class="panel">
 <div class="section-title cyan">What Just Happened?</div>
+<div id="situation-room" class="sitroom">
+<div class="sitroom-label">Situation Room</div>
+<div id="sitroom-headline" class="sitroom-headline">Awaiting intelligence report...</div>
+<div id="sitroom-body"></div>
+</div>
 <div id="cascade-pipeline"></div>
 <div id="event-chains"></div>
 <div class="raw-toggle" id="raw-toggle" onclick="toggleRaw()" tabindex="0" role="button" aria-expanded="false">Raw Events</div>
@@ -1638,12 +1664,257 @@ document.getElementById('pending-items').innerHTML='What Is Unresolved: <strong>
 
 function showSignalLost(show){document.getElementById('signal-lost-center').classList.toggle('visible',show)}
 
+
+// ═══ SITUATION ROOM STORY ENGINE ═══
+
+var _sitroomData = null;
+var _latestNarration = null;
+
+function fetchNarrationData() {
+  apiFetch('/map/narration/latest', 5000).then(function(data) {
+    if (data && data.status === 'ok' && data.narration) {
+      _latestNarration = data.narration;
+    }
+  }).catch(function() { /* endpoint may not exist yet */ });
+}
+
+function _sitCategorize(desc) {
+  var d = (desc || '').toLowerCase();
+  if (/gathered intel|planted disinformation|sabotage|heist|stole|acquired a valuable|under-the-table|insider|black market|covert|secret|undermine|vanish|illicit|smuggl/.test(d)) return 'scheming';
+  if (/blocked unauthorized|enforced security|led a security sweep|repelled|increased surveillance|ordered reinforced|rallied|issued a new directive|conducted a surprise review|broke up/.test(d)) return 'heroism';
+  if (/explore|uncharted|expedition|discovered new|stumbled upon|returned with tales|signal source|outpost|charted|frontier/.test(d)) return 'exploration';
+  if (/confront|challenged|combat drills|threat level|raised the threat|war|offensive|strike|skirmish|clash|hostile/.test(d)) return 'conflict';
+  if (/spy|espionage|uncovered|intel on|infiltrat|intercept|surveillance on/.test(d)) return 'espionage';
+  if (/breakthrough|research|published a cautionary|data-share|temporal physics|meditation on the nature|quantum|dimensional|analysis|experiment/.test(d)) return 'science';
+  if (/sensed a disturbance|dimensional breach|corruption|anomal|consciousness-aligning|esoteric|strange signal|artifact|ancient|rift/.test(d)) return 'mystery';
+  if (/security|reinforced|defenses|void gates|docking|blocked access|sweep|patrol|guard|perimeter/.test(d)) return 'defense';
+  return 'other';
+}
+
+function _sitGroupByNpc(events) {
+  var byNpc = {};
+  for (var i = 0; i < events.length; i++) {
+    var e = events[i];
+    var name = e.source_char_name || e.name || 'Unknown';
+    if (!byNpc[name]) byNpc[name] = [];
+    byNpc[name].push(e);
+  }
+  return byNpc;
+}
+
+function _sitHtml(text) {
+  // Wrap NPC names, faction names, and keywords with semantic spans
+  text = text.replace(/\b(The Trickster|Lord Malaxis|Baroness Greed|Shadowborn|Cipher|Captain Frontier|Conquistador Drake|Professor Enigma|Admiral Vanguard|Diplomat Grace|Sage Winters|Chronos|Warden Stone|Outlaw Jack|Seeker Dawn|Medic Halo|Engineer Bolt|Pilot Nova|Scholar Flux|Guardian Aegis|Dr. Synthesis|Commander Steel|Ambassador Silk|Scientist Prism|Navigator Starfall|Architect Edge|Sentinel Iron|Bishop Candle|Harbinger Doom|Oracle Mystic|Phantom Echo|Nomad Drift)\b/g, '<span class="npc-name">$1</span>');
+  text = text.replace(/\b(Military Command|Research Division|Diplomatic Corps|Explorer Guild|Shadow Cartel|Dawn Alliance|Frontier Syndicate|Void Collective)\b/g, '<span class="faction-name" style="color:var(--violet)">$1</span>');
+  text = text.replace(/\b(crisis|critical|danger|threat|sabotage|doom|collapse|failure)\b/gi, '<span class="danger">$1</span>');
+  text = text.replace(/\b(secure|stable|protect|defend|reinforced|recovery|success|breakthrough)\b/gi, '<span class="good">$1</span>');
+  text = text.replace(/\b(scheme|covert|secret|illicit|undermine|disinformation|intel|smuggl)\b/gi, '<span class="sneaky">$1</span>');
+  return text;
+}
+
+function renderSituationRoom() {
+  var headlineEl = document.getElementById('sitroom-headline');
+  var bodyEl = document.getElementById('sitroom-body');
+  if (!headlineEl || !bodyEl) return;
+
+  // Fetch narration in background (non-blocking)
+  fetchNarrationData();
+
+  // We need /map/data for crisis_readout + events
+  apiFetch('/map/data', 8000).then(function(data) {
+    if (!data) { headlineEl.textContent = 'Signal interrupted...'; return; }
+
+    var ws = data.world_state || {};
+    var crisis = data.crisis_readout || {};
+    var events = data.events || [];
+    var npcs = data.npcs || [];
+    var narr = _latestNarration;
+    var html = '';
+
+    // ── 1. HEADLINE ──
+    var headline = crisis.headline || '';
+    if (!headline && narr && narr.headline) headline = narr.headline;
+    if (!headline) {
+      var threat = ws.threat || 0;
+      var morale = ws.morale || 50;
+      var anomaly = ws.anomaly || 0;
+      if (threat > 70) headline = 'Threat level critical across the Federation';
+      else if (anomaly > 70) headline = 'Anomalous readings sweeping the sector';
+      else if (morale < 30) headline = 'Morale collapsing across factions';
+      else headline = 'Federation status: holding steady';
+    }
+    headlineEl.textContent = headline;
+
+    // ── 2. THE BIG PICTURE ──
+    var bigPic = crisis.plain_english || '';
+    if (bigPic) {
+      html += '<div class="sitroom-section">';
+      html += '<div class="sitroom-section-title">The Big Picture</div>';
+      html += '<div class="sitroom-text">' + _sitHtml(bigPic) + '</div>';
+      html += '</div>';
+    }
+
+    // ── 3. OFFICIAL BRIEFING (from LLM narration) ──
+    if (narr && narr.developments && narr.developments.length > 0) {
+      html += '<div class="sitroom-section">';
+      html += '<div class="sitroom-section-title">Official Briefing</div>';
+      for (var d = 0; d < Math.min(narr.developments.length, 3); d++) {
+        html += '<div class="sitroom-text" style="margin-bottom:4px">' + _sitHtml(narr.developments[d]) + '</div>';
+      }
+      html += '</div>';
+    }
+
+    // ── 4. VOICES FROM THE Factions ──
+    if (narr && narr.voices && narr.voices.length > 0) {
+      html += '<div class="sitroom-section">';
+      html += '<div class="sitroom-section-title">Voices from the Factions</div>';
+      for (var v = 0; v < Math.min(narr.voices.length, 4); v++) {
+        var voice = narr.voices[v] || '';
+        // Format: "Speaker — quote" or "Speaker: quote"
+        var parts = voice.split(/\s*[—–:]\s*/);
+        if (parts.length >= 2) {
+          html += '<div class="sitroom-voice"><span class="speaker">' + esc(parts[0]) + '</span> — ' + esc(parts.slice(1).join(' — ')) + '</div>';
+        } else {
+          html += '<div class="sitroom-voice">' + esc(voice) + '</div>';
+        }
+      }
+      html += '</div>';
+    }
+
+    // ── 5. CATEGORIZE EVENTS INTO STORY BUCKETS ──
+    var buckets = {scheming:[], heroism:[], exploration:[], conflict:[], espionage:[], science:[], mystery:[], defense:[], other:[]};
+    for (var e = 0; e < events.length; e++) {
+      var ev = events[e];
+      var desc = ev.description || ev.name || '';
+      var cat = _sitCategorize(desc);
+      buckets[cat].push(ev);
+    }
+
+    // ── 6. UNDER THE SURFACE (scheming + espionage) ──
+    var schemers = buckets.scheming.concat(buckets.espionage);
+    if (schemers.length > 0) {
+      html += '<div class="sitroom-section">';
+      html += '<div class="sitroom-section-title">Under the Surface</div>';
+      var byNpc = _sitGroupByNpc(schemers);
+      var names = Object.keys(byNpc);
+      var sentences = [];
+      for (var n = 0; n < Math.min(names.length, 5); n++) {
+        var npcName = names[n];
+        var npcEvents = byNpc[npcName];
+        var actions = [];
+        for (var a = 0; a < Math.min(npcEvents.length, 3); a++) {
+          var evDesc = npcEvents[a].description || npcEvents[a].name || '';
+          // Strip "X " prefix if the description starts with the NPC name
+          evDesc = evDesc.replace(new RegExp('^' + npcName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\s*', 'i'), '');
+          if (evDesc) actions.push(evDesc);
+        }
+        if (actions.length > 0) {
+          sentences.push('<span class="npc-name">' + esc(npcName) + '</span> ' + _sitHtml(actions.join(', and ')).toLowerCase());
+        }
+      }
+      html += '<div class="sitroom-text">' + sentences.join('. ') + '.</div>';
+      html += '</div>';
+    }
+
+    // ── 7. KEY BROADCASTS (Who Is Moving) ──
+    var broadcasts = crisis.key_broadcasts || [];
+    if (broadcasts.length > 0) {
+      html += '<div class="sitroom-section">';
+      html += '<div class="sitroom-section-title">Who Is Moving</div>';
+      for (var b = 0; b < Math.min(broadcasts.length, 4); b++) {
+        html += '<div class="sitroom-text" style="margin-bottom:3px">' + _sitHtml(esc(broadcasts[b])) + '</div>';
+      }
+      html += '</div>';
+    }
+
+    // ── 8. EXPEDITIONS & DISCOVERIES ──
+    if (buckets.exploration.length > 0) {
+      html += '<div class="sitroom-section">';
+      html += '<div class="sitroom-section-title">Expeditions &amp; Discoveries</div>';
+      var exploreByNpc = _sitGroupByNpc(buckets.exploration);
+      var eNames = Object.keys(exploreByNpc);
+      var eSentences = [];
+      for (var en = 0; en < Math.min(eNames.length, 5); en++) {
+        var eNpc = eNames[en];
+        var eEvts = exploreByNpc[eNpc];
+        var eDescs = [];
+        for (var ed = 0; ed < Math.min(eEvts.length, 2); ed++) {
+          var eDesc = eEvts[ed].description || eEvts[ed].name || '';
+          eDesc = eDesc.replace(new RegExp('^' + eNpc.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\s*', 'i'), '');
+          if (eDesc) eDescs.push(eDesc);
+        }
+        if (eDescs.length > 0) {
+          eSentences.push('<span class="npc-name">' + esc(eNpc) + '</span> ' + _sitHtml(eDescs.join(', and ')).toLowerCase());
+        }
+      }
+      html += '<div class="sitroom-text">' + eSentences.join('. ') + '.</div>';
+      html += '</div>';
+    }
+
+    // ── 9. HOLDING THE LINE (defense + heroism) ──
+    var defenders = buckets.defense.concat(buckets.heroism);
+    if (defenders.length > 0) {
+      html += '<div class="sitroom-section">';
+      html += '<div class="sitroom-section-title">Holding the Line</div>';
+      var defByNpc = _sitGroupByNpc(defenders);
+      var dNames = Object.keys(defByNpc);
+      var dSentences = [];
+      for (var dn = 0; dn < Math.min(dNames.length, 5); dn++) {
+        var dNpc = dNames[dn];
+        var dEvts = defByNpc[dNpc];
+        var dDescs = [];
+        for (var dd = 0; dd < Math.min(dEvts.length, 2); dd++) {
+          var dDesc = dEvts[dd].description || dEvts[dd].name || '';
+          dDesc = dDesc.replace(new RegExp('^' + dNpc.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\s*', 'i'), '');
+          if (dDesc) dDescs.push(dDesc);
+        }
+        if (dDescs.length > 0) {
+          dSentences.push('<span class="npc-name">' + esc(dNpc) + '</span> ' + _sitHtml(dDescs.join(', and ')).toLowerCase());
+        }
+      }
+      html += '<div class="sitroom-text">' + dSentences.join('. ') + '.</div>';
+      html += '</div>';
+    }
+
+    // ── 10. STRANGE SIGNALS (mystery + science) ──
+    var strange = buckets.mystery.concat(buckets.science);
+    if (strange.length > 0) {
+      html += '<div class="sitroom-section">';
+      html += '<div class="sitroom-section-title">Strange Signals</div>';
+      for (var s = 0; s < Math.min(strange.length, 4); s++) {
+        var sDesc = strange[s].description || strange[s].name || '';
+        html += '<div class="sitroom-text" style="margin-bottom:3px">' + _sitHtml(esc(sDesc)) + '</div>';
+      }
+      html += '</div>';
+    }
+
+    // ── 11. FOREWARNING ──
+    var forewarning = '';
+    if (narr && narr.forewarning) forewarning = narr.forewarning;
+    else if (crisis.why_it_matters) forewarning = crisis.why_it_matters;
+    if (forewarning) {
+      html += '<div class="sitroom-forewarning">' + _sitHtml(esc(forewarning)) + '</div>';
+    }
+
+    // ── 12. QUIET STATE ──
+    if (!html) {
+      html = '<div class="sitroom-quiet">All sectors nominal. No significant activity detected.</div>';
+    }
+
+    bodyEl.innerHTML = html;
+
+  }).catch(function(err) {
+    headlineEl.textContent = 'Intelligence report unavailable';
+    bodyEl.innerHTML = '<div class="sitroom-quiet">Could not reach the data stream.</div>';
+  });
+}
+
 async function refreshLight(){
 var results=await Promise.all([apiFetch('/simulation/status',8000),apiFetch('/simulation/factions',8000),apiFetch('/simulation/events',8000)]);
 var status=results[0],factions=results[1],events=results[2];
 var anyOk=status||factions||events;
 if(!anyOk){fetchErrorCount++;if(fetchErrorCount>=3)showSignalLost(true)}else{fetchErrorCount=0;showSignalLost(false);if(status)lastData.status=status;if(factions)lastData.factions=factions;if(events)lastData.events=events}
-if(lastData.status){updateTopBanner(lastData.status);updateSituation(lastData.status)}
+if(lastData.status){updateTopBanner(lastData.status);updateSituation(lastData.status)}renderSituationRoom();
 if(lastData.factions)renderFactions(lastData.factions);
 if(lastData.events)renderEvents(lastData.events);
 if(lastData.status)renderBottom(lastData.status);
@@ -1664,7 +1935,7 @@ function toggleRaw(){var btn=document.getElementById('raw-toggle'),wrap=document
 function toggleHelp(){var overlay=document.getElementById('help-overlay');overlay.classList.toggle('open');if(overlay.classList.contains('open')){overlay.focus();document.body.style.overflow='hidden'}else{document.body.style.overflow=''}}
 document.addEventListener('keydown',function(e){if(e.key==='Escape'){var overlay=document.getElementById('help-overlay');if(overlay.classList.contains('open'))toggleHelp()}});
 
-function init(){generateStarfield();refresh();setInterval(refreshLight,10000);setInterval(refreshNpcs,30000);setInterval(refreshQuests,20000);setInterval(refreshFactionTech,25000);setInterval(refreshChoices,20000);setInterval(updateTimeSince,1000)}
+function init(){generateStarfield();refresh();setInterval(refreshLight,10000);setInterval(refreshNpcs,30000);setInterval(refreshQuests,20000);setInterval(refreshFactionTech,25000);setInterval(refreshChoices,20000);setInterval(updateTimeSince,1000);setInterval(renderSituationRoom,15000)}
 document.addEventListener('DOMContentLoaded',init);
 
 </script>
