@@ -203,6 +203,28 @@ This document provides visual design concepts for NPC characters, mapping names 
 
 ---
 
+**ANTAGONIST NAMES (Malicious, Opposing)**
+- Names like "Malaxis", "Void Oracle", "Greed", "Devastation" → Dark, menacing
+- **Lord Malaxis:** Dark purple/obsidian robes, malevolent smirk, shadow aura
+- **The Void Oracle:** Pure black, blind third eye, chaotic energy tendrils
+- **Baroness Greed:** Blood-red and gold, heavy jewelry, predatory expression
+- **General Devastation:** Battle-gray with war-red, cybernetic eye, scarred
+
+**MYSTERIOUS NAMES (Enigmatic, Otherworldly)**
+- Names like "Wanderer", "Jester", "Trickster", "Spectre" → Shifting, cryptic
+- **The Wanderer:** Shifting traveler's colors, horizon-gaze, dimensional compass
+- **The Jester:** Harlequin patterns, mischievous grin, juggling orbs
+- **The Spectre:** Translucent white, spectral glow, chains of memory
+- **The Trickster:** Green/gold split, dice motif, confident smirk
+
+**SPECIAL NAMES (Unique, Distinct)**
+- **The Oracle:** All-seeing or blindfolded, prophetic gesture, crystal ball
+- **Cipher:** Digital-green cybernetics, code-stream eyes, decryption gauntlet
+- **Paradox:** Split colors (red/blue), two-faced, reality-warp aura
+- **Tempus:** Temporal distortion effects, clockwork motifs, non-linear pose
+
+---
+
 ## 3. VISUAL DIVERSITY GUIDELINES
 
 ### Age Variations Within Factions
@@ -314,6 +336,20 @@ Each faction should feature representatives from:
 - **Threat Assessment:** Alert scanning, careful movement, defensive posture
 - **Peaceful Stability:** Calm meditation, balanced stance, serene expression
 
+### Antagonists - Expressions and Poses
+- **Lord Malaxis:** Malevolent grin, shadow manipulation, throne-straddling pose
+- **The Void Oracle:** Void-staring, entropy gesture, impossible geometry stance
+- **Baroness Greed:** Greedy clutch, wealth-display pose, calculating stare
+- **General Devastation:** War-cry pose, weapon-raised, battle-frenzy expression
+
+### Mysterious Figures - Expressions and Poses
+- **The Wanderer:** Horizon-gazing, compass-spinning, dimensional-shift gesture
+- **The Jester:** Carnival grin, juggling motion, reality-bending stance
+- **The Hermit:** Meditative stillness, wisdom-sharing hand gesture
+- **The Spectre:** Wailing expression, chain-dragging, ethereal drift
+- **The Trickster:** Cheshire smile, dice-roll gesture, probability dance
+- **The Oracle:** Prophetic trance, time-vision pose, future-seeing gesture
+
 ---
 
 ## 5. VISUAL STATUS INDICATORS
@@ -330,12 +366,92 @@ Each faction should feature representatives from:
 
 ---
 
-## 6. COMPANION-SPECIFIC VISUAL DESIGN
+## 6. ANTAGONISTS AND MYSTERIOUS FIGURES VISUAL DESIGN
+
+### Antagonists (Key Villains)
+
+1. **Lord Malaxis (Deceiver/Dark Tyrant)**
+   - Dark purple (#4C1D95) and obsidian (#0F172A) with crimson (#991B1B) accents
+   - Sinister smile, glowing red eyes, twisted crown
+   - Accessories: Shadow whip, corrupted artifacts, throne-sigil
+
+2. **The Void Oracle (Mystic/Harbinger of Chaos)**
+   - Pure black (#000000) with void-purple (#6B21A8) energy tendrils
+   - Blind third eye, mouth sewn with dark energy, hovering form
+   - Accessories: Void spheres, chaotic symbols, entropy field
+
+3. **Baroness Greed (Economic/Overlord)**
+   - Blood-red (#8B0000) and gold (#D4AF37) with obsidian (#111827) gems
+   - Predatory grin, heavy jewelry, grasping hands
+   - Accessories: Treasure sacks, golden chains, currency piles
+
+4. **General Devastation (Military/War Machine)**
+   - Battle-gray (#1F2937) with war-red (#991B1B) and chrome
+   - Scarred face, cybernetic eye, aggressive stance
+   - Accessories: Heavy weapons, war medals of conquest, tactical array
+
+### Mysterious Figures
+
+5. **The Wanderer (Traveler Between Worlds)**
+   - Shifting colors (#6B7280 → #9CA3AF), traveler's cloak with star-map
+   - Ageless face, knowing smile, horizon-gaze
+   - Accessories: Dimensional compass, traveler's staff, realm-key
+
+6. **The Jester (Cosmic Comedian)**
+   - Harlequin patterns (#8B5CF6/#EC4899/#F59E0B), motley outfit
+   - Mischievous grin, playing card motifs, floating atop hat
+   - Accessories: Juggling orbs, laughing mask, chaos bells
+
+7. **The Hermit (Isolated Sage)**
+   - Earth-brown (#7C3AED) robes, weathered skin, deep wrinkles
+   - Long white beard, knowing eyes, contemplative pose
+   - Accessories: Wooden staff, meditation bowl, ancient texts
+
+8. **The Spectre (Ghost of the Past)**
+   - Translucent white (#F8FAFC) with spectral-blue (#0EA5E9) glow
+   - Ethereal form, mournful expression, wispy edges
+   - Accessories: Chains of memory, phantom lantern, relic fragments
+
+9. **The Trickster (Fate's Gambler)**
+   - Green and gold (#10B981/#D4AF37), jester-like but regal
+   - Confident grin, dice-and-cards motif, shifting stance
+   - Accessories: Deck of prophecies, probability dice, fate-string
+
+10. **The Oracle (Seer of Futures)**
+    - Pure white (#FFFFFF) with silver (#C0C0C0) and starlight (#FDE047)
+    - Blindfold or all-seeing eyes, prophetic gesture, serene
+    - Accessories: Crystal ball, time-threads, vision-sand
+
+### Unique NPCs
+
+11. **The Cartographer (Mapper of Possibility)**
+    - Map-brown (#A36934) with chart-blue (#0EA5E9) highlights
+    - Spectacles, pointing gesture, scroll-unfurling pose
+    - Accessories: Astrolabe, charting tools, living map
+
+12. **Solace Heartmend (Counselor of Sorrows)**
+    - Soft teal (#0D9488) with comforting cream (#FEF3C7)
+    - Gentle hands, listening expression, nurturing posture
+    - Accessories: Counseling cards, empathy crystals, soothing tea
+
+13. **Cipher (Code-Breaker)**
+    - Digital green (#10B981) and terminal-black (#0F172A)
+    - Cybernetic interface ports, data-stream eyes, focused stare
+    - Accessories: Decryption gauntlet, holo-keyboard, cipher wheel
+
+14. **Paradox (Living Contradiction)**
+    - Opposing colors (#EF4444 and #1E3A8A) in split patterns
+    - Two-faced mask, contradictory gestures, reality-warp aura
+    - Accessories: Logic chains, paradox orb, duality staff
+
+---
+
+## 7. COMPANION-SPECIFIC VISUAL DESIGN
 
 ### Unique Visual Elements for Recruitable Companions
 
 1. **Lyra Swiftwind (Rogue/Archer - Stealth)**
-   - Forest green attire (#059669), dark leather, hood
+   - Forest green (#059669), dark leather, hood
    - Agile pose, bow ready, mischievous smile
    - Accessories: Quiver, climbing gear, lock-picking tools
 
@@ -386,7 +502,7 @@ Each faction should feature representatives from:
 
 ---
 
-## 7. IMPLEMENTATION NOTES
+## 8. IMPLEMENTATION NOTES
 
 - All visual concepts prioritize readability for players with visual disabilities
 - Color palettes should include high-contrast alternatives
