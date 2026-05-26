@@ -130,7 +130,27 @@ html{height:auto;min-height:100vh}body{height:auto;min-height:100vh;overflow-x:h
 .ai-chat::before{content:'';position:absolute;top:0;left:0;width:3px;height:100%;background:linear-gradient(180deg,var(--cyan),var(--amber));border-radius:3px 0 0 3px}
 .ai-chat-label{font-family:'Orbitron',sans-serif;font-size:0.5625rem;font-weight:900;letter-spacing:2px;color:var(--amber);text-transform:uppercase;margin-bottom:8px;display:flex;align-items:center;gap:8px}
 .ai-chat-label::after{content:'';flex:1;height:1px;background:linear-gradient(90deg,rgba(255,152,0,0.3),transparent)}
-.ai-chat-messages{max-height:200px;overflow-y:auto;margin-bottom:8px;scrollbar-width:thin;scrollbar-color:rgba(0,188,212,0.2) transparent}
+.ai-chat-messages{max-height:400px;overflow-y:auto;margin-bottom:8px;scrollbar-width:thin;scrollbar-color:rgba(0,188,212,0.2) transparent}
+
+/* ── Markdown formatting inside assistant messages ── */
+.ai-chat-msg.assistant h2{font-family:'Orbitron',sans-serif;font-size:0.8125rem;font-weight:900;letter-spacing:1.5px;text-transform:uppercase;color:var(--cyan);margin:10px 0 4px 0;padding:0;border-bottom:1px solid rgba(0,188,212,0.15);padding-bottom:3px}
+.ai-chat-msg.assistant h3{font-family:'Orbitron',sans-serif;font-size:0.7rem;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--amber);margin:8px 0 3px 0;padding:0}
+.ai-chat-msg.assistant hr{border:none;border-top:1px solid rgba(0,188,212,0.12);margin:8px 0}
+.ai-chat-msg.assistant strong{color:var(--amber);font-weight:700}
+.ai-chat-msg.assistant em{color:rgba(255,255,255,0.7);font-style:italic}
+.ai-chat-msg.assistant blockquote{color:var(--violet);border-left:2px solid rgba(206,147,216,0.3);padding:2px 0 2px 10px;margin:4px 0;font-size:0.75rem;line-height:1.4;background:rgba(206,147,216,0.04);border-radius:0 4px 4px 0}
+.ai-chat-msg.assistant ul{list-style:none;margin:4px 0;padding:0}
+.ai-chat-msg.assistant li{padding:2px 0 2px 14px;position:relative;color:var(--white);font-size:0.8125rem;line-height:1.4}
+.ai-chat-msg.assistant li::before{content:'\25B8';position:absolute;left:0;color:var(--cyan);opacity:0.6}
+.ai-chat-msg.assistant ol{list-style:none;counter-reset:md-ol;margin:4px 0;padding:0}
+.ai-chat-msg.assistant ol li{counter-increment:md-ol;padding:2px 0 2px 18px;position:relative;color:var(--white);font-size:0.8125rem;line-height:1.4}
+.ai-chat-msg.assistant ol li::before{content:counter(md-ol) '.';position:absolute;left:0;color:var(--cyan);opacity:0.6;font-family:'Orbitron',sans-serif;font-size:0.625rem;font-weight:700}
+.ai-chat-msg.assistant code{font-family:'Share Tech Mono',monospace;font-size:0.75rem;background:rgba(0,0,0,0.35);padding:1px 5px;border-radius:3px;color:var(--green);border:1px solid rgba(76,175,80,0.2)}
+.ai-chat-msg.assistant table{border-collapse:collapse;margin:6px 0;width:100%;font-size:0.75rem}
+.ai-chat-msg.assistant th{font-family:'Orbitron',sans-serif;font-size:0.5625rem;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--dim);border-bottom:1px solid rgba(0,188,212,0.2);padding:4px 8px;text-align:left;background:rgba(0,0,0,0.2)}
+.ai-chat-msg.assistant td{border-bottom:1px solid rgba(255,255,255,0.04);padding:4px 8px;color:var(--white)}
+.ai-chat-msg.assistant tr:last-child td{border-bottom:none}
+.ai-chat-msg.assistant p{margin:4px 0;line-height:1.5}
 .ai-chat-msg{padding:6px 0;font-size:0.8125rem;line-height:1.5}
 .ai-chat-msg.user{color:var(--amber);padding-left:10px}
 .ai-chat-msg.user::before{content:'> ';opacity:0.5}
@@ -975,6 +995,55 @@ function moodLabel(mood){if(mood==null)return '\u2014';if(typeof mood==='string'
 function moodColorOf(mood){if(mood==null)return '#78909C';var label=moodLabel(mood).toLowerCase();return MOOD_COLORS[label]||'#78909C'}
 function cascadeColor(pct){if(pct<30)return '#4CAF50';if(pct<60)return '#FF9800';if(pct<85)return '#F44336';return '#E91E63'}
 function esc(s){if(s==null)return '';return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;')}
+
+/* ═══ Markdown → HTML for AI assistant responses ═══ */
+function md(text){
+  if(text==null)return '';
+  // Escape HTML first to prevent XSS
+  var s = String(text).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  // Inline conversions (before block wrapping)
+  s = s.replace(/\*\*(.+?)\*\*/g,'<strong>$1</strong>');
+  s = s.replace(/\*(.+?)\*/g,'<em>$1</em>');
+  s = s.replace(/`(.+?)`/g,'<code>$1</code>');
+  // Block-level conversions (applied per-line)
+  s = s.replace(/^### (.+)$/gm,'<h3>$1</h3>');
+  s = s.replace(/^## (.+)$/gm,'<h2>$1</h2>');
+  s = s.replace(/^# (.+)$/gm,'<h1>$1</h1>');
+  s = s.replace(/^-{3,}$/gm,'<hr>');
+  s = s.replace(/^&gt; (.+)$/gm,'<blockquote>$1</blockquote>');
+  // List items (unordered and ordered)
+  s = s.replace(/^- (.+)$/gm,'<li>$1</li>');
+  s = s.replace(/^\d+\.\s(.+)$/gm,'<li>$1</li>');
+  // Wrap consecutive list items in <ul>
+  s = s.replace(/((?:<li>.*?<\/li>\s*)+)/g,'<ul>$1</ul>');
+  // Tables — capture blocks of |...| lines
+  s = s.replace(/((?:\|.*\|(?:\s|$)\s*)+)/g, function(m){
+    var rows = m.trim().split('\n');
+    var html = '<table>';
+    for(var r=0;r<rows.length;r++){
+      var row = rows[r].trim();
+      if(row.match(/^\|[-: ]+\|$/)) continue; // skip separator
+      var cells = row.split('|').slice(1,-1);
+      // first row is header if second row is a separator
+      var isHead = (r===0 && rows.length>1 && rows[1].match(/^\|[-: ]+\|$/));
+      var tag = isHead ? 'th' : 'td';
+      html += '<tr>';
+      for(var c=0;c<cells.length;c++){
+        html += '<' + tag + '>' + cells[c].trim() + '</' + tag + '>';
+      }
+      html += '</tr>';
+    }
+    html += '</table>';
+    return html;
+  });
+  // Paragraphs and line breaks
+  s = s.replace(/\n/g,'<br>');
+  // Cleanup: remove <br> immediately after block-closing tags
+  s = s.replace(/<\/(h[1-3]|blockquote|ul|table)>\s*<br>/g,'</$1>');
+  // Collapse multiple blank lines
+  s = s.replace(/(<br>\s*){3,}/g,'<br><br>');
+  return s;
+}
 function clamp(v,lo,hi){return Math.max(lo,Math.min(hi,v))}
 function timeAgo(isoStr){if(!isoStr)return '';var t=Date.parse(isoStr);if(isNaN(t))return String(isoStr);var diff=Date.now()-t;if(diff<0)diff=0;var s=Math.floor(diff/1000);if(s<60)return s+'s ago';var m=Math.floor(s/60);if(m<60)return m+'m ago';var h=Math.floor(m/60);if(h<24)return h+'h ago';var d=Math.floor(h/24);return d+'d ago'}
 
@@ -2127,7 +2196,7 @@ function aiChatRender() {
       html += '<div class="ai-chat-msg thinking">Analyzing simulation data...</div>';
     } else if (m.role === "assistant") {
       var prov = m.provider ? '<span class="ai-provider">' + esc(m.provider) + '</span>' : '';
-      html += '<div class="ai-chat-msg assistant">' + esc(m.text) + prov + '</div>';
+      html += '<div class="ai-chat-msg assistant">' + md(m.text) + prov + '</div>';
     } else if (m.role === "error") {
       html += '<div class="ai-chat-msg error">' + esc(m.text) + '</div>';
     }
