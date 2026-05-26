@@ -1022,6 +1022,43 @@ def _build_crisis_readout(world_state, npcs, factions, events, broadcasts):
 
 
 # ---------------------------------------------------------------------------
+# Narration endpoint
+# ---------------------------------------------------------------------------
+
+
+@router.get("/narration/latest")
+async def get_narration_latest():
+    """Return the latest narration from Redis.
+
+    The narrator worker stores its output in ``narration:latest`` as JSON.
+    This endpoint exposes it to the frontend Situation Room panel so the
+    story-driven UI can show headline, developments, voices, and forewarning
+    without requiring a separate LLM call from the browser.
+    """
+    r = _get_redis()
+    try:
+        raw = r.get("narration:latest")
+        if raw:
+            data = json.loads(raw)
+            return {"status": "ok", "narration": data}
+    except Exception as exc:
+        logger.debug("Failed to read narration:latest: %s", exc)
+
+    # Return empty-but-valid structure so the frontend never 404s
+    return {
+        "status": "empty",
+        "narration": {
+            "headline": "",
+            "developments": [],
+            "voices": [],
+            "forewarning": "",
+            "source": "none",
+            "ts": 0,
+            "model": "",
+        },
+    }
+
+
 # Main endpoint
 # ---------------------------------------------------------------------------
 
