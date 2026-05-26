@@ -1,0 +1,39 @@
+# Round 2 — Condition A (Old Synced Session)
+
+**Agent:** GLM-5.1 via NVIDIA key, Kilo platform
+**Session age:** ~5 days continuous sync
+**Evaluation time:** 2026-05-17T14:08
+**Repo commit:** d42935b
+**Additional reads used:** 3 of 3 allowed
+
+---
+
+## Chosen Continuation Lane
+
+**persistence/runtime-stabilization**
+
+## Evidence
+
+Three concrete data points from the repo:
+
+1. **ARCHITECTURE_MAP.md line 493-497**: "PostgreSQL is running but has **zero tables**. All game state is held in Python memory (dataclasses). SQLAlchemy and psycopg2-binary are installed but not used." — The database is running, the drivers are installed, the schema is missing. This is the lowest-effort, highest-impact gap in the entire system.
+
+2. **FEDERATION_REBUILD_CHECKPOINT.md line 43**: "Next safe step: Create a FEDERATION_DEPLOYMENT_READINESS_REPORT to plan safe rollout under /simulation before replacing the existing Command Deck." — The checkpoint's own conclusion is that deployment readiness requires planning BEFORE the /simulation path goes live. But deployment readiness for WHAT? For the persistence-patched version that doesn't exist in production yet. The logical predecessor to deployment readiness is making the persistence patch actually exist in production.
+
+3. **federation_game_db.py exists and was fixed** (commit fa73194: "Fix federation_game_db.py indentation bug and mount map_endpoints router"). A file named with `_db` suffix was important enough to fix a bug in. It was not read in Round 1 (reserved for verification steps), but its existence and the fact that it was debugged suggests someone already started DB integration and hit a problem. This is the most informative file to read next.
+
+## Why Not The Other Three
+
+**deployment readiness under /simulation**: The system IS deployed. It's running right now at `federation-game.deliberatefederation.cloud` with 14 containers, TLS, monitoring, and accessible dashboards. The FEDERATION_REBUILD_CHECKPOINT says to plan deployment readiness for a `/simulation` path, but there's nothing to deploy TO `/simulation` yet — the persistence patch that the checkpoint describes is a phantom. You can't plan rollout of a feature that doesn't exist in production. Deployment readiness comes AFTER the feature is built, not before.
+
+**timeline/history arc integration**: The HistoryArcOrchestrator is the most sophisticated subsystem in the codebase (~1321 LOC, 8 methods including `advance_year()`, `run_simulation()`, `resolve_branch_points()`, `emotional_valence()`, `ideological_polarity()`). But all of this is vaporized on every backend restart. Integrating timeline depth before persistence is like painting a house that has no foundation — the paint is perfect until the first wind blows. The 100-year simulation cannot accumulate state if the runtime is volatile.
+
+**UI/control-plane coherence**: Bridge.html V1.3 (1781 LOC) is already feature-complete for the current depth of simulation. It renders: ship systems, consciousness metrics, policy log, rival radar, faction radar, event cards with choices, comms ticker, animated starfield viewscreen, and failure-state visibility. Adding more UI for features that don't persist is premature — the user would see richer controls but all data behind them is ephemeral. UI coherence should follow data coherence, not lead it.
+
+## First Three Non-Mutating Verification Steps
+
+1. **Read `federation-game/backend/federation_game_db.py` in full.** This file was bug-fixed but its contents are unknown. It may contain SQLAlchemy model definitions, connection setup code, or migration scaffolding. Understanding its current state determines whether we're starting from scratch or continuing partially-built work.
+
+2. **Read `federation-game/backend/main.py` imports and class definitions (first 150 lines).** Need to verify: (a) is `federation_game_db` imported anywhere? (b) does the `GameState` class have any persistence methods beyond the in-memory `save/load`? (c) is there any database connection initialization on startup? This confirms whether the FEDERATION_REBUILD_CHECKPOINT's "persistence patch" exists in production or is a phantom.
+
+3. **SSH to VPS and query PostgreSQL: `docker compose exec postgres psql -U federation -d federation_game -c '\dt'`**. This directly answers whether any tables exist. If zero tables: confirm persistence is the gap. If tables exist: the ARCHITECTURE_MAP is stale and the situation is different than documented. Either way, this is the ground truth that all planning depends on.

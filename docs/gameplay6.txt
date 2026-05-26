@@ -1,0 +1,120 @@
+😂 exactly. One lane is doing:
+
+> “Crisis Readout deployed, 14 fields, collapse toggle, canvas highlighting, verified API data…”
+
+And your actual operator experience is:
+
+> “why is Telegram yelling raw JSON nonsense at me every few minutes”
+
+That’s a **UX routing failure**, not a simulation failure.
+
+## What it’s doing right
+
+From the screenshot, the agent actually diagnosed the problem correctly:
+
+```text
+Telegram messages are raw event dumps with no narrative context.
+Redesign notification system to use Crisis Readout data and tell a coherent story.
+```
+
+That is the right fix.
+
+## What Telegram should become
+
+Not:
+
+```text
+CRITICAL anomaly event + hostile threat + external military + more
+NPC involved 10, factions 8, cascade chain 4...
+```
+
+But:
+
+```text
+🚨 Critical Crisis: Reality instability spreading near Sector 7
+
+Why it matters:
+A hostile external faction is amplifying an anomaly event. 
+10 NPCs and 8 factions are now involved, with 4 cascade targets at risk.
+
+Main actors:
+- Escalating: Red Covenant
+- Helping: Local medical convoy
+- Involved: City Guard, Free Traders
+
+What changed:
+- Broadcast panic increased
+- Two factions shifted from neutral to involved
+- Cascade chain now has 4 targets
+
+Suggested action:
+Open Crisis View or highlight affected NPCs.
+```
+
+That’s the “fo drizzle” version: **less dump, more narrator**.
+
+## The rule I’d give it
+
+Paste this into that lane:
+
+```text
+Telegram notifications must be operator-readable, not raw telemetry.
+
+Use the existing crisis_readout object as the source of truth.
+
+Each Telegram message should have:
+
+1. One-line headline
+2. Severity/classification badge
+3. Plain-English reason this matters
+4. 2-4 key actors/factions only
+5. What changed since the last tick, if available
+6. One suggested action or link target
+
+Do not include raw arrays, raw object dumps, full NPC lists, full faction lists, or internal field names unless debug mode is enabled.
+
+Hard rule:
+Telegram is for human-readable alerts.
+The web UI/API can hold full telemetry.
+```
+
+## Even better: notification tiers
+
+```text
+LOW / STABLE:
+No Telegram unless explicitly subscribed.
+
+MODERATE:
+Short digest only.
+
+ELEVATED:
+One concise alert with why_it_matters + suggested action.
+
+SEVERE / CRITICAL:
+Narrative alert + involved factions + action buttons/link.
+```
+
+## The exact anti-spam guard
+
+```text
+Add Telegram dedupe/throttle:
+
+- Do not send the same crisis headline more than once within 10 minutes.
+- If severity does not increase, update only in digest mode.
+- If severity increases, send immediate alert.
+- If multiple events happen in one tick, summarize top 3 by severity.
+- Include DEBUG_TELEGRAM_RAW=1 mode for raw payloads only when debugging.
+```
+
+Because otherwise your phone becomes:
+
+> “congratulations, your simulation achieved consciousness and chose spam.”
+
+The fix is simple conceptually:
+
+**Starmap gets the data. Telegram gets the story.**
+
+OUTPUT_PROVENANCE:
+agent: ChatGPT GPT-5.5 Thinking
+lane: exterior-synthesis
+target: Federation Telegram notification UX cleanup / crisis readout summarization

@@ -1,0 +1,316 @@
+services:
+  reverse-proxy:
+    image: traefik:latest
+    command:
+      - --api.insecure=true
+      - --providers.docker=true
+      - --providers.docker.exposedbydefault=false
+      - --entrypoints.web.address=:80
+      - --entrypoints.websecure.address=:443
+      - --certificatesresolvers.letsencrypt.acme.email=sean@deliberatefederation.cloud
+      - --certificatesresolvers.letsencrypt.acme.storage=/letsencrypt/acme.json
+      - --certificatesresolvers.letsencrypt.acme.httpChallenge.entrypoint=web
+    ports:
+      - 80:80
+      - 443:443
+      - 8080:8080
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./letsencrypt:/letsencrypt
+    networks:
+      - fed-net
+    restart: unless-stopped
+
+  backend:
+    build: /docker/federation-game/backend
+    command:
+      - uvicorn
+      - main:app
+      - --host
+      - 0.0.0.0
+      - --port
+      - '8000'
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      - NIM_API_KEYS=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
+    volumes:
+      - /docker/federation-game/backend:/app:ro
+    healthcheck:
+      test:
+        - CMD
+        - python3
+        - -c
+        - "import urllib.request; urllib.request.urlopen('http://localhost:8000/healthz')"
+      interval: 60s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    depends_on:
+      - postgres
+      - redis
+    networks:
+      - fed-net
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+    labels:
+      - traefik.enable=true
+      - "traefik.http.routers.fed-api.rule=Host(`federation-game.deliberatefederation.cloud`) && (PathPrefix(`/npcs`) || PathPrefix(`/world`) || PathPrefix(`/simulation/`) || PathPrefix(`/political`) || PathPrefix(`/factions`) || PathPrefix(`/broadcast-events`) || PathPrefix(`/quests`) || PathPrefix(`/technology`) || PathPrefix(`/history-arc`) || PathPrefix(`/atlas`) || PathPrefix(`/consciousness`) || PathPrefix(`/engine-status`) || PathPrefix(`/map/`) || PathPrefix(`/state`) || PathPrefix(`/systems-overview`) || PathPrefix(`/timeline`) || PathPrefix(`/rivals`) || PathPrefix(`/reset`) || PathPrefix(`/log`) || PathPrefix(`/ws`) || PathPrefix(`/healthz`) || PathPrefix(`/docs`) || PathPrefix(`/openapi.json`) || PathPrefix(`/redoc`) || PathPrefix(`/cognition`) || PathPrefix(`/narrator`))"
+      - traefik.http.routers.fed-api.entrypoints=websecure
+      - traefik.http.routers.fed-api.tls.certresolver=letsencrypt
+      - "traefik.http.routers.fed-api.priority=100"
+      - traefik.http.routers.fed-api.service=fed-api-svc
+      - traefik.http.services.fed-api-svc.loadbalancer.server.port=8000
+      - "traefik.http.routers.fed-api-http.rule=Host(`federation-game.deliberatefederation.cloud`) && (PathPrefix(`/npcs`) || PathPrefix(`/world`) || PathPrefix(`/simulation/`) || PathPrefix(`/political`) || PathPrefix(`/factions`) || PathPrefix(`/broadcast-events`) || PathPrefix(`/quests`) || PathPrefix(`/technology`) || PathPrefix(`/history-arc`) || PathPrefix(`/atlas`) || PathPrefix(`/consciousness`) || PathPrefix(`/engine-status`) || PathPrefix(`/map/`) || PathPrefix(`/state`) || PathPrefix(`/systems-overview`) || PathPrefix(`/timeline`) || PathPrefix(`/rivals`) || PathPrefix(`/reset`) || PathPrefix(`/log`) || PathPrefix(`/ws`) || PathPrefix(`/healthz`) || PathPrefix(`/docs`) || PathPrefix(`/openapi.json`) || PathPrefix(`/redoc`) || PathPrefix(`/cognition`) || PathPrefix(`/narrator`))"
+      - traefik.http.routers.fed-api-http.entrypoints=web
+      - "traefik.http.routers.fed-api-http.priority=100"
+      - traefik.http.routers.fed-api-http.service=fed-api-http-svc
+      - traefik.http.services.fed-api-http-svc.loadbalancer.server.port=8000
+
+  frontend:
+    build: /docker/federation-game/frontend
+    restart: unless-stopped
+    volumes:
+      - /docker/federation-game/public_html:/usr/share/nginx/html:ro
+    labels:
+      - traefik.enable=true
+      - "traefik.http.routers.federation-game.rule=Host(`federation-game.deliberatefederation.cloud`)"
+      - traefik.http.routers.federation-game.entrypoints=websecure
+      - traefik.http.routers.federation-game.tls.certresolver=letsencrypt
+      - traefik.http.routers.federation-game.service=federation-game-svc
+      - traefik.http.services.federation-game-svc.loadbalancer.server.port=80
+      - "traefik.http.routers.federation-game-http.rule=Host(`federation-game.deliberatefederation.cloud`)"
+      - traefik.http.routers.federation-game-http.entrypoints=web
+      - traefik.http.routers.federation-game-http.service=federation-game-http-svc
+      - traefik.http.services.federation-game-http-svc.loadbalancer.server.port=80
+      # Priority-200: catch simulation.html BEFORE backend PathPrefix(/simulation/) rule
+      - "traefik.http.routers.fed-sim-html.rule=Host(`federation-game.deliberatefederation.cloud`) && (Path(`/simulation.html`) || Path(`/bridge.html`) || Path(`/starmap.html`) || Path(`/earth.html`) || Path(`/constellation.html`))"
+      - traefik.http.routers.fed-sim-html.entrypoints=websecure
+      - traefik.http.routers.fed-sim-html.tls.certresolver=letsencrypt
+      - "traefik.http.routers.fed-sim-html.priority=200"
+      - traefik.http.routers.fed-sim-html.service=fed-sim-html-svc
+      - traefik.http.services.fed-sim-html-svc.loadbalancer.server.port=80
+      - "traefik.http.routers.fed-sim-html-http.rule=Host(`federation-game.deliberatefederation.cloud`) && (Path(`/simulation.html`) || Path(`/bridge.html`) || Path(`/starmap.html`) || Path(`/earth.html`) || Path(`/constellation.html`))"
+      - traefik.http.routers.fed-sim-html-http.entrypoints=web
+      - "traefik.http.routers.fed-sim-html-http.priority=200"
+      - traefik.http.routers.fed-sim-html-http.service=fed-sim-html-http-svc
+      - traefik.http.services.fed-sim-html-http-svc.loadbalancer.server.port=80
+    depends_on:
+      - backend
+    networks:
+      - fed-net
+
+  worker:
+    build: /docker/federation-game/backend
+    command: python -u worker.py
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      - "NIM_API_KEYS=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"
+    healthcheck:
+      test:
+        - CMD
+        - python3
+        - -c
+        - "import os; open('/proc/1/cmdline').read()"
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    depends_on:
+      - redis
+    networks:
+      - fed-net
+    deploy:
+      resources:
+        limits:
+          cpus: "0.50"
+
+  postgres:
+    image: postgres:15-alpine
+    restart: unless-stopped
+    env_file:
+      - .env
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - pg_isready -U federation
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks:
+      - fed-net
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    healthcheck:
+      test:
+        - CMD
+        - redis-cli
+        - ping
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
+    networks:
+      - fed-net
+
+  adminer:
+    image: adminer:latest
+    restart: unless-stopped
+    depends_on:
+      - postgres
+    networks:
+      - fed-net
+    labels:
+      - traefik.enable=true
+      - "traefik.http.routers.adminer.rule=Host(`adminer.federation-game.deliberatefederation.cloud`)"
+      - traefik.http.routers.adminer.entrypoints=websecure
+      - traefik.http.routers.adminer.tls.certresolver=letsencrypt
+      - traefik.http.services.adminer-svc.loadbalancer.server.port=8080
+
+  # === OBSERVABILITY STACK ===
+
+  prometheus:
+    image: prom/prometheus:latest
+    restart: unless-stopped
+    volumes:
+      - /docker/federation-game/monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.retention.time=7d'
+      - '--storage.tsdb.retention.size=512MB'
+    networks:
+      - fed-net
+    deploy:
+      resources:
+        limits:
+          cpus: "0.50"
+          memory: 128M
+
+  grafana:
+    image: grafana/grafana:latest
+    restart: unless-stopped
+    entrypoint: ["/etc/grafana/entrypoint.sh"]
+    environment:
+      - GF_AUTH_ANONYMOUS_ENABLED=true
+      - GF_AUTH_ANONYMOUS_ORG_ROLE=Viewer
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=federation2025
+      - GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH=/var/lib/grafana/dashboards/federation-overview.json
+      - GF_USERS_DEFAULT_THEME=dark
+      - GF_SERVER_ROOT_URL=https://federation-game.deliberatefederation.cloud/grafana
+      - GF_SERVER_SERVE_FROM_SUB_PATH=true
+    volumes:
+      - /docker/federation-game/monitoring/provisioning:/etc/grafana/provisioning:ro
+      - /docker/federation-game/monitoring/provisioning/dashboards:/var/lib/grafana/dashboards:ro
+      - /docker/federation-game/monitoring/grafana-config/grafana.ini:/etc/grafana/grafana.ini:ro
+      - /docker/federation-game/monitoring/grafana-dashboards-home/custom.css:/etc/grafana/custom.css:ro
+      - /docker/federation-game/monitoring/grafana-entrypoint.sh:/etc/grafana/entrypoint.sh:ro
+      - grafana_data:/var/lib/grafana
+    networks:
+      - fed-net
+    labels:
+      - traefik.enable=true
+      - "traefik.http.routers.grafana.rule=Host(`federation-game.deliberatefederation.cloud`) && PathPrefix(`/grafana`)"
+      - traefik.http.routers.grafana.entrypoints=websecure
+      - traefik.http.routers.grafana.tls.certresolver=letsencrypt
+      - "traefik.http.routers.grafana.priority=100"
+      - traefik.http.routers.grafana.service=grafana-svc
+      - traefik.http.services.grafana-svc.loadbalancer.server.port=3000
+      - "traefik.http.routers.grafana-http.rule=Host(`federation-game.deliberatefederation.cloud`) && PathPrefix(`/grafana`)"
+      - traefik.http.routers.grafana-http.entrypoints=web
+      - "traefik.http.routers.grafana-http.priority=100"
+      - traefik.http.routers.grafana-http.service=grafana-http-svc
+      - traefik.http.services.grafana-http-svc.loadbalancer.server.port=3000
+    deploy:
+      resources:
+        limits:
+          cpus: "0.50"
+          memory: 256M
+
+  node-exporter:
+    image: prom/node-exporter:latest
+    restart: unless-stopped
+    pid: host
+    volumes:
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /:/rootfs:ro
+    command:
+      - '--path.procfs=/host/proc'
+      - '--path.sysfs=/host/sys'
+      - '--path.rootfs=/rootfs'
+      - '--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|etc|var/(run|lib/docker))$$'
+    networks:
+      - fed-net
+    deploy:
+      resources:
+        limits:
+          memory: 32M
+
+  redis-exporter:
+    image: oliver006/redis_exporter:alpine
+    restart: unless-stopped
+    environment:
+      - REDIS_ADDR=redis:6379
+    networks:
+      - fed-net
+    deploy:
+      resources:
+        limits:
+          memory: 32M
+
+  postgres-exporter:
+    image: prometheuscommunity/postgres-exporter:latest
+    restart: unless-stopped
+    environment:
+      - DATA_SOURCE_NAME=postgresql://federation:federation_pwd@postgres:5432/federation_game?sslmode=disable
+    networks:
+      - fed-net
+    deploy:
+      resources:
+        limits:
+          memory: 32M
+
+  cadvisor:
+    image: gcr.io/cadvisor/cadvisor:latest
+    restart: unless-stopped
+    command:
+      - "--docker_only"
+      - "--store_container_labels=false"
+      - "--housekeeping_interval=30s"
+      - "--global_housekeeping_interval=60s"
+      - "--enable_metrics=cpu,memory"
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:ro
+      - /sys:/sys:ro
+      - /var/lib/docker/:/var/lib/docker:ro
+      - /dev/disk/:/dev/disk:ro
+    networks:
+      - fed-net
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+          cpus: "0.50"
+
+networks:
+  fed-net:
+    name: fed-net
+    driver: bridge
+
+volumes:
+  postgres_data:
+  prometheus_data:
+  grafana_data:

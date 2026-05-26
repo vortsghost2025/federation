@@ -1,0 +1,1337 @@
+#!/usr/bin/env python3
+"""Build the updated simulation.html with all field mismatch fixes,
+accessibility improvements, and explanatory content."""
+
+import os
+
+TARGET = r"S:\federation\federation-game\frontend\simulation.html"
+
+CSS = r"""<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Federation — Simulation Observer</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🟢</text></svg>">
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+<style>
+:root {
+--amber: #FF9800;
+--amber-dim: rgba(255,152,0,0.15);
+--cyan: #00BCD4;
+--cyan-dim: rgba(0,188,212,0.12);
+--violet: #CE93D8;
+--red: #F44336;
+--red-dim: rgba(244,67,54,0.12);
+--green: #4CAF50;
+--green-dim: rgba(76,175,80,0.12);
+--white: #e0e0e0;
+--dim: #90A4AE;
+--panel-bg: rgba(8,12,20,0.94);
+--panel-border: rgba(0,188,212,0.15);
+--glow-cyan: 0 0 10px rgba(0,188,212,0.25);
+--glow-amber: 0 0 10px rgba(255,152,0,0.25);
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{height:100%;overflow:hidden;background:#040810;color:var(--white);font-family:'Share Tech Mono',monospace;font-size:18px}
+#app{display:grid;grid-template-rows:72px 1fr 64px;grid-template-columns:30% 40% 30%;grid-template-areas:"top top top" "left center right" "bottom bottom bottom";height:100vh;gap:1px;background:radial-gradient(ellipse at 50% 30%,rgba(0,188,212,0.03) 0%,transparent 60%)}
+.panel{background:var(--panel-bg);overflow-y:auto;scrollbar-width:thin;scrollbar-color:rgba(0,188,212,0.2) transparent}
+.panel::-webkit-scrollbar{width:4px}
+.panel::-webkit-scrollbar-thumb{background:rgba(0,188,212,0.2);border-radius:2px}
+#top{grid-area:top;display:flex;align-items:center;gap:0;background:var(--panel-bg);border-bottom:1px solid var(--panel-border);padding:0 12px;z-index:5;flex-wrap:nowrap;overflow-x:auto}
+#left{grid-area:left;border-right:1px solid var(--panel-border);padding:12px}
+#center{grid-area:center;padding:12px;position:relative}
+#right{grid-area:right;border-left:1px solid var(--panel-border);padding:12px}
+#bottom{grid-area:bottom;display:flex;align-items:center;gap:16px;background:var(--panel-bg);border-top:1px solid var(--panel-border);padding:0 16px;overflow-x:auto}
+.top-title{font-family:'Orbitron',sans-serif;font-weight:700;font-size:20px;color:var(--cyan);letter-spacing:3px;padding-right:20px;border-right:1px solid var(--panel-border);margin-right:12px;white-space:nowrap;text-shadow:var(--glow-cyan)}
+.top-tick{display:flex;align-items:center;gap:6px;padding:0 12px;border-right:1px solid rgba(0,188,212,0.08);margin-right:8px;white-space:nowrap}
+.top-tick-label{color:var(--dim);font-size:13px;text-transform:uppercase;letter-spacing:1.5px}
+.top-tick-val{font-family:'Orbitron',sans-serif;font-size:18px;color:var(--amber);min-width:50px;text-align:right}
+.top-metric{display:flex;flex-direction:column;align-items:center;gap:2px;padding:4px 10px;border-right:1px solid rgba(0,188,212,0.06);min-width:90px}
+.top-metric:last-of-type{border-right:none}
+.tm-label{color:var(--dim);font-size:13px;text-transform:uppercase;letter-spacing:1.5px}
+.tm-val{font-family:'Orbitron',sans-serif;font-size:16px;min-width:28px;text-align:center}
+.tm-bar{width:80px;height:8px;background:rgba(255,255,255,0.06);border-radius:4px;overflow:hidden}
+.tm-fill{height:100%;border-radius:4px;transition:width 0.8s ease,background 0.5s ease}
+.cascade-gauge{display:flex;flex-direction:column;align-items:center;gap:2px;padding:0 16px;border-left:1px solid var(--panel-border);margin-left:8px;min-width:120px}
+.cascade-label{color:var(--dim);font-size:13px;text-transform:uppercase;letter-spacing:1.5px}
+.cascade-bar{width:120px;height:14px;background:rgba(255,255,255,0.06);border-radius:7px;overflow:hidden;position:relative;border:1px solid rgba(255,255,255,0.08)}
+.cascade-fill{height:100%;border-radius:7px;transition:width 0.8s ease,background 0.5s ease;position:relative}
+.cascade-fill::after{content:'';position:absolute;inset:0;background:linear-gradient(180deg,rgba(255,255,255,0.15) 0%,transparent 50%);border-radius:7px}
+.cascade-pct{font-family:'Orbitron',sans-serif;font-size:16px;min-width:40px;text-align:center}
+.time-since{display:flex;align-items:center;gap:6px;padding:0 12px;border-left:1px solid var(--panel-border);margin-left:8px;white-space:nowrap}
+.time-since-label{color:var(--dim);font-size:13px;text-transform:uppercase;letter-spacing:1.5px}
+.time-since-val{font-family:'Orbitron',sans-serif;font-size:16px;color:var(--cyan)}
+.top-nav{margin-left:auto;display:flex;gap:4px;flex-shrink:0}
+.top-nav a{color:var(--dim);font-size:14px;text-decoration:none;padding:8px 12px;letter-spacing:1px;text-transform:uppercase;transition:color 0.2s;border-radius:4px}
+.top-nav a:hover,.top-nav a.active{color:var(--cyan);background:var(--cyan-dim)}
+.section-title{font-family:'Orbitron',sans-serif;font-weight:700;font-size:14px;letter-spacing:2px;text-transform:uppercase;padding-bottom:8px;margin-bottom:10px;border-bottom:1px solid var(--panel-border)}
+.section-title.amber{color:var(--amber)}
+.section-title.cyan{color:var(--cyan)}
+.section-title.violet{color:var(--violet)}
+.intro-box{background:rgba(0,188,212,0.06);border:1px solid rgba(0,188,212,0.15);border-radius:8px;padding:10px 12px;margin-bottom:12px;font-size:13px;line-height:1.5;color:var(--dim)}
+.intro-box strong{color:var(--cyan)}
+.intro-legend{display:flex;gap:12px;margin-top:8px;flex-wrap:wrap;font-size:13px}
+.legend-item{display:flex;align-items:center;gap:4px}
+.legend-dot{width:14px;height:14px;border-radius:50%;flex-shrink:0}
+.faction-card{background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.06);border-radius:8px;padding:10px 12px;margin-bottom:8px;cursor:pointer;transition:border-color 0.3s,background 0.3s,box-shadow 0.3s}
+.faction-card:hover{background:rgba(255,255,255,0.05);border-color:rgba(0,188,212,0.2)}
+.faction-card.active{box-shadow:0 0 12px rgba(0,188,212,0.15);border-color:rgba(0,188,212,0.35)}
+.faction-header{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.faction-name{font-family:'Orbitron',sans-serif;font-size:15px;font-weight:700;letter-spacing:1px}
+.faction-power{font-family:'Orbitron',sans-serif;font-size:18px;font-weight:900}
+.faction-sub{display:flex;align-items:center;gap:8px;margin-top:6px;font-size:13px}
+.faction-cohesion-label{color:var(--dim);font-size:13px;text-transform:uppercase;letter-spacing:1px}
+.faction-cohesion-bar{flex:1;height:8px;background:rgba(255,255,255,0.06);border-radius:4px;overflow:hidden}
+.faction-cohesion-fill{height:100%;border-radius:4px;transition:width 0.8s ease}
+.faction-action{color:var(--dim);font-size:13px;margin-top:4px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.faction-stances{display:flex;gap:4px;margin-top:6px;flex-wrap:wrap}
+.stance-dot{width:16px;height:16px;border-radius:50%;border:1px solid rgba(255,255,255,0.1);transition:transform 0.2s,box-shadow 0.2s}
+.stance-dot:hover{transform:scale(1.5);box-shadow:0 0 6px currentColor}
+.stance-dot.ally{background:var(--green);border-color:var(--green)}
+.stance-dot.neutral{background:#FFC107;border-color:#FFC107}
+.stance-dot.enemy{background:var(--red);border-color:var(--red)}
+.faction-detail{max-height:0;overflow:hidden;transition:max-height 0.4s ease,opacity 0.3s ease;opacity:0}
+.faction-card.active .faction-detail{max-height:600px;opacity:1}
+.detail-stances{margin-top:8px;font-size:13px}
+.detail-stance-row{display:flex;align-items:center;gap:8px;padding:2px 0}
+.detail-stance-name{color:var(--dim);min-width:140px}
+.detail-stance-val{font-weight:700;text-transform:uppercase;font-size:13px;letter-spacing:1px}
+.detail-action-history{margin-top:8px;font-size:13px;color:var(--dim)}
+.detail-action-item{padding:3px 0;border-bottom:1px solid rgba(255,255,255,0.03)}
+.event-feed{display:flex;flex-direction:column;gap:4px}
+.event-entry{display:flex;gap:10px;padding:8px 10px;border-radius:6px;border-left:3px solid transparent;background:rgba(255,255,255,0.02);transition:opacity 0.3s;font-size:14px;animation:fadeSlideIn 0.4s ease}
+@keyframes fadeSlideIn{from{opacity:0;transform:translateY(-8px)}to{opacity:1;transform:translateY(0)}}
+.event-entry.world{border-left-color:var(--cyan)}
+.event-entry.cascade{border-left-color:var(--violet)}
+.event-entry.faction-action{border-left-color:var(--amber)}
+.event-entry.broadcast{border-left-color:var(--red)}
+.event-time{color:var(--dim);font-size:13px;white-space:nowrap;min-width:55px;padding-top:2px}
+.event-source{font-size:13px;text-transform:uppercase;letter-spacing:1px;padding:2px 6px;border-radius:3px;white-space:nowrap;align-self:flex-start}
+.event-source.world{color:var(--cyan);background:var(--cyan-dim)}
+.event-source.cascade{color:var(--violet);background:rgba(206,147,216,0.12)}
+.event-source.faction{color:var(--amber);background:var(--amber-dim)}
+.event-source.broadcast{color:var(--red);background:var(--red-dim)}
+.event-body{flex:1;line-height:1.4}
+.event-cascade-depth{font-family:'Orbitron',sans-serif;font-size:13px;color:var(--violet);margin-left:4px}
+.npc-grid{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.npc-card{background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.06);border-radius:6px;padding:8px 10px;cursor:pointer;transition:border-color 0.3s,background 0.3s}
+.npc-card:hover{background:rgba(255,255,255,0.05);border-color:rgba(0,188,212,0.2)}
+.npc-card.active{border-color:rgba(0,188,212,0.4);box-shadow:0 0 8px rgba(0,188,212,0.1)}
+.npc-name{font-family:'Orbitron',sans-serif;font-size:14px;font-weight:700;letter-spacing:0.5px;margin-bottom:4px}
+.npc-badges{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+.npc-mood{font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;padding:1px 6px;border-radius:3px}
+.npc-decision{font-size:13px;color:var(--dim)}
+.npc-affil{width:12px;height:12px;border-radius:50%;flex-shrink:0}
+.npc-detail{max-height:0;overflow:hidden;transition:max-height 0.4s ease,opacity 0.3s;opacity:0}
+.npc-card.active .npc-detail{max-height:500px;opacity:1;margin-top:8px;padding-top:8px;border-top:1px solid rgba(255,255,255,0.06)}
+.npc-detail-section{margin-bottom:6px}
+.npc-detail-label{font-size:13px;color:var(--dim);text-transform:uppercase;letter-spacing:1px;margin-bottom:2px}
+.npc-detail-val{font-size:14px;line-height:1.4}
+.npc-thought{font-size:13px;color:var(--dim);padding:2px 0;border-bottom:1px solid rgba(255,255,255,0.03);font-style:italic}
+.npc-rel{display:inline-block;font-size:13px;padding:1px 5px;margin:1px;border-radius:3px;background:rgba(255,255,255,0.04)}
+.bottom-era{font-family:'Orbitron',sans-serif;font-weight:700;font-size:18px;color:var(--amber);white-space:nowrap;text-shadow:var(--glow-amber)}
+.bottom-progress{flex:1;display:flex;align-items:center;gap:10px;min-width:200px}
+.bottom-progress-label{font-size:13px;color:var(--dim);text-transform:uppercase;letter-spacing:1px;white-space:nowrap}
+.bottom-progress-bar{flex:1;height:12px;background:rgba(255,255,255,0.06);border-radius:6px;overflow:hidden;border:1px solid rgba(255,255,255,0.06)}
+.bottom-progress-fill{height:100%;border-radius:6px;background:linear-gradient(90deg,var(--cyan),var(--amber));transition:width 1s ease;position:relative}
+.bottom-progress-fill::after{content:'';position:absolute;inset:0;background:linear-gradient(180deg,rgba(255,255,255,0.15) 0%,transparent 50%);border-radius:6px}
+.bottom-progress-pct{font-family:'Orbitron',sans-serif;font-size:16px;color:var(--cyan);min-width:50px}
+.bottom-triggers{display:flex;gap:6px;flex-wrap:nowrap;overflow-x:auto}
+.bottom-trigger{font-size:13px;padding:3px 8px;border-radius:4px;background:rgba(206,147,216,0.1);border:1px solid rgba(206,147,216,0.2);color:var(--violet);white-space:nowrap}
+.bottom-pending{font-size:14px;color:var(--dim);white-space:nowrap;border-left:1px solid var(--panel-border);padding-left:16px;margin-left:8px}
+.bottom-pending strong{color:var(--amber);font-family:'Orbitron',sans-serif;font-size:16px}
+.signal-lost{position:absolute;inset:0;background:rgba(4,8,16,0.85);display:flex;align-items:center;justify-content:center;z-index:10;opacity:0;pointer-events:none;transition:opacity 0.5s ease}
+.signal-lost.visible{opacity:1;pointer-events:auto}
+.signal-lost-text{font-family:'Orbitron',sans-serif;font-size:28px;color:var(--red);letter-spacing:4px;text-transform:uppercase;animation:signalBlink 1.5s ease infinite;text-shadow:0 0 20px rgba(244,67,54,0.5)}
+@keyframes signalBlink{0%,100%{opacity:0.6}50%{opacity:1}}
+.loading-pulse{animation:loadPulse 1.2s ease infinite}
+@keyframes loadPulse{0%,100%{opacity:0.4}50%{opacity:1}}
+.starfield{position:fixed;inset:0;z-index:-1;overflow:hidden}
+.star{position:absolute;background:#fff;border-radius:50%;animation:twinkle var(--dur) ease infinite var(--delay)}
+@keyframes twinkle{0%,100%{opacity:0.2}50%{opacity:0.8}}
+.tab-bar{display:flex;gap:2px;margin-bottom:10px;border-bottom:1px solid var(--panel-border);padding-bottom:4px}
+.tab-btn{font-family:'Orbitron',sans-serif;font-size:13px;font-weight:700;letter-spacing:1px;text-transform:uppercase;padding:8px 14px;cursor:pointer;border:1px solid transparent;border-radius:6px 6px 0 0;background:rgba(255,255,255,0.02);color:var(--dim);transition:color 0.2s,background 0.2s,border-color 0.2s;min-width:60px;text-align:center}
+.tab-btn:hover{color:var(--white);background:rgba(255,255,255,0.04)}
+.tab-btn.active-amber{color:var(--amber);background:var(--amber-dim);border-color:rgba(255,152,0,0.25);border-bottom-color:transparent}
+.tab-btn.active-cyan{color:var(--cyan);background:var(--cyan-dim);border-color:rgba(0,188,212,0.25);border-bottom-color:transparent}
+.tab-btn.active-violet{color:var(--violet);background:rgba(206,147,216,0.12);border-color:rgba(206,147,216,0.25);border-bottom-color:transparent}
+.tab-content{display:none}
+.tab-content.visible{display:block}
+.quest-log{display:flex;flex-direction:column;gap:4px}
+.quest-entry{display:flex;gap:8px;padding:8px 10px;border-radius:6px;border-left:3px solid var(--violet);background:rgba(255,255,255,0.02);font-size:14px;cursor:pointer;transition:background 0.2s}
+.quest-entry:hover{background:rgba(255,255,255,0.05)}
+.quest-entry.quest-accept{border-left-color:var(--green)}
+.quest-entry.quest-progress{border-left-color:var(--cyan)}
+.quest-entry.quest-complete{border-left-color:var(--amber)}
+.quest-entry.quest-abandon{border-left-color:var(--red)}
+.quest-time{color:var(--dim);font-size:13px;white-space:nowrap;min-width:50px;padding-top:2px}
+.quest-event{font-size:13px;text-transform:uppercase;letter-spacing:1px;padding:2px 6px;border-radius:3px;white-space:nowrap;align-self:flex-start}
+.quest-event.accept{color:var(--green);background:var(--green-dim)}
+.quest-event.progress{color:var(--cyan);background:var(--cyan-dim)}
+.quest-event.complete{color:var(--amber);background:var(--amber-dim)}
+.quest-event.abandon{color:var(--red);background:var(--red-dim)}
+.quest-body{flex:1;line-height:1.4}
+.quest-detail{background:rgba(255,255,255,0.03);border:1px solid rgba(206,147,216,0.2);border-radius:8px;padding:12px;margin-top:8px;margin-bottom:8px}
+.quest-detail-title{font-family:'Orbitron',sans-serif;font-size:14px;font-weight:700;color:var(--violet);margin-bottom:6px}
+.quest-detail-desc{font-size:13px;color:var(--dim);margin-bottom:8px;line-height:1.4}
+.quest-objective{margin-bottom:6px}
+.quest-obj-label{font-size:13px;display:flex;justify-content:space-between;margin-bottom:3px}
+.quest-obj-name{color:var(--white)}
+.quest-obj-pct{color:var(--cyan);font-family:'Orbitron',sans-serif;font-size:13px}
+.quest-obj-bar{height:10px;background:rgba(255,255,255,0.06);border-radius:5px;overflow:hidden}
+.quest-obj-fill{height:100%;border-radius:5px;transition:width 0.8s ease}
+.quest-obj-fill.done{background:var(--green)}
+.quest-reward{font-size:13px;color:var(--amber);margin-top:6px}
+.quest-stats{display:flex;gap:12px;margin-top:8px;font-size:14px}
+.quest-stat{display:flex;flex-direction:column;align-items:center;gap:1px}
+.quest-stat-val{font-family:'Orbitron',sans-serif;font-size:18px;font-weight:900}
+.quest-stat-label{font-size:13px;color:var(--dim);text-transform:uppercase;letter-spacing:1px}
+.tech-card{background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.06);border-radius:8px;padding:10px 12px;margin-bottom:8px;transition:border-color 0.3s}
+.tech-card:hover{border-color:rgba(0,188,212,0.2)}
+.tech-header{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.tech-faction{font-family:'Orbitron',sans-serif;font-size:14px;font-weight:700;letter-spacing:1px}
+.tech-project{font-size:13px;color:var(--cyan);margin-top:4px}
+.tech-progress{margin-top:6px}
+.tech-progress-label{display:flex;justify-content:space-between;font-size:13px;margin-bottom:3px}
+.tech-progress-pct{font-family:'Orbitron',sans-serif;color:var(--amber);font-size:13px}
+.tech-progress-bar{height:12px;background:rgba(255,255,255,0.06);border-radius:6px;overflow:hidden;border:1px solid rgba(255,255,255,0.06)}
+.tech-progress-fill{height:100%;border-radius:6px;background:linear-gradient(90deg,var(--cyan),var(--amber));transition:width 0.8s ease;position:relative}
+.tech-progress-fill::after{content:'';position:absolute;inset:0;background:linear-gradient(180deg,rgba(255,255,255,0.15) 0%,transparent 50%);border-radius:6px}
+.tech-meta{display:flex;gap:10px;margin-top:6px;font-size:13px;color:var(--dim);flex-wrap:wrap}
+.tech-meta-item{display:flex;align-items:center;gap:4px}
+.tech-meta-val{color:var(--white);font-weight:700}
+.tech-completed{margin-top:6px;font-size:13px;color:var(--dim)}
+.tech-completed-tag{display:inline-block;font-size:13px;padding:2px 6px;margin:2px;border-radius:3px;background:rgba(76,175,80,0.1);border:1px solid rgba(76,175,80,0.2);color:var(--green)}
+.tech-no-research{font-size:13px;color:var(--dim);padding:8px 0}
+.choice-list{display:flex;flex-direction:column;gap:6px}
+.choice-item{display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:6px;background:rgba(255,255,255,0.02);cursor:pointer;transition:background 0.2s}
+.choice-item:hover{background:rgba(255,255,255,0.05)}
+.choice-rank{font-family:'Orbitron',sans-serif;font-size:18px;font-weight:900;color:var(--amber);min-width:30px;text-align:center}
+.choice-id{font-size:14px;color:var(--white);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.choice-count{font-family:'Orbitron',sans-serif;font-size:16px;color:var(--cyan);min-width:40px;text-align:right}
+.choice-bar-container{width:100%;margin-top:4px}
+.choice-bar{height:8px;background:rgba(255,255,255,0.06);border-radius:4px;overflow:hidden}
+.choice-bar-fill{height:100%;border-radius:4px;background:var(--violet);transition:width 0.8s ease}
+.faction-choice-detail{background:rgba(255,255,255,0.03);border:1px solid rgba(206,147,216,0.2);border-radius:8px;padding:12px;margin-top:8px;margin-bottom:8px}
+.faction-choice-title{font-family:'Orbitron',sans-serif;font-size:14px;font-weight:700;color:var(--violet);margin-bottom:6px}
+.faction-choice-history{display:flex;flex-direction:column;gap:3px;font-size:13px;color:var(--dim)}
+.faction-choice-entry{padding:3px 6px;border-radius:3px;background:rgba(206,147,216,0.06)}
+:focus{outline:2px solid var(--cyan);outline-offset:2px}
+</style>
+"""
+
+HTML_BODY = r"""</head>
+<body>
+<div class="starfield" id="starfield"></div>
+<div id="app">
+<header id="top">
+<div class="top-title">SIMULATION OBSERVER</div>
+<div class="top-tick">
+<span class="top-tick-label">Tick</span>
+<span class="top-tick-val" id="tick-count">&mdash;</span>
+</div>
+<div class="top-metric">
+<span class="tm-label" title="Inter-faction tension (0-100). High = conflict likely">Tension</span>
+<span class="tm-val" id="val-tension">&mdash;</span>
+<div class="tm-bar" role="progressbar" aria-label="Tension level"><div class="tm-fill" id="bar-tension" style="width:0;background:var(--red)"></div></div>
+</div>
+<div class="top-metric">
+<span class="tm-label" title="Resource availability (0-100). High = abundance">Resources</span>
+<span class="tm-val" id="val-resources">&mdash;</span>
+<div class="tm-bar" role="progressbar" aria-label="Resource level"><div class="tm-fill" id="bar-resources" style="width:0;background:var(--green)"></div></div>
+</div>
+<div class="top-metric">
+<span class="tm-label" title="External threat level (0-100). High = danger">Threat</span>
+<span class="tm-val" id="val-threat">&mdash;</span>
+<div class="tm-bar" role="progressbar" aria-label="Threat level"><div class="tm-fill" id="bar-threat" style="width:0;background:var(--red)"></div></div>
+</div>
+<div class="top-metric">
+<span class="tm-label" title="Societal stability (0-100). High = stable">Stability</span>
+<span class="tm-val" id="val-stability">&mdash;</span>
+<div class="tm-bar" role="progressbar" aria-label="Stability level"><div class="tm-fill" id="bar-stability" style="width:0;background:var(--cyan)"></div></div>
+</div>
+<div class="top-metric">
+<span class="tm-label" title="Population morale (0-100). High = confident">Morale</span>
+<span class="tm-val" id="val-morale">&mdash;</span>
+<div class="tm-bar" role="progressbar" aria-label="Morale level"><div class="tm-fill" id="bar-morale" style="width:0;background:var(--amber)"></div></div>
+</div>
+<div class="top-metric">
+<span class="tm-label" title="Anomalous phenomena activity (0-100). High = reality instability">Anomaly</span>
+<span class="tm-val" id="val-anomaly">&mdash;</span>
+<div class="tm-bar" role="progressbar" aria-label="Anomaly level"><div class="tm-fill" id="bar-anomaly" style="width:0;background:var(--violet)"></div></div>
+</div>
+<div class="cascade-gauge">
+<span class="cascade-label" title="How active cascade chains are (0-100%). High = events triggering more events rapidly">Cascade Temp</span>
+<div class="cascade-bar" role="progressbar" aria-label="Cascade temperature"><div class="cascade-fill" id="cascade-fill" style="width:0;background:var(--green)"></div></div>
+<span class="cascade-pct" id="cascade-pct">0%</span>
+</div>
+<div class="time-since">
+<span class="time-since-label">Last Tick</span>
+<span class="time-since-val" id="time-since">&mdash;</span>
+</div>
+<nav class="top-nav" aria-label="Main navigation">
+<a href="bridge.html">Bridge</a>
+<a href="starmap.html">Starmap</a>
+<a href="/">Simulator</a>
+<a href="simulation.html" class="active">Live Sim</a>
+<a href="adult.html">Control</a>
+<a href="earth.html">Earth</a>
+</nav>
+</header>
+
+<section id="left" class="panel">
+<div class="intro-box">
+<strong>Federation Simulation</strong> — 39 autonomous NPCs across 8 factions evolve without player input. Click any card to expand details.
+<div class="intro-legend">
+<div class="legend-item"><div class="legend-dot" style="background:var(--green)"></div> Ally</div>
+<div class="legend-item"><div class="legend-dot" style="background:#FFC107"></div> Neutral</div>
+<div class="legend-item"><div class="legend-dot" style="background:var(--red)"></div> Enemy</div>
+</div>
+<div class="intro-legend" style="margin-top:4px">
+<div class="legend-item"><div style="width:20px;height:3px;border-radius:2px;background:var(--cyan)"></div> System</div>
+<div class="legend-item"><div style="width:20px;height:3px;border-radius:2px;background:var(--violet)"></div> Cascade</div>
+<div class="legend-item"><div style="width:20px;height:3px;border-radius:2px;background:var(--amber)"></div> Faction</div>
+<div class="legend-item"><div style="width:20px;height:3px;border-radius:2px;background:var(--red)"></div> Broadcast</div>
+</div>
+</div>
+<div class="tab-bar" id="left-tabs" role="tablist">
+<button class="tab-btn active-amber" data-tab="factions" role="tab" onclick="switchLeftTab('factions')">Factions</button>
+<button class="tab-btn" data-tab="faction-tech" role="tab" onclick="switchLeftTab('faction-tech')">Faction Tech</button>
+</div>
+<div class="tab-content visible" id="left-factions">
+<div class="section-title amber">Faction Standings</div>
+<div id="faction-list"></div>
+</div>
+<div class="tab-content" id="left-faction-tech">
+<div class="section-title amber">Faction Tech Research</div>
+<div id="tech-list"></div>
+</div>
+</section>
+
+<section id="center" class="panel">
+<div class="section-title cyan">World Events Feed</div>
+<div class="event-feed" id="event-feed"></div>
+<div class="signal-lost" id="signal-lost-center">
+<span class="signal-lost-text">SIGNAL LOST</span>
+</div>
+</section>
+
+<section id="right" class="panel">
+<div class="tab-bar" id="right-tabs" role="tablist">
+<button class="tab-btn active-violet" data-tab="npcs" role="tab" onclick="switchRightTab('npcs')">NPCs</button>
+<button class="tab-btn" data-tab="npc-quests" role="tab" onclick="switchRightTab('npc-quests')">NPC Quests</button>
+<button class="tab-btn" data-tab="choices" role="tab" onclick="switchRightTab('choices')">Choices</button>
+</div>
+<div class="tab-content visible" id="right-npcs">
+<div class="section-title violet">NPC Activity <span id="npc-count" style="font-size:13px;color:var(--dim);font-weight:400"></span></div>
+<div class="npc-grid" id="npc-grid"></div>
+</div>
+<div class="tab-content" id="right-npc-quests">
+<div class="section-title violet">NPC Quest Feed</div>
+<div id="quest-detail-area"></div>
+<div class="quest-log" id="quest-log"></div>
+</div>
+<div class="tab-content" id="right-choices">
+<div class="section-title violet">Choice Resolutions</div>
+<div id="faction-choice-detail-area"></div>
+<div class="choice-list" id="choice-list"></div>
+</div>
+</section>
+
+<footer id="bottom">
+<div class="bottom-era" id="era-name">&mdash;</div>
+<div class="bottom-progress">
+<span class="bottom-progress-label">Next Era</span>
+<div class="bottom-progress-bar"><div class="bottom-progress-fill" id="era-fill" style="width:0"></div></div>
+<span class="bottom-progress-pct" id="era-pct">0%</span>
+</div>
+<div class="bottom-triggers" id="era-triggers"></div>
+<div class="bottom-pending" id="pending-items">Pending: <strong>&mdash;</strong></div>
+</footer>
+</div>
+"""
+
+JS = r"""<script>
+var FACTION_COLORS = {
+military_command: '#F44336',
+research_division: '#2196F3',
+diplomatic_corps: '#4CAF50',
+cultural_ministry: '#CE93D8',
+economic_council: '#FF9800',
+exploration_initiative: '#00BCD4',
+consciousness_collective: '#E91E63',
+preservation_society: '#8BC34A'
+};
+
+var FACTION_DISPLAY = {
+military_command: 'Military Command',
+research_division: 'Research Division',
+diplomatic_corps: 'Diplomatic Corps',
+cultural_ministry: 'Cultural Ministry',
+economic_council: 'Economic Council',
+exploration_initiative: 'Exploration Initiative',
+consciousness_collective: 'Consciousness Collective',
+preservation_society: 'Preservation Society'
+};
+
+var MOOD_COLORS = {
+satisfied:'#4CAF50',inspired:'#66BB6A',serene:'#81C784',peaceful:'#A5D6A7',
+hopeful:'#4CAF50',excited:'#66BB6A',confident:'#4CAF50',enlightened:'#66BB6A',
+adventurous:'#81C784',determined:'#4CAF50',resolute:'#66BB6A',steadfast:'#4CAF50',
+patient:'#81C784',valiant:'#4CAF50',free:'#66BB6A',
+frustrated:'#F44336',aggressive:'#D32F2F',suspicious:'#FF9800',anxious:'#FF9800',
+alarmed:'#F44336',worried:'#FF9800',unsettled:'#FF9800',weary:'#FF9800',
+melancholic:'#CE93D8',paranoid:'#F44336',burdened:'#FF9800',
+contemplative:'#00BCD4',thoughtful:'#00BCD4',curious:'#00BCD4',
+distracted:'#78909C',reserved:'#78909C',
+analytical:'#00BCD4'
+};
+
+/* FIX #1: Field name map — API uses different keys than old frontend expected */
+var METRIC_FIELD_MAP = {
+tension: 'tension_level',
+resources: 'resource_abundance',
+threat: 'threat_level',
+stability: 'stability',
+morale: 'morale',
+anomaly: 'anomaly_activity'
+};
+
+var METRIC_COLORS = {
+tension:'#F44336',resources:'#4CAF50',threat:'#F44336',
+stability:'#00BCD4',morale:'#FF9800',anomaly:'#CE93D8'
+};
+
+var lastData = { status:null, factions:null, npcs:null, events:null, quests:null, factionTech:null, choices:null };
+var fetchErrorCount = 0;
+var lastTickTime = null;
+var expandedFaction = null;
+var expandedNpc = null;
+var activeLeftTab = 'factions';
+var activeRightTab = 'npcs';
+var expandedQuestNpc = null;
+var expandedChoiceFaction = null;
+
+function generateStarfield() {
+var sf = document.getElementById('starfield');
+for (var i = 0; i < 80; i++) {
+var s = document.createElement('div');
+s.className = 'star';
+var size = Math.random() * 2 + 1;
+s.style.cssText = 'width:' + size + 'px;height:' + size + 'px;left:' + (Math.random()*100) + '%;top:' + (Math.random()*100) + '%;--dur:' + (2+Math.random()*4) + 's;--delay:' + (Math.random()*3) + 's;opacity:' + (0.2+Math.random()*0.5);
+sf.appendChild(s);
+}
+}
+
+function formatTime(seconds) {
+if (seconds == null || isNaN(seconds)) return '\u2014';
+if (seconds < 60) return Math.floor(seconds) + 's';
+if (seconds < 3600) return Math.floor(seconds/60) + 'm ' + Math.floor(seconds%60) + 's';
+return Math.floor(seconds/3600) + 'h ' + Math.floor((seconds%3600)/60) + 'm';
+}
+
+/* FIX #5: stanceToClass handles {value,label,trend} objects, numeric, and string */
+function stanceLabel(stance) {
+if (!stance) return 'neutral';
+if (typeof stance === 'object' && stance.label) return stance.label.toLowerCase();
+if (typeof stance === 'number') {
+if (stance >= 0.75) return 'ally';
+if (stance <= 0.25) return 'enemy';
+return 'neutral';
+}
+var s = String(stance).toLowerCase();
+if (s === 'ally' || s === 'allied' || s === 'friendly') return 'ally';
+if (s === 'enemy' || s === 'hostile' || s === 'adversarial') return 'enemy';
+return 'neutral';
+}
+
+function stanceToClass(stance) {
+return stanceLabel(stance);
+}
+
+/* FIX #11: moodLabel converts numeric moods to descriptive labels */
+function moodLabel(mood) {
+if (mood == null) return '\u2014';
+if (typeof mood === 'string') {
+var n = parseFloat(mood);
+if (!isNaN(n)) mood = n;
+ else return mood.toLowerCase();
+}
+if (typeof mood === 'number') {
+if (mood >= 0.9) return 'INSPIRED';
+if (mood >= 0.7) return 'SATISFIED';
+if (mood >= 0.5) return 'CONTEMPLATIVE';
+if (mood >= 0.3) return 'ANXIOUS';
+return 'FRUSTRATED';
+}
+return String(mood);
+}
+
+/* FIX #11: moodColorOf handles numeric moods */
+function moodColorOf(mood) {
+if (mood == null) return '#78909C';
+var label = moodLabel(mood).toLowerCase();
+return MOOD_COLORS[label] || '#78909C';
+}
+
+function cascadeColor(pct) {
+if (pct < 30) return '#4CAF50';
+if (pct < 60) return '#FF9800';
+if (pct < 85) return '#F44336';
+return '#E91E63';
+}
+
+function esc(s) {
+if (s == null) return '';
+return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
+
+async function apiFetch(endpoint, timeoutMs) {
+var ctl = new AbortController();
+var timer = setTimeout(function() { ctl.abort(); }, timeoutMs || 8000);
+try {
+var r = await fetch('/api' + endpoint, { headers: { 'Accept': 'application/json' }, signal: ctl.signal });
+clearTimeout(timer);
+if (!r.ok) throw new Error(r.status);
+return await r.json();
+} catch (e) {
+clearTimeout(timer);
+return null;
+}
+}
+
+function switchLeftTab(tab) {
+activeLeftTab = tab;
+var btns = document.querySelectorAll('#left-tabs .tab-btn');
+for (var i = 0; i < btns.length; i++) {
+btns[i].classList.remove('active-amber');
+if (btns[i].dataset.tab === tab) btns[i].classList.add('active-amber');
+}
+document.getElementById('left-factions').classList.toggle('visible', tab === 'factions');
+document.getElementById('left-faction-tech').classList.toggle('visible', tab === 'faction-tech');
+if (tab === 'faction-tech' && !lastData.factionTech) refreshFactionTech();
+}
+
+function switchRightTab(tab) {
+activeRightTab = tab;
+var btns = document.querySelectorAll('#right-tabs .tab-btn');
+for (var i = 0; i < btns.length; i++) {
+btns[i].classList.remove('active-violet');
+if (btns[i].dataset.tab === tab) btns[i].classList.add('active-violet');
+}
+document.getElementById('right-npcs').classList.toggle('visible', tab === 'npcs');
+document.getElementById('right-npc-quests').classList.toggle('visible', tab === 'npc-quests');
+document.getElementById('right-choices').classList.toggle('visible', tab === 'choices');
+if (tab === 'npc-quests' && !lastData.quests) refreshQuests();
+if (tab === 'choices' && !lastData.choices) refreshChoices();
+}
+
+function updateTopRibbon(status) {
+if (!status) return;
+var ws = status.world_state || status.worldState || status;
+
+/* FIX #2: Tick count from last_tick_result or last_tick_timestamp */
+var tick = '\u2014';
+if (status.last_tick_result && status.last_tick_result.tick_ts) {
+tick = status.last_tick_result.tick_ts;
+} else if (status.last_tick_timestamp) {
+tick = status.last_tick_timestamp;
+} else if (ws.tick_count != null) {
+tick = ws.tick_count;
+}
+document.getElementById('tick-count').textContent = tick;
+
+/* FIX #1: Use METRIC_FIELD_MAP to read correct API field names */
+var metrics = ['tension','resources','threat','stability','morale','anomaly'];
+for (var i = 0; i < metrics.length; i++) {
+var m = metrics[i];
+var apiField = METRIC_FIELD_MAP[m] || m;
+var v = ws[apiField] != null ? ws[apiField] : (ws[m] != null ? ws[m] : 0);
+var valEl = document.getElementById('val-' + m);
+var barEl = document.getElementById('bar-' + m);
+if (typeof v === 'number') {
+valEl.textContent = Math.round(v);
+barEl.style.width = clamp(v, 0, 100) + '%';
+} else {
+valEl.textContent = v;
+}
+barEl.style.background = METRIC_COLORS[m] || 'var(--cyan)';
+}
+
+/* FIX #3: Cascade temperature — auto-detect 0-1 vs 0-100 range */
+var cascade = status.cascade_summary || status.cascadeSummary || {};
+var temp = cascade.temperature != null ? cascade.temperature : (cascade.cascade_temperature != null ? cascade.cascade_temperature : 0);
+var cascadePct;
+if (typeof temp === 'number') {
+/* If value > 1.5 assume already a percentage; otherwise multiply by 100 */
+cascadePct = temp > 1.5 ? temp : (temp * 100);
+} else {
+cascadePct = 0;
+}
+cascadePct = clamp(cascadePct, 0, 100);
+var cf = document.getElementById('cascade-fill');
+cf.style.width = cascadePct + '%';
+cf.style.background = cascadeColor(cascadePct);
+var cpEl = document.getElementById('cascade-pct');
+cpEl.textContent = Math.round(cascadePct) + '%';
+cpEl.style.color = cascadeColor(cascadePct);
+
+lastTickTime = Date.now();
+}
+
+function updateTimeSince() {
+if (!lastTickTime) return;
+var elapsed = (Date.now() - lastTickTime) / 1000;
+document.getElementById('time-since').textContent = formatTime(elapsed);
+}
+
+/* FIX #4,#6: renderFactions unwraps nested dynamics/stances/actions */
+function renderFactions(factions) {
+if (!factions) return;
+var list = document.getElementById('faction-list');
+var keys = Object.keys(factions);
+var needsRebuild = list.children.length !== keys.length || list.dataset.keySig !== keys.join('|');
+
+if (needsRebuild) {
+list.dataset.keySig = keys.join('|');
+list.innerHTML = '';
+for (var fi = 0; fi < keys.length; fi++) {
+(function(fk) {
+var f = factions[fk];
+var color = FACTION_COLORS[fk] || '#78909C';
+var display = FACTION_DISPLAY[fk] || (f.name || fk.replace(/_/g, ' '));
+var card = document.createElement('div');
+card.className = 'faction-card';
+card.dataset.faction = fk;
+card.setAttribute('tabindex', '0');
+
+/* FIX #5: Unwrap stance objects for dot display */
+var stancesHtml = '';
+for (var si = 0; si < keys.length; si++) {
+var otherK = keys[si];
+if (otherK === fk) continue;
+var rawStance = f.stances ? f.stances[otherK] : null;
+var sc = stanceToClass(rawStance);
+var dotColor = sc === 'ally' ? '#4CAF50' : (sc === 'enemy' ? '#F44336' : '#FFC107');
+var sl = stanceLabel(rawStance);
+stancesHtml += '<div class="stance-dot ' + sc + '" title="' + esc(FACTION_DISPLAY[otherK] || otherK) + ': ' + esc(sl) + '" style="color:' + dotColor + '"></div>';
+}
+
+card.innerHTML =
+'<div class="faction-header">' +
+'<span class="faction-name" style="color:' + color + '">' + esc(display) + '</span>' +
+'<span class="faction-power" style="color:' + color + '" data-field="power">\u2014</span>' +
+'</div>' +
+'<div class="faction-sub">' +
+'<span class="faction-cohesion-label">Cohesion</span>' +
+'<div class="faction-cohesion-bar"><div class="faction-cohesion-fill" data-field="cohesion-fill" style="width:0"></div></div>' +
+'</div>' +
+'<div class="faction-action" data-field="action">No recent action</div>' +
+'<div class="faction-stances">' + stancesHtml + '</div>' +
+'<div class="faction-detail">' +
+'<div class="detail-stances" data-field="detail-stances"></div>' +
+'<div class="detail-action-history" data-field="detail-history"></div>' +
+'</div>';
+
+card.addEventListener('click', function() {
+var wasActive = card.classList.contains('active');
+list.querySelectorAll('.faction-card').forEach(function(c) { c.classList.remove('active'); });
+if (!wasActive) { card.classList.add('active'); expandedFaction = fk; }
+else { expandedFaction = null; }
+fillFactionDetail(fk, factions);
+});
+card.addEventListener('keydown', function(e) {
+if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); card.click(); }
+});
+
+list.appendChild(card);
+})(keys[fi]);
+}
+}
+
+for (var ui = 0; ui < keys.length; ui++) {
+var uk = keys[ui];
+var uf = factions[uk];
+var ucard = list.querySelector('[data-faction="' + uk + '"]');
+if (!ucard) continue;
+
+/* FIX #4: Unwrap dynamics sub-object for cohesion */
+var dyn = uf.dynamics || uf;
+var cohesionVal = dyn.cohesion != null ? dyn.cohesion : (uf.cohesion != null ? uf.cohesion : 50);
+var cohesionPct = clamp(cohesionVal, 0, 100);
+var cohesionColor = cohesionPct > 60 ? '#4CAF50' : (cohesionPct > 30 ? '#FF9800' : '#F44336');
+var cFill = ucard.querySelector('[data-field="cohesion-fill"]');
+if (cFill) { cFill.style.width = cohesionPct + '%'; cFill.style.background = cohesionColor; }
+
+var pwr = ucard.querySelector('[data-field="power"]');
+if (pwr) pwr.textContent = uf.power != null ? uf.power : (dyn.power != null ? dyn.power : '\u2014');
+
+/* FIX #6: Use recent_actions (plural array) not recent_action (singular) */
+var act = ucard.querySelector('[data-field="action"]');
+if (act) {
+var recentActions = uf.recent_actions || uf.recent_action || [];
+var actionText = 'No recent action';
+if (Array.isArray(recentActions) && recentActions.length > 0) {
+var first = recentActions[0];
+actionText = typeof first === 'string' ? first : (first.action || first.description || 'acting');
+/* Beautify snake_case action names */
+actionText = actionText.replace(/_/g, ' ').replace(/\b\w/g, function(c) { return c.toUpperCase(); });
+}
+act.textContent = actionText;
+}
+
+if (expandedFaction === uk) fillFactionDetail(uk, factions);
+}
+}
+
+function fillFactionDetail(fk, factions) {
+var f = factions[fk];
+if (!f) return;
+var keys = Object.keys(factions);
+var card = document.querySelector('[data-faction="' + fk + '"]');
+if (!card) return;
+
+var dsEl = card.querySelector('[data-field="detail-stances"]');
+if (dsEl) {
+var html = '<div style="font-size:13px;color:var(--dim);margin-bottom:4px;text-transform:uppercase;letter-spacing:1px">Stances</div>';
+for (var i = 0; i < keys.length; i++) {
+var otherK = keys[i];
+if (otherK === fk) continue;
+var rawStance = f.stances ? f.stances[otherK] : null;
+var sc = stanceToClass(rawStance);
+var scColor = sc === 'ally' ? '#4CAF50' : (sc === 'enemy' ? '#F44336' : '#FFC107');
+var sl = stanceLabel(rawStance);
+/* Show numeric value if available */
+var numVal = (typeof rawStance === 'object' && rawStance.value != null) ? ' (' + (rawStance.value * 100).toFixed(0) + '%)' : '';
+html += '<div class="detail-stance-row"><span class="detail-stance-name">' + esc(FACTION_DISPLAY[otherK] || otherK) + '</span><span class="detail-stance-val" style="color:' + scColor + '">' + esc(sl) + numVal + '</span></div>';
+}
+dsEl.innerHTML = html;
+}
+
+var dhEl = card.querySelector('[data-field="detail-history"]');
+if (dhEl) {
+var history = f.recent_actions || f.action_history || [];
+var hhtml = '<div style="font-size:13px;color:var(--dim);margin-bottom:4px;text-transform:uppercase;letter-spacing:1px">Recent Actions</div>';
+if (!history.length) {
+hhtml += '<div style="font-size:13px;color:var(--dim)">No history available</div>';
+} else {
+for (var h = 0; h < Math.min(history.length, 8); h++) {
+var a = history[h];
+var actionName = typeof a === 'string' ? a : (a.action || a.description || JSON.stringify(a));
+actionName = actionName.replace(/_/g, ' ').replace(/\b\w/g, function(c) { return c.toUpperCase(); });
+/* Show effects if available */
+var effectsStr = '';
+if (typeof a === 'object' && a.effects) {
+var effParts = [];
+for (var ek in a.effects) {
+if (a.effects[ek] !== 0) effParts.push(ek + ':' + (a.effects[ek] > 0 ? '+' : '') + a.effects[ek]);
+}
+if (effParts.length) effectsStr = ' <span style="color:var(--cyan);font-size:12px">[' + esc(effParts.join(', ')) + ']</span>';
+}
+hhtml += '<div class="detail-action-item">' + esc(actionName) + effectsStr + '</div>';
+}
+}
+dhEl.innerHTML = hhtml;
+}
+}
+
+/* FIX #7,#8: renderEvents handles {world_events,cascade_events,broadcast_events} AND flat arrays */
+function renderEvents(events) {
+if (!events) return;
+var feed = document.getElementById('event-feed');
+
+/* Normalize to flat array */
+var flat = [];
+if (Array.isArray(events)) {
+flat = events;
+} else if (typeof events === 'object') {
+var we = events.world_events || [];
+var ce = events.cascade_events || [];
+var be = events.broadcast_events || [];
+flat = we.concat(ce, be);
+/* Sort by timestamp descending if available */
+flat.sort(function(a, b) {
+var ta = a.ts || a.timestamp || a.tick || a.time || 0;
+var tb = b.ts || b.timestamp || b.tick || b.time || 0;
+return (tb > ta ? 1 : (tb < ta ? -1 : 0));
+});
+}
+
+for (var i = 0; i < Math.min(flat.length, 60); i++) {
+var ev = flat[i];
+var id = 'ev-' + (ev.id || i);
+var el = document.getElementById(id);
+if (!el) {
+el = document.createElement('div');
+el.id = id;
+feed.insertBefore(el, feed.firstChild);
+}
+
+var typeClass = 'world';
+var sourceLabel = 'SYSTEM';
+var sourceClass = 'world';
+var evType = (ev.type || ev.event_type || '').toLowerCase();
+var evSource = (ev.source || ev.source_type || '').toLowerCase();
+
+/* FIX #8: Handle API event_type values like 'game_event' and 'cascade_reaction' */
+if (evType === 'cascade' || evType === 'cascade_reaction' || ev.cascade) {
+typeClass = 'cascade'; sourceLabel = 'CASCADE'; sourceClass = 'cascade';
+} else if (evSource === 'faction' || evType === 'faction_action' || ev.faction_id) {
+typeClass = 'faction-action'; sourceLabel = 'FACTION'; sourceClass = 'faction';
+} else if (evType === 'broadcast' || ev.broadcast || evSource === 'npc') {
+typeClass = 'broadcast'; sourceLabel = 'BROADCAST'; sourceClass = 'broadcast';
+}
+if (evSource === 'faction') { typeClass = 'faction-action'; sourceLabel = 'FACTION'; sourceClass = 'faction'; }
+else if (evSource === 'cascade') { typeClass = 'cascade'; sourceLabel = 'CASCADE'; sourceClass = 'cascade'; }
+else if (evSource === 'broadcast') { typeClass = 'broadcast'; sourceLabel = 'BROADCAST'; sourceClass = 'broadcast'; }
+
+var ts = ev.timestamp || ev.ts || ev.tick || ev.time || '';
+var desc = ev.description || ev.message || ev.text || ev.event || JSON.stringify(ev);
+var cascadeDepth = ev.cascade_depth || ev.depth || ev.cascadeDepth;
+var cascadeHtml = cascadeDepth && typeClass === 'cascade'
+? '<span class="event-cascade-depth">D' + esc(String(cascadeDepth)) + '</span>' : '';
+
+var factionBorder = ev.faction_id && FACTION_COLORS[ev.faction_id]
+? 'border-left-color:' + FACTION_COLORS[ev.faction_id] : '';
+
+el.className = 'event-entry ' + typeClass;
+el.style.cssText = factionBorder;
+el.innerHTML =
+'<span class="event-time">' + esc(String(ts)) + '</span>' +
+'<span class="event-source ' + sourceClass + '">' + esc(sourceLabel) + '</span>' +
+'<span class="event-body">' + esc(desc) + cascadeHtml + '</span>';
+}
+
+if (feed.children.length > 80) {
+while (feed.children.length > 80) feed.removeChild(feed.lastChild);
+}
+}
+
+/* FIX #9,#10,#11,#12: renderNpcs unwraps {npcs:[...]}, maps field names, handles numeric mood */
+function renderNpcs(npcs) {
+if (!npcs) return;
+var grid = document.getElementById('npc-grid');
+/* Unwrap if API returns {npcs:[...], count:N} */
+var list = Array.isArray(npcs) ? npcs : (npcs.npcs ? npcs.npcs : Object.values(npcs));
+
+/* Show NPC count badge */
+var countEl = document.getElementById('npc-count');
+if (countEl) countEl.textContent = '(' + list.length + ' / 39)';
+
+var needsRebuild = grid.children.length !== list.length || grid.dataset.count !== String(list.length);
+
+if (needsRebuild) {
+grid.dataset.count = String(list.length);
+grid.innerHTML = '';
+for (var ni = 0; ni < list.length; ni++) {
+(function(npc, idx) {
+/* FIX #9: Map char_id->id, affiliation->faction, corruption_level->corruption, rumor_level->rumor */
+var mapped = {
+id: npc.char_id || npc.id || npc.name || idx,
+name: npc.name || 'Unknown',
+faction: npc.affiliation || npc.faction || npc.faction_id || '',
+mood: npc.mood,
+corruption: npc.corruption_level != null ? npc.corruption_level : (npc.corruption != null ? npc.corruption : 0),
+rumor: npc.rumor_level != null ? npc.rumor_level : (npc.rumor != null ? npc.rumor : 0),
+recent_thoughts: npc.recent_thoughts || npc.thoughts || npc.recentThoughts || [],
+recent_decisions: npc.recent_decisions || npc.decisions || npc.recentDecisions || [],
+recent_actions: npc.recent_actions || npc.actions || [],
+last_decision_category: (npc.recent_decisions && npc.recent_decisions.length) ? npc.recent_decisions[0].category : (npc.last_decision_category || npc.lastDecision || npc.decision_category || '\u2014'),
+relationships: npc.relationships || npc.relations || {}
+};
+
+var card = document.createElement('div');
+card.className = 'npc-card';
+card.dataset.npcId = mapped.id;
+card.setAttribute('tabindex', '0');
+
+var ml = moodLabel(mapped.mood);
+var mc = moodColorOf(mapped.mood);
+var affilColor = FACTION_COLORS[mapped.faction] || '#78909C';
+
+card.innerHTML =
+'<div class="npc-name">' + esc(mapped.name) + '</div>' +
+'<div class="npc-badges">' +
+'<span class="npc-mood" style="color:' + mc + ';background:' + mc + '18" data-field="mood">' + esc(ml) + '</span>' +
+'<span class="npc-decision" data-field="decision">' + esc(mapped.last_decision_category) + '</span>' +
+'<span class="npc-affil" style="background:' + affilColor + '" title="' + esc(FACTION_DISPLAY[mapped.faction] || mapped.faction) + '" data-field="affil"></span>' +
+'</div>' +
+'<div class="npc-detail">' +
+'<div class="npc-detail-section"><div class="npc-detail-label">Recent Thoughts</div><div class="npc-detail-val" data-field="thoughts"></div></div>' +
+'<div class="npc-detail-section"><div class="npc-detail-label">Recent Decisions</div><div class="npc-detail-val" data-field="decisions"></div></div>' +
+'<div class="npc-detail-section"><div class="npc-detail-label">Recent Actions</div><div class="npc-detail-val" data-field="actions"></div></div>' +
+'<div class="npc-detail-section"><div class="npc-detail-label">Corruption / Rumor</div><div class="npc-detail-val" data-field="corruption"></div></div>' +
+'<div class="npc-detail-section"><div class="npc-detail-label">Relationships</div><div class="npc-detail-val" data-field="relationships"></div></div>' +
+'</div>';
+
+card.addEventListener('click', function() {
+var wasActive = card.classList.contains('active');
+grid.querySelectorAll('.npc-card').forEach(function(c) { c.classList.remove('active'); });
+if (!wasActive) { card.classList.add('active'); expandedNpc = mapped.id; }
+else { expandedNpc = null; }
+});
+card.addEventListener('keydown', function(e) {
+if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); card.click(); }
+});
+
+grid.appendChild(card);
+})(list[ni], ni);
+}
+}
+
+for (var ui = 0; ui < list.length; ui++) {
+var npc = list[ui];
+var nId = npc.char_id || npc.id || npc.name || ui;
+var ncard = grid.querySelector('[data-npc-id="' + nId + '"]');
+if (!ncard) continue;
+
+var ml2 = moodLabel(npc.mood);
+var mc2 = moodColorOf(npc.mood);
+var moodEl = ncard.querySelector('[data-field="mood"]');
+if (moodEl) { moodEl.textContent = ml2; moodEl.style.color = mc2; moodEl.style.background = mc2 + '18'; }
+var decEl = ncard.querySelector('[data-field="decision"]');
+var decCat = (npc.recent_decisions && npc.recent_decisions.length) ? npc.recent_decisions[0].category : (npc.last_decision_category || '\u2014');
+if (decEl) decEl.textContent = decCat;
+var affilEl = ncard.querySelector('[data-field="affil"]');
+var fk2 = npc.affiliation || npc.faction || npc.faction_id || '';
+if (affilEl) { affilEl.style.background = FACTION_COLORS[fk2] || '#78909C'; affilEl.title = FACTION_DISPLAY[fk2] || fk2; }
+
+if (expandedNpc === nId) {
+/* FIX #10: thoughts use .thought key */
+var thoughts = npc.recent_thoughts || npc.thoughts || [];
+var thoughtsEl = ncard.querySelector('[data-field="thoughts"]');
+if (thoughtsEl) {
+if (Array.isArray(thoughts) && thoughts.length) {
+var thtml = '';
+for (var t = 0; t < Math.min(thoughts.length, 4); t++) {
+var th = thoughts[t];
+var thText = typeof th === 'string' ? th : (th.thought || th.text || JSON.stringify(th));
+var thMood = (typeof th === 'object' && th.mood) ? ' [' + esc(th.mood) + ']' : '';
+thtml += '<div class="npc-thought">' + esc(thText) + thMood + '</div>';
+}
+thoughtsEl.innerHTML = thtml;
+} else { thoughtsEl.textContent = 'None available'; }
+}
+
+var decisions = npc.recent_decisions || npc.decisions || [];
+var decDetailEl = ncard.querySelector('[data-field="decisions"]');
+if (decDetailEl) {
+if (Array.isArray(decisions) && decisions.length) {
+var dhtml = '';
+for (var d = 0; d < Math.min(decisions.length, 4); d++) {
+var dc = decisions[d];
+var dcText = typeof dc === 'string' ? dc : (dc.description || dc.decision || dc.category || JSON.stringify(dc));
+dhtml += '<div class="npc-thought">' + esc(dcText) + '</div>';
+}
+decDetailEl.innerHTML = dhtml;
+} else { decDetailEl.textContent = 'None available'; }
+}
+
+/* NEW: Recent Actions section */
+var actions = npc.recent_actions || npc.actions || [];
+var actDetailEl = ncard.querySelector('[data-field="actions"]');
+if (actDetailEl) {
+if (Array.isArray(actions) && actions.length) {
+var ahtml = '';
+for (var ai = 0; ai < Math.min(actions.length, 4); ai++) {
+var ra = actions[ai];
+var raText = typeof ra === 'string' ? ra : (ra.description || ra.action_type || ra.action || JSON.stringify(ra));
+ahtml += '<div class="npc-thought">' + esc(raText) + '</div>';
+}
+actDetailEl.innerHTML = ahtml;
+} else { actDetailEl.textContent = 'None available'; }
+}
+
+var corrEl = ncard.querySelector('[data-field="corruption"]');
+if (corrEl) {
+var corr = npc.corruption_level != null ? npc.corruption_level : (npc.corruption != null ? npc.corruption : 0);
+var rum = npc.rumor_level != null ? npc.rumor_level : (npc.rumor != null ? npc.rumor : 0);
+corrEl.innerHTML = '<span style="color:var(--red)">' + Math.round(corr) + '%</span> / <span style="color:var(--amber)">' + Math.round(rum) + '%</span>';
+}
+
+var relEl = ncard.querySelector('[data-field="relationships"]');
+if (relEl) {
+var rels = npc.relationships || npc.relations || {};
+var rkeys = Object.keys(rels);
+if (rkeys.length) {
+var rhtml = '';
+for (var ri = 0; ri < Math.min(rkeys.length, 8); ri++) {
+var rk = rkeys[ri];
+var rv = rels[rk];
+var rval = typeof rv === 'number' ? rv : (rv.score != null ? rv.score : (rv.value != null ? rv.value : (rv.trust != null ? rv.trust : 0)));
+var rvc = rval > 50 ? '#4CAF50' : (rval > 20 ? '#FFC107' : '#F44336');
+rhtml += '<span class="npc-rel" style="border-left:2px solid ' + rvc + '">' + esc(rk) + ': ' + Math.round(rval) + '</span>';
+}
+relEl.innerHTML = rhtml;
+} else { relEl.textContent = 'None available'; }
+}
+}
+}
+}
+
+function renderQuests(data) {
+if (!data || !data.quest_log) return;
+var log = document.getElementById('quest-log');
+var entries = data.quest_log;
+if (!Array.isArray(entries)) return;
+var needsRebuild = log.children.length !== entries.length || log.dataset.keySig !== entries.map(function(e){return e.char_id+'_'+e.quest_id+'_'+e.event}).join('|');
+
+if (needsRebuild) {
+log.dataset.keySig = entries.map(function(e){return e.char_id+'_'+e.quest_id+'_'+e.event}).join('|');
+log.innerHTML = '';
+for (var i = 0; i < entries.length; i++) {
+(function(entry, idx) {
+var el = document.createElement('div');
+var evtLower = String(entry.event || '').toLowerCase();
+var cls = 'quest-entry';
+var eventClass = 'progress';
+if (evtLower.indexOf('accept') !== -1) { cls += ' quest-accept'; eventClass = 'accept'; }
+else if (evtLower.indexOf('complet') !== -1) { cls += ' quest-complete'; eventClass = 'complete'; }
+else if (evtLower.indexOf('abandon') !== -1 || evtLower.indexOf('fail') !== -1) { cls += ' quest-abandon'; eventClass = 'abandon'; }
+else { cls += ' quest-progress'; }
+el.className = cls;
+el.dataset.charId = entry.char_id || '';
+
+var evtLabel = entry.event || 'PROGRESS';
+el.innerHTML =
+'<span class="quest-time">' + esc(String(entry.timestamp || '')) + '</span>' +
+'<span class="quest-event ' + eventClass + '">' + esc(evtLabel.toUpperCase()) + '</span>' +
+'<span class="quest-body">' +
+'<strong>' + esc(entry.char_id || 'Unknown') + '</strong> \u2014 ' +
+esc(entry.quest_id || '') +
+(entry.reason ? ' <span style="color:var(--dim)">(' + esc(entry.reason) + ')</span>' : '') +
+'</span>';
+
+el.addEventListener('click', function() { loadQuestDetail(entry.char_id); });
+log.appendChild(el);
+})(entries[i], i);
+}
+}
+}
+
+async function loadQuestDetail(charId) {
+if (!charId) return;
+var detailArea = document.getElementById('quest-detail-area');
+if (expandedQuestNpc === charId) { expandedQuestNpc = null; detailArea.innerHTML = ''; return; }
+expandedQuestNpc = charId;
+detailArea.innerHTML = '<div class="loading-pulse" style="color:var(--dim);padding:8px">Loading quest detail...</div>';
+var data = await apiFetch('/simulation/npc-quests/' + encodeURIComponent(charId), 10000);
+if (!data) { detailArea.innerHTML = '<div style="color:var(--red);padding:8px">Failed to load quest detail</div>'; return; }
+var html = '<div class="quest-detail">';
+html += '<div class="quest-detail-title">' + esc(charId) + ' \u2014 Quest Status</div>';
+html += '<div class="quest-stats">';
+html += '<div class="quest-stat"><span class="quest-stat-val" style="color:var(--green)">' + (data.completed_count || 0) + '</span><span class="quest-stat-label">Completed</span></div>';
+html += '<div class="quest-stat"><span class="quest-stat-val" style="color:var(--red)">' + (data.failed_count || 0) + '</span><span class="quest-stat-label">Failed</span></div>';
+html += '<div class="quest-stat"><span class="quest-stat-val" style="color:var(--cyan)">' + (data.active_quests ? data.active_quests.length : 0) + '</span><span class="quest-stat-label">Active</span></div>';
+html += '</div>';
+if (data.active_quests && data.active_quests.length) {
+for (var q = 0; q < data.active_quests.length; q++) {
+var quest = data.active_quests[q];
+html += '<div style="margin-top:10px;padding-top:8px;border-top:1px solid rgba(255,255,255,0.06)">';
+html += '<div style="font-family:Orbitron,sans-serif;font-size:13px;color:var(--amber);margin-bottom:4px">' + esc(quest.title || quest.quest_id || 'Unknown Quest') + '</div>';
+if (quest.description) html += '<div class="quest-detail-desc">' + esc(quest.description) + '</div>';
+if (quest.objectives && quest.objectives.length) {
+for (var o = 0; o < quest.objectives.length; o++) {
+var obj = quest.objectives[o];
+var target = obj.target || 1;
+var current = obj.current_progress || 0;
+var pct = target > 0 ? Math.round((current / target) * 100) : 0;
+var completed = obj.completed || false;
+var fillClass = completed ? ' done' : '';
+var fillColor = completed ? '' : ' style="background:var(--cyan)"';
+html += '<div class="quest-objective">';
+html += '<div class="quest-obj-label"><span class="quest-obj-name">' + esc(obj.description || obj.objective_type || 'Objective') + '</span>';
+html += '<span class="quest-obj-pct">' + (completed ? 'DONE' : pct + '%') + '</span></div>';
+html += '<div class="quest-obj-bar"><div class="quest-obj-fill' + fillClass + '"' + fillColor + ' style="width:' + clamp(pct, 0, 100) + '%"></div></div>';
+html += '</div>';
+}
+}
+if (quest.rewards) {
+var rewardStr = typeof quest.rewards === 'string' ? quest.rewards : JSON.stringify(quest.rewards);
+html += '<div class="quest-reward">Rewards: ' + esc(rewardStr) + '</div>';
+}
+html += '</div>';
+}
+}
+html += '</div>';
+detailArea.innerHTML = html;
+}
+
+function renderFactionTech(data) {
+if (!data || !data.factions) return;
+var list = document.getElementById('tech-list');
+var factions = data.factions;
+var keys = Object.keys(factions);
+var needsRebuild = list.children.length !== keys.length || list.dataset.keySig !== keys.join('|');
+if (needsRebuild) {
+list.dataset.keySig = keys.join('|');
+list.innerHTML = '';
+for (var i = 0; i < keys.length; i++) {
+(function(fk) {
+var f = factions[fk];
+var color = FACTION_COLORS[fk] || '#78909C';
+var display = FACTION_DISPLAY[fk] || fk.replace(/_/g, ' ');
+var card = document.createElement('div');
+card.className = 'tech-card';
+card.dataset.techFaction = fk;
+card.innerHTML =
+'<div class="tech-header">' +
+'<span class="tech-faction" style="color:' + color + '">' + esc(display) + '</span>' +
+'</div>' +
+'<div class="tech-project" data-field="tech-name">No active research</div>' +
+'<div class="tech-progress">' +
+'<div class="tech-progress-label"><span data-field="tech-pct-label">Progress</span><span class="tech-progress-pct" data-field="tech-pct">0%</span></div>' +
+'<div class="tech-progress-bar"><div class="tech-progress-fill" data-field="tech-fill" style="width:0"></div></div>' +
+'</div>' +
+'<div class="tech-meta">' +
+'<span class="tech-meta-item">Turns left: <span class="tech-meta-val" data-field="tech-turns">\u2014</span></span>' +
+'<span class="tech-meta-item">RP invested: <span class="tech-meta-val" data-field="tech-rp">0</span></span>' +
+'<span class="tech-meta-item">Total RP: <span class="tech-meta-val" data-field="tech-total-rp">0</span></span>' +
+'</div>' +
+'<div class="tech-completed" data-field="tech-completed"></div>';
+list.appendChild(card);
+})(keys[i]);
+}
+}
+for (var ui = 0; ui < keys.length; ui++) {
+var uk = keys[ui];
+var uf = factions[uk];
+var ucard = list.querySelector('[data-tech-faction="' + uk + '"]');
+if (!ucard) continue;
+var research = uf.active_research || null;
+var progressPct = uf.progress_percent != null ? uf.progress_percent : 0;
+if (research) {
+var techName = ucard.querySelector('[data-field="tech-name"]');
+if (techName) techName.textContent = research.technology || 'Unknown Tech';
+var pct = research.progress_percentage != null ? research.progress_percentage : progressPct;
+var pctClamped = clamp(pct, 0, 100);
+var pctEl = ucard.querySelector('[data-field="tech-pct"]');
+if (pctEl) pctEl.textContent = Math.round(pctClamped) + '%';
+var fillEl = ucard.querySelector('[data-field="tech-fill"]');
+if (fillEl) fillEl.style.width = pctClamped + '%';
+var turnsEl = ucard.querySelector('[data-field="tech-turns"]');
+if (turnsEl) turnsEl.textContent = research.turns_remaining != null ? research.turns_remaining : '\u2014';
+var rpEl = ucard.querySelector('[data-field="tech-rp"]');
+if (rpEl) rpEl.textContent = research.research_points_invested != null ? research.research_points_invested : '0';
+} else {
+var noTechName = ucard.querySelector('[data-field="tech-name"]');
+if (noTechName) noTechName.innerHTML = '<span class="tech-no-research">No active research</span>';
+var noFillEl = ucard.querySelector('[data-field="tech-fill"]');
+if (noFillEl) noFillEl.style.width = '0%';
+var noPctEl = ucard.querySelector('[data-field="tech-pct"]');
+if (noPctEl) noPctEl.textContent = '0%';
+}
+var totalRpEl = ucard.querySelector('[data-field="tech-total-rp"]');
+if (totalRpEl) totalRpEl.textContent = uf.research_points != null ? uf.research_points : '0';
+var completedEl = ucard.querySelector('[data-field="tech-completed"]');
+if (completedEl) {
+var completed = uf.completed_techs || [];
+if (completed.length) {
+var chtml = '<div style="margin-bottom:3px;text-transform:uppercase;letter-spacing:1px;font-size:13px;color:var(--dim)">Completed</div>';
+for (var c = 0; c < Math.min(completed.length, 8); c++) {
+chtml += '<span class="tech-completed-tag">' + esc(typeof completed[c] === 'string' ? completed[c] : (completed[c].name || completed[c].technology || JSON.stringify(completed[c]))) + '</span> ';
+}
+if (completed.length > 8) chtml += '<span style="font-size:13px;color:var(--dim)">+' + (completed.length - 8) + ' more</span>';
+completedEl.innerHTML = chtml;
+} else { completedEl.innerHTML = ''; }
+}
+}
+}
+
+function renderChoices(data) {
+if (!data || !data.stats) return;
+var list = document.getElementById('choice-list');
+var stats = data.stats;
+var entries = [];
+for (var key in stats) {
+if (stats.hasOwnProperty(key)) { entries.push({ id: key, count: stats[key] }); }
+}
+entries.sort(function(a, b) { return b.count - a.count; });
+var maxCount = entries.length ? entries[0].count : 1;
+if (maxCount < 1) maxCount = 1;
+var needsRebuild = list.children.length !== entries.length || list.dataset.keySig !== entries.map(function(e){return e.id}).join('|');
+if (needsRebuild) {
+list.dataset.keySig = entries.map(function(e){return e.id}).join('|');
+list.innerHTML = '';
+for (var i = 0; i < entries.length; i++) {
+(function(entry, rank) {
+var el = document.createElement('div');
+el.className = 'choice-item';
+el.dataset.choiceId = entry.id;
+var barPct = Math.round((entry.count / maxCount) * 100);
+el.innerHTML =
+'<span class="choice-rank">' + (rank + 1) + '</span>' +
+'<span class="choice-id">' + esc(entry.id) + '</span>' +
+'<span class="choice-count">' + entry.count + '</span>' +
+'<div class="choice-bar-container"><div class="choice-bar"><div class="choice-bar-fill" style="width:' + barPct + '%"></div></div></div>';
+el.addEventListener('click', function() {
+var factionId = entry.id;
+if (factionId.indexOf('_') !== -1) {
+var parts = factionId.split('_');
+if (parts.length >= 2) factionId = parts[0] + '_' + parts[1];
+}
+if (FACTION_DISPLAY[factionId]) { loadFactionChoiceDetail(factionId); }
+else { loadFactionChoiceDetail(entry.id); }
+});
+list.appendChild(el);
+})(entries[i], i);
+}
+} else {
+for (var u = 0; u < entries.length; u++) {
+var existing = list.children[u];
+if (existing) {
+var barPct2 = Math.round((entries[u].count / maxCount) * 100);
+var countEl = existing.querySelector('.choice-count');
+if (countEl) countEl.textContent = entries[u].count;
+var fillEl = existing.querySelector('.choice-bar-fill');
+if (fillEl) fillEl.style.width = barPct2 + '%';
+}
+}
+}
+}
+
+async function loadFactionChoiceDetail(factionId) {
+if (!factionId) return;
+var detailArea = document.getElementById('faction-choice-detail-area');
+if (expandedChoiceFaction === factionId) { expandedChoiceFaction = null; detailArea.innerHTML = ''; return; }
+expandedChoiceFaction = factionId;
+var displayName = FACTION_DISPLAY[factionId] || factionId.replace(/_/g, ' ');
+detailArea.innerHTML = '<div class="loading-pulse" style="color:var(--dim);padding:8px">Loading choices for ' + esc(displayName) + '...</div>';
+var data = await apiFetch('/simulation/choice-resolutions/' + encodeURIComponent(factionId), 10000);
+if (!data) { detailArea.innerHTML = '<div style="color:var(--red);padding:8px">Failed to load faction choices</div>'; return; }
+var html = '<div class="faction-choice-detail">';
+html += '<div class="faction-choice-title">' + esc(displayName) + ' \u2014 Choice History</div>';
+if (data.choice_history && data.choice_history.length) {
+html += '<div class="faction-choice-history">';
+for (var i = 0; i < data.choice_history.length; i++) {
+var ch = data.choice_history[i];
+html += '<div class="faction-choice-entry">' + esc(typeof ch === 'string' ? ch : (ch.choice_id || ch.description || JSON.stringify(ch))) + '</div>';
+}
+html += '</div>';
+} else { html += '<div style="font-size:13px;color:var(--dim)">No choice history available</div>'; }
+html += '</div>';
+detailArea.innerHTML = html;
+}
+
+function renderBottom(status) {
+if (!status) return;
+var era = status.current_era || status.era || status.currentEra || {};
+var eraName = era.name || era.era_name || era.label || status.era_name || 'Unknown Era';
+document.getElementById('era-name').textContent = eraName;
+var progress = era.progress != null ? era.progress : (era.progress_pct != null ? era.progress_pct : (era.progressPercent != null ? era.progressPercent : 0));
+var eraPct = clamp(progress, 0, 100);
+document.getElementById('era-fill').style.width = eraPct + '%';
+document.getElementById('era-pct').textContent = Math.round(eraPct) + '%';
+var triggers = era.recent_triggers || era.triggers || status.era_triggers || [];
+var trigEl = document.getElementById('era-triggers');
+if (Array.isArray(triggers) && triggers.length) {
+var thtml = '';
+for (var t = 0; t < Math.min(triggers.length, 5); t++) {
+var tr = triggers[t];
+thtml += '<span class="bottom-trigger">' + esc(typeof tr === 'string' ? tr : (tr.name || tr.description || JSON.stringify(tr))) + '</span>';
+}
+trigEl.innerHTML = thtml;
+} else { trigEl.innerHTML = ''; }
+var pending = status.pending_items || status.pendingItems || {};
+var total = 0;
+var pKeys = Object.keys(pending);
+for (var p = 0; p < pKeys.length; p++) {
+var pv = pending[pKeys[p]];
+total += typeof pv === 'number' ? pv : (Array.isArray(pv) ? pv.length : 0);
+}
+document.getElementById('pending-items').innerHTML = 'Pending: <strong>' + total + '</strong>';
+}
+
+function showSignalLost(show) {
+document.getElementById('signal-lost-center').classList.toggle('visible', show);
+}
+
+async function refreshLight() {
+var results = await Promise.all([
+apiFetch('/simulation/status', 8000),
+apiFetch('/simulation/factions', 8000),
+apiFetch('/simulation/events', 8000),
+]);
+var status = results[0], factions = results[1], events = results[2];
+var anyOk = status || factions || events;
+if (!anyOk) {
+fetchErrorCount++;
+if (fetchErrorCount >= 3) showSignalLost(true);
+} else {
+fetchErrorCount = 0;
+showSignalLost(false);
+if (status) lastData.status = status;
+if (factions) lastData.factions = factions;
+if (events) lastData.events = events;
+}
+if (lastData.status) updateTopRibbon(lastData.status);
+if (lastData.factions) renderFactions(lastData.factions);
+if (lastData.events) renderEvents(lastData.events);
+if (lastData.status) renderBottom(lastData.status);
+}
+
+async function refreshNpcs() {
+var npcs = await apiFetch('/simulation/npcs/activity', 12000);
+if (npcs) { lastData.npcs = npcs; showSignalLost(false); }
+if (lastData.npcs) renderNpcs(lastData.npcs);
+}
+
+async function refreshQuests() {
+var data = await apiFetch('/simulation/npc-quests', 12000);
+if (data) { lastData.quests = data; showSignalLost(false); }
+if (lastData.quests) renderQuests(lastData.quests);
+}
+
+async function refreshFactionTech() {
+var data = await apiFetch('/simulation/faction-tech', 12000);
+if (data) { lastData.factionTech = data; showSignalLost(false); }
+if (lastData.factionTech) renderFactionTech(lastData.factionTech);
+}
+
+async function refreshChoices() {
+var data = await apiFetch('/simulation/choice-resolutions', 12000);
+if (data) { lastData.choices = data; showSignalLost(false); }
+if (lastData.choices) renderChoices(lastData.choices);
+}
+
+async function refresh() {
+var loadingEls = document.querySelectorAll('.section-title');
+for (var l = 0; l < loadingEls.length; l++) loadingEls[l].classList.add('loading-pulse');
+await refreshLight();
+await refreshNpcs();
+await refreshQuests();
+await refreshFactionTech();
+await refreshChoices();
+for (var l2 = 0; l2 < loadingEls.length; l2++) loadingEls[l2].classList.remove('loading-pulse');
+}
+
+function init() {
+generateStarfield();
+refresh();
+setInterval(refreshLight, 10000);
+setInterval(refreshNpcs, 30000);
+setInterval(refreshQuests, 20000);
+setInterval(refreshFactionTech, 25000);
+setInterval(refreshChoices, 20000);
+setInterval(updateTimeSince, 1000);
+}
+
+document.addEventListener('DOMContentLoaded', init);
+</script>
+</body>
+</html>"""
+
+# Write the combined file
+content = CSS + HTML_BODY + JS
+with open(TARGET, "w", encoding="utf-8") as f:
+    f.write(content)
+
+# Verify
+size = os.path.getsize(TARGET)
+lines = content.count("\n") + 1
+print(f"Written: {TARGET}")
+print(f"Size: {size} bytes, Lines: {lines}")
+print("BUILD OK")

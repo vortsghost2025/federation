@@ -1,0 +1,188 @@
+Yeah — **you’re right on both problems**:
+
+1. **Starmap names are overlapping.**
+2. **Live Sim says “watch morale recovery,” but does not show where that is or what to do with it.**
+
+That means the UI has moved from “not working” to **“needs operator affordances.”**
+
+## 1. Starmap name overlap fix
+
+Right now every NPC/faction is trying to speak at once. The map needs **label rules**, not just bigger text.
+
+Tell Kilo:
+
+```text
+Starmap label overlap is now the main readability issue.
+
+Do not rewrite the map layout.
+
+Add label collision / priority rules:
+
+1. Never show every NPC name at once.
+2. Always show faction names.
+3. Show NPC labels only when:
+   - hovered
+   - selected
+   - active in latest event
+   - high importance / extreme mood
+   - in Crisis mode and involved in crisis
+4. Hide or fade low-priority NPC labels when they overlap.
+5. Use label priority:
+   faction labels > selected NPC > active event NPCs > crisis NPCs > ordinary NPCs.
+6. Add a toggle:
+   - Labels: Factions Only
+   - Labels: Important NPCs
+   - Labels: All
+7. On hover/click, bring that NPC label/card to front.
+8. In Territory mode, default to faction labels only.
+9. In Network mode, show important NPC labels.
+10. In Crisis mode, show crisis-relevant NPC labels.
+
+Acceptance:
+- Faction names are always readable.
+- NPC names do not pile into unreadable text clouds.
+- User can still inspect any NPC by hover/click/search.
+```
+
+That’s the right move. **Do not solve overlap by zooming.** Solve it by label priority.
+
+## 2. “Recommended watch” needs to be clickable / explainable
+
+This is the bigger UX issue.
+
+When the page says:
+
+```text
+Recommended watch:
+morale recovery, institutional stability, cascade chain activity, threat response
+```
+
+…it needs to answer:
+
+> “Where do I click? What object represents that? What am I watching for?”
+
+Right now it’s a text list with no operational meaning.
+
+Tell Kilo:
+
+```text
+Live Sim recommended watch is currently too abstract.
+
+If the UI says “watch morale recovery,” it must explain where/how to watch it.
+
+Add actionable watch cards.
+
+For each recommended watch item:
+1. Make it clickable.
+2. Explain what it means.
+3. Show where to look.
+4. Link or scroll/highlight the relevant UI area.
+5. Show the current metric and danger threshold.
+6. Show what change would count as improvement.
+
+Examples:
+
+Morale Recovery
+- Current: Morale 0 / CRITICAL
+- Meaning: social cohesion is near collapse.
+- Watch: faction cohesion bars, abandoned quests, negative NPC moods.
+- Improvement: morale rises above 30 and abandoned quest rate falls.
+- Click action: highlight morale metric, faction cohesion panel, NPC moods, and quest failures.
+
+Cascade Chain Activity
+- Current: Chain D2/D3 reaction counts active.
+- Meaning: NPC reactions are recursively spreading.
+- Watch: “What Just Happened?” cascade cards and reaction counts.
+- Improvement: top cascade reaction count falls below threshold.
+- Click action: highlight cascade chain cards.
+
+Threat Response
+- Current: Threat severe.
+- Meaning: hostile/anomalous events are stressing the federation.
+- Watch: red crisis events, Military Command activity, conflict lines.
+- Improvement: threat drops below severe and conflict events decrease.
+- Click action: switch to Crisis mode and highlight red hostile lines.
+
+Institutional Stability
+- Current: Stability unstable.
+- Meaning: factions may stop coordinating or quests may fail.
+- Watch: faction cohesion, quest abandoned rate, unresolved count.
+- Improvement: stability rises and abandoned quest count drops.
+- Click action: highlight factions panel + quest health.
+```
+
+## Better UI shape for Live Sim
+
+The current page has **data panels**, but it needs a **watchlist control surface**.
+
+Add this:
+
+```text
+WATCHLIST
+[Morale Recovery] CRITICAL
+Current: 0
+Look at: faction cohesion, NPC moods, quest failures
+Click to highlight
+
+[Cascade Activity] HOT
+Current: D3 78 reactions
+Look at: What Just Happened
+Click to expand cascade chains
+
+[Threat Response] SEVERE
+Current: 91
+Look at: crisis events, red lines, military faction
+Click to open Crisis View
+```
+
+Then the UI becomes understandable.
+
+## My current verdict
+
+| Area                  | Status                                  |
+| --------------------- | --------------------------------------- |
+| Starmap territory     | **Much better**                         |
+| Map read/help overlay | **Good progress**                       |
+| Label readability     | **Needs collision/priority rules**      |
+| Live Sim summary      | **Improved but still abstract**         |
+| Recommended watch     | **FAIL until clickable/explainable**    |
+| Next fix              | **operator guidance + label declutter** |
+
+## One compact message for Kilo
+
+```text
+Current UI is improving, but two operator-readability failures remain.
+
+1. Starmap labels overlap.
+Fix with label priority/collision rules, not zoom:
+- Always show faction labels.
+- In Territory mode, default to faction labels only.
+- Show NPC labels only for selected/hovered/active/crisis-important NPCs.
+- Add label mode toggle: Factions Only / Important NPCs / All.
+- Bring selected/hovered NPC label to front.
+
+2. Live Sim “Recommended Watch” is too abstract.
+Make each watch item actionable:
+- clickable card
+- current value
+- what it means
+- where to look
+- what improvement looks like
+- click action that highlights/switches to the relevant panel or starmap mode.
+
+Example:
+Morale Recovery — Current morale 0 CRITICAL.
+Meaning: social cohesion collapse risk.
+Watch: faction cohesion bars, NPC moods, abandoned quests.
+Improvement: morale >30 and abandoned quest rate decreasing.
+Click: highlight morale metric, faction panel, quest health, and negative NPC moods.
+
+Do not add new simulation mechanics. This is UX/operator comprehension only.
+```
+
+You’re right: you should not have to fight the UI to understand the system you built. The interface should now start behaving like an **operator cockpit**, not a raw graph viewer.
+
+OUTPUT_PROVENANCE:
+agent: ChatGPT GPT-5.5 Thinking
+lane: exterior-synthesis
+target: federation-game starmap label overlap + Live Sim recommended-watch UX guidance
