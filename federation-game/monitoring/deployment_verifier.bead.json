@@ -1,0 +1,31 @@
+{
+  "bead_id": "fed-deployment-verifier",
+  "type": "verification-task",
+  "title": "Deployment Verifier - Post-Deploy Health Checker",
+  "description": "Post-deployment verification bead triggered by git push or deploy event. Verifies deployment health by curling /healthz (expect 200 OK) and checking docker compose ps (all containers should show 'healthy' or 'Up'). On failure, sends alert to Gastown dashboard.",
+  "trigger": "post-hook",
+  "command": "python federation-game/monitoring/deployment_verifier.py --hook",
+  "environment": {
+    "BACKEND_URL": "http://localhost",
+    "DOCKER_COMPOSE_FILE": "docker-compose.yml"
+  },
+  "verification": {
+    "checks": [
+      {
+        "name": "healthz_endpoint",
+        "type": "http",
+        "url": "/healthz",
+        "expected_status": 200
+      },
+      {
+        "name": "docker_containers",
+        "type": "docker",
+        "expected_states": ["healthy", "Up"]
+      }
+    ],
+    "alert_on_failure": true,
+    "alert_message": "DEPLOYMENT VERIFICATION FAILED: {failure_details}"
+  },
+  "permissions": ["read", "write_tmp"],
+  "labels": ["verification", "post-deploy", "health-check"]
+}
