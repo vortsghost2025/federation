@@ -282,7 +282,7 @@ html{height:auto;min-height:100vh}body{height:auto;min-height:100vh;overflow-x:h
 .npc-detail-label{font-size:0.8125rem;color:var(--dim);text-transform:uppercase;letter-spacing:1px;margin-bottom:2px}
 .npc-detail-val{font-size:0.875rem;line-height:1.4}
 .npc-thought{font-size:0.8125rem;color:var(--dim);padding:2px 0;border-bottom:1px solid rgba(255,255,255,0.03);font-style:italic}
-.npc-rel{display:inline-block;font-size:0.8125rem;padding:1px 5px;margin:1px;border-radius:3px;background:rgba(255,255,255,0.04)}
+.npc-rel{display:inline-block;font-size:0.8125rem;padding:1px 5px;margin:1px;border-radius:3px;background:rgba(255,255,255,0.04)}.npc-rel-more{display:inline-block;font-size:0.6875rem;padding:1px 6px;margin:1px;border-radius:3px;color:var(--cyan);background:rgba(0,188,212,0.08);border:1px solid rgba(0,188,212,0.2);cursor:pointer;font-family:'Orbitron',sans-serif;letter-spacing:0.5px}.npc-rel-more:hover{background:rgba(0,188,212,0.16)}.npc-rel-overflow{display:none}.npc-rel-overflow.expanded{display:inline}
 .bottom-era{font-family:'Orbitron',sans-serif;font-weight:700;font-size:1.125rem;color:var(--amber);white-space:nowrap;text-shadow:var(--glow-amber)}
 .bottom-progress{flex:1;display:flex;align-items:center;gap:10px;min-width:200px}
 .bottom-progress-label{font-size:0.8125rem;color:var(--dim);text-transform:uppercase;letter-spacing:1px;white-space:nowrap}
@@ -1064,16 +1064,14 @@ var badgesDiv = card.querySelector('.npc-badges');
 if (!badgesDiv) continue;
 var existingBadge = badgesDiv.querySelector('.cascade-badge');
 if (existingBadge) existingBadge.remove();
-if (status === 'root') {
-var b = document.createElement('span'); b.className = 'cascade-badge trigger'; b.textContent = 'TRIGGER';
-badgesDiv.insertBefore(b, badgesDiv.firstChild);
-} else if (status === 'reactor') {
-var b2 = document.createElement('span'); b2.className = 'cascade-badge reactor'; b2.textContent = 'REACTOR';
-badgesDiv.insertBefore(b2, badgesDiv.firstChild);
-} else if (status === 'affected') {
-var b3 = document.createElement('span'); b3.className = 'cascade-badge affected'; b3.textContent = 'AFFECTED';
-badgesDiv.insertBefore(b3, badgesDiv.firstChild);
-}
+  if (status === 'root') {
+      var b = document.createElement('span'); b.className = 'cascade-badge trigger'; b.textContent = 'TRIGGER';
+      badgesDiv.insertBefore(b, badgesDiv.firstChild);
+    } else if (status === 'reactor') {
+      var b2 = document.createElement('span'); b2.className = 'cascade-badge reactor'; b2.textContent = 'REACTOR';
+      badgesDiv.insertBefore(b2, badgesDiv.firstChild);
+    }
+    /* Skip "AFFECTED" badge — too noisy when many NPCs are in cascade chains */
 }
 }
 
@@ -1474,7 +1472,7 @@ if(decDetailEl){if(Array.isArray(decisions)&&decisions.length){var dhtml='';for(
 var actions=npc.recent_actions||npc.actions||[];var actDetailEl=ncard.querySelector('[data-field="actions"]');
 if(actDetailEl){if(Array.isArray(actions)&&actions.length){var ahtml='';for(var ai=0;ai<Math.min(actions.length,4);ai++){var ra=actions[ai];var raText=typeof ra==='string'?ra:(ra.description||ra.action_type||ra.action||JSON.stringify(ra));ahtml+='<div class="npc-thought">'+esc(raText)+'</div>'}actDetailEl.innerHTML=ahtml}else{actDetailEl.textContent='None available'}}
 var corrEl=ncard.querySelector('[data-field="corruption"]');if(corrEl){var corr=npc.corruption_level!=null?npc.corruption_level:(npc.corruption!=null?npc.corruption:0);var rum=npc.rumor_level!=null?npc.rumor_level:(npc.rumor!=null?npc.rumor:0);corrEl.innerHTML='<span style="color:var(--red)">'+Math.round(corr)+'%</span> / <span style="color:var(--amber)">'+Math.round(rum)+'%</span>'}
-var relEl=ncard.querySelector('[data-field="relationships"]');if(relEl){var rels=npc.relationships||npc.relations||{};var rkeys=Object.keys(rels);if(rkeys.length){var rhtml='';for(var ri=0;ri<Math.min(rkeys.length,8);ri++){var rk=rkeys[ri],rv=rels[rk];var rval=typeof rv==='number'?rv:(rv.score!=null?rv.score:(rv.value!=null?rv.value:(rv.trust!=null?rv.trust:0)));var rvc=rval>50?'#4CAF50':(rval>20?'#FFC107':'#F44336');rhtml+='<span class="npc-rel" style="border-left:2px solid '+rvc+'">'+esc(rk)+': '+Math.round(rval)+'</span>'}relEl.innerHTML=rhtml}else{relEl.textContent='None available'}}
+var relEl=ncard.querySelector('[data-field="relationships"]');if(relEl){var rels=npc.relationships||npc.relations||{};var rkeys=Object.keys(rels);if(rkeys.length){var rhtml='';var visCount=4;for(var ri=0;ri<Math.min(rkeys.length,visCount);ri++){var rk=rkeys[ri],rv=rels[rk];var rval=typeof rv==='number'?rv:(rv.score!=null?rv.score:(rv.value!=null?rv.value:(rv.trust!=null?rv.trust:0)));var rvc=rval>50?'#4CAF50':(rval>20?'#FFC107':'#F44336');rhtml+='<span class="npc-rel" style="border-left:2px solid '+rvc+'">'+esc(rk)+': '+Math.round(rval)+'</span>'}if(rkeys.length>visCount){var overflowHtml='';for(var oi=visCount;oi<rkeys.length;oi++){var ok=rkeys[oi],ov=rels[ok];var oval=typeof ov==='number'?ov:(ov.score!=null?ov.score:(ov.value!=null?ov.value:(ov.trust!=null?ov.trust:0)));var ovc=oval>50?'#4CAF50':(oval>20?'#FFC107':'#F44336');overflowHtml+='<span class="npc-rel" style="border-left:2px solid '+ovc+'">'+esc(ok)+': '+Math.round(oval)+'</span>'}rhtml+='<span class="npc-rel-more" data-npc-rel-toggle>+'+( rkeys.length-visCount)+' more</span><span class="npc-rel-overflow">'+overflowHtml+'</span>'}relEl.innerHTML=rhtml;var toggleBtn=relEl.querySelector('[data-npc-rel-toggle]');if(toggleBtn){toggleBtn.addEventListener('click',function(e){e.stopPropagation();var overflow=this.nextElementSibling;if(overflow){overflow.classList.toggle('expanded');this.textContent=overflow.classList.contains('expanded')?'− less':'+'+(rkeys.length-visCount)+' more'}})}}else{relEl.textContent='None available'}}
 }
 }
 /* After rendering NPCs, update cascade badges and filter */
@@ -1695,7 +1693,14 @@ function _sitGroupByNpc(events) {
   var byNpc = {};
   for (var i = 0; i < events.length; i++) {
     var e = events[i];
-    var name = e.source_char_name || e.name || 'Unknown';
+    var name = e.source_char_name || '';
+    // Fallback: extract name from description like "The Trickster gathered intel..."
+    if (!name && e.description) {
+      var m = e.description.match(/^([A-Z][A-Za-z\s]+?)(?:\s+(?:gathered|planted|acquired|set out|stumbled|exchanged|published|conducted|led|enforced|blocked|increased|ordered|sensed|explored|returned|chart|discovered|sabotage|heist|vanish|smuggl|broke|repelled|rallied|issued|confront|challenged|intercept|infiltrat))/);
+      if (m && m[1].trim().length > 2 && m[1].trim().length < 40) name = m[1].trim();
+    }
+    if (!name && e.name) name = e.name;
+    if (!name) continue; // Skip events with no identifiable NPC
     if (!byNpc[name]) byNpc[name] = [];
     byNpc[name].push(e);
   }
@@ -1704,12 +1709,48 @@ function _sitGroupByNpc(events) {
 
 function _sitHtml(text) {
   // Wrap NPC names, faction names, and keywords with semantic spans
-  text = text.replace(/\b(The Trickster|Lord Malaxis|Baroness Greed|Shadowborn|Cipher|Captain Frontier|Conquistador Drake|Professor Enigma|Admiral Vanguard|Diplomat Grace|Sage Winters|Chronos|Warden Stone|Outlaw Jack|Seeker Dawn|Medic Halo|Engineer Bolt|Pilot Nova|Scholar Flux|Guardian Aegis|Dr. Synthesis|Commander Steel|Ambassador Silk|Scientist Prism|Navigator Starfall|Architect Edge|Sentinel Iron|Bishop Candle|Harbinger Doom|Oracle Mystic|Phantom Echo|Nomad Drift)\b/g, '<span class="npc-name">$1</span>');
-  text = text.replace(/\b(Military Command|Research Division|Diplomatic Corps|Explorer Guild|Shadow Cartel|Dawn Alliance|Frontier Syndicate|Void Collective)\b/g, '<span class="faction-name" style="color:var(--violet)">$1</span>');
+  // Dynamic NPC names: build regex from known NPC list
+  if (window._sitNpcRegex) {
+    text = text.replace(window._sitNpcRegex, '<span class="npc-name">$1</span>');
+  }
+  // Dynamic faction names: build regex from FACTION_DISPLAY values
+  if (window._sitFactionRegex) {
+    text = text.replace(window._sitFactionRegex, '<span class="faction-name" style="color:var(--violet)">$1</span>');
+  }
   text = text.replace(/\b(crisis|critical|danger|threat|sabotage|doom|collapse|failure)\b/gi, '<span class="danger">$1</span>');
   text = text.replace(/\b(secure|stable|protect|defend|reinforced|recovery|success|breakthrough)\b/gi, '<span class="good">$1</span>');
   text = text.replace(/\b(scheme|covert|secret|illicit|undermine|disinformation|intel|smuggl)\b/gi, '<span class="sneaky">$1</span>');
   return text;
+}
+
+function _sitBuildRegexes(data) {
+  // Build NPC name regex from actual data
+  var npcNames = [];
+  if (data && data.npcs) {
+    for (var i = 0; i < data.npcs.length; i++) {
+      var n = data.npcs[i];
+      if (n.name && n.name !== 'Unknown') npcNames.push(n.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
+    }
+  }
+  if (npcNames.length > 0) {
+    window._sitNpcRegex = new RegExp('\\b(' + npcNames.join('|') + ')\\b', 'g');
+  } else {
+    window._sitNpcRegex = null;
+  }
+  // Build faction name regex from FACTION_DISPLAY values
+  var factionDisplayVals = [];
+  if (typeof FACTION_DISPLAY !== 'undefined') {
+    var fk = Object.keys(FACTION_DISPLAY);
+    for (var j = 0; j < fk.length; j++) {
+      var dv = FACTION_DISPLAY[fk[j]];
+      if (dv) factionDisplayVals.push(dv.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
+    }
+  }
+  if (factionDisplayVals.length > 0) {
+    window._sitFactionRegex = new RegExp('\\b(' + factionDisplayVals.join('|') + ')\\b', 'g');
+  } else {
+    window._sitFactionRegex = null;
+  }
 }
 
 function renderSituationRoom() {
@@ -1723,6 +1764,9 @@ function renderSituationRoom() {
   // We need /map/data for crisis_readout + events
   apiFetch('/map/data', 8000).then(function(data) {
     if (!data) { headlineEl.textContent = 'Signal interrupted...'; return; }
+
+    // Build dynamic NPC/faction regexes from live data
+    _sitBuildRegexes(data);
 
     var ws = data.world_state || {};
     var crisis = data.crisis_readout || {};
@@ -1822,7 +1866,17 @@ function renderSituationRoom() {
       html += '<div class="sitroom-section">';
       html += '<div class="sitroom-section-title">Who Is Moving</div>';
       for (var b = 0; b < Math.min(broadcasts.length, 4); b++) {
-        html += '<div class="sitroom-text" style="margin-bottom:3px">' + _sitHtml(esc(broadcasts[b])) + '</div>';
+        var bc = broadcasts[b];
+        // key_broadcasts entries may be objects {source, faction, type, description} or strings
+        var bcText = '';
+        if (typeof bc === 'string') {
+          bcText = bc;
+        } else if (bc && typeof bc === 'object') {
+          bcText = (bc.source ? bc.source + ': ' : '') + (bc.description || bc.type || JSON.stringify(bc));
+        }
+        if (bcText) {
+          html += '<div class="sitroom-text" style="margin-bottom:3px">' + _sitHtml(esc(bcText)) + '</div>';
+        }
       }
       html += '</div>';
     }
