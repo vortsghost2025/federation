@@ -124,6 +124,31 @@ html{height:auto;min-height:100vh}body{height:auto;min-height:100vh;overflow-x:h
 .sitroom-forewarning{font-size:0.8125rem;color:var(--amber);line-height:1.5;padding:8px 10px;margin-top:8px;background:rgba(255,152,0,0.06);border:1px solid rgba(255,152,0,0.12);border-radius:6px}
 .sitroom-forewarning::before{content:'\26A0 ';font-style:normal}
 .sitroom-quiet{font-size:0.9375rem;color:rgba(255,255,255,0.5);text-align:center;padding:20px 0}
+
+/* ═══ AI ASSISTANT CHAT ═══ */
+.ai-chat{background:linear-gradient(135deg,rgba(0,188,212,0.03),rgba(255,152,0,0.03));border:1px solid rgba(0,188,212,0.12);border-radius:10px;padding:12px 16px;margin-top:12px;position:relative;overflow:hidden}
+.ai-chat::before{content:'';position:absolute;top:0;left:0;width:3px;height:100%;background:linear-gradient(180deg,var(--cyan),var(--amber));border-radius:3px 0 0 3px}
+.ai-chat-label{font-family:'Orbitron',sans-serif;font-size:0.5625rem;font-weight:900;letter-spacing:2px;color:var(--amber);text-transform:uppercase;margin-bottom:8px;display:flex;align-items:center;gap:8px}
+.ai-chat-label::after{content:'';flex:1;height:1px;background:linear-gradient(90deg,rgba(255,152,0,0.3),transparent)}
+.ai-chat-messages{max-height:200px;overflow-y:auto;margin-bottom:8px;scrollbar-width:thin;scrollbar-color:rgba(0,188,212,0.2) transparent}
+.ai-chat-msg{padding:6px 0;font-size:0.8125rem;line-height:1.5}
+.ai-chat-msg.user{color:var(--amber);padding-left:10px}
+.ai-chat-msg.user::before{content:'> ';opacity:0.5}
+.ai-chat-msg.assistant{color:var(--white);padding-left:10px;border-left:2px solid rgba(0,188,212,0.2);margin-left:4px}
+.ai-chat-msg.assistant .ai-provider{font-size:0.5625rem;color:var(--dim);margin-left:6px;font-family:'Orbitron',sans-serif;letter-spacing:1px}
+.ai-chat-msg.error{color:var(--red);padding-left:10px}
+.ai-chat-msg.thinking{color:var(--dim);font-style:italic;padding-left:10px}
+.ai-chat-input-row{display:flex;gap:6px}
+.ai-chat-input{flex:1;background:rgba(255,255,255,0.04);border:1px solid rgba(0,188,212,0.2);border-radius:6px;padding:6px 10px;color:var(--white);font-family:'Share Tech Mono',monospace;font-size:0.8125rem;outline:none;transition:border-color 0.3s}
+.ai-chat-input:focus{border-color:var(--cyan)}
+.ai-chat-input::placeholder{color:rgba(255,255,255,0.25)}
+.ai-chat-send{background:rgba(0,188,212,0.12);border:1px solid rgba(0,188,212,0.3);border-radius:6px;padding:6px 12px;color:var(--cyan);font-family:'Orbitron',sans-serif;font-size:0.5625rem;font-weight:700;letter-spacing:1px;cursor:pointer;transition:background 0.3s,border-color 0.3s;text-transform:uppercase}
+.ai-chat-send:hover{background:rgba(0,188,212,0.2);border-color:var(--cyan)}
+.ai-chat-send:disabled{opacity:0.3;cursor:not-allowed}
+.ai-chat-suggestions{display:flex;flex-wrap:wrap;gap:4px;margin-top:6px}
+.ai-chat-suggestion{font-size:0.5625rem;font-family:'Orbitron',sans-serif;letter-spacing:0.5px;padding:2px 8px;border-radius:4px;border:1px solid rgba(255,255,255,0.08);background:rgba(255,255,255,0.03);color:var(--dim);cursor:pointer;transition:all 0.2s;text-transform:uppercase}
+.ai-chat-suggestion:hover{background:rgba(0,188,212,0.08);border-color:rgba(0,188,212,0.2);color:var(--cyan)}
+
 .cascade-summary-roster{cursor:pointer;transition:color 0.2s}.cascade-summary-roster:hover{color:var(--cyan)}
 .cascade-badge{font-family:'Orbitron',sans-serif;font-size:0.5625rem;font-weight:900;letter-spacing:0.5px;padding:1px 4px;border-radius:3px;margin-left:4px;vertical-align:middle}
 .cascade-badge.trigger{color:var(--red);background:rgba(244,67,54,0.15);border:1px solid rgba(244,67,54,0.3)}
@@ -561,6 +586,20 @@ html{height:auto;min-height:100vh}body{height:auto;min-height:100vh;overflow-x:h
 <div class="event-feed" id="event-feed"></div>
 </div>
 <div class="signal-lost" id="signal-lost-center">
+<div class="ai-chat" id="ai-chat">
+<div class="ai-chat-label">Federation Intelligence</div>
+<div class="ai-chat-messages" id="ai-chat-messages"></div>
+<div class="ai-chat-input-row">
+<input class="ai-chat-input" id="ai-chat-input" type="text" placeholder="Ask about the simulation..." maxlength="300" autocomplete="off">
+<button class="ai-chat-send" id="ai-chat-send" onclick="aiChatSend()">Ask</button>
+</div>
+<div class="ai-chat-suggestions" id="ai-chat-suggestions">
+<span class="ai-chat-suggestion" onclick="aiChatAsk(this.textContent)">What happened this tick?</span>
+<span class="ai-chat-suggestion" onclick="aiChatAsk(this.textContent)">Which faction is winning?</span>
+<span class="ai-chat-suggestion" onclick="aiChatAsk(this.textContent)">Why are quests failing?</span>
+<span class="ai-chat-suggestion" onclick="aiChatAsk(this.textContent)">Who is the biggest threat?</span>
+</div>
+</div>
 <span class="signal-lost-text">SIGNAL LOST</span>
 </div>
 </section>
@@ -2070,6 +2109,104 @@ document.addEventListener('keydown',function(e){if(e.key==='Escape'){var overlay
 
 function init(){generateStarfield();refresh();setInterval(refreshLight,10000);setInterval(refreshNpcs,30000);setInterval(refreshQuests,20000);setInterval(refreshFactionTech,25000);setInterval(refreshChoices,20000);setInterval(updateTimeSince,1000);setInterval(renderSituationRoom,15000)}
 document.addEventListener('DOMContentLoaded',init);
+
+
+/* ═══ AI ASSISTANT CHAT ═══ */
+var aiChatHistory = [];
+var aiChatBusy = false;
+
+function aiChatRender() {
+  var el = document.getElementById("ai-chat-messages");
+  if (!el) return;
+  var html = "";
+  for (var i = 0; i < aiChatHistory.length; i++) {
+    var m = aiChatHistory[i];
+    if (m.role === "user") {
+      html += '<div class="ai-chat-msg user">' + esc(m.text) + '</div>';
+    } else if (m.role === "thinking") {
+      html += '<div class="ai-chat-msg thinking">Analyzing simulation data...</div>';
+    } else if (m.role === "assistant") {
+      var prov = m.provider ? '<span class="ai-provider">' + esc(m.provider) + '</span>' : '';
+      html += '<div class="ai-chat-msg assistant">' + esc(m.text) + prov + '</div>';
+    } else if (m.role === "error") {
+      html += '<div class="ai-chat-msg error">' + esc(m.text) + '</div>';
+    }
+  }
+  el.innerHTML = html;
+  el.scrollTop = el.scrollHeight;
+}
+
+function aiChatAsk(text) {
+  var input = document.getElementById("ai-chat-input");
+  if (input) input.value = text;
+  aiChatSend();
+}
+
+async function aiChatSend() {
+  if (aiChatBusy) return;
+  var input = document.getElementById("ai-chat-input");
+  if (!input) return;
+  var question = input.value.trim();
+  if (!question) return;
+  input.value = "";
+  aiChatBusy = true;
+  var btn = document.getElementById("ai-chat-send");
+  if (btn) btn.disabled = true;
+
+  aiChatHistory.push({role: "user", text: question});
+  aiChatHistory.push({role: "thinking"});
+  aiChatRender();
+
+  try {
+    var ctl = new AbortController();
+    var timer = setTimeout(function(){ ctl.abort() }, 15000);
+    var r = await fetch("/api/map/assistant", {
+      method: "POST",
+      headers: {"Content-Type": "application/json", "Accept": "application/json"},
+      body: JSON.stringify({question: question}),
+      signal: ctl.signal
+    });
+    clearTimeout(timer);
+    if (!r.ok) throw new Error("HTTP " + r.status);
+    var data = await r.json();
+
+    // Remove the "thinking" entry
+    aiChatHistory = aiChatHistory.filter(function(m){ return m.role !== "thinking"; });
+
+    if (data.status === "ok") {
+      aiChatHistory.push({
+        role: "assistant",
+        text: data.answer || "No answer returned.",
+        provider: data.provider || ""
+      });
+    } else {
+      aiChatHistory.push({
+        role: "error",
+        text: data.answer || "The intelligence systems are offline."
+      });
+    }
+  } catch (e) {
+    aiChatHistory = aiChatHistory.filter(function(m){ return m.role !== "thinking"; });
+    aiChatHistory.push({
+      role: "error",
+      text: "Connection failed. The simulation may be offline."
+    });
+  }
+
+  aiChatBusy = false;
+  if (btn) btn.disabled = false;
+  aiChatRender();
+}
+
+// Enter key to send
+document.addEventListener("DOMContentLoaded", function(){
+  var input = document.getElementById("ai-chat-input");
+  if (input) {
+    input.addEventListener("keydown", function(e){
+      if (e.key === "Enter") { e.preventDefault(); aiChatSend(); }
+    });
+  }
+});
 
 </script>
 </body>
