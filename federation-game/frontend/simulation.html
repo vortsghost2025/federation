@@ -105,7 +105,7 @@ html{height:auto;min-height:100vh}body{height:auto;min-height:100vh;overflow-x:h
 .npc-leader-badge{display:none}
 
 /* ═══ SITUATION ROOM ═══ */
-.sitroom{background:linear-gradient(135deg,rgba(0,188,212,0.04),rgba(206,147,216,0.04));border:1px solid rgba(0,188,212,0.15);border-radius:10px;padding:14px 18px;margin-bottom:14px;position:relative;overflow:hidden}
+.sitroom{background:linear-gradient(135deg,rgba(0,188,212,0.06),rgba(206,147,216,0.06));border:1px solid rgba(0,188,212,0.25);border-radius:10px;padding:16px 20px;margin-bottom:12px;position:relative;overflow:hidden;box-shadow:0 0 20px rgba(0,188,212,0.06),inset 0 0 40px rgba(0,188,212,0.02)}
 .sitroom::before{content:'';position:absolute;top:0;left:0;width:3px;height:100%;background:linear-gradient(180deg,var(--cyan),var(--violet));border-radius:3px 0 0 3px}
 .sitroom-label{font-family:'Orbitron',sans-serif;font-size:0.5625rem;font-weight:900;letter-spacing:2px;color:var(--cyan);text-transform:uppercase;margin-bottom:10px;display:flex;align-items:center;gap:8px}
 .sitroom-label::after{content:'';flex:1;height:1px;background:linear-gradient(90deg,rgba(0,188,212,0.3),transparent)}
@@ -124,6 +124,18 @@ html{height:auto;min-height:100vh}body{height:auto;min-height:100vh;overflow-x:h
 .sitroom-forewarning{font-size:0.8125rem;color:var(--amber);line-height:1.5;padding:8px 10px;margin-top:8px;background:rgba(255,152,0,0.06);border:1px solid rgba(255,152,0,0.12);border-radius:6px}
 .sitroom-forewarning::before{content:'\26A0 ';font-style:normal}
 .sitroom-quiet{font-size:0.9375rem;color:rgba(255,255,255,0.5);text-align:center;padding:20px 0}
+
+/* ═══ ACTIVITY LOG (collapsible) ═══ */
+.activity-log{border:1px solid rgba(255,255,255,0.05);border-radius:8px;margin-bottom:10px;overflow:hidden}
+.activity-log-bar{display:flex;align-items:center;gap:8px;padding:5px 10px;cursor:pointer;background:rgba(255,255,255,0.015);transition:background 0.2s;user-select:none}
+.activity-log-bar:hover{background:rgba(255,255,255,0.03)}
+.activity-log-arrow{font-size:0.5625rem;transition:transform 0.25s ease;color:var(--dim)}
+.activity-log.expanded .activity-log-arrow{transform:rotate(90deg)}
+.activity-log-label{font-family:'Orbitron',sans-serif;font-size:0.5rem;font-weight:700;letter-spacing:1.5px;color:var(--dim);text-transform:uppercase}
+.activity-log-summary{margin-left:auto;font-size:0.6875rem;color:var(--dim)}
+.activity-log-content{max-height:0;overflow:hidden;transition:max-height 0.4s ease,opacity 0.3s ease;opacity:0}
+.activity-log.expanded .activity-log-content{max-height:2500px;opacity:1}
+.activity-log-pad{padding:8px 12px 4px}
 
 /* ═══ AI ASSISTANT CHAT ═══ */
 .ai-chat{background:linear-gradient(135deg,rgba(0,188,212,0.03),rgba(255,152,0,0.03));border:1px solid rgba(0,188,212,0.12);border-radius:10px;padding:12px 16px;margin-top:12px;position:relative;overflow:hidden}
@@ -605,11 +617,22 @@ html{height:auto;min-height:100vh}body{height:auto;min-height:100vh;overflow-x:h
 <div id="sitroom-headline" class="sitroom-headline">Awaiting intelligence report...</div>
 <div id="sitroom-body"></div>
 </div>
+<div id="activity-log" class="activity-log">
+<div class="activity-log-bar" id="activity-log-bar" onclick="toggleActivityLog()" tabindex="0" role="button" aria-expanded="false">
+<span class="activity-log-arrow">&#9654;</span>
+<span class="activity-log-label">Activity Log</span>
+<span class="activity-log-summary" id="activity-log-summary">No recent activity</span>
+</div>
+<div class="activity-log-content" id="activity-log-content">
+<div class="activity-log-pad">
 <div id="cascade-pipeline"></div>
 <div id="event-chains"></div>
 <div class="raw-toggle" id="raw-toggle" onclick="toggleRaw()" tabindex="0" role="button" aria-expanded="false">Raw Events</div>
 <div class="raw-events-wrap" id="raw-wrap">
 <div class="event-feed" id="event-feed"></div>
+</div>
+</div>
+</div>
 </div>
 <div class="signal-lost" id="signal-lost-center">
 <div class="ai-chat" id="ai-chat">
@@ -1475,9 +1498,13 @@ for (var si = 0; si < summaries.length; si++) {
 }
 }
 
+/* Update activity log summary */
+var sumEl=document.getElementById('activity-log-summary');
+if(sumEl){var pts=[];if(cascadeEvents.length)pts.push(cascadeEvents.length+' cascade'+(cascadeEvents.length===1?'':'s'));if(grouped.chains.length)pts.push(grouped.chains.length+' chain'+(grouped.chains.length===1?'':'s'));if(grouped.unchained.length)pts.push(grouped.unchained.length+' raw');sumEl.textContent=pts.length?pts.join(', '):'No recent activity'}
+
 /* Render chain cards */
 chainsArea.innerHTML = '';
-for (var ci = 0; ci < Math.min(grouped.chains.length, 5); ci++) {
+for (var ci = 0; ci < Math.min(grouped.chains.length, 3); ci++) {
 (function(chain) {
 var card = document.createElement('div');
 card.className = 'chain-card';
@@ -2162,6 +2189,7 @@ for(var l2=0;l2<loadingEls.length;l2++)loadingEls[l2].classList.remove('loading-
 
 function toggleRaw(){var btn=document.getElementById('raw-toggle'),wrap=document.getElementById('raw-wrap');btn.classList.toggle('open');wrap.classList.toggle('open');btn.setAttribute('aria-expanded',wrap.classList.contains('open'))}
 function toggleHelp(){var overlay=document.getElementById('help-overlay');overlay.classList.toggle('open');if(overlay.classList.contains('open')){overlay.focus();document.body.style.overflow='hidden'}else{document.body.style.overflow=''}}
+function toggleActivityLog(){var log=document.getElementById('activity-log');var bar=document.getElementById('activity-log-bar');var expanded=log.classList.toggle('expanded');bar.setAttribute('aria-expanded',expanded)}
 document.addEventListener('keydown',function(e){if(e.key==='Escape'){var overlay=document.getElementById('help-overlay');if(overlay.classList.contains('open'))toggleHelp()}});
 
 function init(){generateStarfield();refresh();setInterval(refreshLight,10000);setInterval(refreshNpcs,30000);setInterval(refreshQuests,20000);setInterval(refreshFactionTech,25000);setInterval(refreshChoices,20000);setInterval(updateTimeSince,1000);setInterval(renderSituationRoom,15000)}
