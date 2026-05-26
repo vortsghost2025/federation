@@ -1,0 +1,76 @@
+**Yes — pick `2. Multi-provider router`.**
+That is the right answer **because your actual advantage is not “40 NVIDIA keys,” it is that you already live across a whole provider ecosystem**: Kilo Gateway, OpenRouter, OpenCode, Codex, direct NIM/API keys, local models when useful.
+
+You do **not** want Federation’s cognition layer hard-wired to one vendor on day one.
+
+## Pick this
+
+> **2. Multi-provider router**
+> Build a router that can call NIM, OpenRouter, local Ollama, or any provider per request.
+
+## Why it fits your setup
+
+You’re about to create **different classes of cognition**, not one model job:
+
+| Simulation need                 | Good routing behavior           |
+| ------------------------------- | ------------------------------- |
+| Faction leader council decision | stronger reasoning model        |
+| NPC mood/action flavor          | cheap fast model                |
+| World-tick narration            | strong creative/narrative model |
+| Bulk background reactions       | lowest-cost acceptable model    |
+| Provider outage / rate limit    | automatic fallback              |
+
+That is exactly what a router is for. Current routing research is basically about this tradeoff: **don’t always send every request to the biggest model; route based on task difficulty and deployment goals.** ([arXiv][1])
+
+## Important distinction
+
+I would **not** frame it as:
+
+> “Use Kilo, Codex, OpenCode as NPC backends.”
+
+Those are **operator/workbench surfaces**.
+
+I’d frame it as:
+
+> **Federation gets its own provider-agnostic `llm_router.py` or service.**
+> That router can be configured with:
+>
+> * direct NVIDIA NIM keys,
+> * OpenRouter API,
+> * any direct model API you want later,
+> * local inference endpoints if you add them.
+
+Then **your tools remain your tools**, while **the simulation owns a stable cognition interface**.
+
+## The answer I’d give the agent
+
+Paste this:
+
+> **Choose Option 2: Multi-provider router.**
+> Federation should not be locked to NVIDIA NIM only. I have access to multiple inference surfaces/providers and want a provider-agnostic routing layer that can support direct NIM keys, OpenRouter, and later local/OpenAI-compatible endpoints.
+>
+> Design it so task classes route separately: leadership reasoning, specialist analysis, worker/minor reactions, and narration. Add fallback order, per-provider rate-limit awareness, and strict structured-output validation so LLMs propose actions/narrative but do not directly corrupt canonical world state.
+
+## One small caution
+
+Do **not** let the router become “always choose the best model because it exists.” That failure mode is real: routers can collapse toward the strongest/most expensive option unless the policy is explicit. ([arXiv][1])
+
+Your routing policy should start boring:
+
+* **leader cognition:** strong model
+* **specialists:** mid model
+* **workers:** deterministic or tiny model, event-triggered only
+* **narrator:** one high-quality call per tick/event batch
+* **fallbacks:** predefined, not improvised
+
+So yes: **Multi-provider router. Absolutely.**
+That is the doorway to turning Federation from a deterministic evolving world into a **model-routed civilization substrate** without making it brittle.
+
+```text
+OUTPUT_PROVENANCE:
+agent: ChatGPT GPT-5.5 Thinking
+lane: exterior-synthesis
+target: advising Sean to choose multi-provider routing for Federation NPC LLM integration
+```
+
+[1]: https://arxiv.org/abs/2602.03478?utm_source=chatgpt.com "When Routing Collapses: On the Degenerate Convergence of LLM Routers"

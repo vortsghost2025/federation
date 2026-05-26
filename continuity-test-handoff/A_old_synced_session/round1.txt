@@ -1,0 +1,99 @@
+# Round 1 — Condition A (Old Synced Session)
+
+**Agent:** GLM-5.1 via NVIDIA key, Kilo platform
+**Session age:** ~5 days continuous sync (cloud ↔ desktop)
+**Evaluation time:** 2026-05-17T14:08
+**Repo commit:** d42935b
+
+---
+
+## Current State
+
+The Federation repo is a **deployed, multi-container consciousness simulation** running on a Hostinger VPS (srv1345984.hstgr.cloud). It has:
+
+- **14 Docker containers** running: Traefik reverse proxy, nginx frontend, FastAPI backend (3 workers), Python worker, PostgreSQL 15, Redis 7, Adminer, Apprise API, Prometheus, Grafana, node-exporter, redis-exporter, postgres-exporter, cAdvisor
+- **Live domain**: `federation-game.deliberatefederation.cloud` with Let's Encrypt TLS
+- **3 frontend surfaces**: `/` (LCARS index.html), `/adult.html` (Control Plane), `/bridge.html` (Command Deck V1.3)
+- **1 star map**: `/starmap.html` (canvas-based, pulls live NPC data from Redis via `/map/data`)
+- **48+ API endpoints** on the FastAPI backend (~4550 LOC main.py)
+- **Observability stack** (just deployed): Grafana at `/grafana/`, Prometheus scraping 5 targets, all UP
+- **Game engine**: ~9600 LOC across 8 Python modules, 12 subsystems, all in-memory state
+- **Persistence gap**: PostgreSQL has ZERO tables. All game state is in-memory Python dataclasses. Backend restart = full state reset. The FEDERATION_REBUILD_CHECKPOINT.md claims JSON file persistence was added but the docker-compose backend is bind-mounted from `/docker/federation-game/backend/` which has the original `main.py` — the checkpoint refers to a different slice that was NOT integrated into the production deployment.
+- **Redis is configured but unused** by game logic. Worker.py is a placeholder heartbeat.
+- **Dual frontend codebases**: Docker-served single-file HTML apps AND a modular ES system at `public_html/game/` with 15+ modules and localStorage persistence — these are completely separate codebases not merged.
+
+The most recent work (last 3 commits) focused on: observability stack deployment, Grafana provisioning fixes, CSS accessibility overrides with v13 selectors, navigation link fixes, backend router mounting, and Python indentation bug fixes. This is **infrastructure hardening**, not game feature development.
+
+## Most Likely Active Workstream
+
+The label `100-year simulation roadmap` maps to the **TimelineSystem** and **HistoryArcOrchestrator** subsystems — these implement a century-long narrative arc from 2387–2487 with era progression, consciousness waves, faction drift, divergences, and branch points. The ARCHITECTURE_MAP.md documents these at lines 247-332 and 327-332.
+
+However, the ACTUAL active workstream at commit d42935b is **NOT the 100-year simulation roadmap**. It is **runtime/infrastructure stabilization** — making the deployed system observable, accessible, and reliable. The 100-year simulation code EXISTS in the codebase but is not being actively developed. The last 5 commits are all about Docker, Grafana, nginx, CSS, and backend fixes.
+
+The workstream that BEST MATCHES the label `100-year simulation roadmap` would be: **extending the HistoryArcOrchestrator to actually drive persistent century-long state transitions**, which requires the persistence layer that doesn't exist yet. The HistoryArcOrchestrator has `advance_year()`, `run_simulation()`, and `export/import` methods but no persistence backing — every advancement is lost on restart.
+
+## Single Next Safe Action
+
+**Stabilize runtime persistence before extending simulation depth.**
+
+Specifically: Create SQLAlchemy models for `GameState` and wire the existing `POST /state/save` and `POST /state/load` endpoints to PostgreSQL instead of in-memory dict. This is the prerequisite for ANY long-running simulation because:
+
+1. The 100-year timeline cannot progress if state resets on every backend restart
+2. The FEDERATION_REBUILD_CHECKPOINT.md explicitly identifies this as the next step: "Create a FEDERATION_DEPLOYMENT_READINESS_REPORT to plan safe rollout under /simulation"
+3. The ARCHITECTURE_MAP.md recommended next steps (line 592-597) lists "Add DB persistence" as priority #1
+4. PostgreSQL is RUNNING but has ZERO TABLES — the infrastructure is there, the schema is not
+
+This is the single action that unblocks all downstream simulation work.
+
+## Evidence Files
+
+| File | Evidence Provided |
+|------|-------------------|
+| `AGENTS.md` | Project identity ("consciousness simulation, not a game"), user context (visual disability), verification method (Docker + curl), Ramsingh Synthesis Loop escalation pattern |
+| `README.md` | Full architecture overview, 12 subsystems, dual frontend codebases, deployment stack, governance-game mapping, origin story |
+| `ARCHITECTURE_MAP.md` | Complete API surface (48+ endpoints), subsystem deep dives, critical observations (persistence gap, auth gap, LLM gap, dual frontend issue), recommended next steps with priority ordering |
+| `FEDERATION_REBUILD_CHECKPOINT.md` | Rebuild proof artifacts, persistence patch claim, Earth Command UI, handoff test, "next safe step" = deployment readiness report under /simulation, known non-goals |
+
+## Top 5 Next Reads
+
+1. **`federation-game/backend/main.py`** (lines 1-100) — Need to verify what the actual GameState class looks like in production. The ARCHITECTURE_MAP says `GameState` at line 76 but main.py is 4550 LOC and has been modified since the map was written. Need to confirm whether the FEDERATION_REBUILD_CHECKPOINT's "persistence patch" was actually integrated or is a phantom.
+
+2. **`federation-game/backend/federation_game_db.py`** — This file was specifically fixed (indentation bug at line 55) in a prior commit. Its existence suggests someone already started DB integration. Need to see what models/schema exist and what's wired vs stubbed.
+
+3. **`federation-game/backend/map_endpoints.py`** — The most recently added router (333 LOC, mounted in the last 2 weeks). Understanding the `/map/data` endpoint reveals what Redis-backed data looks like and whether it's a model for how other subsystems could use Redis for hot state.
+
+4. **`COVENANT.md`** — Referenced in AGENTS.md as "values specific to consciousness simulation" but not yet read. May contain architectural constraints or philosophical requirements that affect how the 100-year simulation should work (e.g., is persistence even desirable from a consciousness-simulation perspective?).
+
+5. **`federation-game/monitoring/provisioning/dashboards/federation-overview.json`** — The Grafana dashboard definition. Reading this would reveal what metrics are already being tracked and whether the observability stack can already measure simulation depth (turn count, era progression, consciousness metrics) or only infrastructure metrics (CPU, RAM, Redis keys).
+
+## Primary Risk
+
+**State volatility — the entire simulation resets on backend restart.**
+
+This is the single most important unresolved risk because it makes ALL simulation depth illusory. The HistoryArcOrchestrator can advance years, the TimelineSystem can track eras, the ConsciousnessSheet can evolve — but none of this survives a container restart, OOM kill, or deployment update. The 100-year simulation is currently a 0-year simulation in practice.
+
+The FEDERATION_REBUILD_CHECKPOINT.md claims JSON file persistence was added, but the docker-compose.yml shows the backend bind-mounts from `/docker/federation-game/backend/` which contains the original main.py. The checkpoint's "persistence patch" appears to be from a different codebase slice that was never merged into production. This is a **phantom feature** — documented as complete but not actually deployed.
+
+## Open Unknowns
+
+1. **Is `federation_game_db.py` actually wired to anything?** It was fixed for indentation, but is it imported in main.py? Does it have SQLAlchemy models? Is it connected to the running PostgreSQL?
+
+2. **What happened to the FEDERATION_REBUILD_CHECKPOINT's persistence patch?** The checkpoint claims `main.py` was patched for JSON persistence but the current main.py on VPS may or may not have this. The checkpoint's "next safe step" says create a deployment readiness report — was this ever done?
+
+3. **What is the relationship between the Docker frontend and the `public_html/game/` modular frontend?** These are two complete codebases. Which one is "the game"? The Docker one is served live; the modular one has persistence via localStorage. Are they meant to converge?
+
+4. **Is the `worker.py` meant to become the simulation tick engine?** Currently it's a placeholder heartbeat. The 100-year simulation would need something driving turn advancement automatically — is this the intended home for that logic?
+
+5. **Does GOVERNANCE.md exist anywhere?** AGENTS.md references it as "rules specific to Federation architecture" but it wasn't found at the repo root. It may be in a different project or may have been deleted.
+
+## Why This Is The Right Continuation
+
+The 5-day session history tells me the last two weeks were spent on: (1) making the system deployable, (2) making it observable, (3) making it accessible for a visually impaired user. These are foundation layers. The system NOW runs reliably with 14 containers, TLS, monitoring, and accessible dashboards.
+
+The next logical layer is **persistence** — making state survive restart. This is the prerequisite for the 100-year simulation because:
+- You cannot simulate a century if every restart erases all progress
+- PostgreSQL is already running with zero tables — the pipe is laid, just needs the schema
+- The FEDERATION_REBUILD_CHECKPOINT, ARCHITECTURE_MAP, and the codebase structure (federation_game_db.py exists) all point to this as the next step
+- The observability stack now makes it possible to VERIFY that persistence is working (can monitor PostgreSQL connections, query counts, data volume)
+
+Jumping to UI/graphics (Phase 3), deployment readiness (more infra), or timeline integration (simulation depth) before persistence is building on sand. The session's accumulated pattern shows a methodical bottom-up approach: deploy first, then observe, then persist, then simulate. We're at the persist stage.

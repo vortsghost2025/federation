@@ -1,0 +1,46 @@
+server:
+  http_listen_port: 9080
+  grpc_listen_port: 0
+
+positions:
+  filename: /tmp/positions.yaml
+
+clients:
+  - url: http://loki:3100/loki/api/v1/push
+
+scrape_configs:
+  - job_name: federation-containers
+    docker_sd_configs:
+      - host: unix:///var/run/docker.sock
+        refresh_interval: 60s
+        filters:
+          - name: label
+            values:
+              - com.docker.compose.project
+    relabel_configs:
+      # Extract compose service → "service" label
+      # (actual meta label name from Docker SD, not the documented shorthand)
+      - source_labels: [__meta_docker_container_label_com_docker_compose_service]
+        target_label: service
+      # Extract compose project → "project" label
+      # (actual meta label name from Docker SD, not the documented shorthand)
+      - source_labels: [__meta_docker_container_label_com_docker_compose_project]
+        target_label: project
+      # Extract container name (strip leading /) → "container" label
+      - source_labels: [__meta_docker_container_name]
+        regex: "/(.*)"
+        target_label: container
+      # Drop ALL __meta_ labels so they don't become stream labels
+      - regex: "__meta_(.+)"
+        action: labeldrop
+    pipeline_stages:
+      - json:
+          expressions:
+            output: log
+            stream: stream
+            time: time
+      - timestamp:
+          source: time
+          format: RFC3339Nano
+      - output:
+          source: output

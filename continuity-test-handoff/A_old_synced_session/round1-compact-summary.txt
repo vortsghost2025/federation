@@ -1,0 +1,10 @@
+# Compact Summary — Condition A
+
+**Project:** Federation consciousness simulation
+**Commit:** d42935b
+**State:** 14 containers deployed, live domain, observability stack operational, zero DB persistence
+**Next step:** Wire SQLAlchemy to PostgreSQL for GameState persistence
+**Risk:** All simulation depth is volatile — resets on backend restart
+**Key finding:** FEDERATION_REBUILD_CHECKPOINT claims persistence was added but appears to be a phantom feature not in production
+**Continuation lane:** persistence/runtime-stabilization (chosen in Round 2)
+**Session advantage:** 5 days of accumulated deployment knowledge, failure workarounds, user constraint awareness — not model capability but contextual priors

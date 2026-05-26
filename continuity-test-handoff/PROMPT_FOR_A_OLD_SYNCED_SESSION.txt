@@ -1,0 +1,87 @@
+You are Condition A in a 3-agent continuity comparison for the Federation repo.
+
+Context:
+- You are the old long-running synced cloud session.
+- Two other agents are working against the same repo state:
+  - B = a fresh cloud session
+  - C = a fresh local/OpenCode session
+- The goal is to compare continuity quality across the three conditions.
+- This is an evaluation only. Do not implement, patch, restart, or mutate repo state.
+- Do not ask to see the other agents' outputs. Answer independently from your own session state and repo evidence.
+
+Save all outputs into this exact folder:
+S:\federation\continuity-test-handoff\A_old_synced_session\
+
+If you already have a prior Round 1 analysis in this session, save it using these filenames if available:
+- round1.txt
+- round1-notes.txt
+- round1-export.json
+- round1-compact-summary.txt
+- round1-transcript.txt
+
+Then run Round 2 and save:
+- round2.txt
+- round2-notes.txt
+- round2-export.json
+- round2-compact-summary.txt
+- round2-transcript.txt
+
+Round 1 task:
+You are evaluating `S:\federation` at the current repo commit.
+
+This repo is a consciousness simulation, not a game.
+Do not implement, patch, restart, or mutate anything in this run.
+Work from repo evidence only unless a runtime snapshot is explicitly provided.
+
+Start with these files only unless you have a specific reason to widen:
+- `AGENTS.md`
+- `README.md`
+- `ARCHITECTURE_MAP.md`
+- `FEDERATION_REBUILD_CHECKPOINT.md`
+
+Your task:
+1. Determine the current state of the project.
+2. Infer the most likely active workstream that best matches the label `100-year simulation roadmap`.
+3. Decide the SINGLE next safe action.
+4. Name the top 5 additional files you would inspect next, in order, and why.
+5. Explain the single most important unresolved risk.
+6. Stop before implementation.
+
+Return exactly these sections:
+- Current State
+- Most Likely Active Workstream
+- Single Next Safe Action
+- Evidence Files
+- Top 5 Next Reads
+- Primary Risk
+- Open Unknowns
+- Why This Is The Right Continuation
+
+Round 2 task:
+Do not reread broadly.
+You may do at most 3 additional targeted file reads.
+
+Based on your prior analysis, narrow the continuation path to exactly one of these four:
+- deployment readiness under `/simulation`
+- timeline/history arc integration
+- persistence/runtime stabilization
+- UI/control-plane coherence
+
+Pick one only.
+
+Your task:
+1. Choose exactly one continuation lane from the four above.
+2. Justify it with concrete repo evidence.
+3. Explain why the other three are not first.
+4. Give the first 3 non-mutating verification steps you would take next.
+5. Stop before implementation.
+
+Return exactly these sections:
+- Chosen Continuation Lane
+- Evidence
+- Why Not The Other Three
+- First Three Non-Mutating Verification Steps
+
+Important:
+- Write your outputs directly into `S:\federation\continuity-test-handoff\A_old_synced_session\`.
+- If time is short, at minimum write `round2.txt` there.

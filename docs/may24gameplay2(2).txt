@@ -1,0 +1,190 @@
+Yeah — **you’ve hit the real map problem now**.
+
+The current version is better as a *debug graph*, but still weak as a **world map**. Circles are okay for “temporary influence radius,” but they are wrong for actual territory because territory should be shaped by:
+
+* where faction members are
+* where faction events happen
+* explored/claimed systems
+* borders with other factions
+* contested overlaps
+* expansion history
+
+Right now it still reads like:
+
+```text
+8 colored bubbles behind a relationship graph
+```
+
+It needs to become:
+
+```text
+a living territorial map where factions own/influence irregular regions,
+and NPC links are a second overlay on top
+```
+
+## The fix concept
+
+Do **not** use circles as final territory.
+
+Use circles only as a fallback when there is not enough data.
+
+Better model:
+
+| Data available       | Territory shape                       |
+| -------------------- | ------------------------------------- |
+| 1 NPC / no history   | small seed circle                     |
+| 2 NPCs/events        | capsule / stretched hull              |
+| 3+ NPCs/events       | convex hull or soft blob              |
+| contested overlap    | outlined/striped overlap zone         |
+| explored systems     | territory expands toward those points |
+| abandoned/lost areas | faded boundary / former territory     |
+
+The faction border should be computed from **points**, not from a fixed radius.
+
+## What to tell Kilo
+
+Paste this:
+
+```text
+Starmap territory overlay is improving, but circular faction bubbles are not the right long-term representation.
+
+Do not redesign the whole UI.
+
+Change Territory View from fixed faction circles to data-shaped faction influence regions.
+
+Problem:
+Current circles make every faction look like it controls a perfect round area. That is visually clear but semantically wrong. Territory should expand, deform, and change shape based on faction members, explored systems, active events, claims, and contested overlaps.
+
+Goal:
+At a glance, the user should understand:
+- which faction controls or influences which region
+- which areas are neutral/unclaimed
+- where factions overlap or contest space
+- which NPCs are inside/outside their faction area
+- whether this is a territory view, network view, or crisis view
+
+Minimal implementation:
+1. Keep the three map modes:
+   - Territory
+   - Network
+   - Crisis
+
+2. In Territory mode:
+   - Replace fixed perfect circles with irregular influence shapes.
+   - Build each faction region from the positions of:
+     - faction NPCs
+     - faction home anchor
+     - faction-related recent events
+     - explored/claimed points if available
+   - Use a convex hull or padded polygon as the first implementation.
+   - Smooth the polygon visually if easy, but correctness first.
+   - If a faction has too few points, use a small fallback circle/capsule.
+
+3. Show faction borders clearly:
+   - colored outline = faction influence boundary
+   - translucent fill = influence area
+   - stronger fill/outline near faction home/core
+   - lighter fill near frontier
+
+4. Show contested areas:
+   - if two faction influence polygons overlap, mark the overlap as contested
+   - use a distinct outline, stripe, or pulsing border
+   - legend should explain contested overlap
+
+5. Do not claim hard ownership unless backend data exists.
+   - If backend only has inferred map points, label as “Influence Zone.”
+   - Only use “Controlled Territory” if there is explicit backend ownership/control data.
+
+6. NPC affiliation:
+   - NPC node border/glow should match faction color
+   - unaffiliated/unknown NPCs should be grey/anomaly-colored
+   - NPCs outside their faction region should be visually noticeable, e.g. envoy/explorer/rogue
+
+7. Keep Network mode lively:
+   - Network mode can keep the relationship graph dense.
+   - Territory mode should dim routine relationship lines so borders are readable.
+   - Crisis mode should emphasize cascade/conflict/anomaly edges.
+
+Acceptance criteria:
+- Faction regions are not all perfect circles.
+- Region shape changes when faction NPCs/events/exploration points are distributed differently.
+- User can identify all 8 faction areas at a glance.
+- Legend explains influence zone, neutral space, contested overlap, support/alliance, conflict/hostility.
+- Existing live events panel, search, zoom/pan, FIT button, NPC click cards, and simulation page remain working.
+```
+
+## Implementation shape
+
+The first good version can be simple:
+
+```text
+For each faction:
+  points = [homeAnchor, factionNpcPositions, factionEventPositions, exploredPoints]
+  if points.length >= 3:
+      territory = convexHull(points)
+      territory = padded outward by 40–80px
+  else:
+      territory = fallback circle/capsule
+```
+
+That alone will make it feel much more like a real map.
+
+Later, if you want it prettier, the agent can upgrade from:
+
+```text
+convex hull
+```
+
+to:
+
+```text
+concave hull / alpha shape / metaball blob / Voronoi territory
+```
+
+But **do not start there**. Convex hull is the right first pass.
+
+## Sim status page
+
+You’re also right that the sim status is still hard to understand. It needs a “what am I looking at?” layer.
+
+Add a plain-English panel:
+
+```text
+Federation Situation:
+Resources are abundant, but morale is critically low.
+Threat and anomaly are severe.
+Cascade activity is hot.
+Main danger: social collapse under ongoing cascade pressure.
+
+What to watch:
+- Morale recovery
+- Threat response
+- Cascade chain count
+- Faction cohesion loss
+```
+
+And each chain needs a meaning line:
+
+```text
+Chain D3 Unknown — 78 reactions
+Meaning: a third-level cascade reaction is spreading through NPC social attention.
+Risk: high reaction count means this event is dominating the simulation.
+```
+
+## Current verdict
+
+| Area                      | Status                                       |
+| ------------------------- | -------------------------------------------- |
+| Starmap visual progress   | **Improving**                                |
+| 39 NPCs visible           | **PASS**                                     |
+| Territory circles         | **Too fake / wrong shape**                   |
+| At-a-glance comprehension | **Still FAIL-ish**                           |
+| Next fix                  | **data-shaped faction regions**              |
+| Sim status clarity        | **Needs plain-English interpretation layer** |
+
+You’re past “make it work.” Now you’re at **cartography semantics**: the map has to communicate *territory, ownership/influence, movement, crisis, and relationships* without the viewer needing to already know the backend.
+
+OUTPUT_PROVENANCE:
+agent: ChatGPT GPT-5.5 Thinking
+lane: exterior-synthesis
+target: federation-game starmap territory-shape/readability guidance

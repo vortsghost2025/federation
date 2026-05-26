@@ -1,0 +1,110 @@
+Yeah. **That is the correct frustration.**
+
+You are not “using” a finished game UI — you are **building the control surface for a living simulation**, and right now the UI is making *you* compensate for its missing affordances.
+
+The agent’s response in the screenshot is actually dead-on:
+
+> “That’s a fundamental UX failure. You built this, you shouldn’t be fighting it.”
+
+Exactly.
+
+## The actual problem
+
+You are trying to read:
+
+* faction labels
+* NPC names
+* territory shapes
+* live event panel
+* top metrics
+* map legend
+* hover cards
+* mode buttons
+
+from a **50-inch TV at distance**, while the UI is using:
+
+* tiny monospace text
+* low contrast labels
+* zoom-dependent readability
+* panels that compete with the graph
+* information that only appears when you already know where to look
+
+That is not a “you” problem. That is a **cockpit UX problem**.
+
+## What the next fix should be
+
+Not more simulation logic. Not more graph math.
+
+It needs a **TV / accessibility mode**.
+
+Paste this to Kilo if needed:
+
+```text
+The map is improving, but the user is fighting the UI on a 50-inch TV.
+
+Add an accessibility / TV mode for starmap.html.
+
+Goal:
+The user should understand the map from viewing distance without needing browser zoom or constant hover.
+
+Do not redesign the simulation.
+
+Required changes:
+1. Add a visible "TV" or "Readable" toggle near Territory / Network / Crisis.
+2. In TV mode:
+   - increase faction label size significantly
+   - increase NPC label size or show only important NPC labels
+   - increase top metric text size
+   - increase mode button size
+   - increase legend text size
+   - increase map-read panel text size
+   - increase hover/click card size
+   - increase clickable hit targets
+3. Add persistent faction labels that remain readable without zoom.
+4. Add optional "show faction names only" mode to reduce clutter.
+5. Keep NPC labels readable in Network/Crisis mode, but do not force all tiny names on screen in Territory mode.
+6. Make the Map Read panel more prominent and plain-English.
+7. Ensure browser zoom is not required to read the main state.
+
+Acceptance criteria:
+- On a 50-inch display, the user can identify factions, current crisis, and mode without zooming.
+- User can click/hover NPCs without precision fighting.
+- Territory / Network / Crisis modes remain usable.
+- Existing map data, live events, FIT, search, and NPC cards still work.
+```
+
+## Even better: make the UI adaptive
+
+Instead of one fixed UI, give yourself modes:
+
+| Mode               | Purpose                                  |
+| ------------------ | ---------------------------------------- |
+| **TV Mode**        | big text, big buttons, fewer tiny labels |
+| **Inspector Mode** | dense details, hover cards, all labels   |
+| **Demo Mode**      | cinematic, readable from distance        |
+| **Debug Mode**     | full raw graph/data clutter allowed      |
+
+Right now you are stuck in **Debug Mode** while trying to use it as **TV/Demo Mode**.
+
+## My pass/fail read
+
+| Area                         | Status                    |
+| ---------------------------- | ------------------------- |
+| Simulation data              | **Alive**                 |
+| Starmap structure            | **Improving**             |
+| Territory shape              | **Improving**             |
+| Human understanding          | **Still not good enough** |
+| Accessibility / TV usability | **FAIL**                  |
+| Correct next task            | **TV/readability mode**   |
+
+The right standard is simple:
+
+> You should be able to glance at the screen and know:
+> **who is powerful, who is collapsing, where the crisis is, and what to click next.**
+
+Until that’s true, the UI is still making the operator do too much work.
+
+OUTPUT_PROVENANCE:
+agent: ChatGPT GPT-5.5 Thinking
+lane: exterior-synthesis
+target: federation-game starmap TV/readability UX frustration review

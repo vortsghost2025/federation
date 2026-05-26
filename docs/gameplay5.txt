@@ -1,0 +1,166 @@
+https://github.com/vortsghost2025/federation
+
+## First-sight read: it looks **way more real than “a game repo”**
+
+From here, `vortsghost2025/federation` presents as a **public, deployable AI-governance simulation disguised as a Star Trek / LCARS game**.
+
+The README’s first impression is unusually clear: it explicitly says **“A Star Trek consciousness simulation — not a game”**, then immediately backs that with concrete surfaces: a kid-friendly `index.html` Starship Simulator and a deeper `adult.html` strategic control plane. 
+
+## What looks strong
+
+### 1. The repo tells a coherent story
+
+It does not just say “cool simulation.” It maps the game layer to your governance architecture:
+
+| Game layer          | Governance layer         |
+| ------------------- | ------------------------ |
+| Factions            | lanes                    |
+| Event cards         | inbox messages           |
+| Consciousness sheet | CPS score                |
+| Chaos mode          | drift detection          |
+| Turn cycle          | checkpoint stack         |
+| Rival NPCs          | adversarial verification |
+
+That part is very you, and it lands. The README directly frames this as proof-of-concept lineage for Archivist, Library, and SwarmMind. 
+
+### 2. The backend is no longer a toy shim
+
+`main.py` is importing real subsystem modules: factions, timeline, NPCs, NPC chat, NPC autonomy, quests, technology, DB manager, rival simulator, consciousness sheet, history arc, political engine, simulation engine, faction AI, event cascade, cognition, narrator, LLM router, and NPC memory. 
+
+That means from the code surface, this looks like a **living simulation runtime**, not static HTML plus fake API buttons.
+
+### 3. The LLM/NPC layer is obvious now
+
+The `llm_router.py` file is a big credibility jump. It describes multi-provider routing for NPC cognition, including Ollama, Cloudflare Workers AI, Together, NVIDIA NIM, Gemini, Grok/xAI, and OpenRouter, with fallbacks, Redis audit logging, circuit breakers, rate limits, and task-class routing. It also explicitly uses your preferred safe local default: `qwen2.5-coder:3b-instruct-q4_K_M`, with 7B disabled unless `OLLAMA_HEAVY_ENABLED=1`. 
+
+That is the part that makes the repo read like:
+
+> “This is a game-shaped front end over a distributed autonomous NPC cognition system.”
+
+Not just “Star Trek web game.”
+
+### 4. NPC autonomy is documented like an actual agent system
+
+`npc_autonomy.py` says NPCs generate thoughts, form opinions, take autonomous actions, develop relationships, create rumors/news, and make contextual decisions based on goals, mood, relationships, and world state. It stores those in Redis keys like `npc_thoughts:{char_id}`, `npc_actions:{char_id}`, `npc_relationships:{char_id}`, `npc_world_events`, and `npc_decisions:{char_id}`. 
+
+That is the “real AI agents disguised as a game” part showing through.
+
+## What looks messy / confusing from outside
+
+### 1. The README under-describes the current agent/NPC breakthrough
+
+The README still emphasizes “48+ API endpoints,” “12 subsystems,” and “LCARS interface.” That is good, but it undersells the wild part:
+
+> **39-ish autonomous NPCs with local/remote LLM cognition, Redis memory, decision logs, faction dynamics, and simulation ticks.**
+
+That should probably be near the top.
+
+Right now a visitor may think:
+**“Neat management sim.”**
+
+What it actually seems to be:
+**“A persistent multi-agent society simulator where governance mechanics are tested through game metaphors.”**
+
+### 2. Architecture docs may already be slightly stale
+
+`ARCHITECTURE_MAP.md` says database state has zero tables and all state is in-memory, but `main.py` now clearly initializes `db_manager`, tries to load latest snapshots, and has `save_to_db()` snapshot logic.  
+
+So from here, I would flag:
+
+> **Docs need a persistence-state update.**
+> It may have started as in-memory, but the current backend has DB snapshot restore/save plumbing.
+
+### 3. `worldguide.html` does not show up in the indexed repo search
+
+Given your earlier screenshot about Codex building a World Guide / Lore page, I searched for `worldguide`, NPC/faction/creature terms, and related nav language. It did **not** surface. That likely means one of these:
+
+| Possibility             | Meaning                                   |
+| ----------------------- | ----------------------------------------- |
+| Not pushed yet          | Codex changed VPS/local but not GitHub    |
+| Search index lag        | GitHub connector has not caught up        |
+| Different filename/path | Maybe page was created under another name |
+| Branch mismatch         | Work exists off `main`                    |
+
+So from GitHub as of this view, I would **not trust that the World Guide task is represented in the public repo yet**.
+
+## Best one-line description
+
+I would describe it like this:
+
+> **Federation is a Star Trek–styled, browser-playable governance simulation where autonomous NPC agents, faction politics, memory, LLM cognition, and constitutional decision mechanics run underneath a game interface.**
+
+That is much stronger than “game.”
+
+## What I’d fix first
+
+### Priority 1 — add a blunt top README banner
+
+Something like:
+
+```md
+## What This Actually Is
+
+Federation is a persistent AI society simulator disguised as a Star Trek LCARS game.
+
+Under the interface, 39+ NPC agents generate thoughts, moods, goals, faction decisions, memories, world events, and political consequences using Redis-backed autonomy plus local/remote LLM routing. The game mechanics are a readable surface for testing constitutional governance, drift, faction pressure, continuity, and multi-agent decision-making.
+```
+
+### Priority 2 — add a “Current Runtime Capabilities” section
+
+The README should explicitly list:
+
+* autonomous NPC thoughts/actions
+* NPC memory and mood
+* faction dynamics
+* LLM router
+* Ollama local 3B default
+* Redis-backed state
+* DB snapshot persistence
+* world-state decay/cascade handling
+* Earth / Bridge / Starship / Adult views
+
+### Priority 3 — update architecture map
+
+`ARCHITECTURE_MAP.md` should be revised so it no longer implies persistence is basically unused, unless that doc is intentionally historical.
+
+### Priority 4 — verify whether Codex actually pushed the World Guide
+
+Given the connector view, I would tell Codex:
+
+```text
+Verify the World Guide landed in the GitHub repo, not only on VPS/local.
+
+Acceptance:
+- worldguide.html exists on main or current working branch
+- all nav surfaces link to it: index, adult, bridge, starmap, simulation, earth
+- Dockerfile/frontend copy rules include it
+- git status clean
+- commit hash provided
+- live URL verified after deploy
+```
+
+## Verdict
+
+**It looks legit.** More than legit: it looks like the repo has crossed from “prototype game” into **living multi-agent simulation infrastructure**.
+
+The main issue is not substance. The substance is there.
+
+The issue is **presentation lag**: the repo still introduces itself like a rich LCARS game, while the actual code now says:
+
+> “This is a local/remote LLM-powered NPC society and governance lab.”
+
+That should be made impossible to miss.
+
+---
+
+OUTPUT_PROVENANCE:
+agent: ChatGPT GPT-5.5 Thinking
+lane: exterior-synthesis
+generated_at: 2026-05-24
+target: exterior review of `vortsghost2025/federation` from connected GitHub repository state
+
+
+
+S:\federation\public_html
+
+
