@@ -5550,6 +5550,40 @@ async def state_info():
         return {"db_initialized": False, "snapshot_count": 0, "error": str(e)}
 
 
+@app.get("/state/safe-to-restart")
+async def safe_to_restart():
+    """
+    Check if the simulator is in a safe state for restart.
+    Returns safety criteria for the auto-restart manager.
+    """
+    safety_issues = []
+
+    # Check if async operations are in progress
+    async_op_in_progress = game_state.async_tick_in_progress if hasattr(game_state, 'async_tick_in_progress') else False
+    if async_op_in_progress:
+        safety_issues.append("async_operations_in_progress")
+
+    # Check if history arc is mid-transition
+    history_arc = game_state.history_arc
+    if history_arc and hasattr(history_arc, 'current_era'):
+        # Era transitions can leave state inconsistent
+        safety_issues.append("history_arc_transition_possible")
+
+    # Check if autosave is in progress
+    if hasattr(game_state, 'saving') and game_state.saving:
+        safety_issues.append("autosave_in_progress")
+
+    # Determine overall safety
+    safe = len(safety_issues) == 0
+
+    return {
+        "safe": safe,
+        "issues": safety_issues,
+        "turn": game_state.turn,
+        "last_autosave": game_state.engine_systems.get("persistence", {}).get("last_checkpoint"),
+    }
+
+
 if __name__ == "__main__":
     import uvicorn
 

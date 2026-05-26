@@ -24,16 +24,16 @@ services:
   backend:
     build: /docker/federation-game/backend
     command:
-    - uvicorn
-    - main:app
-    - --host
-    - 0.0.0.0
-    - --port
-    - '8000'
+      - uvicorn
+      - main:app
+      - --host
+      - 0.0.0.0
+      - --port
+      - '8000'
     restart: unless-stopped
     env_file:
-    - .env
-  volumes:
+      - .env
+    volumes:
       - /docker/federation-game/backend:/app:ro
     healthcheck:
       test:
@@ -56,13 +56,13 @@ services:
           cpus: "1.0"
     labels:
       - traefik.enable=true
-        - "traefik.http.routers.fed-api.rule=Host(`federation-game.deliberatefederation.cloud`) && (PathPrefix(`/npcs`) || PathPrefix(`/world`) || PathPrefix(`/simulation/`) || PathPrefix(`/political`) || PathPrefix(`/factions`) || PathPrefix(`/broadcast-events`) || PathPrefix(`/quests`) || PathPrefix(`/technology`) || PathPrefix(`/history-arc`) || PathPrefix(`/atlas`) || PathPrefix(`/consciousness`) || PathPrefix(`/engine-status`) || PathPrefix(`/map/`) || PathPrefix(`/state`) || PathPrefix(`/systems-overview`) || PathPrefix(`/timeline`) || PathPrefix(`/rivals`) || PathPrefix(`/reset`) || PathPrefix(`/log`) || PathPrefix(`/ws`) || PathPrefix(`/healthz`) || PathPrefix(`/docs`) || PathPrefix(`/openapi.json`) || PathPrefix(`/redoc`) || PathPrefix(`/cognition`) || PathPrefix(`/narrator`))"
+      - "traefik.http.routers.fed-api.rule=Host(`federation-game.deliberatefederation.cloud`) && (PathPrefix(`/npcs`) || PathPrefix(`/world`) || PathPrefix(`/simulation/`) || PathPrefix(`/political`) || PathPrefix(`/factions`) || PathPrefix(`/broadcast-events`) || PathPrefix(`/quests`) || PathPrefix(`/technology`) || PathPrefix(`/history-arc`) || PathPrefix(`/atlas`) || PathPrefix(`/consciousness`) || PathPrefix(`/engine-status`) || PathPrefix(`/map/`) || PathPrefix(`/state`) || PathPrefix(`/systems-overview`) || PathPrefix(`/timeline`) || PathPrefix(`/rivals`) || PathPrefix(`/reset`) || PathPrefix(`/log`) || PathPrefix(`/ws`) || PathPrefix(`/healthz`) || PathPrefix(`/docs`) || PathPrefix(`/openapi.json`) || PathPrefix(`/redoc`) || PathPrefix(`/cognition`) || PathPrefix(`/narrator`))"
       - traefik.http.routers.fed-api.entrypoints=websecure
       - traefik.http.routers.fed-api.tls.certresolver=letsencrypt
       - "traefik.http.routers.fed-api.priority=100"
       - traefik.http.routers.fed-api.service=fed-api-svc
       - traefik.http.services.fed-api-svc.loadbalancer.server.port=8000
-        - "traefik.http.routers.fed-api-http.rule=Host(`federation-game.deliberatefederation.cloud`) && (PathPrefix(`/npcs`) || PathPrefix(`/world`) || PathPrefix(`/simulation/`) || PathPrefix(`/political`) || PathPrefix(`/factions`) || PathPrefix(`/broadcast-events`) || PathPrefix(`/quests`) || PathPrefix(`/technology`) || PathPrefix(`/history-arc`) || PathPrefix(`/atlas`) || PathPrefix(`/consciousness`) || PathPrefix(`/engine-status`) || PathPrefix(`/map/`) || PathPrefix(`/state`) || PathPrefix(`/systems-overview`) || PathPrefix(`/timeline`) || PathPrefix(`/rivals`) || PathPrefix(`/reset`) || PathPrefix(`/log`) || PathPrefix(`/ws`) || PathPrefix(`/healthz`) || PathPrefix(`/docs`) || PathPrefix(`/openapi.json`) || PathPrefix(`/redoc`) || PathPrefix(`/cognition`) || PathPrefix(`/narrator`))"
+      - "traefik.http.routers.fed-api-http.rule=Host(`federation-game.deliberatefederation.cloud`) && (PathPrefix(`/npcs`) || PathPrefix(`/world`) || PathPrefix(`/simulation/`) || PathPrefix(`/political`) || PathPrefix(`/factions`) || PathPrefix(`/broadcast-events`) || PathPrefix(`/quests`) || PathPrefix(`/technology`) || PathPrefix(`/history-arc`) || PathPrefix(`/atlas`) || PathPrefix(`/consciousness`) || PathPrefix(`/engine-status`) || PathPrefix(`/map/`) || PathPrefix(`/state`) || PathPrefix(`/systems-overview`) || PathPrefix(`/timeline`) || PathPrefix(`/rivals`) || PathPrefix(`/reset`) || PathPrefix(`/log`) || PathPrefix(`/ws`) || PathPrefix(`/healthz`) || PathPrefix(`/docs`) || PathPrefix(`/openapi.json`) || PathPrefix(`/redoc`) || PathPrefix(`/cognition`) || PathPrefix(`/narrator`))"
       - traefik.http.routers.fed-api-http.entrypoints=web
       - "traefik.http.routers.fed-api-http.priority=100"
       - traefik.http.routers.fed-api-http.service=fed-api-http-svc
@@ -84,7 +84,6 @@ services:
       - traefik.http.routers.federation-game-http.entrypoints=web
       - traefik.http.routers.federation-game-http.service=federation-game-http-svc
       - traefik.http.services.federation-game-http-svc.loadbalancer.server.port=80
-      # Priority-200: catch simulation.html BEFORE backend PathPrefix(/simulation/) rule
       - "traefik.http.routers.fed-sim-html.rule=Host(`federation-game.deliberatefederation.cloud`) && (Path(`/simulation.html`) || Path(`/bridge.html`) || Path(`/starmap.html`) || Path(`/earth.html`))"
       - traefik.http.routers.fed-sim-html.entrypoints=websecure
       - traefik.http.routers.fed-sim-html.tls.certresolver=letsencrypt
@@ -105,7 +104,7 @@ services:
     build: /docker/federation-game/backend
     command: python -u worker.py
     restart: unless-stopped
-  env_file:
+    env_file:
       - .env
     healthcheck:
       test:
@@ -182,7 +181,7 @@ services:
       - /docker/federation-game/monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
       - prometheus_data:/prometheus
     command:
-      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--config.file=/etc/postgresql/prometheus.yml'
       - '--storage.tsdb.retention.time=7d'
       - '--storage.tsdb.retention.size=512MB'
     networks:
@@ -300,6 +299,29 @@ services:
         limits:
           memory: 256M
           cpus: "0.50"
+
+  auto-restart-manager:
+    build: /docker/federation-game/backend
+    command: python -u monitoring/auto_restart_manager.py
+    restart: unless-stopped
+    env_file:
+      - .env
+    healthcheck:
+      test:
+        - CMD
+        - python3
+        - -c
+        - "import os; open('/proc/1/cmdline').read()"
+      interval: 60s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+    depends_on:
+      - redis
+    volumes:
+      - /docker/federation-game:/app:ro
+    networks:
+      - fed-net
 
 networks:
   fed-net:
