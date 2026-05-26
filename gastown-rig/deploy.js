@@ -12,18 +12,19 @@
  * Environment:
  * VPS_HOST - VPS IP (default: 187.77.3.56)
  * VPS_USER - SSH user (default: root)
- * VPS_KEY_PATH - Path to SSH private key (default: ~/.ssh/id_rsa)
+ * VPS_KEY_PATH - Path to SSH private key (default: ~/.ssh/id_ed25519)
  * FEDERATION_DIR - Project root on rig (default: current directory)
  * VPS_BASE_DIR - Project root on VPS (default: /docker/federation-game)
  */
-import { connect } from 'ssh2';
+import { Client } from 'ssh2';
 import { readFileSync, existsSync, readdirSync, statSync } from 'node:fs';
 import { join, basename, resolve } from 'node:path';
 import { homedir } from 'node:os';
+import { execFileSync } from 'node:child_process';
 
 const VPS_HOST = process.env.VPS_HOST || '187.77.3.56';
 const VPS_USER = process.env.VPS_USER || 'root';
-const VPS_KEY_PATH = process.env.VPS_KEY_PATH || join(homedir(), '.ssh', 'id_rsa');
+const VPS_KEY_PATH = process.env.VPS_KEY_PATH || join(homedir(), '.ssh', 'id_ed25519');
 const FEDERATION_DIR = process.env.FEDERATION_DIR || process.cwd();
 const VPS_BASE_DIR = process.env.VPS_BASE_DIR || '/docker/federation-game';
 
@@ -144,25 +145,26 @@ function sshExec(conn, cmd) {
 }
 
 function sshWriteFile(conn, localPath, remotePath) {
-  return new Promise((resolve, reject) => {
-    const content = readFileSync(localPath);
-    const cmd = `cat > '${remotePath}'`;
-    conn.exec(cmd, (err, stream) => {
-      if (err) return reject(err);
-      let stderr = '';
-      stream.stderr.on('data', d => stderr += d.toString());
-      stream.on('close', (code) => {
-        if (code !== 0) reject(new Error(`Write failed exit ${code}: ${stderr.trim()}`));
-        else resolve();
-      });
-      stream.write(content);
-      stream.end();
+  // Use system SSH (scp-style pipe) instead of ssh2 exec for reliable file transfer
+  try {
+    execFileSync('ssh', [
+      '-o', 'StrictHostKeyChecking=accept-new',
+      '-i', VPS_KEY_PATH,
+      '-p', '22',
+      `${VPS_USER}@${VPS_HOST}`,
+      `cat > '${remotePath}'`
+    ], {
+      input: readFileSync(localPath),
+      timeout: 30000
     });
-  });
+    return Promise.resolve();
+  } catch (e) {
+    return Promise.reject(e);
+  }
 }
 
 async function run() {
-  const conn = new connect();
+  const conn = new Client();
   
   await new Promise((resolve, reject) => {
     conn.on('ready', resolve);
