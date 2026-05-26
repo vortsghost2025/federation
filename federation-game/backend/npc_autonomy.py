@@ -2062,6 +2062,7 @@ def _score_decision_option(
     has_rivals,
     recent_event_count,
     broadcast_event_count=0,
+    has_active_quests=False,
 ):
     score = 1.0
     mood_biases = MOOD_DECISION_BIAS.get(mood, {})
@@ -2092,6 +2093,13 @@ def _score_decision_option(
     except Exception:
         pass  # bias is optional — never break decision scoring
 
+    # Quest-aware bias: NPCs with active quests strongly prefer advance_goal
+    if has_active_quests and category == "advance_goal":
+        score *= 1.4
+    # Cap cascade suppression of advance_goal when NPC has quests
+    if has_active_quests and category == "advance_goal" and score < 0.5:
+        score = 0.5
+
     score *= _world_state_decision_modifier(category)
     score += random.uniform(-0.1, 0.1)
     return max(0.1, score)
@@ -2115,6 +2123,17 @@ def evaluate_decision_options(char_id, char_name, archetype, affiliation, mood="
         )
     broadcast_event_count = len(broadcast_events)
 
+    # Check if NPC has active quests (quest-aware decision bias)
+    has_active_quests = False
+    try:
+        _qr = _get_redis()
+        _quest_data = _qr.get(f"npc_quests:active:{char_id}")
+        if _quest_data:
+            _quest_list = json.loads(_quest_data)
+            has_active_quests = len(_quest_list) > 0
+    except Exception:
+        pass  # quest check is optional — never break decision evaluation
+
     options = []
     for cat in DECISION_CATEGORIES:
         score = _score_decision_option(
@@ -2127,6 +2146,7 @@ def evaluate_decision_options(char_id, char_name, archetype, affiliation, mood="
             has_rivals,
             recent_event_count,
             broadcast_event_count,
+            has_active_quests=has_active_quests,
         )
         reasons = []
         mood_biases = MOOD_DECISION_BIAS.get(mood, {})

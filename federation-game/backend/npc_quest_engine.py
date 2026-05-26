@@ -52,12 +52,12 @@ if not logger.handlers:
 
 MAX_LOG_ENTRIES = 200
 MAX_ACTIVE_QUESTS_PER_NPC = 3
-MAX_QUEST_AGE_TICKS = 50
-ABANDON_CHANCE = 0.10
-SETBACK_CHANCE = 0.05
-MAX_QUEST_AGE_HARD_CAP = 80
+MAX_QUEST_AGE_TICKS = 100
+ABANDON_CHANCE = 0.05
+SETBACK_CHANCE = 0.02
+MAX_QUEST_AGE_HARD_CAP = 120
 NPC_OBJECTIVE_SCALE = (
-    0.1  # NPCs get 10% of original targets (designed for interactive, not 1/tick)
+    0.25  # NPCs get 25% of original targets (more achievable for 1/tick autonomy)
 )
 
 # Skill-to-faction keyword mapping for proper cross-referencing
@@ -598,7 +598,7 @@ class NPCQuestEngine:
             completed_json = json.dumps(quest_data, default=str)
             r.lpush(completed_key, completed_json)
             r.hdel(active_key, quest_id)
-    
+
             r.delete(progress_key)
 
             if rewards:
