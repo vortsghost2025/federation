@@ -269,21 +269,27 @@ html{height:auto;min-height:100vh}body{height:auto;min-height:100vh;overflow-x:h
 .intro-legend{display:flex;gap:12px;margin-top:8px;flex-wrap:wrap;font-size:0.8125rem}
 .legend-item{display:flex;align-items:center;gap:4px}
 .legend-dot{width:14px;height:14px;border-radius:50%;flex-shrink:0}
-.faction-card{background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.06);border-radius:8px;padding:10px 12px;margin-bottom:8px;cursor:pointer;transition:border-color 0.3s,background 0.3s,box-shadow 0.3s,opacity 0.4s,max-height 0.6s}
+.faction-card{background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.06);border-radius:6px;padding:5px 10px;margin-bottom:3px;cursor:pointer;transition:border-color 0.3s,background 0.3s,box-shadow 0.3s;position:relative;overflow:hidden}
+.faction-card::before{content:'';position:absolute;left:0;top:2px;bottom:2px;width:3px;border-radius:2px;background:rgba(255,255,255,0.08);transition:background 0.5s}
 .faction-card:hover{background:rgba(255,255,255,0.05);border-color:rgba(0,188,212,0.2)}
-.faction-card.faction-quiet{opacity:0.2;max-height:0;padding:0;margin:0;border:none;overflow:hidden;pointer-events:none}
-.faction-card.faction-warning{border-color:rgba(255,193,7,0.5);box-shadow:0 0 8px rgba(255,193,7,0.15)}
-.faction-card.faction-critical{border-color:rgba(244,67,54,0.6);box-shadow:0 0 12px rgba(244,67,54,0.2);animation:rootPulse 3s ease infinite}
-.faction-all-clear{font-family:'Orbitron',sans-serif;font-size:0.8125rem;color:var(--sev-low);letter-spacing:1px;text-transform:uppercase;padding:12px;text-align:center;background:rgba(76,175,80,0.06);border:1px solid rgba(76,175,80,0.15);border-radius:8px}
-.faction-card.active{box-shadow:0 0 12px rgba(0,188,212,0.15);border-color:rgba(0,188,212,0.35)}
-.faction-header{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:8px}
-.faction-name{font-family:'Orbitron',sans-serif;font-size:0.9375rem;font-weight:700;letter-spacing:1px}
-.faction-power{font-family:'Orbitron',sans-serif;font-size:1.125rem;font-weight:900}
-.faction-sub{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-top:6px;font-size:0.8125rem}
-.faction-cohesion-label{color:var(--dim);font-size:0.8125rem;text-transform:uppercase;letter-spacing:1px}
-.faction-cohesion-bar{flex:1;height:8px;background:rgba(255,255,255,0.06);border-radius:4px;overflow:hidden}
-.faction-cohesion-fill{height:100%;border-radius:4px;transition:width 0.8s ease}
-.faction-action{color:var(--dim);font-size:0.8125rem;margin-top:4px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.faction-card.expanded{background:rgba(255,255,255,0.05);border-color:rgba(0,188,212,0.25);padding:10px 12px;margin-bottom:8px}
+.faction-card.faction-warning{box-shadow:0 0 4px rgba(255,193,7,0.1)}
+.faction-card.faction-critical{box-shadow:0 0 6px rgba(244,67,54,0.15);animation:rootPulse 3s ease infinite}
+
+.faction-header{display:flex;flex-wrap:wrap;align-items:center;gap:6px}
+.faction-name{font-family:'Orbitron',sans-serif;font-size:0.8125rem;font-weight:700;letter-spacing:0.5px}
+.faction-name.expanded{font-size:0.9375rem}
+.faction-power{font-family:'Orbitron',sans-serif;font-size:0.875rem;font-weight:700;margin-left:auto;display:none}
+.faction-card.expanded .faction-power{display:inline}
+/* Sub details hidden by default, shown on expand */
+.faction-sub{display:none;flex-wrap:wrap;align-items:center;gap:6px;margin-top:5px;font-size:0.75rem}
+.faction-card.expanded .faction-sub{display:flex}
+.faction-cohesion-label{color:var(--dim);font-size:0.6875rem;text-transform:uppercase;letter-spacing:1px}
+.faction-cohesion-bar{flex:1;height:6px;background:rgba(255,255,255,0.06);border-radius:3px;overflow:hidden;max-width:120px}
+.faction-cohesion-fill{height:100%;border-radius:3px;transition:width 0.8s ease}
+.faction-action{color:var(--dim);font-size:0.75rem;margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:none}
+.faction-card.expanded .faction-action{display:block}
+.faction-card.expanded .faction-action:empty{display:none}
 .faction-stances{display:flex;flex-wrap:wrap;gap:4px;margin-top:6px}
 .stance-dot{width:16px;height:16px;border-radius:50%;border:1px solid rgba(255,255,255,0.1);transition:transform 0.2s,box-shadow 0.2s}
 .stance-dot:hover{transform:scale(1.5);box-shadow:0 0 6px currentColor}
@@ -291,7 +297,7 @@ html{height:auto;min-height:100vh}body{height:auto;min-height:100vh;overflow-x:h
 .stance-dot.neutral{background:#FFC107;border-color:#FFC107}
 .stance-dot.enemy{background:var(--red);border-color:var(--red)}
 .faction-detail{max-height:0;overflow:hidden;transition:max-height 0.4s ease,opacity 0.3s ease;opacity:0}
-.faction-card.active .faction-detail{max-height:600px;opacity:1}
+.faction-card.expanded .faction-detail{max-height:600px;opacity:1}
 .detail-stances{margin-top:8px;font-size:0.8125rem}
 .detail-stance-row{display:flex;flex-wrap:wrap;align-items:center;gap:8px;padding:2px 0}
 .detail-stance-name{color:var(--dim);min-width:140px}
@@ -1186,28 +1192,6 @@ if (existingBadge) existingBadge.remove();
 }
 
 /* ═══ FACTIONS ═══ */
-function isFactionNotable(fk,f,keys){
-/* A faction is "notable" if it has extreme cohesion, hostile/ally stances, or recent action */
-var dyn=f.dynamics||f;
-var cohesionVal=dyn.cohesion!=null?dyn.cohesion:(f.cohesion!=null?f.cohesion:50);
-if(cohesionVal<35||cohesionVal>75)return true;
-var stances=f.stances||{};
-for(var si=0;si<keys.length;si++){
-var otherK=keys[si];if(otherK===fk)continue;
-var raw=stances[otherK];
-if(raw!=null){
-var val=(typeof raw==='object'&&raw.value!=null)?raw.value:raw;
-if(typeof val==='number'){if(val>=0.72||val<=0.28)return true}
-if(typeof raw==='object'&&raw.label){
-var lbl=raw.label.toLowerCase();
-if(lbl==='ally'||lbl==='enemy'||lbl==='hostile'||lbl==='friendly')return true;
-}
-}
-}
-var recentActions=f.recent_actions||f.recent_action||[];
-if(Array.isArray(recentActions)&&recentActions.length>0)return true;
-return false;
-}
 function renderFactions(factions){
 if(!factions)return;
 var list=document.getElementById('faction-list');
@@ -1220,45 +1204,49 @@ for(var fi=0;fi<keys.length;fi++){
 var f=factions[fk],color=FACTION_COLORS[fk]||'#78909C';
 var display=FACTION_DISPLAY[fk]||(f.name||fk.replace(/_/g,' '));
 var card=document.createElement('div');card.className='faction-card';card.dataset.faction=fk;card.setAttribute('tabindex','0');
-var stancesHtml='';
-for(var si=0;si<keys.length;si++){
-var otherK=keys[si];if(otherK===fk)continue;
-var rawStance=f.stances?f.stances[otherK]:null;
-var sc=stanceToClass(rawStance);
-var dotColor=sc==='ally'?'#4CAF50':(sc==='enemy'?'#F44336':'#FFC107');
-var sl=stanceLabel(rawStance);
-stancesHtml+='<div class="stance-dot '+sc+'" title="'+esc(FACTION_DISPLAY[otherK]||otherK)+': '+esc(sl)+'" style="color:'+dotColor+'"></div>';
-}
-card.innerHTML='<div class="faction-header"><span class="faction-name" style="color:'+color+'">'+esc(display)+'</span><span class="faction-power" style="color:'+color+'" data-field="power">\u2014</span></div><div class="faction-sub"><span class="faction-cohesion-label">Cohesion</span><div class="faction-cohesion-bar"><div class="faction-cohesion-fill" data-field="cohesion-fill" style="width:0"></div></div></div><div class="faction-action" data-field="action">No recent action</div><div class="faction-stances">'+stancesHtml+'</div><div class="faction-detail"><div class="detail-stances" data-field="detail-stances"></div><div class="detail-action-history" data-field="detail-history"></div></div>';
-card.addEventListener('click',function(){var wasActive=card.classList.contains('active');list.querySelectorAll('.faction-card').forEach(function(c){c.classList.remove('active')});if(!wasActive){card.classList.add('active');expandedFaction=fk}else{expandedFaction=null}fillFactionDetail(fk,factions)});
-card.addEventListener('keydown',function(e){if(e.key==='Enter'||e.key===' '){e.preventDefault();card.click()}});
-list.appendChild(card);
-})(keys[fi]);
-}
-}
-for(var ui=0;ui<keys.length;ui++){
-var uk=keys[ui],uf=factions[uk];
-var ucard=list.querySelector('[data-faction="'+uk+'"]');if(!ucard)continue;
-var dyn=uf.dynamics||uf;
-var cohesionVal=dyn.cohesion!=null?dyn.cohesion:(uf.cohesion!=null?uf.cohesion:50);
-var cohesionPct=clamp(cohesionVal,0,100);
-var cohesionColor=cohesionPct>60?'#4CAF50':(cohesionPct>30?'#FF9800':'#F44336');
-var cFill=ucard.querySelector('[data-field="cohesion-fill"]');if(cFill){cFill.style.width=cohesionPct+'%';cFill.style.background=cohesionColor}
-var pwr=ucard.querySelector('[data-field="power"]');if(pwr)pwr.textContent=uf.power!=null?uf.power:(dyn.power!=null?dyn.power:'\u2014');
-var act=ucard.querySelector('[data-field="action"]');if(act){var recentActions=uf.recent_actions||uf.recent_action||[];var actionText='No recent action';if(Array.isArray(recentActions)&&recentActions.length>0){var first=recentActions[0];actionText=typeof first==='string'?first:(first.action||first.description||'acting');actionText=actionText.replace(/_/g,' ').replace(/\b\w/g,function(c){return c.toUpperCase()})}act.textContent=actionText}
-/* Fix 1: Hide normal factions — only show notable ones */
-var notable=isFactionNotable(uk,uf,keys);
-ucard.classList.remove('faction-quiet','faction-warning','faction-critical');
-if(!notable){ucard.classList.add('faction-quiet')}
-else if(cohesionPct<30){ucard.classList.add('faction-critical')}
-else if(cohesionPct<40){ucard.classList.add('faction-warning')}
-if(expandedFaction===uk)fillFactionDetail(uk,factions);
-}
-/* Add "all clear" message when no factions are notable */
-var existingAC=list.querySelector('.faction-all-clear');
-var notableCount=list.querySelectorAll('.faction-card:not(.faction-quiet)').length;
-if(notableCount===0&&!existingAC){var ac=document.createElement('div');ac.className='faction-all-clear';ac.textContent='All factions stable \u2014 no alerts';list.appendChild(ac)}
-else if(notableCount>0&&existingAC){existingAC.remove()}
+      var stancesHtml='';
+      for(var si=0;si<keys.length;si++){
+      var otherK=keys[si];if(otherK===fk)continue;
+      var rawStance=f.stances?f.stances[otherK]:null;
+      var sc=stanceToClass(rawStance);
+      var dotColor=sc==='ally'?'#4CAF50':(sc==='enemy'?'#F44336':'#FFC107');
+      var sl=stanceLabel(rawStance);
+      stancesHtml+='<div class="stance-dot '+sc+'" title="'+esc(FACTION_DISPLAY[otherK]||otherK)+': '+esc(sl)+'" style="color:'+dotColor+'"></div>';
+      }
+      card.innerHTML='<div class="faction-header"><span class="faction-name" style="color:'+color+'">'+esc(display)+'</span><span class="faction-power" style="color:'+color+'" data-field="power"></span></div><div class="faction-sub"><span class="faction-cohesion-label">Cohesion</span><div class="faction-cohesion-bar"><div class="faction-cohesion-fill" data-field="cohesion-fill" style="width:0"></div></div></div><div class="faction-action" data-field="action"></div><div class="faction-stances">'+stancesHtml+'</div><div class="faction-detail"><div class="detail-stances" data-field="detail-stances"></div><div class="detail-action-history" data-field="detail-history"></div></div>';
+      card.addEventListener('click',function(){if(card.classList.contains('expanded')){card.classList.remove('expanded');expandedFaction=null}else{list.querySelectorAll('.faction-card.expanded').forEach(function(c){c.classList.remove('expanded')});card.classList.add('expanded');expandedFaction=fk;fillFactionDetail(fk,factions)}});
+      card.addEventListener('keydown',function(e){if(e.key==='Enter'||e.key===' '){e.preventDefault();card.click()}});
+      list.appendChild(card);
+      })(keys[fi]);
+      }
+      }
+      for(var ui=0;ui<keys.length;ui++){
+      var uk=keys[ui],uf=factions[uk];
+      var ucard=list.querySelector('[data-faction="'+uk+'"]');if(!ucard)continue;
+      var dyn=uf.dynamics||uf;
+      var cohesionVal=dyn.cohesion!=null?dyn.cohesion:(uf.cohesion!=null?uf.cohesion:50);
+      var cohesionPct=clamp(cohesionVal,0,100);
+      var cohesionColor=cohesionPct>60?'#4CAF50':(cohesionPct>30?'#FF9800':'#F44336');
+      var cFill=ucard.querySelector('[data-field="cohesion-fill"]');if(cFill){cFill.style.width=cohesionPct+'%';cFill.style.background=cohesionColor}
+      /* Update left color strip */
+      var leftStrip=ucard; /* the ::before pseudo-element uses this element's state */
+      var pwr=ucard.querySelector('[data-field="power"]');if(pwr)pwr.textContent=uf.power!=null?uf.power:(dyn.power!=null?dyn.power:'');
+      /* Set left border color to cohesion color */
+      ucard.style.setProperty('--cohesion-color',cohesionColor);
+      /* Remove any old dynamic style and replace */
+      var oldStyle=ucard.querySelector('.cohesion-strip-style');
+      if(oldStyle)oldStyle.remove();
+      var stripStyle=document.createElement('style');stripStyle.className='cohesion-strip-style';
+      stripStyle.textContent='[data-faction="'+uk+'"]::before{background:'+cohesionColor+'}';
+      ucard.appendChild(stripStyle);
+      var act=ucard.querySelector('[data-field="action"]');if(act){var recentActions=uf.recent_actions||uf.recent_action||[];var actionText='';if(Array.isArray(recentActions)&&recentActions.length>0){var first=recentActions[0];actionText=typeof first==='string'?first:(first.action||first.description||'')}if(actionText){actionText=actionText.replace(/_/g,' ').replace(/\b\w/g,function(c){return c.toUpperCase()})}act.textContent=actionText}
+      /* Highlight dangerous factions */
+      ucard.classList.remove('faction-warning','faction-critical');
+      if(cohesionPct<30){ucard.classList.add('faction-critical')}
+      else if(cohesionPct<40){ucard.classList.add('faction-warning')}
+      if(expandedFaction===uk){ucard.classList.add('expanded');fillFactionDetail(uk,factions)}
+      }
+      /* Remove "all clear" message — we always show the roster */
 }
 
 function fillFactionDetail(fk,factions){
