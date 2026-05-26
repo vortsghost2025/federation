@@ -60,9 +60,9 @@ body{background:#0a0a1a;color:#e0e0e0;font-family:'Courier New',monospace;overfl
 
 /* View toggle — TV-scale */
 #view-toggle{position:fixed;top:72px;left:12px;z-index:10;display:flex;flex-wrap:wrap;gap:4px;margin-top:40px}
-.vt-btn{background:rgba(10,10,26,0.9);border:1px solid rgba(79,195,247,0.3);color:#78909c;padding:10px 20px;border-radius:6px;font-size:1.125rem;font-family:'Courier New',monospace;cursor:pointer;transition:all 0.2s;letter-spacing:1px;text-transform:uppercase}
+.vt-btn{background:#0a0a1a;border:1px solid rgba(79,195,247,0.3);color:#78909c;padding:10px 20px;border-radius:6px;font-size:1.125rem;font-family:'Courier New',monospace;cursor:pointer;transition:all 0.2s;letter-spacing:1px;text-transform:uppercase}
 .vt-btn:hover{border-color:#4fc3f7;color:#4fc3f7}
-.vt-btn.active{background:rgba(79,195,247,0.15);border-color:#4fc3f7;color:#4fc3f7;box-shadow:0 0 8px rgba(79,195,247,0.2)}
+.vt-btn.active{background:#1a1a2a;border-color:#4fc3f7;color:#4fc3f7;box-shadow:0 0 8px rgba(79,195,247,0.2)}
 
 /* Map legend — TV-scale */
 #map-legend{position:fixed;bottom:12px;right:calc(min(420px,30vw) + 12px);background:rgba(10,10,26,0.94);border:1px solid rgba(79,195,247,0.25);border-radius:8px;padding:14px 16px;z-index:10;font-size:1.125rem;max-width:340px}
@@ -216,6 +216,9 @@ body{background:#0a0a1a;color:#e0e0e0;font-family:'Courier New',monospace;overfl
 <!-- Event sidebar -->
 <div id="sidebar">
 <h2>Live Events</h2>
+<div id="event-filter">
+<label><input type="checkbox" id="show-all-events"> Show All Events</label>
+</div>
 <div id="event-list"></div>
 </div>
 
@@ -868,62 +871,67 @@ function updateUI() {
       match: at => /dream|consciousness|anomaly|vision|meditation|ritual|destabilization|void|reality|cosmic/i.test(at) },
     { key: 'other', icon: '📋', title: 'Other', match: () => true }
   ];
-  const rawEvents = (mapData.events || []).slice(0, 30);
-  const el = document.getElementById('event-list');
-  let html = '';
-  for (const cat of categories) {
-    const bucketEvents = rawEvents.filter(ev => cat.match(ev.action_type || ''));
-    if (cat.key === 'other' && categories.slice(0, -1).some(c => rawEvents.filter(e => c.match(e.action_type || '')).length > 0)) {
-      // Remove items already claimed by previous buckets
-      let remaining = [...rawEvents];
-      for (const pc of categories.slice(0, -1)) {
-        remaining = remaining.filter(ev => !pc.match(ev.action_type || ''));
-      }
-      bucketEvents.length = 0;
-      bucketEvents.push(...remaining);
-    }
-    // Deduplicate
-    const seen = new Map();
-    const deduped = [];
-    for (const ev of bucketEvents) {
-      const key = (ev.char_name || '') + '|' + (ev.description || '');
-      if (seen.has(key)) {
-        seen.get(key).count++;
-      } else {
-        deduped.push({ ...ev, count: 1 });
-        seen.set(key, deduped[deduped.length - 1]);
-      }
-    }
-    const count = deduped.reduce((s, e) => s + e.count, 0);
-    const isOpen = window._evBucketState[cat.key];
-    html += `<div class="ev-bucket">
-<div class="ev-bucket-header" data-bucket="${cat.key}">
-<span class="ev-bucket-arrow${isOpen?' open':''}">&#9654;</span>
-<span class="ev-bucket-icon">${cat.icon}</span>
-<span class="ev-bucket-title">${cat.title}</span>
-<span class="ev-bucket-count">${count}</span>
-</div>
-<div class="ev-bucket-body${isOpen?'':' collapsed'}">`;
-    for (const ev of deduped) {
-      const moodColor = ev.mood ? (mapData.npcs.find(n => n.mood === ev.mood)?.mood_color || '#9e9e9e') : '#9e9e9e';
-      html += `<div class="ev-item">
-<span class="ev-mood" style="background:${moodColor}"></span>
-<span class="ev-char">${ev.char_name || 'Unknown'}</span>
-<span class="ev-type">${ev.action_type || ''}</span>
-<span class="ev-desc"> — ${ev.description || ''}</span>${ev.count > 1 ? `<span class="ev-item-repeat">(x${ev.count})</span>` : ''}
-</div>`;
-    }
-    html += `</div></div>`;
-  }
-  el.innerHTML = html;
-  // Collapse/expand toggle
-  el.querySelectorAll('.ev-bucket-header').forEach(hdr => {
-    hdr.addEventListener('click', function() {
-      const key = this.dataset.bucket;
-      window._evBucketState[key] = !window._evBucketState[key];
-      updateUI(); // re-render
-    });
-  });
+   const showAll = document.getElementById('show-all-events').checked;
+   let rawEvents = (mapData.events || []).slice(0, 30);
+   // Filter to significant events unless showing all
+   if (!showAll) {
+     rawEvents = rawEvents.filter(isSignificantEvent);
+   }
+   const el = document.getElementById('event-list');
+   let html = '';
+   for (const cat of categories) {
+     const bucketEvents = rawEvents.filter(ev => cat.match(ev.action_type || ''));
+     if (cat.key === 'other' && categories.slice(0, -1).some(c => rawEvents.filter(e => c.match(e.action_type || '')).length > 0)) {
+       // Remove items already claimed by previous buckets
+       let remaining = [...rawEvents];
+       for (const pc of categories.slice(0, -1)) {
+         remaining = remaining.filter(ev => !pc.match(ev.action_type || ''));
+       }
+       bucketEvents.length = 0;
+       bucketEvents.push(...remaining);
+     }
+     // Deduplicate
+     const seen = new Map();
+     const deduped = [];
+     for (const ev of bucketEvents) {
+       const key = (ev.char_name || '') + '|' + (ev.description || '');
+       if (seen.has(key)) {
+         seen.get(key).count++;
+       } else {
+         deduped.push({ ...ev, count: 1 });
+         seen.set(key, deduped[deduped.length - 1]);
+       }
+     }
+     const count = deduped.reduce((s, e) => s + e.count, 0);
+     const isOpen = window._evBucketState[cat.key];
+     html += `<div class="ev-bucket">
+ <div class="ev-bucket-header" data-bucket="${cat.key}">
+ <span class="ev-bucket-arrow${isOpen?' open':''}">&#9654;</span>
+ <span class="ev-bucket-icon">${cat.icon}</span>
+ <span class="ev-bucket-title">${cat.title}</span>
+ <span class="ev-bucket-count">${count}</span>
+ </div>
+ <div class="ev-bucket-body${isOpen?'':' collapsed'}">`;
+     for (const ev of deduped) {
+       const moodColor = ev.mood ? (mapData.npcs.find(n => n.mood === ev.mood)?.mood_color || '#9e9e9e') : '#9e9e9e';
+       html += `<div class="ev-item">
+ <span class="ev-mood" style="background:${moodColor}"></span>
+ <span class="ev-char">${ev.char_name || 'Unknown'}</span>
+ <span class="ev-type">${ev.action_type || ''}</span>
+ <span class="ev-desc"> — ${ev.description || ''}</span>${ev.count > 1 ? `<span class="ev-item-repeat">(x${ev.count})</span>` : ''}
+       </div>`;
+     }
+     html += `</div></div>`;
+   }
+   el.innerHTML = html;
+   // Collapse/expand toggle
+   el.querySelectorAll('.ev-bucket-header').forEach(hdr => {
+     hdr.addEventListener('click', function() {
+       const key = this.dataset.bucket;
+       window._evBucketState[key] = !window._evBucketState[key];
+       updateUI(); // re-render
+     });
+   });
 
   // Map legend — always visible
   buildLegend();
@@ -1330,6 +1338,15 @@ const recentEvents = (mapData && mapData.events) || [];
 const recentCharIds = recentEvents.slice(0, 10).map(e => e.char_id).filter(Boolean);
 if (recentCharIds.includes(node.id)) return true;
 return false;
+}
+
+function isSignificantEvent(ev) {
+const severity = ev.severity || '';
+const isHighSeverity = ['CRITICAL', 'MAJOR'].includes(severity);
+// Check if involves a primary character (faction leader or historical figure)
+const charId = ev.char_id || '';
+const isPrimaryChar = charId.startsWith('char_1') || charId.startsWith('char_0');
+return isHighSeverity || isPrimaryChar;
 }
 
 // Compute label bounding box for collision detection
