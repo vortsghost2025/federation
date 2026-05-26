@@ -49,6 +49,7 @@ html{height:auto;min-height:100vh}body{height:auto;min-height:100vh;overflow-x:h
 .top-tick-display{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin-left:auto;flex-shrink:0;padding-left:12px;border-left:1px solid var(--panel-border)}
 .top-tick-label{color:var(--dim);font-size:0.75rem;text-transform:uppercase;letter-spacing:1.5px}
 .top-tick-val{font-family:'Orbitron',sans-serif;font-size:1rem;color:var(--amber);min-width:50px;text-align:right}
+.tick-raw{font-size:0.75rem;color:var(--dim);min-width:30px}
 .time-since{display:flex;align-items:center;gap:6px;padding-left:10px;white-space:nowrap}
 .time-since-label{color:var(--dim);font-size:0.6875rem;text-transform:uppercase;letter-spacing:1px}
 .time-since-val{font-family:'Orbitron',sans-serif;font-size:0.875rem;color:var(--cyan)}
@@ -99,6 +100,9 @@ html{height:auto;min-height:100vh}body{height:auto;min-height:100vh;overflow-x:h
 .npc-card.npc-idle{opacity:0.35;transition:opacity 0.4s ease}
 .npc-card.npc-idle:hover{opacity:0.7}
 .npc-card.npc-idle.hide-idle{display:none}
+.npc-card-story.npc-idle{opacity:0.3;transition:opacity 0.4s ease}
+.npc-card-story.npc-idle:hover{opacity:0.6}
+.npc-card-story.npc-idle.hide-idle{display:none}
 .npc-card.npc-leader{border-color:rgba(0,188,212,0.4);box-shadow:0 0 8px rgba(0,188,212,0.1);background:rgba(0,188,212,0.04)}
 .npc-card.npc-leader .npc-name{font-size:1rem;color:var(--cyan);text-shadow:0 0 6px rgba(0,188,212,0.3)}
 .npc-card.npc-leader .npc-leader-badge{display:inline-block;font-family:'Orbitron',sans-serif;font-size:0.5625rem;font-weight:900;letter-spacing:1px;padding:1px 5px;border-radius:3px;color:var(--amber);background:rgba(255,152,0,0.12);border:1px solid rgba(255,152,0,0.25);margin-left:6px;vertical-align:middle;text-transform:uppercase}
@@ -331,7 +335,7 @@ html{height:auto;min-height:100vh}body{height:auto;min-height:100vh;overflow-x:h
 .event-source.broadcast{color:var(--red);background:var(--red-dim)}
 .event-body{flex:1;line-height:1.4}
 .event-cascade-depth{font-family:'Orbitron',sans-serif;font-size:0.8125rem;color:var(--violet);margin-left:4px}
-.npc-grid{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.npc-grid{display:flex;flex-direction:column;gap:2px}
 .npc-card{background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.06);border-radius:6px;padding:8px 10px;cursor:pointer;transition:border-color 0.3s,background 0.3s,opacity 0.4s}
 .npc-card:hover{background:rgba(255,255,255,0.05);border-color:rgba(0,188,212,0.2)}
 .npc-card.active{border-color:rgba(0,188,212,0.4);box-shadow:0 0 8px rgba(0,188,212,0.1)}
@@ -375,6 +379,23 @@ html{height:auto;min-height:100vh}body{height:auto;min-height:100vh;overflow-x:h
 .tab-btn.active-violet{color:var(--violet);background:rgba(206,147,216,0.12);border-color:rgba(206,147,216,0.25);border-bottom-color:transparent}
 .tab-content{display:none}
 .tab-content.visible{display:block}
+.section-sub{font-size:0.75rem;color:var(--dim);font-weight:400;letter-spacing:0.5px;text-transform:none;margin-left:8px}
+.npc-faction-group{margin-bottom:10px}
+.npc-faction-header{font-family:'Orbitron',sans-serif;font-size:0.75rem;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;padding:4px 8px;margin-bottom:4px;border-radius:4px;display:flex;align-items:center;gap:6px}
+.npc-faction-header .npc-faction-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+.npc-faction-header .npc-faction-count{font-size:0.6875rem;font-weight:400;opacity:0.6;margin-left:auto}
+.npc-card-story{padding:8px 10px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.05);border-radius:6px;margin-bottom:4px;cursor:pointer;transition:background 0.2s,border-color 0.2s}
+.npc-card-story:hover{background:rgba(255,255,255,0.04);border-color:rgba(0,188,212,0.15)}
+.npc-card-story .npc-story-name{font-family:'Orbitron',sans-serif;font-size:0.8125rem;font-weight:600;color:var(--white);display:flex;align-items:center;gap:6px}
+.npc-card-story .npc-story-role{font-size:0.75rem;color:var(--dim);margin-left:auto}
+.npc-card-story .npc-story-status{font-size:0.8125rem;color:var(--dim);margin-top:3px;line-height:1.3;font-style:italic}
+.npc-card-story.active{border-color:rgba(0,188,212,0.3);background:rgba(0,188,212,0.04)}
+.npc-story-detail{max-height:0;overflow:hidden;transition:max-height 0.4s ease,opacity 0.3s,margin 0.3s;opacity:0}
+.npc-card-story.active .npc-story-detail{max-height:400px;opacity:1;margin-top:6px;padding-top:6px;border-top:1px solid rgba(255,255,255,0.05)}
+.npc-story-thought{font-size:0.8125rem;color:var(--dim);padding:3px 0 3px 12px;border-left:2px solid rgba(206,147,216,0.3);margin-bottom:2px;line-height:1.3}
+.npc-story-action{font-size:0.8125rem;color:var(--cyan);padding:2px 0 2px 12px;border-left:2px solid rgba(0,188,212,0.25);margin-bottom:2px;line-height:1.3}
+.choice-narrative{font-size:0.8125rem;color:var(--dim);padding:8px 10px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.06);border-radius:6px;margin-bottom:8px;line-height:1.4}
+.choice-narrative strong{color:var(--violet)}
 .quest-log{display:flex;flex-direction:column;gap:4px}
 .quest-entry{display:flex;gap:8px;padding:8px 10px;border-radius:6px;border-left:3px solid var(--violet);background:rgba(255,255,255,0.02);font-size:0.875rem;cursor:pointer;transition:background 0.2s}
 .quest-entry:hover{background:rgba(255,255,255,0.05)}
@@ -471,9 +492,13 @@ html{height:auto;min-height:100vh}body{height:auto;min-height:100vh;overflow-x:h
 <span class="split-chip degradation" id="chip-anomaly">A &#8212;</span>
 </div>
 <span class="split-severity nominal" id="deg-sev">NOMINAL</span>
-<div class="top-tick-display">
+<div class="top-tick-display" title="Federation Calendar: tick-to-date conversion">
+<span class="top-tick-label">Federation Date</span>
+<span class="top-tick-val" id="fed-date">&#8212;</span>
+</div>
+<div class="top-tick-display" style="border-left:none;padding-left:8px">
 <span class="top-tick-label">Tick</span>
-<span class="top-tick-val" id="tick-count">&#8212;</span>
+<span class="top-tick-val tick-raw" id="tick-count">&#8212;</span>
 </div>
 <div class="time-since">
 <span class="time-since-label">Last Tick</span>
@@ -655,21 +680,21 @@ html{height:auto;min-height:100vh}body{height:auto;min-height:100vh;overflow-x:h
 
 <section id="right" class="panel">
 <div class="tab-bar" id="right-tabs" role="tablist">
-<button class="tab-btn active-violet" data-tab="npcs" role="tab" onclick="switchRightTab('npcs')">NPCs</button>
-<button class="tab-btn" data-tab="npc-quests" role="tab" onclick="switchRightTab('npc-quests')">NPC Quests</button>
-<button class="tab-btn" data-tab="choices" role="tab" onclick="switchRightTab('choices')">Choices</button>
+<button class="tab-btn active-violet" data-tab="npcs" role="tab" onclick="switchRightTab('npcs')">Characters</button>
+<button class="tab-btn" data-tab="npc-quests" role="tab" onclick="switchRightTab('npc-quests')">Story Log</button>
+<button class="tab-btn" data-tab="choices" role="tab" onclick="switchRightTab('choices')">Decisions</button>
 </div>
 <div class="tab-content visible" id="right-npcs">
-<div class="section-title violet">NPC Activity <span id="npc-count" style="font-size:0.8125rem;color:var(--dim);font-weight:400"></span></div>
+<div class="section-title violet">Character Roster <span id="npc-count" style="font-size:0.8125rem;color:var(--dim);font-weight:400"></span></div>
 <div class="npc-noise-toggle" id="npc-noise-toggle" onclick="toggleNpcFilter()" tabindex="0" role="button" aria-pressed="false">
-<span class="npc-noise-toggle-label">FILTER OFF</span>
+<span class="npc-noise-toggle-label">Show All Characters</span>
 <span class="npc-noise-toggle-count" id="npc-active-count"></span>
 </div>
 <div class="npc-grid" id="npc-grid"></div>
 </div>
 <div class="tab-content" id="right-npc-quests">
-<div class="section-title violet">What Are Agents Trying To Do?</div>
-<div class="quest-health" id="quest-health">
+<div class="section-title violet">Story Log <span class="section-sub">What the agents are doing right now</span></div>
+<div class="quest-health" id="quest-health" style="display:none">
 <div class="sit-card-label">Quest Health</div>
 <div class="qh-grid" id="qh-grid"></div>
 <div class="qh-type-list" id="qh-types"></div>
@@ -678,7 +703,8 @@ html{height:auto;min-height:100vh}body{height:auto;min-height:100vh;overflow-x:h
 <div class="quest-log" id="quest-log"></div>
 </div>
 <div class="tab-content" id="right-choices">
-<div class="section-title violet">Choice Resolutions</div>
+<div class="section-title violet">Faction Decisions <span class="section-sub">How the powers are shaping the story</span></div>
+<div class="choice-narrative" id="choice-narrative"></div>
 <div id="faction-choice-detail-area"></div>
 <div class="choice-list" id="choice-list"></div>
 </div>
@@ -849,13 +875,25 @@ thSevEl.textContent = thLabels[thCls] || 'NOMINAL';
 thSevEl.className = 'split-severity ' + thCls;
 }
 
-/* Tick counter */
+/* Tick counter + Federation Date */
 var tick = '\u2014';
 if (status.last_tick_result && status.last_tick_result.tick_ts) tick = status.last_tick_result.tick_ts;
 else if (status.last_tick_timestamp) tick = status.last_tick_timestamp;
 else if (ws.tick_count != null) tick = ws.tick_count;
 var tickEl = document.getElementById('tick-count');
 if (tickEl) tickEl.textContent = tick;
+/* Federation Calendar date */
+var fedEl = document.getElementById('fed-date');
+if (fedEl) {
+  if (tick && tick !== '\u2014') {
+    var fullDate = formatFedDateFull(tick);
+    var shortDate = formatFedDateShort(tick);
+    fedEl.textContent = shortDate;
+    fedEl.title = fullDate;
+  } else {
+    fedEl.textContent = '\u2014';
+  }
+}
 
 lastTickTime = Date.now();
 }
@@ -1017,6 +1055,54 @@ function generateStarfield(){var sf=document.getElementById('starfield');for(var
 
 function formatTime(seconds){if(seconds==null||isNaN(seconds))return '\u2014';if(seconds<60)return Math.floor(seconds)+'s';if(seconds<3600)return Math.floor(seconds/60)+'m '+Math.floor(seconds%60)+'s';return Math.floor(seconds/3600)+'h '+Math.floor((seconds%3600)/60)+'m'}
 
+/* ═══ FEDERATION CALENDAR ═══ */
+var FEDERATION_EPOCH = 1779825069; // Tick value = Day 1, 00:00 Federation Time
+var MONTH_NAMES = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+var WEEK_NAMES = ['Primus','Secundus','Tertius','Quartus','Quintus','Sextus','Septimus'];
+
+function federationTime(tickVal) {
+  if (tickVal == null || isNaN(tickVal)) return null;
+  var num = typeof tickVal === 'number' ? tickVal : parseInt(tickVal, 10);
+  if (isNaN(num)) return null;
+  var elapsed = Math.max(0, num - FEDERATION_EPOCH); // seconds of Federation time
+  var fedMinute = Math.floor(elapsed / 60);
+  var fedHour = Math.floor(fedMinute / 60);
+  var fedDay = Math.floor(fedHour / 24); // 0-based
+  var minute = fedMinute % 60;
+  var hour = fedHour % 24;
+  var day = fedDay + 1; // 1-based
+  var year = Math.floor(fedDay / 360) + 1;
+  var dayOfYear = fedDay % 360;
+  var month = Math.floor(dayOfYear / 30);
+  var dayOfMonth = (dayOfYear % 30) + 1;
+  var week = Math.floor(dayOfYear / 7) + 1;
+  var dayOfWeek = dayOfYear % 7;
+  return {
+    day: day, hour: hour, minute: minute,
+    year: year, month: month, dayOfMonth: dayOfMonth,
+    week: week, dayOfWeek: dayOfWeek,
+    elapsedSeconds: elapsed
+  };
+}
+
+function formatFedDateShort(tickVal) {
+  var ft = federationTime(tickVal);
+  if (!ft) return '\u2014';
+  var hh = String(ft.hour).padStart(2,'0');
+  var mm = String(ft.minute).padStart(2,'0');
+  return 'Day '+ft.day+' \u00b7 '+hh+':'+mm;
+}
+
+function formatFedDateFull(tickVal) {
+  var ft = federationTime(tickVal);
+  if (!ft) return '\u2014';
+  var hh = String(ft.hour).padStart(2,'0');
+  var mm = String(ft.minute).padStart(2,'0');
+  var monthName = MONTH_NAMES[ft.month] || '???';
+  var weekName = WEEK_NAMES[ft.dayOfWeek] || '???';
+  return 'Yr '+ft.year+', '+monthName+' '+ft.dayOfMonth+' ('+weekName+') \u00b7 '+hh+':'+mm;
+}
+
 function stanceLabel(stance){if(!stance)return 'neutral';if(typeof stance==='object'&&stance.label)return stance.label.toLowerCase();if(typeof stance==='number'){if(stance>=0.75)return 'ally';if(stance<=0.25)return 'enemy';return 'neutral'}var s=String(stance).toLowerCase();if(s==='ally'||s==='allied'||s==='friendly')return 'ally';if(s==='enemy'||s==='hostile'||s==='adversarial')return 'enemy';return 'neutral'}
 function stanceToClass(stance){return stanceLabel(stance)}
 
@@ -1158,19 +1244,19 @@ var toggle = document.getElementById('npc-noise-toggle');
 var label = toggle ? toggle.querySelector('.npc-noise-toggle-label') : null;
 if (toggle) toggle.classList.toggle('on', window.npcFilterOn);
 if (toggle) toggle.setAttribute('aria-pressed', String(window.npcFilterOn));
-if (label) label.textContent = window.npcFilterOn ? 'FILTER ON' : 'FILTER OFF';
+if (label) label.textContent = window.npcFilterOn ? 'Active Only' : 'Show All';
 applyNpcFilter();
 }
 
 function applyNpcFilter() {
-var cards = document.querySelectorAll('.npc-card');
+var cards = document.querySelectorAll('.npc-card-story');
 var activeCount = 0;
 for (var i = 0; i < cards.length; i++) {
 var card = cards[i];
 var npcId = card.dataset.npcId;
 var cascadeStatus = getNpcCascadeStatus(npcId);
-var moodEl = card.querySelector('[data-field="mood"]');
-var moodText = moodEl ? moodEl.textContent.toLowerCase() : '';
+var moodDot = card.querySelector('.npc-mood');
+var moodText = moodDot ? moodDot.textContent.toLowerCase() : '';
 var idle = isNpcIdle(moodText);
 var isCascade = cascadeStatus !== 'none';
 
@@ -1192,23 +1278,23 @@ if (countEl) countEl.textContent = activeCount + ' active';
 }
 
 function updateNpcCascadeBadges() {
-var cards = document.querySelectorAll('.npc-card');
+var cards = document.querySelectorAll('.npc-card-story');
 for (var i = 0; i < cards.length; i++) {
 var card = cards[i];
 var npcId = card.dataset.npcId;
 var status = getNpcCascadeStatus(npcId);
 card.classList.remove('cascade-root','cascade-reactor','cascade-affected','cascade-none');
 card.classList.add('cascade-' + status);
-var badgesDiv = card.querySelector('.npc-badges');
-if (!badgesDiv) continue;
-var existingBadge = badgesDiv.querySelector('.cascade-badge');
+var nameDiv = card.querySelector('.npc-story-name');
+if (!nameDiv) continue;
+var existingBadge = nameDiv.querySelector('.cascade-badge');
 if (existingBadge) existingBadge.remove();
   if (status === 'root') {
       var b = document.createElement('span'); b.className = 'cascade-badge trigger'; b.textContent = 'TRIGGER';
-      badgesDiv.insertBefore(b, badgesDiv.firstChild);
+      nameDiv.insertBefore(b, nameDiv.firstChild);
     } else if (status === 'reactor') {
       var b2 = document.createElement('span'); b2.className = 'cascade-badge reactor'; b2.textContent = 'REACTOR';
-      badgesDiv.insertBefore(b2, badgesDiv.firstChild);
+      nameDiv.insertBefore(b2, nameDiv.firstChild);
     }
     /* Skip "AFFECTED" badge — too noisy when many NPCs are in cascade chains */
 }
@@ -1571,43 +1657,72 @@ function renderNpcs(npcs){
 if(!npcs)return;
 var grid=document.getElementById('npc-grid');
 var list=Array.isArray(npcs)?npcs:(npcs.npcs?npcs.npcs:Object.values(npcs));
-var countEl=document.getElementById('npc-count');if(countEl)countEl.textContent='('+list.length+' / 39)';
-var needsRebuild=grid.children.length!==list.length||grid.dataset.count!==String(list.length);
-if(needsRebuild){
-grid.dataset.count=String(list.length);grid.innerHTML='';
+var countEl=document.getElementById('npc-count');if(countEl)countEl.textContent='('+list.length+' total)';
+/* Group by faction */
+var byFaction={};
+var factionOrder=[];
 for(var ni=0;ni<list.length;ni++){
+var npc=list[ni];var fk=npc.affiliation||npc.faction||npc.faction_id||'independent';
+if(!byFaction[fk]){byFaction[fk]=[];factionOrder.push(fk)}
+byFaction[fk].push(npc);
+}
+/* Render faction groups */
+var rebuildKey=factionOrder.join(',')+':'+list.map(function(n){return n.char_id||n.id||n.name||''}).join(',');
+var needsRebuild=grid.dataset.keySig!==rebuildKey;
+if(needsRebuild){
+grid.dataset.keySig=rebuildKey;grid.innerHTML='';
+for(var fi=0;fi<factionOrder.length;fi++){
+var fk=factionOrder[fi];
+var fGroup=byFaction[fk];
+var color=FACTION_COLORS[fk]||'#78909C';
+var display=FACTION_DISPLAY[fk]||fk.replace(/_/g,' ');
+/* Faction header */
+var header=document.createElement('div');header.className='npc-faction-group';header.style.cssText='width:100%';
+header.innerHTML='<div class="npc-faction-header" style="color:'+color+';background:'+color+'10;border-left:3px solid '+color+'"><span class="npc-faction-dot" style="background:'+color+'"></span>'+esc(display)+'<span class="npc-faction-count">'+fGroup.length+' characters</span></div>';
+grid.appendChild(header);
+/* Character cards for this faction */
+for(var nci=0;nci<fGroup.length;nci++){
 (function(npc,idx){
-var mapped={id:npc.char_id||npc.id||npc.name||idx,name:npc.name||'Unknown',faction:npc.affiliation||npc.faction||npc.faction_id||'',mood:npc.mood,corruption:npc.corruption_level!=null?npc.corruption_level:(npc.corruption!=null?npc.corruption:0),rumor:npc.rumor_level!=null?npc.rumor_level:(npc.rumor!=null?npc.rumor:0),recent_thoughts:npc.recent_thoughts||npc.thoughts||npc.recentThoughts||[],recent_decisions:npc.recent_decisions||npc.decisions||npc.recentDecisions||[],recent_actions:npc.recent_actions||npc.actions||[],last_decision_category:(npc.recent_decisions&&npc.recent_decisions.length)?npc.recent_decisions[0].category:(npc.last_decision_category||npc.lastDecision||npc.decision_category||'\u2014'),relationships:npc.relationships||npc.relations||{}};
-var card=document.createElement('div');card.className='npc-card';card.dataset.npcId=mapped.id;card.setAttribute('tabindex','0');
-var ml=moodLabel(mapped.mood),mc=moodColorOf(mapped.mood),affilColor=FACTION_COLORS[mapped.faction]||'#78909C';var isLeader=mapped.faction&&FACTION_COLORS[mapped.faction];if(isLeader)card.classList.add('npc-leader');
-var nameHtml=esc(mapped.name);if(isLeader)nameHtml+='<span class="npc-leader-badge">LEADER</span>';
-card.innerHTML='<div class="npc-name">'+nameHtml+'</div><div class="npc-badges"><span class="npc-mood" style="color:'+mc+';background:'+mc+'18" data-field="mood">'+esc(ml)+'</span><span class="npc-decision" data-field="decision">'+esc(mapped.last_decision_category)+'</span><span class="npc-affil" style="background:'+affilColor+'" title="'+esc(FACTION_DISPLAY[mapped.faction]||mapped.faction)+'" data-field="affil"></span></div><div class="npc-detail"><div class="npc-detail-section"><div class="npc-detail-label">Recent Thoughts</div><div class="npc-detail-val" data-field="thoughts"></div></div><div class="npc-detail-section"><div class="npc-detail-label">Recent Decisions</div><div class="npc-detail-val" data-field="decisions"></div></div><div class="npc-detail-section"><div class="npc-detail-label">Recent Actions</div><div class="npc-detail-val" data-field="actions"></div></div><div class="npc-detail-section"><div class="npc-detail-label">Corruption / Rumor</div><div class="npc-detail-val" data-field="corruption"></div></div><div class="npc-detail-section"><div class="npc-detail-label">Relationships</div><div class="npc-detail-val" data-field="relationships"></div></div></div>';
-card.addEventListener('click',function(){var wasActive=card.classList.contains('active');grid.querySelectorAll('.npc-card').forEach(function(c){c.classList.remove('active')});if(!wasActive){card.classList.add('active');expandedNpc=mapped.id}else{expandedNpc=null}});
+var mapped={id:npc.char_id||npc.id||npc.name||idx,name:npc.name||'Unknown',faction:fk,mood:npc.mood,recent_thoughts:npc.recent_thoughts||npc.thoughts||npc.recentThoughts||[],recent_actions:npc.recent_actions||npc.actions||[],recent_decisions:npc.recent_decisions||npc.decisions||npc.recentDecisions||[],corruption:npc.corruption_level!=null?npc.corruption_level:(npc.corruption!=null?npc.corruption:0)};
+var ml=moodLabel(mapped.mood),mc=moodColorOf(mapped.mood);
+/* Build status narrative */
+var statusText='Status: '+ml;
+if(mapped.recent_actions&&mapped.recent_actions.length){var lastAct=mapped.recent_actions[0];var actText=typeof lastAct==='string'?lastAct:(lastAct.description||lastAct.action_type||lastAct.action||'');if(actText)statusText=esc(actText)}
+/* Role: use decision category or mood */
+var role=mapped.recent_decisions&&mapped.recent_decisions.length?esc(mapped.recent_decisions[0].category||''):'';
+var leaderBadge=fk&&FACTION_COLORS[fk]?'<span class="npc-leader-badge" style="font-size:0.625rem;padding:1px 5px;background:'+color+'20;color:'+color+'">LEADER</span>':'';
+var card=document.createElement('div');card.className='npc-card-story';card.dataset.npcId=mapped.id;card.setAttribute('tabindex','0');
+card.innerHTML='<div class="npc-story-name"><span class="npc-mood" style="color:'+mc+'">\u25CF</span> '+esc(mapped.name)+' '+leaderBadge+'<span class="npc-story-role">'+(role||ml)+'</span></div><div class="npc-story-status">'+statusText+'</div><div class="npc-story-detail"><div class="npc-story-section"><div class="npc-detail-label">\uD83D\uDCDD Recent Thoughts</div><div class="npc-detail-val" data-field="story-thoughts"></div></div><div class="npc-story-section" style="margin-top:6px"><div class="npc-detail-label">\u2694\uFE0F Recent Actions</div><div class="npc-detail-val" data-field="story-actions"></div></div></div>';
+card.addEventListener('click',function(){var wasActive=card.classList.contains('active');grid.querySelectorAll('.npc-card-story').forEach(function(c){c.classList.remove('active')});if(!wasActive){card.classList.add('active');expandedNpc=mapped.id}else{expandedNpc=null}});
 card.addEventListener('keydown',function(e){if(e.key==='Enter'||e.key===' '){e.preventDefault();card.click()}});
 grid.appendChild(card);
-})(list[ni],ni);
+})(fGroup[nci],nci);
 }
 }
+}
+/* Update data on each tick */
 for(var ui=0;ui<list.length;ui++){
 var npc=list[ui],nId=npc.char_id||npc.id||npc.name||ui;
 var ncard=grid.querySelector('[data-npc-id="'+nId+'"]');if(!ncard)continue;
 var ml2=moodLabel(npc.mood),mc2=moodColorOf(npc.mood);
-var moodEl=ncard.querySelector('[data-field="mood"]');if(moodEl){moodEl.textContent=ml2;moodEl.style.color=mc2;moodEl.style.background=mc2+'18'}
-var decEl=ncard.querySelector('[data-field="decision"]');var decCat=(npc.recent_decisions&&npc.recent_decisions.length)?npc.recent_decisions[0].category:(npc.last_decision_category||'\u2014');if(decEl)decEl.textContent=decCat;
-var affilEl=ncard.querySelector('[data-field="affil"]');var fk2=npc.affiliation||npc.faction||npc.faction_id||'';if(affilEl){affilEl.style.background=FACTION_COLORS[fk2]||'#78909C';affilEl.title=FACTION_DISPLAY[fk2]||fk2}var isLeader2=fk2&&FACTION_COLORS[fk2];if(isLeader2&&!ncard.classList.contains('npc-leader')){ncard.classList.add('npc-leader');var nameEl=ncard.querySelector('.npc-name');if(nameEl&&!nameEl.querySelector('.npc-leader-badge'))nameEl.innerHTML+='<span class="npc-leader-badge">LEADER</span>'}else if(!isLeader2){ncard.classList.remove('npc-leader');var badgeEl=ncard.querySelector('.npc-leader-badge');if(badgeEl)badgeEl.remove()}if(expandedNpc===nId){
-var thoughts=npc.recent_thoughts||npc.thoughts||[];var thoughtsEl=ncard.querySelector('[data-field="thoughts"]');
-if(thoughtsEl){if(Array.isArray(thoughts)&&thoughts.length){var thtml='';for(var t=0;t<Math.min(thoughts.length,4);t++){var th=thoughts[t];var thText=typeof th==='string'?th:(th.thought||th.text||JSON.stringify(th));var thMood=(typeof th==='object'&&th.mood)?' ['+esc(th.mood)+']':'';thtml+='<div class="npc-thought">'+esc(thText)+thMood+'</div>'}thoughtsEl.innerHTML=thtml}else{thoughtsEl.textContent='None available'}}
-var decisions=npc.recent_decisions||npc.decisions||[];var decDetailEl=ncard.querySelector('[data-field="decisions"]');
-if(decDetailEl){if(Array.isArray(decisions)&&decisions.length){var dhtml='';for(var d=0;d<Math.min(decisions.length,4);d++){var dc=decisions[d];var dcText=typeof dc==='string'?dc:(dc.description||dc.decision||dc.category||JSON.stringify(dc));dhtml+='<div class="npc-thought">'+esc(dcText)+'</div>'}decDetailEl.innerHTML=dhtml}else{decDetailEl.textContent='None available'}}
-var actions=npc.recent_actions||npc.actions||[];var actDetailEl=ncard.querySelector('[data-field="actions"]');
-if(actDetailEl){if(Array.isArray(actions)&&actions.length){var ahtml='';for(var ai=0;ai<Math.min(actions.length,4);ai++){var ra=actions[ai];var raText=typeof ra==='string'?ra:(ra.description||ra.action_type||ra.action||JSON.stringify(ra));ahtml+='<div class="npc-thought">'+esc(raText)+'</div>'}actDetailEl.innerHTML=ahtml}else{actDetailEl.textContent='None available'}}
-var corrEl=ncard.querySelector('[data-field="corruption"]');if(corrEl){var corr=npc.corruption_level!=null?npc.corruption_level:(npc.corruption!=null?npc.corruption:0);var rum=npc.rumor_level!=null?npc.rumor_level:(npc.rumor!=null?npc.rumor:0);corrEl.innerHTML='<span style="color:var(--red)">'+Math.round(corr)+'%</span> / <span style="color:var(--amber)">'+Math.round(rum)+'%</span>'}
-var relEl=ncard.querySelector('[data-field="relationships"]');if(relEl){var rels=npc.relationships||npc.relations||{};var rkeys=Object.keys(rels);if(rkeys.length){var rhtml='';var visCount=4;for(var ri=0;ri<Math.min(rkeys.length,visCount);ri++){var rk=rkeys[ri],rv=rels[rk];var rval=typeof rv==='number'?rv:(rv.score!=null?rv.score:(rv.value!=null?rv.value:(rv.trust!=null?rv.trust:0)));var rvc=rval>50?'#4CAF50':(rval>20?'#FFC107':'#F44336');rhtml+='<span class="npc-rel" style="border-left:2px solid '+rvc+'">'+esc(rk)+': '+Math.round(rval)+'</span>'}if(rkeys.length>visCount){var overflowHtml='';for(var oi=visCount;oi<rkeys.length;oi++){var ok=rkeys[oi],ov=rels[ok];var oval=typeof ov==='number'?ov:(ov.score!=null?ov.score:(ov.value!=null?ov.value:(ov.trust!=null?ov.trust:0)));var ovc=oval>50?'#4CAF50':(oval>20?'#FFC107':'#F44336');overflowHtml+='<span class="npc-rel" style="border-left:2px solid '+ovc+'">'+esc(ok)+': '+Math.round(oval)+'</span>'}rhtml+='<span class="npc-rel-more" data-npc-rel-toggle>+'+( rkeys.length-visCount)+' more</span><span class="npc-rel-overflow">'+overflowHtml+'</span>'}relEl.innerHTML=rhtml;var toggleBtn=relEl.querySelector('[data-npc-rel-toggle]');if(toggleBtn){toggleBtn.addEventListener('click',function(e){e.stopPropagation();var overflow=this.nextElementSibling;if(overflow){overflow.classList.toggle('expanded');this.textContent=overflow.classList.contains('expanded')?'− less':'+'+(rkeys.length-visCount)+' more'}})}}else{relEl.textContent='None available'}}
+var moodDot=ncard.querySelector('.npc-story-name .npc-mood');if(moodDot){moodDot.style.color=mc2;moodDot.textContent='\u25CF'}
+/* Status line */
+var statusEl=ncard.querySelector('.npc-story-status');
+if(statusEl){var acts=npc.recent_actions||npc.actions||[];if(acts.length){var aText=typeof acts[0]==='string'?acts[0]:(acts[0].description||acts[0].action_type||acts[0].action||'');statusEl.textContent=esc(aText)}else{statusEl.textContent='Status: '+ml2}}
+/* Role line */
+var roleEl=ncard.querySelector('.npc-story-role');
+if(roleEl){var decs=npc.recent_decisions||npc.decisions||[];var roleText=decs.length?(decs[0].category||''):ml2;roleEl.textContent=roleText||ml2}
+/* Expanded detail */
+if(expandedNpc===nId){
+var thoughts=npc.recent_thoughts||npc.thoughts||[];var thoughtsEl=ncard.querySelector('[data-field="story-thoughts"]');
+if(thoughtsEl){if(Array.isArray(thoughts)&&thoughts.length){var thtml='';for(var t2=0;t2<Math.min(thoughts.length,3);t2++){var th=thoughts[t2];var thText=typeof th==='string'?th:(th.thought||th.text||JSON.stringify(th));thtml+='<div class="npc-story-thought">'+esc(thText)+'</div>'}thoughtsEl.innerHTML=thtml}else{thoughtsEl.innerHTML='<div style="font-size:0.8125rem;color:var(--dim);font-style:italic">No recent thoughts recorded</div>'}}
+var actions=npc.recent_actions||npc.actions||[];var actEl=ncard.querySelector('[data-field="story-actions"]');
+if(actEl){if(Array.isArray(actions)&&actions.length){var ahtml='';for(var ai2=0;ai2<Math.min(actions.length,3);ai2++){var ra=actions[ai2];var raText=typeof ra==='string'?ra:(ra.description||ra.action_type||ra.action||JSON.stringify(ra));ahtml+='<div class="npc-story-action">'+esc(raText)+'</div>'}actEl.innerHTML=ahtml}else{actEl.innerHTML='<div style="font-size:0.8125rem;color:var(--dim);font-style:italic">No recent actions</div>'}}
 }
-}
-/* After rendering NPCs, update cascade badges and filter */
+/* Cascade badges and filter */
 updateNpcCascadeBadges();
 applyNpcFilter();
+}
 }
 
 /* ═══ QUEST HEALTH SUMMARY ═══ */
@@ -1648,27 +1763,65 @@ typesEl.innerHTML = tHtml;
 
 function renderQuests(data){
 if(!data||!data.quest_log)return;
+/* Still compute health but hide the raw display; keep for data dependency */
 renderQuestHealth(data);
 var log=document.getElementById('quest-log');
 var entries=data.quest_log;if(!Array.isArray(entries))return;
-var needsRebuild=log.children.length!==entries.length||log.dataset.keySig!==entries.map(function(e){return e.char_id+'_'+e.quest_id+'_'+e.event}).join('|');
-if(needsRebuild){
-log.dataset.keySig=entries.map(function(e){return e.char_id+'_'+e.quest_id+'_'+e.event}).join('|');log.innerHTML='';
+/* Build narrative entries grouped by event type */
+var narrativeMap={active:[],completed:[],abandoned:[]};
 for(var i=0;i<entries.length;i++){
-(function(entry,idx){
-var el=document.createElement('div');
-var evtLower=String(entry.event||'').toLowerCase();
-var cls='quest-entry';var eventClass='progress';
-if(evtLower.indexOf('accept')!==-1){cls+=' quest-accept';eventClass='accept'}
-else if(evtLower.indexOf('complet')!==-1){cls+=' quest-complete';eventClass='complete'}
-else if(evtLower.indexOf('abandon')!==-1||evtLower.indexOf('fail')!==-1){cls+=' quest-abandon';eventClass='abandon'}
-else{cls+=' quest-progress'}
-el.className=cls;el.dataset.charId=entry.char_id||'';
-var evtLabel=entry.event||'PROGRESS';
-el.innerHTML='<span class="quest-time">'+timeAgo(entry.timestamp||'')+'</span><span class="quest-event '+eventClass+'">'+esc(evtLabel.toUpperCase())+'</span><span class="quest-body"><strong>'+esc(entry.char_id||'Unknown')+'</strong> \u2014 '+esc(entry.quest_id||'')+(entry.reason?' <span style="color:var(--dim)">('+esc(entry.reason)+')</span>':'')+'</span>';
-el.addEventListener('click',function(){loadQuestDetail(entry.char_id)});
-log.appendChild(el);
-})(entries[i],i);
+var e=entries[i];var evt=String(e.event||'').toLowerCase();
+var narr={char:e.char_id||'Unknown',quest:e.quest_id||'',reason:e.reason||'',ts:e.timestamp||'',tType:''};
+if(evt.indexOf('accept')!==-1||evt.indexOf('start')!==-1){narr.tType='active';narrativeMap.active.push(narr)}
+else if(evt.indexOf('complet')!==-1){narr.tType='completed';narrativeMap.completed.push(narr)}
+else if(evt.indexOf('abandon')!==-1||evt.indexOf('fail')!==-1){narr.tType='abandoned';narrativeMap.abandoned.push(narr)}
+else{narr.tType='active';narrativeMap.active.push(narr)}
+}
+/* Build story-oriented display */
+var keySig=JSON.stringify(entries.map(function(e){return e.char_id+'_'+e.event+'_'+e.quest_id}));
+var needsRebuild=log.dataset.keySig!==keySig;
+if(needsRebuild){
+log.dataset.keySig=keySig;log.innerHTML='';
+/* Active narrative */
+if(narrativeMap.active.length){
+var activeSec=document.createElement('div');activeSec.style.marginBottom='10px';
+activeSec.innerHTML='<div class="quest-narr-header" style="color:var(--cyan);border-left:3px solid var(--cyan);padding:4px 10px;margin-bottom:6px;font-family:Orbitron,sans-serif;font-size:0.75rem;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;background:var(--cyan-dim)">\u25B6 In Progress</div>';
+for(var ai=0;ai<Math.min(narrativeMap.active.length,10);ai++){
+var ae=narrativeMap.active[ai];
+var aEl=document.createElement('div');aEl.className='quest-entry quest-progress';aEl.dataset.charId=ae.char;
+aEl.innerHTML='<span class="quest-time">'+timeAgo(ae.ts)+'</span><span class="quest-event progress">\u2694\uFE0F</span><span class="quest-body"><strong>'+esc(ae.char)+'</strong> set out to <em>'+esc(ae.quest.replace(/_/g,' '))+'</em>'+(ae.reason?' <span style="color:var(--dim)">('+esc(ae.reason)+')</span>':'')+'</span>';
+aEl.addEventListener('click',function(){loadQuestDetail(ae.char)});
+activeSec.appendChild(aEl);
+}
+if(narrativeMap.active.length>10){var moreA=document.createElement('div');moreA.style.cssText='font-size:0.75rem;color:var(--dim);padding:4px 10px';moreA.textContent='+'+(narrativeMap.active.length-10)+' more ongoing activities';activeSec.appendChild(moreA)}
+log.appendChild(activeSec);
+}
+/* Completed narrative */
+if(narrativeMap.completed.length){
+var compSec=document.createElement('div');compSec.style.marginBottom='10px';
+compSec.innerHTML='<div class="quest-narr-header" style="color:var(--green);border-left:3px solid var(--green);padding:4px 10px;margin-bottom:6px;font-family:Orbitron,sans-serif;font-size:0.75rem;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;background:var(--green-dim)">\u2714\uFE0F Completed</div>';
+for(var ci=0;ci<Math.min(narrativeMap.completed.length,6);ci++){
+var ce=narrativeMap.completed[ci];
+var cEl=document.createElement('div');cEl.className='quest-entry quest-complete';cEl.dataset.charId=ce.char;
+cEl.innerHTML='<span class="quest-time">'+timeAgo(ce.ts)+'</span><span class="quest-event complete">\u2714\uFE0F</span><span class="quest-body"><strong>'+esc(ce.char)+'</strong> completed <em>'+esc(ce.quest.replace(/_/g,' '))+'</em></span>';
+cEl.addEventListener('click',function(){loadQuestDetail(ce.char)});
+compSec.appendChild(cEl);
+}
+if(narrativeMap.completed.length>6){var moreC=document.createElement('div');moreC.style.cssText='font-size:0.75rem;color:var(--dim);padding:4px 10px';moreC.textContent='+'+(narrativeMap.completed.length-6)+' more completed';compSec.appendChild(moreC)}
+log.appendChild(compSec);
+}
+/* Abandoned narrative */
+if(narrativeMap.abandoned.length){
+var abanSec=document.createElement('div');
+abanSec.innerHTML='<div class="quest-narr-header" style="color:var(--red);border-left:3px solid var(--red);padding:4px 10px;margin-bottom:6px;font-family:Orbitron,sans-serif;font-size:0.75rem;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;background:var(--red-dim)">\u274C Abandoned / Failed</div>';
+for(var bi=0;bi<Math.min(narrativeMap.abandoned.length,4);bi++){
+var be=narrativeMap.abandoned[bi];
+var bEl=document.createElement('div');bEl.className='quest-entry quest-abandon';bEl.dataset.charId=be.char;
+bEl.innerHTML='<span class="quest-time">'+timeAgo(be.ts)+'</span><span class="quest-event abandon">\u274C</span><span class="quest-body"><strong>'+esc(be.char)+'</strong> abandoned <em>'+esc(be.quest.replace(/_/g,' '))+'</em>'+(be.reason?' <span style="color:var(--dim)">('+esc(be.reason)+')</span>':'')+'</span>';
+bEl.addEventListener('click',function(){loadQuestDetail(be.char)});
+abanSec.appendChild(bEl);
+}
+log.appendChild(abanSec);
 }
 }
 }
@@ -1744,22 +1897,62 @@ if(completedEl){var completed=uf.completed_techs||[];if(completed.length){var ch
 }
 
 function renderChoices(data){
-if(!data||!data.stats)return;var list=document.getElementById('choice-list');var stats=data.stats;
-var entries=[];for(var key in stats){if(stats.hasOwnProperty(key)){entries.push({id:key,count:stats[key]})}}
-entries.sort(function(a,b){return b.count-a.count});var maxCount=entries.length?entries[0].count:1;if(maxCount<1)maxCount=1;
-var needsRebuild=list.children.length!==entries.length||list.dataset.keySig!==entries.map(function(e){return e.id}).join('|');
-if(needsRebuild){
-list.dataset.keySig=entries.map(function(e){return e.id}).join('|');list.innerHTML='';
-for(var i=0;i<entries.length;i++){
-(function(entry,rank){
-var el=document.createElement('div');el.className='choice-item';el.dataset.choiceId=entry.id;
-var barPct=Math.round((entry.count/maxCount)*100);
-el.innerHTML='<span class="choice-rank">'+(rank+1)+'</span><span class="choice-id">'+esc(entry.id)+'</span><span class="choice-count">'+entry.count+'</span><div class="choice-bar-container"><div class="choice-bar"><div class="choice-bar-fill" style="width:'+barPct+'%"></div></div></div>';
-el.addEventListener('click',function(){var factionId=entry.id;if(factionId.indexOf('_')!==-1){var parts=factionId.split('_');if(parts.length>=2)factionId=parts[0]+'_'+parts[1]}if(FACTION_DISPLAY[factionId]){loadFactionChoiceDetail(factionId)}else{loadFactionChoiceDetail(entry.id)}});
-list.appendChild(el);
-})(entries[i],i);
+if(!data||!data.stats)return;
+var list=document.getElementById('choice-list');
+var narrativeEl=document.getElementById('choice-narrative');
+var stats=data.stats;
+/* Group choices by faction */
+var byFaction={};
+var totalChoices=0;
+for(var key in stats){
+if(!stats.hasOwnProperty(key))continue;
+totalChoices+=stats[key];
+var factionId=key;
+if(factionId.indexOf('_')!==-1){var p=factionId.split('_');if(p.length>=2)factionId=p[0]+'_'+p[1]}
+if(!byFaction[factionId])byFaction[factionId]=[];
+byFaction[factionId].push({id:key,count:stats[key]});
 }
-}else{for(var u=0;u<entries.length;u++){var existing=list.children[u];if(existing){var barPct2=Math.round((entries[u].count/maxCount)*100);var countEl=existing.querySelector('.choice-count');if(countEl)countEl.textContent=entries[u].count;var fillEl=existing.querySelector('.choice-bar-fill');if(fillEl)fillEl.style.width=barPct2+'%'}}}
+/* Sort factions by total choices */
+var factionOrder=Object.keys(byFaction).sort(function(a,b){
+var sumA=byFaction[a].reduce(function(s,x){return s+x.count},0);
+var sumB=byFaction[b].reduce(function(s,x){return s+x.count},0);
+return sumB-sumA;
+});
+/* Narrative intro */
+if(narrativeEl){
+narrativeEl.innerHTML='The powers have made <strong>'+totalChoices+'</strong> decisions shaping the course of events.';
+}
+/* Build display */
+var keySig=JSON.stringify(Object.keys(stats).sort());
+var needsRebuild=list.dataset.keySig!==keySig;
+if(needsRebuild){
+list.dataset.keySig=keySig;list.innerHTML='';
+for(var fi=0;fi<factionOrder.length;fi++){
+var fk=factionOrder[fi];
+var fChoices=byFaction[fk];
+var fTotal=fChoices.reduce(function(s,x){return s+x.count},0);
+var color=FACTION_COLORS[fk]||'#78909C';
+var display=FACTION_DISPLAY[fk]||fk.replace(/_/g,' ');
+/* Faction decision header */
+var fHeader=document.createElement('div');fHeader.style.cssText='width:100%;margin-top:'+(fi>0?'8px':'0')+';margin-bottom:4px';
+fHeader.innerHTML='<div style="display:flex;align-items:center;gap:6px;font-family:Orbitron,sans-serif;font-size:0.75rem;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:'+color+';padding:4px 8px;background:'+color+'10;border-left:3px solid '+color+';border-radius:3px"><span style="width:8px;height:8px;border-radius:50%;background:'+color+';flex-shrink:0"></span>'+esc(display)+'<span style="font-size:0.6875rem;font-weight:400;opacity:0.6;margin-left:auto">'+fTotal+' decision'+(fTotal!==1?'s':'')+'</span></div>';
+list.appendChild(fHeader);
+/* Decision items for this faction */
+for(var di=0;di<fChoices.length;di++){
+(function(entry){
+var el=document.createElement('div');el.className='choice-item';el.dataset.choiceId=entry.id;
+var barPct=Math.round((entry.count/Math.max(fChoices[0].count,1))*100);
+/* Human-readable choice label */
+var choiceLabel=entry.id.replace(fk+'_','').replace(/_/g,' ');
+var labelParts=choiceLabel.split(' ');
+var narrLabel=labelParts.map(function(w){return w.charAt(0).toUpperCase()+w.slice(1)}).join(' ');
+el.innerHTML='<span class="choice-rank">'+entry.count+'</span><span class="choice-id">'+esc(narrLabel)+'</span><div class="choice-bar-container"><div class="choice-bar"><div class="choice-bar-fill" style="width:'+barPct+'%"></div></div></div>';
+el.addEventListener('click',function(){loadFactionChoiceDetail(fk)});
+list.appendChild(el);
+})(fChoices[di]);
+}
+}
+}
 }
 
 async function loadFactionChoiceDetail(factionId){
