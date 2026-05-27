@@ -893,6 +893,48 @@ function buildNodes() {
 }
 
 // --- Update UI panels ---
+/* ═══ Fed UI Phenotype State (compact-restore pattern) ═══ */
+const FED_SMAP_SCHEMA = '1.0.0';
+const FED_SMAP_AUTH_FIELDS = ['event_buckets','crisis_collapsed'];
+const FED_SMAP_MAX_AGE = 300000;
+
+function _smapHash(s){var h=0;for(var i=0;i<s.length;i++){h=((h<<5)-h)+s.charCodeAt(i);h=h&h}return 'h'+Math.abs(h).toString(36)}
+
+function fedStarmapSaveUI(changes) {
+  try {
+    var existing = fedStarmapLoadRaw();
+    var state = {event_buckets:{exploration:true,defensive:true,covert:true,anomalies:false,other:false},crisis_collapsed:false};
+    if(existing&&existing.payload){
+      for(var k in existing.payload){
+        if(k==='event_buckets'&&existing.payload[k]){state.event_buckets=JSON.parse(JSON.stringify(existing.payload[k]))}
+        else{state[k]=existing.payload[k]}
+      }
+    }
+    if(changes){for(var k in changes)state[k]=changes[k]}
+    var packet={schema:FED_SMAP_SCHEMA,timestamp:Date.now(),source:'federation-starmap',
+      authority:{fields_authoritative:FED_SMAP_AUTH_FIELDS,fields_advisory:[]},
+      payload:state,hash:''};
+    packet.hash=_smapHash(packet.schema+'|'+packet.timestamp+'|'+packet.source+'|'+JSON.stringify(packet.payload)+'|'+JSON.stringify(packet.authority));
+    localStorage.setItem('fed_starmap_phenotype',JSON.stringify(packet));
+    return true;
+  }catch(e){return false}
+}
+
+function fedStarmapLoadRaw() {
+  try{
+    var raw=localStorage.getItem('fed_starmap_phenotype');if(!raw)return null;
+    var p=JSON.parse(raw);if(!p.schema||!p.timestamp)return null;
+    var ch=p.hash;p.hash='';
+    var cmp=_smapHash(p.schema+'|'+p.timestamp+'|'+p.source+'|'+JSON.stringify(p.payload)+'|'+JSON.stringify(p.authority));
+    if(ch!==cmp)return null;
+    p.hash=ch;p._stale=(Date.now()-p.timestamp)>FED_SMAP_MAX_AGE;
+    return p;
+  }catch(e){return null}
+}
+
+function fedStarmapRestoreUI(){var p=fedStarmapLoadRaw();return p?p.payload:null}
+/* ═══ End Phenotype State ═══ */
+
 /* ═══ STARMAP QUICK STATUS ═══ */
 function renderStarmapQuickStatus() {
   if (!mapData) return;
@@ -1001,21 +1043,12 @@ function updateUI() {
   dot.className = status === 'running' ? '' : 'stopped';
   document.getElementById('tick-label').textContent = `TICK ${tickCount} · ${status.toUpperCase()}`;
 
-  // Events sidebar — categorized buckets (persisted to localStorage)
+  // Events sidebar — categorized buckets (restored from phenotype packet)
   if (!window._evBucketState) {
-    try {
-      var saved = localStorage.getItem('fed_starmap_buckets');
-      if (saved) { window._evBucketState = JSON.parse(saved); }
-      else {
-        window._evBucketState = {
-          'exploration': true, 'defensive': true, 'covert': true, 'anomalies': false, 'other': false
-        };
-      }
-    } catch(e) {
-      window._evBucketState = {
-        'exploration': true, 'defensive': true, 'covert': true, 'anomalies': false, 'other': false
-      };
-    }
+    var ps = fedStarmapRestoreUI();
+    window._evBucketState = (ps && ps.event_buckets) ? JSON.parse(JSON.stringify(ps.event_buckets)) : {
+      'exploration': true, 'defensive': true, 'covert': true, 'anomalies': false, 'other': false
+    };
   }
   const categories = [
     { key: 'exploration', icon: '🚀', title: 'Exploration & Discoveries',
@@ -1086,7 +1119,7 @@ function updateUI() {
       hdr.addEventListener('click', function() {
         const key = this.dataset.bucket;
         window._evBucketState[key] = !window._evBucketState[key];
-        try { localStorage.setItem('fed_starmap_buckets', JSON.stringify(window._evBucketState)); } catch(e) {}
+        fedStarmapSaveUI({event_buckets:window._evBucketState});
         updateUI(); // re-render
       });
     });
@@ -1139,7 +1172,7 @@ function buildLegend() {
 
 // --- Crisis Readout: case-file panel ---
 let crisisReadoutCollapsed = false;
-try { crisisReadoutCollapsed = localStorage.getItem('fed_crisis_collapsed') === 'true'; } catch(e) {}
+(function(){var ps=fedStarmapRestoreUI();if(ps&&ps.crisis_collapsed)crisisReadoutCollapsed=true;})();
 let crisisHighlightIds = []; // NPC IDs to highlight on canvas
 
 function buildMapRead() {
@@ -1327,7 +1360,7 @@ function crisisOpenLiveSim() {
 
 function toggleCrisisReadout() {
   crisisReadoutCollapsed = !crisisReadoutCollapsed;
-  try { localStorage.setItem('fed_crisis_collapsed', String(crisisReadoutCollapsed)); } catch(e) {}
+  fedStarmapSaveUI({crisis_collapsed:crisisReadoutCollapsed});
   const panel = document.getElementById('map-read');
   if (crisisReadoutCollapsed) {
     panel.style.maxHeight = '80px';
