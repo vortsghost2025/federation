@@ -753,6 +753,26 @@ function buildNodes() {
           hull.push({ x: fcx + Math.cos(pa) * pr, y: fcy + Math.sin(pa) * pr });
         }
       }
+      // Fix flat triangles: when a hull has only 3 points with extreme aspect ratio
+      // (all NPCs nearly collinear), outward normals at the vertices don't push
+      // the edges far enough in the narrow axis. Augment with synthetic perimeter
+      // points around the faction center to ensure all NPCs are enclosed.
+      if (hull.length === 3) {
+        const hB = polyBounds(hull);
+        const hW = hB.maxX - hB.minX, hH = hB.maxY - hB.minY;
+        const large = Math.max(hW, hH), small = Math.min(hW, hH);
+        if (small > 0 && large / small > 4) {
+          const infl = fdata.influence || 20;
+          const baseR = Math.max(large * 0.6, spread * (0.8 + (infl / 100) * 0.4));
+          const numPts = Math.max(6, 8 + Math.floor(infl / 10));
+          for (let pi = 0; pi < numPts; pi++) {
+            const pa = (pi / numPts) * Math.PI * 2 + (i * 0.17 + pi * 0.03);
+            const pr = baseR * (0.55 + seededRand(hashStr(fid + 'h2_' + pi))() * 0.6);
+            hull.push({ x: fcx + Math.cos(pa) * pr, y: fcy + Math.sin(pa) * pr });
+          }
+          hull = convexHull(hull);
+        }
+      }
       let padAmt = Math.max(30, 50 * (1 + ((fdata.influence||20) - 20) / 100));
       let padded = padPolygon(hull, padAmt);
       polygon = smoothPoly(padded, 2);
