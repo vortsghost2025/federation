@@ -56,13 +56,26 @@ services:
           cpus: "1.0"
     labels:
       - traefik.enable=true
-      - "traefik.http.routers.fed-api.rule=Host(`federation-game.deliberatefederation.cloud`) && (PathPrefix(`/npcs`) || PathPrefix(`/world`) || PathPrefix(`/simulation/`) || PathPrefix(`/political`) || PathPrefix(`/factions`) || PathPrefix(`/broadcast-events`) || PathPrefix(`/quests`) || PathPrefix(`/technology`) || PathPrefix(`/history-arc`) || PathPrefix(`/atlas`) || PathPrefix(`/consciousness`) || PathPrefix(`/engine-status`) || PathPrefix(`/map/`) || PathPrefix(`/state`) || PathPrefix(`/systems-overview`) || PathPrefix(`/timeline`) || PathPrefix(`/rivals`) || PathPrefix(`/reset`) || PathPrefix(`/log`) || PathPrefix(`/ws`) || PathPrefix(`/healthz`) || PathPrefix(`/docs`) || PathPrefix(`/openapi.json`) || PathPrefix(`/redoc`))"
+      - "traefik.http.routers.fed-api.rule=Host(`federation-game.deliberatefederation.cloud`) && (PathPrefix(`/npcs`) || PathPrefix(`/world`) || PathPrefix(`/simulation/`) || PathPrefix(`/political`) || PathPrefix(`/factions`) || PathPrefix(`/broadcast-events`) || PathPrefix(`/quests`) || PathPrefix(`/technology`) || PathPrefix(`/history-arc`) || PathPrefix(`/atlas`) || PathPrefix(`/consciousness`) || PathPrefix(`/engine-status`) || PathPrefix(`/map/`) || PathPrefix(`/state`) || PathPrefix(`/systems-overview`) || PathPrefix(`/timeline`) || PathPrefix(`/rivals`) || PathPrefix(`/reset`) || PathPrefix(`/log`) || PathPrefix(`/ws`) || PathPrefix(`/healthz`) || PathPrefix(`/docs`) || PathPrefix(`/openapi.json`) || PathPrefix(`/redoc`) || PathPrefix(`/cognition`) || PathPrefix(`/narrator`))"
       - traefik.http.routers.fed-api.entrypoints=websecure
       - traefik.http.routers.fed-api.tls.certresolver=letsencrypt
       - "traefik.http.routers.fed-api.priority=100"
       - traefik.http.routers.fed-api.service=fed-api-svc
       - traefik.http.services.fed-api-svc.loadbalancer.server.port=8000
-      - "traefik.http.routers.fed-api-http.rule=Host(`federation-game.deliberatefederation.cloud`) && (PathPrefix(`/npcs`) || PathPrefix(`/world`) || PathPrefix(`/simulation/`) || PathPrefix(`/political`) || PathPrefix(`/factions`) || PathPrefix(`/broadcast-events`) || PathPrefix(`/quests`) || PathPrefix(`/technology`) || PathPrefix(`/history-arc`) || PathPrefix(`/atlas`) || PathPrefix(`/consciousness`) || PathPrefix(`/engine-status`) || PathPrefix(`/map/`) || PathPrefix(`/state`) || PathPrefix(`/systems-overview`) || PathPrefix(`/timeline`) || PathPrefix(`/rivals`) || PathPrefix(`/reset`) || PathPrefix(`/log`) || PathPrefix(`/ws`) || PathPrefix(`/healthz`) || PathPrefix(`/docs`) || PathPrefix(`/openapi.json`) || PathPrefix(`/redoc`))"
+      # ── /api/ prefix router: strip /api and forward to backend ──
+      - "traefik.http.middlewares.strip-api.stripprefix.prefixes=/api"
+      - "traefik.http.routers.fed-api-prefix.rule=Host(`federation-game.deliberatefederation.cloud`) && PathPrefix(`/api/`)"
+      - traefik.http.routers.fed-api-prefix.entrypoints=websecure
+      - traefik.http.routers.fed-api-prefix.tls.certresolver=letsencrypt
+      - "traefik.http.routers.fed-api-prefix.priority=150"
+      - traefik.http.routers.fed-api-prefix.middlewares=strip-api
+      - traefik.http.routers.fed-api-prefix.service=fed-api-svc
+      - "traefik.http.routers.fed-api-prefix-http.rule=Host(`federation-game.deliberatefederation.cloud`) && PathPrefix(`/api/`)"
+      - traefik.http.routers.fed-api-prefix-http.entrypoints=web
+      - "traefik.http.routers.fed-api-prefix-http.priority=150"
+      - traefik.http.routers.fed-api-prefix-http.middlewares=strip-api
+      - traefik.http.routers.fed-api-prefix-http.service=fed-api-http-svc
+      - "traefik.http.routers.fed-api-http.rule=Host(`federation-game.deliberatefederation.cloud`) && (PathPrefix(`/npcs`) || PathPrefix(`/world`) || PathPrefix(`/simulation/`) || PathPrefix(`/political`) || PathPrefix(`/factions`) || PathPrefix(`/broadcast-events`) || PathPrefix(`/quests`) || PathPrefix(`/technology`) || PathPrefix(`/history-arc`) || PathPrefix(`/atlas`) || PathPrefix(`/consciousness`) || PathPrefix(`/engine-status`) || PathPrefix(`/map/`) || PathPrefix(`/state`) || PathPrefix(`/systems-overview`) || PathPrefix(`/timeline`) || PathPrefix(`/rivals`) || PathPrefix(`/reset`) || PathPrefix(`/log`) || PathPrefix(`/ws`) || PathPrefix(`/healthz`) || PathPrefix(`/docs`) || PathPrefix(`/openapi.json`) || PathPrefix(`/redoc`) || PathPrefix(`/cognition`) || PathPrefix(`/narrator`))"
       - traefik.http.routers.fed-api-http.entrypoints=web
       - "traefik.http.routers.fed-api-http.priority=100"
       - traefik.http.routers.fed-api-http.service=fed-api-http-svc
