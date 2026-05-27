@@ -2571,9 +2571,10 @@ function renderSituationRoom() {
             return _latestNarration;
         }).catch(function() { return _latestNarration; });
 
-    // We need /map/data for crisis_readout + events
-    Promise.all([apiFetch('/map/data', 8000), narrPromise]).then(function(results) {
-        var data = results[0];
+    // We need /map/data for crisis_readout + events; narration is optional
+    Promise.allSettled([apiFetch('/map/data', 8000), narrPromise]).then(function(results) {
+        var data = results[0].status === 'fulfilled' ? results[0].value : null;
+        var narrResult = results[1].status === 'fulfilled' ? results[1].value : _latestNarration;
         if (!data) { headlineEl.textContent = 'Signal interrupted...'; return; }
 
     // Build dynamic NPC/faction regexes from live data
@@ -2610,7 +2611,7 @@ function renderSituationRoom() {
         if (_isLLMLeak(n.forewarning)) n.forewarning = '';
         return n;
     }
-    var narr = _cleanNarr(results[1] || _latestNarration);
+    var narr = _cleanNarr(narrResult || _latestNarration);
 
     // ── 1. HEADLINE ──
     var headline = crisis.headline || '';
