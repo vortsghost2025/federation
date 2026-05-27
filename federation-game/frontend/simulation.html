@@ -2842,7 +2842,7 @@ function renderSituationRoom() {
     bodyEl.innerHTML = html;
 
 }).catch(function(err) {
-    console.error('[renderSituationRoom] UNHANDLED:', err);
+    console.warn('[renderSituationRoom]', err);
     headlineEl.textContent = 'Intelligence report unavailable';
     bodyEl.innerHTML = '<div class="sitroom-quiet">Could not reach the data stream.</div>';
 });
