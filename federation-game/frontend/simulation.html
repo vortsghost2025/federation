@@ -499,413 +499,175 @@ html{height:auto;min-height:100vh}body{height:auto;min-height:100vh;overflow-x:h
   .top-nav{border-left:none;padding-left:0;margin-left:0;flex-wrap:wrap}
 }
 
-/* ═══ HUMAN READABILITY MODE V2 — OPERATOR LAYOUT ═══ */
-.readable-mode #app {
-  grid-template-columns: 1fr !important;
-  grid-template-rows: auto auto 1fr auto !important;
-  grid-template-areas: "top" "sit" "center" "bottom" !important;
-}
-.readable-mode #left,
-.readable-mode #right {
-  display: none !important;
-}
-.readable-mode #center {
-  padding: 24px !important;
-  max-width: 960px !important;
-  margin: 0 auto !important;
-  width: 100% !important;
-}
-.readable-mode #top {
-  padding: 8px 24px !important;
-}
-.readable-mode #situation {
-  padding: 12px 24px !important;
-}
-.readable-mode #bottom {
-  padding: 8px 24px !important;
-  justify-content: center;
-  gap: 12px;
-}
-.readable-mode body {
+/* ═══ HUMAN READABILITY MODE ═══ */
+.readable-mode {
   font-size: 18px !important;
-  line-height: 1.55 !important;
 }
 .readable-mode .panel {
-  overflow-y: visible !important;
+  padding: 20px !important;
+}
+.readable-mode .top-row {
+  min-height: 44px !important;
+}
+.readable-mode .split-bar-container {
+  height: 28px !important;
+  min-width: 180px !important;
+}
+.readable-mode * {
+  line-height: 1.5 !important;
 }
 .readable-mode .top-row-label,
 .readable-mode .split-severity,
 .readable-mode .split-chip,
 .readable-mode .top-tick-label,
 .readable-mode .time-since-label,
-.readable-mode .time-since-val,
-.readable-mode .top-tick-val,
-.readable-mode .tick-raw,
-.readable-mode .top-nav a,
-.readable-mode .help-btn {
+.readable-mode .section-title,
+.readable-mode .sit-card-label,
+.readable-mode .qs-header,
+.readable-mode .qs-section-title,
+.readable-mode .qs-badge,
+.readable-mode .sitroom-label,
+.readable-mode .activity-log-label,
+.readable-mode .activity-log-summary,
+.readable-mode .ai-chat-label,
+.readable-mode .ai-chat-suggestion,
+.readable-mode .npc-noise-toggle-label,
+.readable-mode .help-box h3,
+.readable-mode .tab-btn,
+.readable-mode .bottom-progress-label,
+.readable-mode .event-source,
+.readable-mode .event-time,
+.readable-mode .wc-sev,
+.readable-mode .wc-click-hint,
+.readable-mode .faction-cohesion-label,
+.readable-mode .npc-leader-badge,
+.readable-mode .cascade-badge,
+.readable-mode .chain-title,
+.readable-mode .quest-event,
+.readable-mode .quest-obj-label,
+.readable-mode .quest-stat-label,
+.readable-mode .qh-stat-label,
+.readable-mode .tech-progress-label,
+.readable-mode .faction-name,
+.readable-mode .npc-name,
+.readable-mode .npc-story-name,
+.readable-mode .domino-depth,
+.readable-mode .domino-name,
+.readable-mode .domino-tone,
+.readable-mode .pipeline-root-label,
+.readable-mode .bottom-pending strong {
+  font-size: 14px !important;
+  letter-spacing: 0.5px !important;
+}
+.readable-mode body,
+.readable-mode .sit-card-value,
+.readable-mode .sitroom-headline,
+.readable-mode .sitroom-text,
+.readable-mode .sitroom-voice,
+.readable-mode .sitroom-quiet,
+.readable-mode .event-body,
+.readable-mode .event-entry,
+.readable-mode .npc-detail-val,
+.readable-mode .npc-mood,
+.readable-mode .npc-decision,
+.readable-mode .npc-thought,
+.readable-mode .npc-story-status,
+.readable-mode .npc-story-thought,
+.readable-mode .npc-story-action,
+.readable-mode .faction-detail,
+.readable-mode .detail-stance-row,
+.readable-mode .detail-action-item,
+.readable-mode .quest-body,
+.readable-mode .quest-detail-desc,
+.readable-mode .choice-narrative,
+.readable-mode .choice-id,
+.readable-mode .chain-meta,
+.readable-mode .chain-event,
+.readable-mode .cascade-summary-text,
+.readable-mode .cascade-summary-detail,
+.readable-mode .domino-desc,
+.readable-mode .domino-event,
+.readable-mode .pipeline-root-event,
+.readable-mode .tech-project,
+.readable-mode .tech-meta,
+.readable-mode .bottom-trigger,
+.readable-mode .bottom-pending,
+.readable-mode .intro-box,
+.readable-mode .help-box p,
+.readable-mode .help-box li,
+.readable-mode .qs-row,
+.readable-mode .qs-catalyst,
+.readable-mode .qs-empty,
+.readable-mode .wc-current,
+.readable-mode .wc-meaning,
+.readable-mode .wc-look,
+.readable-mode .wc-improve,
+.readable-mode .ai-chat-input,
+.readable-mode .ai-chat-msg,
+.readable-mode .npc-card,
+.readable-mode .faction-card,
+.readable-mode .npc-card-story,
+.readable-mode .quest-entry {
   font-size: 16px !important;
 }
-.readable-mode .split-bar-container {
-  height: 28px !important;
-  min-width: 200px !important;
+.readable-mode .tab-btn,
+.readable-mode .help-btn,
+.readable-mode .help-close,
+.readable-mode .ai-chat-send,
+.readable-mode .raw-toggle,
+.readable-mode .npc-noise-toggle,
+.readable-mode .activity-log-bar,
+.readable-mode .ai-chat-suggestion,
+.readable-mode .faction-card,
+.readable-mode .npc-card,
+.readable-mode .npc-card-story,
+.readable-mode .quest-entry,
+.readable-mode .choice-item,
+.readable-mode .chain-card,
+.readable-mode .cascade-summary,
+.readable-mode .watch-card,
+.readable-mode .qs-rm-toggle-btn {
+  min-height: 36px !important;
+  padding: 6px 12px !important;
+}
+.readable-mode #left,
+.readable-mode #center,
+.readable-mode #right {
+  padding: 20px !important;
 }
 .readable-mode .top-row {
-  min-height: 44px !important;
+  padding: 4px 8px !important;
 }
-
-/* Federation Status Card — replaces rm-summary */
-.rm-status-card {
-  background: linear-gradient(135deg, rgba(0,188,212,0.08), rgba(255,152,0,0.05));
-  border: 2px solid rgba(0,188,212,0.3);
-  border-radius: 12px;
-  padding: 28px 32px;
-  margin-bottom: 20px;
-  position: relative;
-  overflow: hidden;
+.readable-mode #top {
+  padding: 8px 16px !important;
 }
-.rm-status-card::before {
-  content: '';
-  position: absolute;
-  top: 0; left: 0;
-  width: 6px;
-  height: 100%;
-  background: linear-gradient(180deg, var(--cyan), var(--amber));
+.readable-mode #situation {
+  padding: 12px 20px !important;
+  gap: 16px !important;
 }
-.rm-status-header {
-  font-family: 'Orbitron', sans-serif;
-  font-size: 14px !important;
-  font-weight: 900;
-  letter-spacing: 2px;
-  text-transform: uppercase;
-  color: var(--dim);
-  margin-bottom: 16px;
-  display: flex;
-  align-items: center;
-  gap: 12px;
+.readable-mode .section-title,
+.readable-mode .sit-card-label,
+.readable-mode .sitroom-label,
+.readable-mode .activity-log-label,
+.readable-mode .ai-chat-label,
+.readable-mode .top-row-label,
+.readable-mode .top-tick-label,
+.readable-mode .time-since-label,
+.readable-mode .npc-noise-toggle-label,
+.readable-mode .bottom-progress-label,
+.readable-mode .qs-section-title,
+.readable-mode .bottom-pending strong,
+.readable-mode .event-source,
+.readable-mode .quest-event,
+.readable-mode .wc-click-hint,
+.readable-mode .faction-cohesion-label,
+.readable-mode .tab-btn,
+.readable-mode .help-btn,
+.readable-mode .qs-header,
+.readable-mode .raw-toggle {
+  text-transform: none !important;
+  letter-spacing: 0.5px !important;
 }
-.rm-status-header::after {
-  content: '';
-  flex: 1;
-  height: 1px;
-  background: linear-gradient(90deg, rgba(0,188,212,0.3), transparent);
-}
-.rm-status-tick {
-  font-family: 'Share Tech Mono', monospace;
-  font-size: 14px;
-  color: var(--cyan);
-  text-transform: none;
-  letter-spacing: 0;
-  font-weight: 400;
-}
-.rm-status-state {
-  font-size: 28px !important;
-  font-weight: 900;
-  margin-bottom: 12px;
-  font-family: 'Orbitron', sans-serif;
-  letter-spacing: 1px;
-}
-.rm-status-state.stable { color: var(--green); }
-.rm-status-state.warning { color: var(--amber); }
-.rm-status-state.crisis { color: var(--red); animation: sevPulse 2s ease infinite; }
-.rm-status-risk {
-  font-size: 18px !important;
-  color: var(--white);
-  margin-bottom: 16px;
-  padding: 8px 16px;
-  background: rgba(255,255,255,0.03);
-  border-radius: 8px;
-  border-left: 4px solid var(--amber);
-  line-height: 1.5;
-}
-.rm-status-metrics {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-  gap: 12px;
-  margin-bottom: 20px;
-}
-.rm-metric-card {
-  background: rgba(255,255,255,0.02);
-  border: 1px solid rgba(255,255,255,0.06);
-  border-radius: 8px;
-  padding: 14px 18px;
-}
-.rm-metric-label {
-  font-family: 'Orbitron', sans-serif;
-  font-size: 11px !important;
-  font-weight: 700;
-  letter-spacing: 1px;
-  text-transform: uppercase;
-  color: var(--dim);
-  margin-bottom: 4px;
-}
-.rm-metric-value {
-  font-size: 22px !important;
-  font-weight: 700;
-  font-family: 'Orbitron', sans-serif;
-}
-.rm-metric-desc {
-  font-size: 16px !important;
-  color: rgba(255,255,255,0.7);
-  margin-top: 2px;
-}
-.rm-metric-value.good { color: var(--green); }
-.rm-metric-value.warn { color: var(--amber); }
-.rm-metric-value.bad { color: var(--red); }
-
-/* What Just Happened section — PRIMARY CONTENT */
-.rm-events-section {
-  margin-bottom: 20px;
-}
-.rm-events-header {
-  font-family: 'Orbitron', sans-serif;
-  font-size: 13px !important;
-  font-weight: 900;
-  letter-spacing: 2px;
-  text-transform: uppercase;
-  color: var(--cyan);
-  margin-bottom: 12px;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-.rm-events-header::after {
-  content: '';
-  flex: 1;
-  height: 1px;
-  background: linear-gradient(90deg, rgba(0,188,212,0.25), transparent);
-}
-.rm-event-card {
-  background: rgba(255,255,255,0.02);
-  border: 1px solid rgba(255,255,255,0.06);
-  border-radius: 8px;
-  padding: 14px 18px;
-  margin-bottom: 8px;
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: 8px;
-}
-.rm-event-title {
-  font-size: 18px !important;
-  font-weight: 700;
-  color: var(--white);
-}
-.rm-event-desc {
-  font-size: 16px !important;
-  color: rgba(255,255,255,0.75);
-  flex: 1;
-  min-width: 200px;
-}
-.rm-event-badge {
-  font-family: 'Orbitron', sans-serif;
-  font-size: 11px !important;
-  font-weight: 700;
-  letter-spacing: 0.5px;
-  padding: 2px 8px;
-  border-radius: 4px;
-  white-space: nowrap;
-}
-.rm-event-badge.world { color: var(--cyan); background: rgba(0,188,212,0.15); border: 1px solid rgba(0,188,212,0.3); }
-.rm-event-badge.cascade { color: var(--violet); background: rgba(206,147,216,0.12); border: 1px solid rgba(206,147,216,0.25); }
-.rm-event-badge.faction { color: var(--amber); background: rgba(255,152,0,0.12); border: 1px solid rgba(255,152,0,0.25); }
-.rm-event-badge.crisis { color: var(--red); background: rgba(244,67,54,0.15); border: 1px solid rgba(244,67,54,0.3); }
-.rm-event-npcs {
-  font-size: 14px !important;
-  color: var(--dim);
-}
-.rm-event-npc-name {
-  color: var(--cyan);
-  font-weight: 600;
-}
-.rm-event-severity {
-  font-size: 11px !important;
-  font-weight: 700;
-  letter-spacing: 1px;
-  text-transform: uppercase;
-  padding: 1px 6px;
-  border-radius: 3px;
-}
-.rm-event-severity.CRITICAL { background: rgba(244,67,54,0.2); color: #ef5350; }
-.rm-event-severity.MAJOR { background: rgba(255,152,0,0.2); color: #ffa726; }
-.rm-event-severity.MINOR { background: rgba(76,175,80,0.15); color: #66bb6a; }
-
-/* Involved Factions/NPCs section */
-.rm-involved-section {
-  margin-bottom: 16px;
-}
-.rm-involved-header {
-  font-family: 'Orbitron', sans-serif;
-  font-size: 13px !important;
-  font-weight: 900;
-  letter-spacing: 1.5px;
-  text-transform: uppercase;
-  color: var(--amber);
-  margin-bottom: 8px;
-}
-.rm-involved-chips {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-}
-.rm-involved-chip {
-  font-size: 15px !important;
-  padding: 4px 12px;
-  border-radius: 6px;
-  background: rgba(255,255,255,0.03);
-  border: 1px solid rgba(255,255,255,0.08);
-  color: var(--white);
-}
-.rm-involved-chip.faction {
-  border-color: rgba(255,152,0,0.3);
-  background: rgba(255,152,0,0.06);
-  color: var(--amber);
-}
-.rm-involved-chip.npc {
-  border-color: rgba(0,188,212,0.3);
-  background: rgba(0,188,212,0.06);
-  color: var(--cyan);
-}
-
-/* Drill-down buttons — bottom of readable area */
-.rm-drill-row {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-  margin-top: 8px;
-  padding-top: 16px;
-  border-top: 1px solid rgba(255,255,255,0.06);
-}
-.rm-drill-btn {
-  font-family: 'Orbitron', sans-serif;
-  font-size: 14px !important;
-  font-weight: 700;
-  letter-spacing: 1px;
-  text-transform: uppercase;
-  padding: 12px 24px;
-  border-radius: 8px;
-  cursor: pointer;
-  border: 1px solid rgba(255,255,255,0.1);
-  background: rgba(255,255,255,0.03);
-  color: var(--dim);
-  transition: all 0.2s;
-  min-height: 48px !important;
-  flex: 1 1 auto;
-  text-align: center;
-}
-.rm-drill-btn:hover {
-  background: rgba(0,188,212,0.1);
-  border-color: rgba(0,188,212,0.3);
-  color: var(--cyan);
-}
-.rm-drill-btn.active {
-  background: rgba(0,188,212,0.15);
-  border-color: var(--cyan);
-  color: var(--cyan);
-}
-.rm-drill-btn.danger {
-  border-color: rgba(244,67,54,0.3);
-  color: var(--red);
-}
-.rm-drill-btn.danger:hover {
-  background: rgba(244,67,54,0.1);
-  border-color: var(--red);
-}
-
-/* Panel overlay (shown when drill-down buttons are clicked) */
-.rm-overlay {
-  display: none;
-  background: rgba(8,12,20,0.98);
-  border: 1px solid rgba(0,188,212,0.15);
-  border-radius: 10px;
-  padding: 20px 24px;
-  margin-top: 12px;
-  max-height: 70vh;
-  overflow-y: auto;
-}
-.rm-overlay.visible {
-  display: block;
-}
-.rm-overlay-header {
-  font-family: 'Orbitron', sans-serif;
-  font-size: 14px !important;
-  font-weight: 900;
-  letter-spacing: 2px;
-  text-transform: uppercase;
-  color: var(--cyan);
-  margin-bottom: 12px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-}
-.rm-overlay-close {
-  font-family: 'Share Tech Mono', monospace;
-  font-size: 14px;
-  color: var(--dim);
-  cursor: pointer;
-  padding: 4px 10px;
-  border: 1px solid rgba(255,255,255,0.1);
-  border-radius: 4px;
-  background: none;
-  transition: all 0.2s;
-}
-.rm-overlay-close:hover {
-  border-color: var(--red);
-  color: var(--red);
-}
-
-/* Next consequence */
-.rm-consequence {
-  font-size: 16px !important;
-  color: var(--amber);
-  font-style: italic;
-  padding: 8px 14px;
-  background: rgba(255,152,0,0.05);
-  border-left: 4px solid var(--amber);
-  border-radius: 4px;
-  margin-top: 16px;
-  line-height: 1.5;
-}
-
-/* Toggle button v2 */
-.rm-toggle-btn {
-  background: none;
-  border: 1px solid rgba(0,188,212,0.3);
-  color: var(--cyan);
-  font-family: 'Share Tech Mono', monospace;
-  font-size: 14px;
-  cursor: pointer;
-  padding: 6px 14px;
-  border-radius: 6px;
-  transition: background 0.2s, border-color 0.2s;
-  line-height: 1;
-  font-weight: 700;
-  white-space: nowrap;
-  min-height: 36px;
-}
-.rm-toggle-btn:hover {
-  background: rgba(0,188,212,0.1);
-  border-color: var(--cyan);
-}
-.rm-toggle-btn.on {
-  background: rgba(0,188,212,0.2);
-  border-color: var(--cyan);
-  color: #fff;
-}
-
-/* Empty state */
-.rm-empty {
-  font-size: 16px !important;
-  color: var(--dim);
-  text-align: center;
-  padding: 24px;
-}
-
-/* Focus visible for keyboard users */
-.readable-mode *:focus-visible {
-  outline: 3px solid var(--cyan) !important;
-  outline-offset: 3px !important;
-}
-
 .high-contrast {
   --white: #ffffff !important;
   --dim: #b0bec5 !important;
@@ -925,13 +687,230 @@ html{height:auto;min-height:100vh}body{height:auto;min-height:100vh;overflow-x:h
   border-width: 2px !important;
   background: rgba(0,0,0,0.95) !important;
 }
-
+.text-large .readable-mode {
+  font-size: 20px !important;
+}
+.text-large .readable-mode .panel {
+  font-size: 18px !important;
+}
 @media (prefers-reduced-motion: reduce) {
   * {
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
   }
+}
+.rm-toggle-btn {
+  background: none;
+  border: 1px solid rgba(0,188,212,0.3);
+  color: var(--cyan);
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 0.8125rem;
+  cursor: pointer;
+  padding: 4px 10px;
+  border-radius: 6px;
+  margin-left: 4px;
+  transition: background 0.2s, border-color 0.2s;
+  line-height: 1;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.rm-toggle-btn:hover {
+  background: var(--cyan-dim);
+  border-color: var(--cyan);
+}
+.rm-toggle-btn.on {
+  background: rgba(0,188,212,0.2);
+  border-color: var(--cyan);
+  color: #fff;
+}
+.rm-summary {
+  background: linear-gradient(135deg, rgba(0,188,212,0.06), rgba(255,152,0,0.04));
+  border: 1px solid rgba(0,188,212,0.2);
+  border-radius: 10px;
+  padding: 16px 20px;
+  margin-bottom: 12px;
+  position: relative;
+  overflow: hidden;
+}
+.rm-summary::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0;
+  width: 4px;
+  height: 100%;
+  background: linear-gradient(180deg, var(--cyan), var(--amber));
+  border-radius: 4px 0 0 4px;
+}
+.rm-summary-header {
+  font-family: 'Orbitron', sans-serif;
+  font-size: 0.75rem;
+  font-weight: 900;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  color: var(--white);
+  margin-bottom: 12px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.rm-summary-header .rm-summary-tick {
+  font-size: 0.6875rem;
+  color: var(--dim);
+  font-weight: 400;
+  letter-spacing: 0.5px;
+  text-transform: none;
+}
+.rm-summary-body {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.rm-summary-section {
+  border-left: 2px solid rgba(255,255,255,0.08);
+  padding-left: 12px;
+}
+.rm-summary-section-title {
+  font-family: 'Orbitron', sans-serif;
+  font-size: 0.625rem;
+  font-weight: 700;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: var(--dim);
+  margin-bottom: 4px;
+}
+.rm-summary-row {
+  font-size: 0.9375rem;
+  line-height: 1.6;
+}
+.rm-summary-state {
+  font-size: 1.25rem;
+  font-weight: 700;
+}
+.rm-summary-state.stable { color: var(--green); }
+.rm-summary-state.warning { color: var(--amber); }
+.rm-summary-state.crisis { color: var(--red); }
+.rm-summary-event-item {
+  font-size: 0.9375rem;
+  color: var(--white);
+  line-height: 1.5;
+  padding: 2px 0;
+}
+.rm-summary-event-item .rm-ev-npc {
+  color: var(--cyan);
+  font-weight: 600;
+}
+.rm-summary-event-item .rm-ev-badge {
+  display: inline-block;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  padding: 1px 6px;
+  border-radius: 3px;
+  margin-right: 4px;
+  vertical-align: middle;
+}
+.rm-summary-event-item .rm-ev-badge.world { color: var(--cyan); background: var(--cyan-dim); }
+.rm-summary-event-item .rm-ev-badge.cascade { color: var(--violet); background: rgba(206,147,216,0.12); }
+.rm-summary-event-item .rm-ev-badge.faction { color: var(--amber); background: var(--amber-dim); }
+.rm-summary-event-item .rm-ev-badge.crisis { color: var(--red); background: var(--red-dim); }
+.rm-summary-faction-chip {
+  display: inline-block;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 4px;
+  margin: 2px 4px 2px 0;
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.08);
+  color: var(--white);
+}
+.rm-summary-consequence {
+  font-size: 0.9375rem;
+  color: var(--amber);
+  font-style: italic;
+  line-height: 1.5;
+}
+.rm-prog-bar {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 10px;
+  flex-wrap: wrap;
+}
+.rm-prog-btn {
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 0.8125rem;
+  padding: 6px 14px;
+  border-radius: 6px;
+  cursor: pointer;
+  border: 1px solid rgba(255,255,255,0.08);
+  background: rgba(255,255,255,0.02);
+  color: var(--dim);
+  transition: all 0.2s;
+  min-height: 36px;
+}
+.rm-prog-btn:hover {
+  background: rgba(0,188,212,0.06);
+  border-color: rgba(0,188,212,0.2);
+  color: var(--cyan);
+}
+.rm-prog-btn.active {
+  background: rgba(0,188,212,0.12);
+  border-color: rgba(0,188,212,0.3);
+  color: var(--cyan);
+}
+.rm-prog-panel {
+  display: none;
+}
+.rm-prog-panel.visible {
+  display: block;
+}
+.readable-mode *:focus {
+  outline: 3px solid var(--cyan) !important;
+  outline-offset: 3px !important;
+}
+.readable-mode .npc-grid {
+  display: none;
+}
+.readable-mode .npc-grid.rm-expanded {
+  display: flex;
+}
+.readable-mode #left-factions {
+  display: none;
+}
+.readable-mode #left-factions.rm-expanded {
+  display: block;
+}
+.readable-mode .rm-collapse-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  margin-bottom: 8px;
+  background: rgba(255,255,255,0.03);
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 6px;
+  cursor: pointer;
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 0.875rem;
+  color: var(--cyan);
+  transition: background 0.2s;
+  min-height: 36px;
+}
+.readable-mode .rm-collapse-toggle:hover {
+  background: rgba(0,188,212,0.06);
+  border-color: rgba(0,188,212,0.2);
+}
+.rm-detail-content {
+  display: none;
+}
+.rm-detail-content.visible {
+  display: block;
+}
+.readable-mode .raw-events-wrap {
+  transition: max-height 0.4s ease;
+}
+.readable-mode .npc-noise-toggle {
+  display: flex !important;
 }
 </style>
 </head>
@@ -1099,50 +1078,30 @@ html{height:auto;min-height:100vh}body{height:auto;min-height:100vh;overflow-x:h
 
 <section id="center" class="panel">
 <div id="quick-status" class="qs-panel" style="display:none">
-<div class="qs-header">📊 Quick Status <span class="qs-tick" id="qs-tick"></span></div>
+<div class="qs-header">&#x1F4CA; Quick Status <span class="qs-tick" id="qs-tick"></span></div>
 <div class="qs-body" id="qs-body"></div>
 </div>
-
-<!-- v2 Readable Mode: Federation Status Card (hidden by default, shown in readable mode) -->
-<div id="rm-status" class="rm-status-card" style="display:none">
-  <div class="rm-status-header">⚙️ Federation Status <span class="rm-status-tick" id="rm-status-tick"></span></div>
-  <div id="rm-status-body"></div>
+<div id="rm-summary" class="rm-summary" style="display:none">
+<div class="rm-summary-header">&#x1F4CB; What Is Happening? <span class="rm-summary-tick" id="rm-summary-tick"></span></div>
+<div class="rm-summary-body" id="rm-summary-body"></div>
 </div>
-
-<!-- v2 Drill-down toggle buttons (hidden by default) -->
-<div id="rm-drill-row" class="rm-drill-row" style="display:none">
-  <button class="rm-drill-btn" data-rm-target="rm-overlay-factions" onclick="rmToggleOverlay('rm-overlay-factions')">FACTIONS</button>
-  <button class="rm-drill-btn" data-rm-target="rm-overlay-characters" onclick="rmToggleOverlay('rm-overlay-characters')">CHARACTERS</button>
-  <button class="rm-drill-btn" data-rm-target="rm-overlay-events" onclick="rmToggleOverlay('rm-overlay-events')">EVENTS</button>
-  <button class="rm-drill-btn danger" data-rm-target="rm-overlay-debug" onclick="rmToggleOverlay('rm-overlay-debug')">DEBUG</button>
+<div class="rm-prog-bar" id="rm-prog-bar" style="display:none">
+<button class="rm-prog-btn active" data-rm-panel="rm-panel-summary" onclick="switchRMPanel('rm-panel-summary')">&#x1F4CB; Summary</button>
+<button class="rm-prog-btn" data-rm-panel="rm-panel-events" onclick="switchRMPanel('rm-panel-events')">&#x1F4E1; Events</button>
+<button class="rm-prog-btn" data-rm-panel="rm-panel-details" onclick="switchRMPanel('rm-panel-details')">&#x2139;&#xFE0F; Details</button>
+<button class="rm-prog-btn" data-rm-panel="rm-panel-advanced" onclick="switchRMPanel('rm-panel-advanced')">&#x2699;&#xFE0F; Advanced</button>
 </div>
-
-<!-- v2 Overlay panels -->
-<div id="rm-overlay-factions" class="rm-overlay">
-  <div class="rm-overlay-header">Factions <button class="rm-overlay-close" onclick="rmToggleOverlay('rm-overlay-factions')">Close</button></div>
-  <div id="rm-overlay-factions-body"></div>
-</div>
-<div id="rm-overlay-characters" class="rm-overlay">
-  <div class="rm-overlay-header">Characters <button class="rm-overlay-close" onclick="rmToggleOverlay('rm-overlay-characters')">Close</button></div>
-  <div id="rm-overlay-characters-body"></div>
-</div>
-<div id="rm-overlay-events" class="rm-overlay">
-  <div class="rm-overlay-header">All Events <button class="rm-overlay-close" onclick="rmToggleOverlay('rm-overlay-events')">Close</button></div>
-  <div id="rm-overlay-events-body"></div>
-</div>
-<div id="rm-overlay-debug" class="rm-overlay">
-  <div class="rm-overlay-header">Advanced Debug <button class="rm-overlay-close" onclick="rmToggleOverlay('rm-overlay-debug')">Close</button></div>
-  <div id="rm-overlay-debug-body"></div>
-</div>
-
-<div class="sitroom" id="situation-room">
+<div id="rm-panel-summary" class="rm-prog-panel visible">
+<div id="situation-room" class="sitroom">
 <div class="sitroom-label">Situation Room</div>
 <div id="sitroom-headline" class="sitroom-headline">Awaiting intelligence report...</div>
 <div id="sitroom-body"></div>
 </div>
+</div>
+<div id="rm-panel-events" class="rm-prog-panel">
 <div id="activity-log" class="activity-log">
 <div class="activity-log-bar" id="activity-log-bar" onclick="toggleActivityLog()" tabindex="0" role="button" aria-expanded="false">
-<span class="activity-log-arrow">▶</span>
+<span class="activity-log-arrow">&#9654;</span>
 <span class="activity-log-label">Activity Log</span>
 <span class="activity-log-summary" id="activity-log-summary">No recent activity</span>
 </div>
@@ -1156,6 +1115,13 @@ html{height:auto;min-height:100vh}body{height:auto;min-height:100vh;overflow-x:h
 </div>
 </div>
 </div>
+</div>
+</div>
+<div id="rm-panel-details" class="rm-prog-panel">
+<p style="color:var(--dim);padding:10px;font-size:1rem;">Select a faction or NPC card to view details here.</p>
+</div>
+<div id="rm-panel-advanced" class="rm-prog-panel">
+<p style="color:var(--dim);padding:10px;font-size:1rem;">Advanced telemetry and debug information.</p>
 </div>
 <div class="signal-lost" id="signal-lost-center">
 <div class="ai-chat" id="ai-chat">
@@ -3155,232 +3121,139 @@ function toggleRaw(){var btn=document.getElementById('raw-toggle'),wrap=document
 function toggleHelp(){var overlay=document.getElementById('help-overlay');overlay.classList.toggle('open');if(overlay.classList.contains('open')){overlay.focus();document.body.style.overflow='hidden'}else{document.body.style.overflow=''}}
 function toggleActivityLog(){var log=document.getElementById('activity-log');var bar=document.getElementById('activity-log-bar');var expanded=log.classList.toggle('expanded');bar.setAttribute('aria-expanded',String(expanded));fedSaveUIState({activity_log_expanded:expanded})}
 
-/* ═══ HUMAN READABILITY MODE V2 ═══ */
-var rmOverlayStack = [];
-
+/* ═══ HUMAN READABILITY MODE ═══ */
 function toggleReadableMode() {
   var on = document.body.classList.toggle('readable-mode');
   var btn = document.getElementById('rm-toggle');
   if (btn) btn.classList.toggle('on', on);
-  
-  var statusCard = document.getElementById('rm-status');
-  var drillRow = document.getElementById('rm-drill-row');
+  var summary = document.getElementById('rm-summary');
   var qs = document.getElementById('quick-status');
+  var progBar = document.getElementById('rm-prog-bar');
+  var collapseToggles = document.querySelectorAll('.rm-collapse-toggle');
   var sitRoom = document.getElementById('situation-room');
-  
+  var activityLog = document.getElementById('activity-log');
+  var mainTitle = document.querySelector('.section-title.cyan');
   if (on) {
-    if (statusCard) statusCard.style.display = 'block';
-    if (drillRow) drillRow.style.display = 'flex';
+    if (summary) summary.style.display = 'block';
     if (qs) qs.style.display = 'none';
-    rmOverlayStack.slice().forEach(function(id) { rmToggleOverlay(id, true); });
-    renderReadableSummary();
+    if (progBar) progBar.style.display = 'flex';
+    if (mainTitle) mainTitle.style.display = 'none';
+    collapseToggles.forEach(function(el) { el.style.display = 'flex'; });
+    var npcGrid = document.getElementById('npc-grid');
+    if (npcGrid) npcGrid.classList.remove('rm-expanded');
+    var fList = document.getElementById('left-factions');
+    if (fList) fList.classList.remove('rm-expanded');
   } else {
-    if (statusCard) statusCard.style.display = 'none';
-    if (drillRow) drillRow.style.display = 'none';
+    if (summary) summary.style.display = 'none';
     if (qs) qs.style.display = '';
+    if (progBar) progBar.style.display = 'none';
+    if (mainTitle) mainTitle.style.display = '';
+    collapseToggles.forEach(function(el) { el.style.display = 'none'; });
+    var npcGrid = document.getElementById('npc-grid');
+    if (npcGrid) npcGrid.classList.add('rm-expanded');
+    var fList = document.getElementById('left-factions');
+    if (fList) fList.classList.add('rm-expanded');
   }
+  renderReadableSummary();
   try { localStorage.setItem('fed_readable_mode', on ? 'true' : 'false'); } catch(e) {}
 }
-
-function rmToggleOverlay(overlayId, forceClose) {
-  var overlay = document.getElementById(overlayId);
-  if (!overlay) return;
-  var isOpen = overlay.classList.contains('visible');
-  
-  if (isOpen || forceClose) {
-    overlay.classList.remove('visible');
-    rmOverlayStack = rmOverlayStack.filter(function(id) { return id !== overlayId; });
-  } else {
-    rmOverlayStack.slice().forEach(function(id) {
-      var el = document.getElementById(id);
-      if (el) el.classList.remove('visible');
-    });
-    rmOverlayStack = [overlayId];
-    overlay.classList.add('visible');
-    populateOverlay(overlayId);
+function switchRMPanel(panelId) {
+  document.querySelectorAll('.rm-prog-panel').forEach(function(el) { el.classList.remove('visible'); });
+  var panel = document.getElementById(panelId);
+  if (panel) panel.classList.add('visible');
+  document.querySelectorAll('.rm-prog-btn').forEach(function(btn) { btn.classList.toggle('active', btn.dataset.rmPanel === panelId); });
+}
+function rmToggleSection(sectionId) {
+  var el = document.getElementById(sectionId);
+  if (!el) return;
+  el.classList.toggle('rm-expanded');
+  var toggle = document.querySelector('[onclick="rmToggleSection(\'' + sectionId + '\')"]');
+  if (toggle) {
+    var arrow = el.classList.contains('rm-expanded') ? '\u25BC' : '\u25B6';
+    toggle.innerHTML = arrow + ' ' + toggle.textContent.replace(/^[\u25B6\u25BC]\s*/, '');
   }
 }
-
-function populateOverlay(overlayId) {
-  var status = lastData ? (lastData.status || lastData) : null;
-  if (!status) return;
-  var ws = status.world_state || status.worldState || status;
-  var events = lastData.events || [];
-  var factions = lastData.factions || {};
-  var body = document.getElementById(overlayId + '-body');
-  if (!body) return;
-  
-  if (overlayId === 'rm-overlay-factions') {
-    var html = '';
-    var facKeys = Object.keys(factions);
-    if (facKeys.length === 0) { html = '<div class="rm-empty">No faction data available</div>'; }
-    else {
-      html = '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:10px;">';
-      for (var i = 0; i < facKeys.length; i++) {
-        var f = factions[facKeys[i]];
-        html += '<div style="background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.06);border-radius:8px;padding:12px 16px;">';
-        html += '<div style="font-family:\'Orbitron\',sans-serif;font-size:14px;font-weight:700;color:var(--white);margin-bottom:4px;">' + (FACTION_DISPLAY[facKeys[i]] || facKeys[i]) + '</div>';
-        html += '<div style="font-size:14px;color:var(--dim);line-height:1.5;">Power: ' + (f.power != null ? Math.round(f.power) : '?') + ' &middot; Cohesion: ' + (f.cohesion != null ? Math.round(f.cohesion) : '?') + '</div>';
-        html += '</div>';
-      }
-      html += '</div>';
-    }
-    body.innerHTML = html;
-    
-  } else if (overlayId === 'rm-overlay-characters') {
-    var npcs = lastData.npcs || [];
-    if (npcs.length === 0) { body.innerHTML = '<div class="rm-empty">No character data available</div>'; }
-    else {
-      var html = '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:8px;">';
-      for (var i = 0; i < npcs.length; i++) {
-        var n = npcs[i];
-        html += '<div style="background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.06);border-radius:6px;padding:10px 14px;">';
-        html += '<div style="font-size:15px;font-weight:700;color:var(--cyan);">' + (n.name || 'Unknown') + '</div>';
-        html += '<div style="font-size:13px;color:var(--dim);">' + (n.role || '') + '</div>';
-        html += '</div>';
-      }
-      html += '</div>';
-      body.innerHTML = html;
-    }
-    
-  } else if (overlayId === 'rm-overlay-events') {
-    if (events.length === 0) { body.innerHTML = '<div class="rm-empty">No events recorded</div>'; }
-    else {
-      var html = '';
-      for (var i = 0; i < Math.min(events.length, 20); i++) {
-        var ev = events[i];
-        html += '<div style="padding:6px 0;border-bottom:1px solid rgba(255,255,255,0.04);font-size:14px;line-height:1.5;">';
-        if (ev.char_name) html += '<strong style="color:var(--cyan);">' + ev.char_name + '</strong> ';
-        html += (ev.description || ev.action_type || 'Unknown') + '</div>';
-      }
-      body.innerHTML = html;
-    }
-    
-  } else if (overlayId === 'rm-overlay-debug') {
-    var dataStr = 'No data available';
-    try { dataStr = '<pre style="font-size:12px;color:var(--dim);white-space:pre-wrap;max-height:400px;overflow-y:auto;">' + JSON.stringify(lastData || {}, null, 2).substring(0, 5000) + '</pre>'; } catch(e) {}
-    body.innerHTML = '<div style="margin-bottom:8px;"><strong style="color:var(--dim);">Tick Data Snapshot</strong></div>' + dataStr + '<div style="margin-top:8px;"><strong style="color:var(--dim);">State</strong>: ' + (ws ? ('Degradation ' + Math.round(ws.degradation || 0) + '%, Runway ' + Math.round(ws.runway || 0) + '%, Threat ' + Math.round(ws.threat_level || 0)) : 'N/A') + '</div>';
-  }
-}
-
 function renderReadableSummary() {
-  var statusCard = document.getElementById('rm-status');
-  var body = document.getElementById('rm-status-body');
-  var tickEl = document.getElementById('rm-status-tick');
-  if (!statusCard || !body) return;
-  
+  var panel = document.getElementById('rm-summary');
+  var body = document.getElementById('rm-summary-body');
+  var tickEl = document.getElementById('rm-summary-tick');
+  if (!panel || !body) return;
   var status = lastData ? (lastData.status || lastData) : null;
-  if (!status) { statusCard.style.display = 'none'; return; }
-  
+  if (!status) { panel.style.display = 'none'; return; }
   var ws = status.world_state || status.worldState || status;
   var events = lastData.events || [];
   var factions = lastData.factions || {};
-  
   var threat = ws.threat_level != null ? ws.threat_level : 50;
   var stability = ws.stability != null ? ws.stability : 50;
   var morale = ws.morale != null ? ws.morale : 50;
   var anomaly = ws.anomaly_activity != null ? ws.anomaly_activity : 0;
   var tension = ws.tension_level != null ? ws.tension_level : 50;
-  var degradation = ws.degradation != null ? ws.degradation : 50;
-  var runway = ws.runway != null ? ws.runway : 50;
-  
   var crisisScore = threat * 1.2 + (100 - stability) * 0.8 + (100 - morale) * 0.6 + anomaly * 0.9 + tension * 0.7;
   var overallState, stateClass;
   if (crisisScore > 180 || threat > 70 || stability < 25) { overallState = 'CRISIS'; stateClass = 'crisis'; }
   else if (crisisScore > 100 || threat > 45 || stability < 45) { overallState = 'WARNING'; stateClass = 'warning'; }
   else { overallState = 'STABLE'; stateClass = 'stable'; }
-  
   var risks = [];
-  if (threat > 50) risks.push('Threat level is ' + Math.round(threat) + ' \u2014 external danger is ' + (threat > 70 ? 'critical' : 'elevated'));
-  if (stability < 40) risks.push('Stability is ' + Math.round(stability) + ' \u2014 institutions are ' + (stability < 25 ? 'failing' : 'weakening'));
-  if (morale < 40) risks.push('Morale is ' + Math.round(morale) + ' \u2014 population is ' + (morale < 25 ? 'despairing' : 'unhappy'));
-  if (anomaly > 50) risks.push('Anomaly activity at ' + Math.round(anomaly) + ' \u2014 unknown phenomena ' + (anomaly > 70 ? 'escalating' : 'present'));
-  if (tension > 50) risks.push('Tension is ' + Math.round(tension) + ' \u2014 factions are ' + (tension > 70 ? 'hostile' : 'on edge'));
-  var mainRisk = risks.length > 0 ? risks[0] : 'No significant threats detected \u2014 systems are nominal';
-  
-  var metricDesc = function(val, label) {
-    if (val > 80) return label + ' critical';
-    if (val > 60) return label + ' high';
-    if (val > 40) return label + ' moderate';
-    if (val > 20) return label + ' low';
-    return label + ' minimal';
-  };
-  var threatClass = threat > 60 ? 'bad' : threat > 35 ? 'warn' : 'good';
-  var stabilityClass = stability < 35 ? 'bad' : stability < 60 ? 'warn' : 'good';
-  var moraleClass = morale < 35 ? 'bad' : morale < 60 ? 'warn' : 'good';
-  var anomalyClass = anomaly > 60 ? 'bad' : anomaly > 30 ? 'warn' : 'good';
-  
+  if (threat > 50) risks.push('High Threat (' + Math.round(threat) + ')');
+  if (stability < 40) risks.push('Low Stability (' + Math.round(stability) + ')');
+  if (morale < 40) risks.push('Low Morale (' + Math.round(morale) + ')');
+  if (anomaly > 50) risks.push('Anomaly Activity (' + Math.round(anomaly) + ')');
+  if (tension > 50) risks.push('High Tension (' + Math.round(tension) + ')');
+  var mainRisk = risks.length > 0 ? risks[0] : 'No significant threats detected';
+  var topEvents = events.slice(0, 3);
+  var involvedNpcs = [];
+  var involvedFactions = [];
+  for (var i = 0; i < Math.min(events.length, 10); i++) {
+    var ev = events[i];
+    if (ev && ev.char_name && involvedNpcs.indexOf(ev.char_name) === -1) { involvedNpcs.push(ev.char_name); }
+    if (ev && ev.faction_id && involvedFactions.indexOf(ev.faction_id) === -1) { involvedFactions.push(ev.faction_id); }
+  }
+  involvedNpcs = involvedNpcs.slice(0, 3);
+  involvedFactions = involvedFactions.slice(0, 3);
+  var consequence = 'Monitoring degradation and threat metrics.';
+  if (overallState === 'crisis') consequence = 'Immediate intervention may be required. Systems at risk of cascade failure.';
+  else if (overallState === 'warning') consequence = 'Conditions deteriorating. Watch for cascade triggers.';
+  else if (threat > 40) consequence = 'External pressure increasing. Faction cohesion may weaken.';
+  else if (anomaly > 40) consequence = 'Anomaly activity rising. Unknown events likely.';
   var tick = '\u2014';
   if (status.last_tick_result && status.last_tick_result.tick_ts) tick = status.last_tick_result.tick_ts;
   else if (status.last_tick_timestamp) tick = status.last_tick_timestamp;
   else if (ws.tick_count != null) tick = ws.tick_count;
-  if (tickEl) tickEl.textContent = 'Tick ' + tick;
-  
+  tickEl.textContent = 'Tick ' + tick;
+  panel.style.display = 'block';
   var html = '';
-  html += '<div class="rm-status-state ' + stateClass + '">' + overallState + '</div>';
-  html += '<div class="rm-status-risk">' + mainRisk + '</div>';
-  
-  html += '<div class="rm-status-metrics">';
-  html += '<div class="rm-metric-card"><div class="rm-metric-label">Threat</div><div class="rm-metric-value ' + threatClass + '">' + Math.round(threat) + '</div><div class="rm-metric-desc">' + metricDesc(threat, 'External danger') + '</div></div>';
-  html += '<div class="rm-metric-card"><div class="rm-metric-label">Stability</div><div class="rm-metric-value ' + stabilityClass + '">' + Math.round(stability) + '</div><div class="rm-metric-desc">' + metricDesc(100 - stability, 'Institutional') + '</div></div>';
-  html += '<div class="rm-metric-card"><div class="rm-metric-label">Morale</div><div class="rm-metric-value ' + moraleClass + '">' + Math.round(morale) + '</div><div class="rm-metric-desc">' + metricDesc(100 - morale, 'Population') + '</div></div>';
-  html += '<div class="rm-metric-card"><div class="rm-metric-label">Anomaly</div><div class="rm-metric-value ' + anomalyClass + '">' + Math.round(anomaly) + '</div><div class="rm-metric-desc">' + metricDesc(anomaly, 'Unknown phenomena') + '</div></div>';
-  html += '</div>';
-  
-  html += '<div class="rm-events-section"><div class="rm-events-header">What Just Happened</div>';
-  var topEvents = events.slice(0, 5);
-  if (topEvents.length === 0) {
-    html += '<div class="rm-empty">No recent events</div>';
-  } else {
+  html += '<div class="rm-summary-section"><div class="rm-summary-section-title">Current Overall State</div>';
+  html += '<div class="rm-summary-row"><span class="rm-summary-state ' + stateClass + '">' + overallState + '</span></div></div>';
+  html += '<div class="rm-summary-section"><div class="rm-summary-section-title">Main Risk</div>';
+  html += '<div class="rm-summary-row">' + mainRisk + '</div></div>';
+  html += '<div class="rm-summary-section"><div class="rm-summary-section-title">Top Recent Events</div>';
+  if (topEvents.length === 0) { html += '<div class="rm-summary-row" style="color:var(--dim)">No recent events</div>'; }
+  else {
     for (var i = 0; i < topEvents.length; i++) {
       var ev = topEvents[i];
       var badgeClass = 'world';
       if (ev.event_type === 'cascade') badgeClass = 'cascade';
       else if (ev.event_type === 'faction') badgeClass = 'faction';
       else if (ev.event_type === 'crisis') badgeClass = 'crisis';
+      var npcName = ev.char_name ? '<span class="rm-ev-npc">' + ev.char_name + '</span>' : '';
       var desc = ev.description || ev.action_type || 'Unknown event';
-      var shortTitle = ev.char_name ? ev.char_name : 'System';
-      var involvement = '';
-      if (ev.char_name) involvement = '<span class="rm-event-npcs">by <span class="rm-event-npc-name">' + ev.char_name + '</span></span>';
-      html += '<div class="rm-event-card">';
-      html += '<span class="rm-event-badge ' + badgeClass + '">' + badgeClass.toUpperCase() + '</span>';
-      html += '<span class="rm-event-title">' + shortTitle + '</span>';
-      html += '<span class="rm-event-desc">' + desc.substring(0, 120) + '</span>';
-      if (involvement) html += involvement;
-      if (ev.severity) html += '<span class="rm-event-severity ' + ev.severity + '">' + ev.severity + '</span>';
-      html += '</div>';
+      html += '<div class="rm-summary-event-item"><span class="rm-ev-badge ' + badgeClass + '">' + badgeClass.toUpperCase() + '</span> ' + npcName + ' ' + desc + '</div>';
     }
   }
   html += '</div>';
-  
-  var involvedNpcs = [];
-  var involvedFactions = [];
-  for (var i = 0; i < Math.min(events.length, 15); i++) {
-    var ev = events[i];
-    if (ev && ev.char_name && involvedNpcs.indexOf(ev.char_name) === -1) involvedNpcs.push(ev.char_name);
-    if (ev && ev.faction_id && involvedFactions.indexOf(ev.faction_id) === -1) involvedFactions.push(ev.faction_id);
+  html += '<div class="rm-summary-section"><div class="rm-summary-section-title">Who Is Involved</div>';
+  if (involvedNpcs.length > 0) { html += '<div style="font-size:0.9375rem;color:var(--cyan);">NPCs: ' + involvedNpcs.join(', ') + '</div>'; }
+  if (involvedFactions.length > 0) {
+    html += '<div style="font-size:0.9375rem;margin-top:4px;">';
+    for (var i = 0; i < involvedFactions.length; i++) { html += '<span class="rm-summary-faction-chip">' + (FACTION_DISPLAY[involvedFactions[i]] || involvedFactions[i]) + '</span> '; }
+    html += '</div>';
   }
-  if (involvedNpcs.length > 0 || involvedFactions.length > 0) {
-    html += '<div class="rm-involved-section"><div class="rm-involved-header">Who Is Involved</div><div class="rm-involved-chips">';
-    for (var i = 0; i < Math.min(involvedFactions.length, 5); i++) {
-      html += '<span class="rm-involved-chip faction">' + (FACTION_DISPLAY[involvedFactions[i]] || involvedFactions[i]) + '</span>';
-    }
-    for (var i = 0; i < Math.min(involvedNpcs.length, 5); i++) {
-      html += '<span class="rm-involved-chip npc">' + involvedNpcs[i] + '</span>';
-    }
-    html += '</div></div>';
-  }
-  
-  var consequence = 'Monitoring systems \u2014 no immediate action required.';
-  if (overallState === 'crisis') consequence = 'IMMEDIATE ATTENTION: Systems at risk of cascade failure. Threat metrics are critical. Consider emergency protocols.';
-  else if (overallState === 'warning') consequence = 'Conditions are deteriorating. Watch threat and stability metrics closely. Cascade triggers may activate.';
-  else if (threat > 40) consequence = 'External pressure is building. Faction cohesion may weaken if threat continues to rise.';
-  else if (anomaly > 40) consequence = 'Anomaly activity is above normal. Unexpected events may occur.';
-  html += '<div class="rm-consequence">' + consequence + '</div>';
-  
+  if (involvedNpcs.length === 0 && involvedFactions.length === 0) { html += '<div class="rm-summary-row" style="color:var(--dim)">No active participants</div>'; }
+  html += '</div>';
+  html += '<div class="rm-summary-section"><div class="rm-summary-section-title">Next Likely Consequence</div>';
+  html += '<div class="rm-summary-consequence">' + consequence + '</div></div>';
   body.innerHTML = html;
 }
-
 function initReadableMode() {
   try { var saved = localStorage.getItem('fed_readable_mode'); if (saved === 'true') { toggleReadableMode(); } } catch(e) {}
 }
