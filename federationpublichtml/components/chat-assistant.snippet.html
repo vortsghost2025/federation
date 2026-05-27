@@ -1,0 +1,18 @@
+<!--
+  Embed this snippet in the HTML body where you want the chat assistant to appear.
+  Make sure the path to chat-assistant.js is correct relative to your site.
+-->
+
+<div id="chat-assistant-container"></div>
+<script src="/components/chat-assistant.js"></script>
+<script>
+  // Initialize the chat assistant once the DOM is loaded
+  document.addEventListener('DOMContentLoaded', function() {
+    ChatAssistant.init({
+      container: '#chat-assistant-container',
+      // Optional: customize endpoints if needed
+      // apiEndpoint: '/api/chat/query',
+      // stateEndpoint: '/api/federation/state'
+    });
+  });
+</script>
