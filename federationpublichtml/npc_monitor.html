@@ -1,0 +1,478 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Federation NPC Monitor</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #0a0a0a;
+            color: #00ff00;
+            font-size: 24px; /* Large text for visual accessibility */
+        }
+        h1 {
+            text-align: center;
+            color: #00ff00;
+            border-bottom: 2px solid #00ff00;
+            padding-bottom: 10px;
+        }
+        #filters {
+            margin: 20px 0;
+            padding: 15px;
+            background-color: #1a1a1a;
+            border-radius: 5px;
+            display: flex;
+            gap: 15px;
+            flex-wrap: wrap;
+        }
+        #filters select, #filters input {
+            background-color: #0a0a0a;
+            color: #00ff00;
+            border: 1px solid #00ff00;
+            padding: 10px;
+            border-radius: 3px;
+            font-size: 18px;
+        }
+        #filters label {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+        #events-container {
+            max-height: 80vh;
+            overflow-y: auto;
+            border: 2px solid #00ff00;
+            border-radius: 5px;
+            padding: 15px;
+            margin-top: 20px;
+            background-color: #0a0a0a;
+        }
+        .event {
+            margin-bottom: 20px;
+            padding: 15px;
+            border-left: 4px solid #00ff00;
+            background-color: #1a1a1a;
+            border-radius: 0 5px 5px 0;
+        }
+        .event-header {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 10px;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+        .event-type {
+            background-color: #003300;
+            padding: 2px 8px;
+            border-radius: 3px;
+            font-weight: bold;
+            text-transform: uppercase;
+            font-size: 20px;
+        }
+        .event-time {
+            color: #888888;
+            font-size: 18px;
+        }
+        .event-char-id {
+            background-color: #003300;
+            padding: 2px 8px;
+            border-radius: 3px;
+            font-weight: bold;
+            font-size: 20px;
+        }
+        .event-data {
+            margin-top: 10px;
+            line-height: 1.6;
+        }
+        .event-data p {
+            margin: 5px 0;
+        }
+        .thought .event-data {
+            font-style: italic;
+        }
+        .action .event-data {
+            color: #00cc00;
+        }
+        .decision .event-data {
+            color: #00aaaa;
+        }
+        .world_event .event-data {
+            color: #aa00aa;
+        }
+        .cognition .event-data {
+            color: #aaaa00;
+        }
+        .status-bar {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            height: 30px;
+            background-color: #0a0a0a;
+            border-top: 2px solid #00ff00;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0 20px;
+            font-size: 18px;
+        }
+        #status-indicator {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background-color: #ff0000;
+            display: inline-block;
+            margin-right: 8px;
+        }
+        #status-indicator.connected {
+            background-color: #00ff00;
+        }
+        .auto-scroll-toggle {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .auto-scroll-toggle input {
+            width: 18px;
+            height: 18px;
+        }
+        .no-events {
+            text-align: center;
+            color: #888888;
+            font-style: italic;
+            padding: 40px 20px;
+        }
+    </style>
+</head>
+<body>
+    <h1>Federation NPC Response Monitor</h1>
+    
+    <div id="filters">
+        <div>
+            <label>
+                <input type="checkbox" id="filter-thoughts" checked>
+                Thoughts
+            </label>
+        </div>
+        <div>
+            <label>
+                <input type="checkbox" id="filter-actions" checked>
+                Actions
+            </label>
+        </div>
+        <div>
+            <label>
+                <input type="checkbox" id="filter-decisions" checked>
+                Decisions
+            </label>
+        </div>
+        <div>
+            <label>
+                <input type="checkbox" id="filter-world-events" checked>
+                World Events
+            </label>
+        </div>
+        <div>
+            <label>
+                <input type="checkbox" id="filter-cognition" checked>
+                Cognition
+            </label>
+        </div>
+        <div class="auto-scroll-toggle">
+            <input type="checkbox" id="auto-scroll" checked>
+            <label for="auto-scroll">Auto-scroll to latest</label>
+        </div>
+    </div>
+    
+    <div id="events-container">
+        <div class="no-events">Waiting for NPC responses...</div>
+    </div>
+    
+    <div class="status-bar">
+        <div>
+            <span id="status-indicator"></span>
+            <span id="connection-status">Disconnected</span>
+        </div>
+        <div>
+            <span id="event-count">0 events</span>
+        </div>
+    </div>
+
+    <script>
+        // WebSocket connection to Gastown's WebSocket server
+        let socket = null;
+        let events = [];
+        let filteredEvents = [];
+        let autoScroll = true;
+        
+        // Filter states
+        const filters = {
+            thoughts: true,
+            actions: true,
+            decisions: true,
+            world_events: true,
+            cognition: true
+        };
+        
+        // DOM elements
+        const eventsContainer = document.getElementById('events-container');
+        const statusIndicator = document.getElementById('status-indicator');
+        const connectionStatus = document.getElementById('connection-status');
+        const eventCount = document.getElementById('event-count');
+        const noEventsMsg = eventsContainer.querySelector('.no-events');
+        
+        // Initialize filters from checkboxes
+        document.getElementById('filter-thoughts').addEventListener('change', (e) => {
+            filters.thoughts = e.target.checked;
+            applyFilters();
+        });
+        document.getElementById('filter-actions').addEventListener('change', (e) => {
+            filters.actions = e.target.checked;
+            applyFilters();
+        });
+        document.getElementById('filter-decisions').addEventListener('change', (e) => {
+            filters.decisions = e.target.checked;
+            applyFilters();
+        });
+        document.getElementById('filter-world-events').addEventListener('change', (e) => {
+            filters.world_events = e.target.checked;
+            applyFilters();
+        });
+        document.getElementById('filter-cognition').addEventListener('change', (e) => {
+            filters.cognition = e.target.checked;
+            applyFilters();
+        });
+        document.getElementById('auto-scroll').addEventListener('change', (e) => {
+            autoScroll = e.target.checked;
+            if (autoScroll && filteredEvents.length > 0) {
+                scrollToLatest();
+            }
+        });
+        
+        // Connect to WebSocket server (adjust URL as needed for your setup)
+        function connectWebSocket() {
+            // In a real deployment, this would connect to Gastown's WebSocket server
+            // For now, we'll simulate with Redis Pub/Sub via a simple polling approach
+            // or connect to a local WebSocket bridge
+            
+            // Simulate connection status updates
+            setTimeout(() => {
+                statusIndicator.className = 'connected';
+                connectionStatus.textContent = 'Connected (Simulated)';
+                connectionStatus.style.color = '#00ff00';
+                
+                // Start simulating events for demonstration
+                startEventSimulation();
+            }, 1000);
+        }
+        
+        // Apply filters to events
+        function applyFilters() {
+            filteredEvents = events.filter(event => filters[event.type]);
+            renderEvents();
+        }
+        
+        // Render events to the container
+        function renderEvents() {
+            if (filteredEvents.length === 0) {
+                noEventsMsg.style.display = 'block';
+                eventsContainer.innerHTML = '<div class="no-events">Waiting for NPC responses...</div>';
+            } else {
+                noEventsMsg.style.display = 'none';
+                
+                // Build HTML for all filtered events
+                let html = '';
+                filteredEvents.forEach(event => {
+                    html += `
+                        <div class="event ${event.type}">
+                            <div class="event-header">
+                                <span class="event-type">${event.type.toUpperCase()}</span>
+                                <span class="event-time">${new Date(event.timestamp * 1000).toLocaleTimeString()}</span>
+                                <span class="event-char-id">${event.char_id}</span>
+                            </div>
+                            <div class="event-data">
+                                ${formatEventData(event)}
+                            </div>
+                        </div>
+                    `;
+                });
+                
+                eventsContainer.innerHTML = html;
+                
+                if (autoScroll) {
+                    scrollToLatest();
+                }
+            }
+            
+            eventCount.textContent = `${filteredEvents.length} events`;
+        }
+        
+        // Format event data for display
+        function formatEventData(event) {
+            switch (event.type) {
+                case 'thought':
+                    return `<p><strong>Thought:</strong> "${event.data.thought}"</p>` +
+                           (event.data.mood ? `<p><strong>Mood:</strong> ${event.data.mood}</p>` : '') +
+                           (event.data.cached !== undefined ? `<p><strong>Cached:</strong> ${event.data.cached ? 'Yes' : 'No'}</p>` : '');
+                
+                case 'action':
+                    return `<p><strong>Action Type:</strong> ${event.data.action_type}</p>` +
+                           `<p><strong>Description:</strong> ${event.data.description}</p>` +
+                           (event.data.mood ? `<p><strong>Mood:</strong> ${event.data.mood}</p>` : '');
+                
+                case 'decision':
+                    return `<p><strong>Category:</strong> ${event.data.category}</p>` +
+                           `<p><strong>Description:</strong> ${event.data.description}</p>` +
+                           (event.data.reasoning ? `<p><strong>Reasoning:</strong> ${event.data.reasoning}</p>` : '') +
+                           (event.data.source ? `<p><strong>Source:</strong> ${event.data.source}</p>` : '');
+                
+                case 'world_event':
+                    return `<p><strong>Event Type:</strong> ${event.data.event_type}</p>` +
+                           `<p><strong>Description:</strong> ${event.data.description}</p>` +
+                           (event.data.interaction_type ? `<p><strong>Interaction:</strong> ${event.data.interaction_type}</p>` : '');
+                
+                case 'cognition':
+                    return `<p><strong>Model:</strong> ${event.data.model}</p>` +
+                           `<p><strong>Category:</strong> ${event.data.category}</p>` +
+                           (event.data.trigger ? `<p><strong>Trigger:</strong> ${event.data.trigger}</p>` : '');
+                
+                case 'cognition_trigger':
+                    return `<p><strong>Trigger Type:</strong> ${event.data.trigger_type}</p>` +
+                           `<p><strong>Priority:</strong> ${event.data.priority}</p>`;
+                
+                case 'cognition_log':
+                    return `<pre>${JSON.stringify(event.data, null, 2)}</pre>`;
+                
+                default:
+                    return `<pre>${JSON.stringify(event.data, null, 2)}</pre>`;
+            }
+        }
+        
+        // Scroll to the latest event
+        function scrollToLatest() {
+            eventsContainer.scrollTop = eventsContainer.scrollHeight;
+        }
+        
+        // Add a new event to the display
+        function addEvent(event) {
+            events.push(event);
+            applyFilters();
+        }
+        
+        // Simulate events for demonstration (remove in production)
+        function startEventSimulation() {
+            const npcIds = ['char_001', 'char_002', 'char_101', 'char_102', 'char_201', 'comp_001'];
+            const thoughtTemplates = [
+                "The data patterns suggest something unusual is forming in the research grids...",
+                "The perimeter feels unsteady. I should reinforce our defensive positions.",
+                "Opportunities don't announce themselves. Time to do some reconnaissance...",
+                "I sense a shift in the cosmic currents. Something approaches from beyond...",
+                "The council meeting approaches. I must prepare my arguments carefully.",
+                "Balance requires patience, but events press urgency upon us.",
+                "I feel the call of uncharted space again. The old restlessness returns.",
+                "Someone out there needs help. I can feel it in my bones.",
+                "The pieces on the board are shifting. Time to rearrange them to my advantage.",
+                "The old protocols must be maintained. I sense complacency in the ranks."
+            ];
+            
+            const actionTemplates = [
+                { type: 'research', desc: 'began studying the quantum flux anomalies in sector 7-Alpha' },
+                { type: 'patrol', desc: 'led a security sweep through sector 12-Gamma' },
+                { type: 'heist', desc: 'acquired a valuable ancient artifact through undisclosed channels' },
+                { type: 'vision', desc: 'experienced a vision of an approaching storm' },
+                { type: 'decree', desc: 'issued a new directive regarding resource allocation' },
+                { type: 'meditation', desc: 'entered deep meditation on the nature of consciousness and entropy' },
+                { type: 'exploration', desc: 'departed to chart the uncharted nebula formation region' },
+                { type: 'rescue', desc: 'responded to a distress signal near the outer ring' },
+                { type: 'manipulation', desc: 'planted disinformation about temporal drift' },
+                { type: 'watch', desc: 'increased surveillance on the docking bay' }
+            ];
+            
+            const decisionTemplates = [
+                { category: 'investigate', desc: 'Investigate the anomaly near the Veil', reasoning: 'Sensor readings show unusual activity requiring immediate attention' },
+                { category: 'advance_goal', desc: 'Pursue research breakthrough in quantum consciousness', reasoning: 'Our faction needs to maintain technological superiority' },
+                { category: 'seek_resources', desc: 'Secure plasma stabilizers for core systems', reasoning: 'Resource levels are dropping below safe thresholds' },
+                { category: 'socialize', desc: 'Initiate diplomatic talks with the Research Division', reasoning: 'Building alliances will strengthen our position' },
+                { category: 'self_improve', desc: 'Upgrade sensor arrays on outer perimeter', reasoning: 'Current equipment is insufficient for detecting void entities' }
+            ];
+            
+            setInterval(() => {
+                const npcId = npcIds[Math.floor(Math.random() * npcIds.length)];
+                const rand = Math.random();
+                
+                let event;
+                if (rand < 0.4) { // Thought
+                    const thought = thoughtTemplates[Math.floor(Math.random() * thoughtTemplates.length)];
+                    event = {
+                        timestamp: Math.floor(Date.now() / 1000),
+                        type: 'thought',
+                        char_id: npcId,
+                        data: {
+                            thought: thought,
+                            mood: ['contemplative', 'vigilant', 'calculating', 'transcendent'][Math.floor(Math.random() * 4)],
+                            cached: Math.random() > 0.7
+                        }
+                    };
+                } else if (rand < 0.7) { // Action
+                    const action = actionTemplates[Math.floor(Math.random() * actionTemplates.length)];
+                    event = {
+                        timestamp: Math.floor(Date.now() / 1000),
+                        type: 'action',
+                        char_id: npcId,
+                        data: {
+                            action_type: action.type,
+                            description: `${npcId} ${action.desc}`,
+                            mood: ['contemplative', 'vigilant', 'calculating', 'transcendent'][Math.floor(Math.random() * 4)]
+                        }
+                    };
+                } else if (rand < 0.85) { // Decision
+                    const decision = decisionTemplates[Math.floor(Math.random() * decisionTemplates.length)];
+                    event = {
+                        timestamp: Math.floor(Date.now() / 1000),
+                        type: 'decision',
+                        char_id: npcId,
+                        data: {
+                            category: decision.category,
+                            description: decision.desc,
+                            reasoning: decision.reasoning,
+                            source: 'llm_cognition'
+                        }
+                    };
+                } else if (rand < 0.95) { // World Event
+                    event = {
+                        timestamp: Math.floor(Date.now() / 1000),
+                        type: 'world_event',
+                        char_id: npcId,
+                        data: {
+                            event_type: 'npc_interaction',
+                            description: `${npcId} shared rumors about char_002 with others`,
+                            interaction_type: 'gossip'
+                        }
+                    };
+                } else { // Cognition
+                    event = {
+                        timestamp: Math.floor(Date.now() / 1000),
+                        type: 'cognition',
+                        char_id: npcId,
+                        data: {
+                            model: ['nim_local', 'openrouter_free'][Math.floor(Math.random() * 2)],
+                            category: ['investigate', 'advance_goal', 'seek_resources'][Math.floor(Math.random() * 3)],
+                            trigger: ['anomaly_spike', 'threat_threshold', 'resource_crisis'][Math.floor(Math.random() * 3)]
+                        }
+                    };
+                }
+                
+                addEvent(event);
+            }, 3000 + Math.random() * 5000); // Random interval between 3-8 seconds
+        }
+        
+        // Initialize
+        document.addEventListener('DOMContentLoaded', () => {
+            connectWebSocket();
+        });
+    </script>
+</body>
+</html>
