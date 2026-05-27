@@ -1425,7 +1425,11 @@ document.getElementById('sit-risk-text').innerHTML = riskText;
 var watchItems = [];
 var questData = lastData.quests || {};
 var npcData = lastData.npcs || [];
-var eventData = lastData.events || [];
+var _rawEvts = lastData.events || [];
+  var eventData;
+  if (Array.isArray(_rawEvts)) { eventData = _rawEvts; }
+  else if (typeof _rawEvts === 'object') { eventData = (_rawEvts.world_events||[]).concat(_rawEvts.cascade_events||[],_rawEvts.broadcast_events||[]); }
+  else { eventData = []; }
 
 if (metrics.morale < 40) {
 var msi = severityInfo('morale', metrics.morale);
@@ -3205,7 +3209,13 @@ function renderReadableSummary() {
   var status = lastData ? (lastData.status || lastData) : null;
   if (!status) { panel.style.display = 'none'; return; }
   var ws = status.world_state || status.worldState || status;
-  var events = lastData.events || [];
+  var rawEvents = lastData.events || [];
+  var events;
+  if (Array.isArray(rawEvents)) { events = rawEvents; }
+  else if (typeof rawEvents === 'object') {
+    events = (rawEvents.world_events || []).concat(rawEvents.cascade_events || [], rawEvents.broadcast_events || []);
+    events.sort(function(a,b){ var ta=a.ts||a.timestamp||0; var tb=b.ts||b.timestamp||0; return (tb>ta?1:(tb<ta?-1:0)); });
+  } else { events = []; }
   var factions = lastData.factions || {};
   var threat = ws.threat_level != null ? ws.threat_level : 50;
   var stability = ws.stability != null ? ws.stability : 50;
