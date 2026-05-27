@@ -2840,10 +2840,11 @@ function renderSituationRoom() {
 
     bodyEl.innerHTML = html;
 
-  }).catch(function(err) {
+}).catch(function(err) {
+    console.error('[renderSituationRoom] UNHANDLED:', err);
     headlineEl.textContent = 'Intelligence report unavailable';
     bodyEl.innerHTML = '<div class="sitroom-quiet">Could not reach the data stream.</div>';
-  });
+});
 }
 
 /* ═══ QUICK STATUS SUMMARY ═══ */
