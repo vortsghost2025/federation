@@ -498,6 +498,420 @@ html{height:auto;min-height:100vh}body{height:auto;min-height:100vh;overflow-x:h
   .top-tick-display{border-left:none;padding-left:0;margin-left:0}
   .top-nav{border-left:none;padding-left:0;margin-left:0;flex-wrap:wrap}
 }
+
+/* ═══ HUMAN READABILITY MODE ═══ */
+.readable-mode {
+  font-size: 18px !important;
+}
+.readable-mode .panel {
+  padding: 20px !important;
+}
+.readable-mode .top-row {
+  min-height: 44px !important;
+}
+.readable-mode .split-bar-container {
+  height: 28px !important;
+  min-width: 180px !important;
+}
+.readable-mode * {
+  line-height: 1.5 !important;
+}
+.readable-mode .top-row-label,
+.readable-mode .split-severity,
+.readable-mode .split-chip,
+.readable-mode .top-tick-label,
+.readable-mode .time-since-label,
+.readable-mode .section-title,
+.readable-mode .sit-card-label,
+.readable-mode .qs-header,
+.readable-mode .qs-section-title,
+.readable-mode .qs-badge,
+.readable-mode .sitroom-label,
+.readable-mode .activity-log-label,
+.readable-mode .activity-log-summary,
+.readable-mode .ai-chat-label,
+.readable-mode .ai-chat-suggestion,
+.readable-mode .npc-noise-toggle-label,
+.readable-mode .help-box h3,
+.readable-mode .tab-btn,
+.readable-mode .bottom-progress-label,
+.readable-mode .event-source,
+.readable-mode .event-time,
+.readable-mode .wc-sev,
+.readable-mode .wc-click-hint,
+.readable-mode .faction-cohesion-label,
+.readable-mode .npc-leader-badge,
+.readable-mode .cascade-badge,
+.readable-mode .chain-title,
+.readable-mode .quest-event,
+.readable-mode .quest-obj-label,
+.readable-mode .quest-stat-label,
+.readable-mode .qh-stat-label,
+.readable-mode .tech-progress-label,
+.readable-mode .faction-name,
+.readable-mode .npc-name,
+.readable-mode .npc-story-name,
+.readable-mode .domino-depth,
+.readable-mode .domino-name,
+.readable-mode .domino-tone,
+.readable-mode .pipeline-root-label,
+.readable-mode .bottom-pending strong {
+  font-size: 14px !important;
+  letter-spacing: 0.5px !important;
+}
+.readable-mode body,
+.readable-mode .sit-card-value,
+.readable-mode .sitroom-headline,
+.readable-mode .sitroom-text,
+.readable-mode .sitroom-voice,
+.readable-mode .sitroom-quiet,
+.readable-mode .event-body,
+.readable-mode .event-entry,
+.readable-mode .npc-detail-val,
+.readable-mode .npc-mood,
+.readable-mode .npc-decision,
+.readable-mode .npc-thought,
+.readable-mode .npc-story-status,
+.readable-mode .npc-story-thought,
+.readable-mode .npc-story-action,
+.readable-mode .faction-detail,
+.readable-mode .detail-stance-row,
+.readable-mode .detail-action-item,
+.readable-mode .quest-body,
+.readable-mode .quest-detail-desc,
+.readable-mode .choice-narrative,
+.readable-mode .choice-id,
+.readable-mode .chain-meta,
+.readable-mode .chain-event,
+.readable-mode .cascade-summary-text,
+.readable-mode .cascade-summary-detail,
+.readable-mode .domino-desc,
+.readable-mode .domino-event,
+.readable-mode .pipeline-root-event,
+.readable-mode .tech-project,
+.readable-mode .tech-meta,
+.readable-mode .bottom-trigger,
+.readable-mode .bottom-pending,
+.readable-mode .intro-box,
+.readable-mode .help-box p,
+.readable-mode .help-box li,
+.readable-mode .qs-row,
+.readable-mode .qs-catalyst,
+.readable-mode .qs-empty,
+.readable-mode .wc-current,
+.readable-mode .wc-meaning,
+.readable-mode .wc-look,
+.readable-mode .wc-improve,
+.readable-mode .ai-chat-input,
+.readable-mode .ai-chat-msg,
+.readable-mode .npc-card,
+.readable-mode .faction-card,
+.readable-mode .npc-card-story,
+.readable-mode .quest-entry {
+  font-size: 16px !important;
+}
+.readable-mode .tab-btn,
+.readable-mode .help-btn,
+.readable-mode .help-close,
+.readable-mode .ai-chat-send,
+.readable-mode .raw-toggle,
+.readable-mode .npc-noise-toggle,
+.readable-mode .activity-log-bar,
+.readable-mode .ai-chat-suggestion,
+.readable-mode .faction-card,
+.readable-mode .npc-card,
+.readable-mode .npc-card-story,
+.readable-mode .quest-entry,
+.readable-mode .choice-item,
+.readable-mode .chain-card,
+.readable-mode .cascade-summary,
+.readable-mode .watch-card,
+.readable-mode .qs-rm-toggle-btn {
+  min-height: 36px !important;
+  padding: 6px 12px !important;
+}
+.readable-mode #left,
+.readable-mode #center,
+.readable-mode #right {
+  padding: 20px !important;
+}
+.readable-mode .top-row {
+  padding: 4px 8px !important;
+}
+.readable-mode #top {
+  padding: 8px 16px !important;
+}
+.readable-mode #situation {
+  padding: 12px 20px !important;
+  gap: 16px !important;
+}
+.readable-mode .section-title,
+.readable-mode .sit-card-label,
+.readable-mode .sitroom-label,
+.readable-mode .activity-log-label,
+.readable-mode .ai-chat-label,
+.readable-mode .top-row-label,
+.readable-mode .top-tick-label,
+.readable-mode .time-since-label,
+.readable-mode .npc-noise-toggle-label,
+.readable-mode .bottom-progress-label,
+.readable-mode .qs-section-title,
+.readable-mode .bottom-pending strong,
+.readable-mode .event-source,
+.readable-mode .quest-event,
+.readable-mode .wc-click-hint,
+.readable-mode .faction-cohesion-label,
+.readable-mode .tab-btn,
+.readable-mode .help-btn,
+.readable-mode .qs-header,
+.readable-mode .raw-toggle {
+  text-transform: none !important;
+  letter-spacing: 0.5px !important;
+}
+.high-contrast {
+  --white: #ffffff !important;
+  --dim: #b0bec5 !important;
+  --panel-bg: rgba(0,0,0,0.97) !important;
+  --panel-border: rgba(255,255,255,0.2) !important;
+}
+.high-contrast .sitroom,
+.high-contrast .qs-panel,
+.high-contrast .ai-chat,
+.high-contrast .faction-card,
+.high-contrast .npc-card,
+.high-contrast .npc-card-story,
+.high-contrast .quest-entry,
+.high-contrast .chain-card,
+.high-contrast .cascade-summary,
+.high-contrast .watch-card {
+  border-width: 2px !important;
+  background: rgba(0,0,0,0.95) !important;
+}
+.text-large .readable-mode {
+  font-size: 20px !important;
+}
+.text-large .readable-mode .panel {
+  font-size: 18px !important;
+}
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+.rm-toggle-btn {
+  background: none;
+  border: 1px solid rgba(0,188,212,0.3);
+  color: var(--cyan);
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 0.8125rem;
+  cursor: pointer;
+  padding: 4px 10px;
+  border-radius: 6px;
+  margin-left: 4px;
+  transition: background 0.2s, border-color 0.2s;
+  line-height: 1;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.rm-toggle-btn:hover {
+  background: var(--cyan-dim);
+  border-color: var(--cyan);
+}
+.rm-toggle-btn.on {
+  background: rgba(0,188,212,0.2);
+  border-color: var(--cyan);
+  color: #fff;
+}
+.rm-summary {
+  background: linear-gradient(135deg, rgba(0,188,212,0.06), rgba(255,152,0,0.04));
+  border: 1px solid rgba(0,188,212,0.2);
+  border-radius: 10px;
+  padding: 16px 20px;
+  margin-bottom: 12px;
+  position: relative;
+  overflow: hidden;
+}
+.rm-summary::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0;
+  width: 4px;
+  height: 100%;
+  background: linear-gradient(180deg, var(--cyan), var(--amber));
+  border-radius: 4px 0 0 4px;
+}
+.rm-summary-header {
+  font-family: 'Orbitron', sans-serif;
+  font-size: 0.75rem;
+  font-weight: 900;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  color: var(--white);
+  margin-bottom: 12px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.rm-summary-header .rm-summary-tick {
+  font-size: 0.6875rem;
+  color: var(--dim);
+  font-weight: 400;
+  letter-spacing: 0.5px;
+  text-transform: none;
+}
+.rm-summary-body {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.rm-summary-section {
+  border-left: 2px solid rgba(255,255,255,0.08);
+  padding-left: 12px;
+}
+.rm-summary-section-title {
+  font-family: 'Orbitron', sans-serif;
+  font-size: 0.625rem;
+  font-weight: 700;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: var(--dim);
+  margin-bottom: 4px;
+}
+.rm-summary-row {
+  font-size: 0.9375rem;
+  line-height: 1.6;
+}
+.rm-summary-state {
+  font-size: 1.25rem;
+  font-weight: 700;
+}
+.rm-summary-state.stable { color: var(--green); }
+.rm-summary-state.warning { color: var(--amber); }
+.rm-summary-state.crisis { color: var(--red); }
+.rm-summary-event-item {
+  font-size: 0.9375rem;
+  color: var(--white);
+  line-height: 1.5;
+  padding: 2px 0;
+}
+.rm-summary-event-item .rm-ev-npc {
+  color: var(--cyan);
+  font-weight: 600;
+}
+.rm-summary-event-item .rm-ev-badge {
+  display: inline-block;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  padding: 1px 6px;
+  border-radius: 3px;
+  margin-right: 4px;
+  vertical-align: middle;
+}
+.rm-summary-event-item .rm-ev-badge.world { color: var(--cyan); background: var(--cyan-dim); }
+.rm-summary-event-item .rm-ev-badge.cascade { color: var(--violet); background: rgba(206,147,216,0.12); }
+.rm-summary-event-item .rm-ev-badge.faction { color: var(--amber); background: var(--amber-dim); }
+.rm-summary-event-item .rm-ev-badge.crisis { color: var(--red); background: var(--red-dim); }
+.rm-summary-faction-chip {
+  display: inline-block;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 4px;
+  margin: 2px 4px 2px 0;
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.08);
+  color: var(--white);
+}
+.rm-summary-consequence {
+  font-size: 0.9375rem;
+  color: var(--amber);
+  font-style: italic;
+  line-height: 1.5;
+}
+.rm-prog-bar {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 10px;
+  flex-wrap: wrap;
+}
+.rm-prog-btn {
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 0.8125rem;
+  padding: 6px 14px;
+  border-radius: 6px;
+  cursor: pointer;
+  border: 1px solid rgba(255,255,255,0.08);
+  background: rgba(255,255,255,0.02);
+  color: var(--dim);
+  transition: all 0.2s;
+  min-height: 36px;
+}
+.rm-prog-btn:hover {
+  background: rgba(0,188,212,0.06);
+  border-color: rgba(0,188,212,0.2);
+  color: var(--cyan);
+}
+.rm-prog-btn.active {
+  background: rgba(0,188,212,0.12);
+  border-color: rgba(0,188,212,0.3);
+  color: var(--cyan);
+}
+.rm-prog-panel {
+  display: none;
+}
+.rm-prog-panel.visible {
+  display: block;
+}
+.readable-mode *:focus {
+  outline: 3px solid var(--cyan) !important;
+  outline-offset: 3px !important;
+}
+.readable-mode .npc-grid {
+  display: none;
+}
+.readable-mode .npc-grid.rm-expanded {
+  display: flex;
+}
+.readable-mode #left-factions {
+  display: none;
+}
+.readable-mode #left-factions.rm-expanded {
+  display: block;
+}
+.readable-mode .rm-collapse-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  margin-bottom: 8px;
+  background: rgba(255,255,255,0.03);
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 6px;
+  cursor: pointer;
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 0.875rem;
+  color: var(--cyan);
+  transition: background 0.2s;
+  min-height: 36px;
+}
+.readable-mode .rm-collapse-toggle:hover {
+  background: rgba(0,188,212,0.06);
+  border-color: rgba(0,188,212,0.2);
+}
+.rm-detail-content {
+  display: none;
+}
+.rm-detail-content.visible {
+  display: block;
+}
+.readable-mode .raw-events-wrap {
+  transition: max-height 0.4s ease;
+}
+.readable-mode .npc-noise-toggle {
+  display: flex !important;
+}
 </style>
 </head>
 <body>
@@ -551,6 +965,7 @@ html{height:auto;min-height:100vh}body{height:auto;min-height:100vh;overflow-x:h
 <a href="worldguide.html">World Guide</a>
 <a href="earth.html">Earth</a>
 <button class="help-btn" onclick="toggleHelp()" aria-label="How to read this page" title="How to read this page">?</button>
+<button class="rm-toggle-btn" id="rm-toggle" onclick="toggleReadableMode()" aria-label="Toggle readable mode" title="Toggle readable mode">Aa</button>
 </nav>
 </div>
 </header>
@@ -651,6 +1066,7 @@ html{height:auto;min-height:100vh}body{height:auto;min-height:100vh;overflow-x:h
 <button class="tab-btn" data-tab="faction-tech" role="tab" onclick="switchLeftTab('faction-tech')">Faction Tech</button>
 </div>
 <div class="tab-content visible" id="left-factions">
+<div class="rm-collapse-toggle" id="rm-toggle-factions" onclick="rmToggleSection('left-factions')" style="display:none">&#x25BC; Who Has Power?</div>
 <div class="section-title amber">Who Has Power?</div>
 <div id="faction-list"></div>
 </div>
@@ -665,12 +1081,24 @@ html{height:auto;min-height:100vh}body{height:auto;min-height:100vh;overflow-x:h
 <div class="qs-header">&#x1F4CA; Quick Status <span class="qs-tick" id="qs-tick"></span></div>
 <div class="qs-body" id="qs-body"></div>
 </div>
-<div class="section-title cyan">What Just Happened?</div>
+<div id="rm-summary" class="rm-summary" style="display:none">
+<div class="rm-summary-header">&#x1F4CB; What Is Happening? <span class="rm-summary-tick" id="rm-summary-tick"></span></div>
+<div class="rm-summary-body" id="rm-summary-body"></div>
+</div>
+<div class="rm-prog-bar" id="rm-prog-bar" style="display:none">
+<button class="rm-prog-btn active" data-rm-panel="rm-panel-summary" onclick="switchRMPanel('rm-panel-summary')">&#x1F4CB; Summary</button>
+<button class="rm-prog-btn" data-rm-panel="rm-panel-events" onclick="switchRMPanel('rm-panel-events')">&#x1F4E1; Events</button>
+<button class="rm-prog-btn" data-rm-panel="rm-panel-details" onclick="switchRMPanel('rm-panel-details')">&#x2139;&#xFE0F; Details</button>
+<button class="rm-prog-btn" data-rm-panel="rm-panel-advanced" onclick="switchRMPanel('rm-panel-advanced')">&#x2699;&#xFE0F; Advanced</button>
+</div>
+<div id="rm-panel-summary" class="rm-prog-panel visible">
 <div id="situation-room" class="sitroom">
 <div class="sitroom-label">Situation Room</div>
 <div id="sitroom-headline" class="sitroom-headline">Awaiting intelligence report...</div>
 <div id="sitroom-body"></div>
 </div>
+</div>
+<div id="rm-panel-events" class="rm-prog-panel">
 <div id="activity-log" class="activity-log">
 <div class="activity-log-bar" id="activity-log-bar" onclick="toggleActivityLog()" tabindex="0" role="button" aria-expanded="false">
 <span class="activity-log-arrow">&#9654;</span>
@@ -687,6 +1115,13 @@ html{height:auto;min-height:100vh}body{height:auto;min-height:100vh;overflow-x:h
 </div>
 </div>
 </div>
+</div>
+</div>
+<div id="rm-panel-details" class="rm-prog-panel">
+<p style="color:var(--dim);padding:10px;font-size:1rem;">Select a faction or NPC card to view details here.</p>
+</div>
+<div id="rm-panel-advanced" class="rm-prog-panel">
+<p style="color:var(--dim);padding:10px;font-size:1rem;">Advanced telemetry and debug information.</p>
 </div>
 <div class="signal-lost" id="signal-lost-center">
 <div class="ai-chat" id="ai-chat">
@@ -714,6 +1149,7 @@ html{height:auto;min-height:100vh}body{height:auto;min-height:100vh;overflow-x:h
 <button class="tab-btn" data-tab="choices" role="tab" onclick="switchRightTab('choices')">Decisions</button>
 </div>
 <div class="tab-content visible" id="right-npcs">
+<div class="rm-collapse-toggle" id="rm-toggle-npcs" onclick="rmToggleSection('npc-grid')" style="display:none">&#x25BC; Character Roster</div>
 <div class="section-title violet">Character Roster <span id="npc-count" style="font-size:0.8125rem;color:var(--dim);font-weight:400"></span></div>
 <div class="npc-noise-toggle" id="npc-noise-toggle" onclick="toggleNpcFilter()" tabindex="0" role="button" aria-pressed="false">
 <span class="npc-noise-toggle-label">Show All Characters</span>
@@ -2618,7 +3054,7 @@ var results=await Promise.all([apiFetch('/simulation/status',8000),apiFetch('/si
 var status=results[0],factions=results[1],events=results[2];
 var anyOk=status||factions||events;
 if(!anyOk){fetchErrorCount++;if(fetchErrorCount>=3)showSignalLost(true)}else{fetchErrorCount=0;showSignalLost(false);if(status)lastData.status=status;if(factions)lastData.factions=factions;if(events)lastData.events=events}
-if(lastData.status){updateTopBanner(lastData.status);updateSituation(lastData.status)}renderQuickStatus();renderSituationRoom();
+if(lastData.status){updateTopBanner(lastData.status);updateSituation(lastData.status)}renderQuickStatus();renderReadableSummary();renderSituationRoom();
 if(lastData.factions)renderFactions(lastData.factions);
 if(lastData.events)renderEvents(lastData.events);
 if(lastData.status)renderBottom(lastData.status);
@@ -2685,6 +3121,142 @@ function toggleRaw(){var btn=document.getElementById('raw-toggle'),wrap=document
 function toggleHelp(){var overlay=document.getElementById('help-overlay');overlay.classList.toggle('open');if(overlay.classList.contains('open')){overlay.focus();document.body.style.overflow='hidden'}else{document.body.style.overflow=''}}
 function toggleActivityLog(){var log=document.getElementById('activity-log');var bar=document.getElementById('activity-log-bar');var expanded=log.classList.toggle('expanded');bar.setAttribute('aria-expanded',String(expanded));fedSaveUIState({activity_log_expanded:expanded})}
 
+/* ═══ HUMAN READABILITY MODE ═══ */
+function toggleReadableMode() {
+  var on = document.body.classList.toggle('readable-mode');
+  var btn = document.getElementById('rm-toggle');
+  if (btn) btn.classList.toggle('on', on);
+  var summary = document.getElementById('rm-summary');
+  var qs = document.getElementById('quick-status');
+  var progBar = document.getElementById('rm-prog-bar');
+  var collapseToggles = document.querySelectorAll('.rm-collapse-toggle');
+  var sitRoom = document.getElementById('situation-room');
+  var activityLog = document.getElementById('activity-log');
+  var mainTitle = document.querySelector('.section-title.cyan');
+  if (on) {
+    if (summary) summary.style.display = 'block';
+    if (qs) qs.style.display = 'none';
+    if (progBar) progBar.style.display = 'flex';
+    if (mainTitle) mainTitle.style.display = 'none';
+    collapseToggles.forEach(function(el) { el.style.display = 'flex'; });
+    var npcGrid = document.getElementById('npc-grid');
+    if (npcGrid) npcGrid.classList.remove('rm-expanded');
+    var fList = document.getElementById('left-factions');
+    if (fList) fList.classList.remove('rm-expanded');
+  } else {
+    if (summary) summary.style.display = 'none';
+    if (qs) qs.style.display = '';
+    if (progBar) progBar.style.display = 'none';
+    if (mainTitle) mainTitle.style.display = '';
+    collapseToggles.forEach(function(el) { el.style.display = 'none'; });
+    var npcGrid = document.getElementById('npc-grid');
+    if (npcGrid) npcGrid.classList.add('rm-expanded');
+    var fList = document.getElementById('left-factions');
+    if (fList) fList.classList.add('rm-expanded');
+  }
+  renderReadableSummary();
+  try { localStorage.setItem('fed_readable_mode', on ? 'true' : 'false'); } catch(e) {}
+}
+function switchRMPanel(panelId) {
+  document.querySelectorAll('.rm-prog-panel').forEach(function(el) { el.classList.remove('visible'); });
+  var panel = document.getElementById(panelId);
+  if (panel) panel.classList.add('visible');
+  document.querySelectorAll('.rm-prog-btn').forEach(function(btn) { btn.classList.toggle('active', btn.dataset.rmPanel === panelId); });
+}
+function rmToggleSection(sectionId) {
+  var el = document.getElementById(sectionId);
+  if (!el) return;
+  el.classList.toggle('rm-expanded');
+  var toggle = document.querySelector('[onclick="rmToggleSection(\'' + sectionId + '\')"]');
+  if (toggle) {
+    var arrow = el.classList.contains('rm-expanded') ? '\u25BC' : '\u25B6';
+    toggle.innerHTML = arrow + ' ' + toggle.textContent.replace(/^[\u25B6\u25BC]\s*/, '');
+  }
+}
+function renderReadableSummary() {
+  var panel = document.getElementById('rm-summary');
+  var body = document.getElementById('rm-summary-body');
+  var tickEl = document.getElementById('rm-summary-tick');
+  if (!panel || !body) return;
+  var status = lastData ? (lastData.status || lastData) : null;
+  if (!status) { panel.style.display = 'none'; return; }
+  var ws = status.world_state || status.worldState || status;
+  var events = lastData.events || [];
+  var factions = lastData.factions || {};
+  var threat = ws.threat_level != null ? ws.threat_level : 50;
+  var stability = ws.stability != null ? ws.stability : 50;
+  var morale = ws.morale != null ? ws.morale : 50;
+  var anomaly = ws.anomaly_activity != null ? ws.anomaly_activity : 0;
+  var tension = ws.tension_level != null ? ws.tension_level : 50;
+  var crisisScore = threat * 1.2 + (100 - stability) * 0.8 + (100 - morale) * 0.6 + anomaly * 0.9 + tension * 0.7;
+  var overallState, stateClass;
+  if (crisisScore > 180 || threat > 70 || stability < 25) { overallState = 'CRISIS'; stateClass = 'crisis'; }
+  else if (crisisScore > 100 || threat > 45 || stability < 45) { overallState = 'WARNING'; stateClass = 'warning'; }
+  else { overallState = 'STABLE'; stateClass = 'stable'; }
+  var risks = [];
+  if (threat > 50) risks.push('High Threat (' + Math.round(threat) + ')');
+  if (stability < 40) risks.push('Low Stability (' + Math.round(stability) + ')');
+  if (morale < 40) risks.push('Low Morale (' + Math.round(morale) + ')');
+  if (anomaly > 50) risks.push('Anomaly Activity (' + Math.round(anomaly) + ')');
+  if (tension > 50) risks.push('High Tension (' + Math.round(tension) + ')');
+  var mainRisk = risks.length > 0 ? risks[0] : 'No significant threats detected';
+  var topEvents = events.slice(0, 3);
+  var involvedNpcs = [];
+  var involvedFactions = [];
+  for (var i = 0; i < Math.min(events.length, 10); i++) {
+    var ev = events[i];
+    if (ev && ev.char_name && involvedNpcs.indexOf(ev.char_name) === -1) { involvedNpcs.push(ev.char_name); }
+    if (ev && ev.faction_id && involvedFactions.indexOf(ev.faction_id) === -1) { involvedFactions.push(ev.faction_id); }
+  }
+  involvedNpcs = involvedNpcs.slice(0, 3);
+  involvedFactions = involvedFactions.slice(0, 3);
+  var consequence = 'Monitoring degradation and threat metrics.';
+  if (overallState === 'crisis') consequence = 'Immediate intervention may be required. Systems at risk of cascade failure.';
+  else if (overallState === 'warning') consequence = 'Conditions deteriorating. Watch for cascade triggers.';
+  else if (threat > 40) consequence = 'External pressure increasing. Faction cohesion may weaken.';
+  else if (anomaly > 40) consequence = 'Anomaly activity rising. Unknown events likely.';
+  var tick = '\u2014';
+  if (status.last_tick_result && status.last_tick_result.tick_ts) tick = status.last_tick_result.tick_ts;
+  else if (status.last_tick_timestamp) tick = status.last_tick_timestamp;
+  else if (ws.tick_count != null) tick = ws.tick_count;
+  tickEl.textContent = 'Tick ' + tick;
+  panel.style.display = 'block';
+  var html = '';
+  html += '<div class="rm-summary-section"><div class="rm-summary-section-title">Current Overall State</div>';
+  html += '<div class="rm-summary-row"><span class="rm-summary-state ' + stateClass + '">' + overallState + '</span></div></div>';
+  html += '<div class="rm-summary-section"><div class="rm-summary-section-title">Main Risk</div>';
+  html += '<div class="rm-summary-row">' + mainRisk + '</div></div>';
+  html += '<div class="rm-summary-section"><div class="rm-summary-section-title">Top Recent Events</div>';
+  if (topEvents.length === 0) { html += '<div class="rm-summary-row" style="color:var(--dim)">No recent events</div>'; }
+  else {
+    for (var i = 0; i < topEvents.length; i++) {
+      var ev = topEvents[i];
+      var badgeClass = 'world';
+      if (ev.event_type === 'cascade') badgeClass = 'cascade';
+      else if (ev.event_type === 'faction') badgeClass = 'faction';
+      else if (ev.event_type === 'crisis') badgeClass = 'crisis';
+      var npcName = ev.char_name ? '<span class="rm-ev-npc">' + ev.char_name + '</span>' : '';
+      var desc = ev.description || ev.action_type || 'Unknown event';
+      html += '<div class="rm-summary-event-item"><span class="rm-ev-badge ' + badgeClass + '">' + badgeClass.toUpperCase() + '</span> ' + npcName + ' ' + desc + '</div>';
+    }
+  }
+  html += '</div>';
+  html += '<div class="rm-summary-section"><div class="rm-summary-section-title">Who Is Involved</div>';
+  if (involvedNpcs.length > 0) { html += '<div style="font-size:0.9375rem;color:var(--cyan);">NPCs: ' + involvedNpcs.join(', ') + '</div>'; }
+  if (involvedFactions.length > 0) {
+    html += '<div style="font-size:0.9375rem;margin-top:4px;">';
+    for (var i = 0; i < involvedFactions.length; i++) { html += '<span class="rm-summary-faction-chip">' + (FACTION_DISPLAY[involvedFactions[i]] || involvedFactions[i]) + '</span> '; }
+    html += '</div>';
+  }
+  if (involvedNpcs.length === 0 && involvedFactions.length === 0) { html += '<div class="rm-summary-row" style="color:var(--dim)">No active participants</div>'; }
+  html += '</div>';
+  html += '<div class="rm-summary-section"><div class="rm-summary-section-title">Next Likely Consequence</div>';
+  html += '<div class="rm-summary-consequence">' + consequence + '</div></div>';
+  body.innerHTML = html;
+}
+function initReadableMode() {
+  try { var saved = localStorage.getItem('fed_readable_mode'); if (saved === 'true') { toggleReadableMode(); } } catch(e) {}
+}
 /* Restore persisted toggle states from phenotype state packet */
 function restoreToggleStates() {
   var state = fedRestoreUIState();
@@ -2714,7 +3286,7 @@ function restoreToggleStates() {
 }
 document.addEventListener('keydown',function(e){if(e.key==='Escape'){var overlay=document.getElementById('help-overlay');if(overlay.classList.contains('open'))toggleHelp()}});
 
-function init(){generateStarfield();restoreToggleStates();refresh();setInterval(refreshLight,10000);setInterval(refreshNpcs,30000);setInterval(refreshQuests,20000);setInterval(refreshFactionTech,25000);setInterval(refreshChoices,20000);setInterval(updateTimeSince,1000);setInterval(renderSituationRoom,15000)}
+function init(){generateStarfield();restoreToggleStates();initReadableMode();refresh();setInterval(refreshLight,10000);setInterval(refreshNpcs,30000);setInterval(refreshQuests,20000);setInterval(refreshFactionTech,25000);setInterval(refreshChoices,20000);setInterval(updateTimeSince,1000);setInterval(renderSituationRoom,15000)}
 document.addEventListener('DOMContentLoaded',init);
 
 

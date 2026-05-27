@@ -205,6 +205,261 @@ body{background:#0a0a1a;color:#e0e0e0;font-family:'Courier New',monospace;overfl
   #zoom-ctrl{position:relative!important;transform:none!important;left:auto!important;bottom:auto!important;justify-content:center}
   .vt-btn,.lt-btn{padding:8px 12px!important}
 }
+
+/* ═══ STARMAP HUMAN READABILITY MODE ═══ */
+.readable-mode {
+  font-size: 16px !important;
+}
+
+.readable-mode * {
+  line-height: 1.45 !important;
+}
+
+.readable-mode .wb-label,
+.readable-mode .wb-val,
+.readable-mode #tick-label {
+  font-size: 14px !important;
+}
+
+.readable-mode .wb-bar {
+  height: 18px !important;
+  min-width: 80px !important;
+}
+
+.readable-mode .wb-item {
+  min-height: 36px !important;
+  padding: 4px 8px !important;
+}
+
+.readable-mode #sidebar {
+  padding: 16px !important;
+  font-size: 15px !important;
+}
+
+.readable-mode .ev-bucket-header {
+  min-height: 40px !important;
+  padding: 8px 12px !important;
+  font-size: 15px !important;
+}
+
+.readable-mode .ev-bucket-title {
+  font-size: 15px !important;
+}
+
+.readable-mode .ev-bucket-count {
+  font-size: 14px !important;
+}
+
+.readable-mode .ev-item {
+  padding: 8px 12px !important;
+  font-size: 14px !important;
+  min-height: 36px !important;
+}
+
+.readable-mode .ev-char,
+.readable-mode .ev-type,
+.readable-mode .ev-desc {
+  font-size: 14px !important;
+}
+
+.readable-mode #detail {
+  padding: 16px !important;
+  font-size: 16px !important;
+  min-width: 300px !important;
+}
+
+.readable-mode #detail-name {
+  font-size: 18px !important;
+  font-weight: 700 !important;
+}
+
+.readable-mode #detail-cat {
+  font-size: 15px !important;
+}
+
+.readable-mode #detail-rows {
+  font-size: 15px !important;
+  line-height: 1.6 !important;
+}
+
+.readable-mode #detail-thought {
+  font-size: 15px !important;
+  line-height: 1.5 !important;
+}
+
+.readable-mode #left-panel {
+  padding: 12px !important;
+  min-width: 200px !important;
+}
+
+.readable-mode #search-box input {
+  font-size: 16px !important;
+  padding: 8px 12px !important;
+  min-height: 40px !important;
+}
+
+.readable-mode #view-toggle button,
+.readable-mode #label-toggle button {
+  font-size: 14px !important;
+  padding: 8px 14px !important;
+  min-height: 38px !important;
+}
+
+.readable-mode #zoom-ctrl button {
+  font-size: 18px !important;
+  min-width: 40px !important;
+  min-height: 40px !important;
+  padding: 6px !important;
+}
+
+.readable-mode #map-read {
+  padding: 14px !important;
+  font-size: 15px !important;
+}
+
+.readable-mode #mr-title {
+  font-size: 16px !important;
+}
+
+.readable-mode #mr-body {
+  font-size: 15px !important;
+  line-height: 1.5 !important;
+}
+
+.readable-mode button,
+.readable-mode .ev-bucket-header,
+.readable-mode .ev-item,
+.readable-mode #detail-lore-toggle {
+  min-height: 36px !important;
+}
+
+.readable-mode #event-filter label {
+  font-size: 14px !important;
+}
+
+.readable-mode #event-filter input[type="checkbox"] {
+  width: 18px !important;
+  height: 18px !important;
+}
+
+.readable-mode #starmap-qs {
+  padding: 16px 12px !important;
+}
+
+.readable-mode .sqs-row {
+  font-size: 15px !important;
+  line-height: 1.6 !important;
+}
+
+.readable-mode .sqs-badge {
+  font-size: 12px !important;
+  padding: 2px 8px !important;
+}
+
+.rm-label-size {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+  font-size: 12px;
+  color: var(--dim);
+}
+
+.rm-label-size input[type="range"] {
+  flex: 1;
+  min-height: 20px;
+  accent-color: var(--cyan);
+}
+
+.rm-label-size .rm-label-preset {
+  font-size: 11px;
+  padding: 2px 6px;
+  border-radius: 3px;
+  cursor: pointer;
+  border: 1px solid rgba(255,255,255,0.1);
+  background: rgba(255,255,255,0.03);
+  color: var(--dim);
+  transition: all 0.2s;
+  min-height: 28px;
+}
+
+.rm-label-size .rm-label-preset:hover,
+.rm-label-size .rm-label-preset.active {
+  background: rgba(0,188,212,0.1);
+  border-color: rgba(0,188,212,0.3);
+  color: var(--cyan);
+}
+
+.rm-focus-btn {
+  display: block;
+  width: 100%;
+  padding: 8px 12px;
+  margin-top: 8px;
+  border: 1px solid rgba(0,188,212,0.3);
+  background: rgba(0,188,212,0.08);
+  color: var(--cyan);
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 14px;
+  font-family: 'Share Tech Mono', monospace;
+  min-height: 36px;
+  transition: background 0.2s;
+}
+
+.rm-focus-btn:hover {
+  background: rgba(0,188,212,0.16);
+}
+
+.rm-focus-btn.active {
+  background: rgba(0,188,212,0.2);
+  border-color: var(--cyan);
+}
+
+.rm-starmap-toggle {
+  background: none;
+  border: 1px solid rgba(0,188,212,0.3);
+  color: var(--cyan);
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 14px;
+  cursor: pointer;
+  padding: 4px 10px;
+  border-radius: 6px;
+  transition: background 0.2s, border-color 0.2s;
+  line-height: 1;
+  font-weight: 700;
+  white-space: nowrap;
+  min-height: 32px;
+}
+
+.rm-starmap-toggle:hover {
+  background: rgba(0,188,212,0.1);
+  border-color: var(--cyan);
+}
+
+.rm-starmap-toggle.on {
+  background: rgba(0,188,212,0.2);
+  border-color: var(--cyan);
+  color: #fff;
+}
+
+.high-contrast {
+  --white: #ffffff !important;
+  --dim: #b0bec5 !important;
+  --panel-bg: rgba(0,0,0,0.97) !important;
+}
+
+.readable-mode *:focus {
+  outline: 3px solid var(--cyan) !important;
+  outline-offset: 3px !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
 </style>
 </head>
 <body>
@@ -229,6 +484,7 @@ body{background:#0a0a1a;color:#e0e0e0;font-family:'Courier New',monospace;overfl
 <a href="/earth.html" style="color:#78909c;font-size:1rem;text-decoration:none;padding:8px 14px;letter-spacing:1px;text-transform:uppercase;transition:color 0.2s">Earth</a>
 <button class="help-btn" onclick="toggleHelp()" aria-label="How to read this map" title="How to read this map">?</button>
 <button id="audio-toggle" title="Toggle audio (M)" aria-label="Toggle audio on/off">&#9835;</button>
+<button class="rm-starmap-toggle" id="rm-smap-toggle" onclick="toggleStarmapReadableMode()" aria-label="Toggle readable mode" title="Toggle readable mode">Aa</button>
 </nav>
 </div>
 
@@ -278,6 +534,14 @@ body{background:#0a0a1a;color:#e0e0e0;font-family:'Courier New',monospace;overfl
     <button class="lt-btn active" data-labels="important" onclick="setLabelMode('important')">Important NPCs</button>
     <button class="lt-btn" data-labels="all" onclick="setLabelMode('all')">All Labels</button>
   </div>
+  <div class="rm-label-size" id="rm-label-size" style="display:none">
+    <span style="font-size:12px;color:var(--dim);white-space:nowrap">Labels:</span>
+    <button class="rm-label-preset" onclick="setLabelPreset('small')" data-preset="small">S</button>
+    <button class="rm-label-preset active" onclick="setLabelPreset('normal')" data-preset="normal">N</button>
+    <button class="rm-label-preset" onclick="setLabelPreset('large')" data-preset="large">L</button>
+    <input type="range" id="rm-label-range" min="10" max="24" value="14" oninput="setLabelSize(this.value)" style="flex:1">
+  </div>
+  <button class="rm-focus-btn" id="rm-focus-faction" onclick="toggleFocusFaction()" style="display:none">&#x1F50D; Focus Selected Faction</button>
 </div>
 
 <!-- Crisis Readout panel — case-file view -->
@@ -475,6 +739,7 @@ function init() {
     });
   }
 
+  initStarmapReadableMode();
   fetchData();
   setInterval(fetchData, POLL_MS);
   requestAnimationFrame(draw);
@@ -1702,7 +1967,7 @@ function draw() {
       // Sub-label: sector type
       const sectorType = cohesion < 40 ? 'CONTESTED' : 'INFLUENCE ZONE';
       ctx.fillStyle = hexToRgba(z.color, isHovered ? 0.7 : 0.35);
-      ctx.font = '14px Courier New';
+      ctx.font = (rmLabelSize || 14) + 'px Courier New';
       ctx.fillText(sectorType, z.labelX, z.labelY + 18);
     } else {
       // --- CIRCLE FALLBACK (1 or 0 NPCs) ---
@@ -1741,7 +2006,7 @@ function draw() {
       ctx.fillText(cDisplayName, z.fcx, z.fcy + z.zoneR + 22);
       const cSectorType = cohesion < 40 ? 'CONTESTED' : 'INFLUENCE ZONE';
       ctx.fillStyle = hexToRgba(z.color, isHovered ? 0.7 : 0.35);
-      ctx.font = '14px Courier New';
+      ctx.font = (rmLabelSize || 14) + 'px Courier New';
       ctx.fillText(cSectorType, z.fcx, z.fcy + z.zoneR + 40);
     }
   }
@@ -1759,7 +2024,7 @@ function draw() {
   ctx.stroke();
   ctx.setLineDash([]);
   ctx.fillStyle = 'rgba(120,144,156,0.4)';
-  ctx.font = '14px Courier New';
+  ctx.font = (rmLabelSize || 14) + 'px Courier New';
   ctx.textAlign = 'center';
   ctx.fillText('NEUTRAL / FEDERATION CORE', cx, cy + centerR + 20);
 
@@ -1909,7 +2174,8 @@ function draw() {
 {
 const priority = getLabelPriority(node);
 if (priority > 0) {
-const fontSize = (isHovered || isSelected) ? 17 : (priority >= 3 ? 15 : 13);
+const baseLabelSize = (rmLabelSize || 14);
+const fontSize = (isHovered || isSelected) ? Math.max(17, baseLabelSize) : (priority >= 3 ? Math.max(15, baseLabelSize) : Math.max(13, baseLabelSize));
 ctx.font = `${fontSize}px Courier New`;
 ctx.textAlign = 'center';
 const labelY = node.y + r + 18;
@@ -2226,6 +2492,91 @@ document.addEventListener('keydown', function(e) {
     if (overlay) overlay.classList.remove('open');
   }
 });
+
+/* ═══ STARMAP READABILITY MODE ═══ */
+var rmLabelSize = 14;
+var rmFocusFactionId = null;
+
+function toggleStarmapReadableMode() {
+  var on = document.body.classList.toggle('readable-mode');
+  var btn = document.getElementById('rm-smap-toggle');
+  if (btn) btn.classList.toggle('on', on);
+
+  var labelSizeDiv = document.getElementById('rm-label-size');
+  var focusBtn = document.getElementById('rm-focus-faction');
+  if (labelSizeDiv) labelSizeDiv.style.display = on ? 'flex' : 'none';
+  if (focusBtn) focusBtn.style.display = on ? 'block' : 'none';
+
+  if (on) {
+    setLabelPreset('normal');
+    if (labelMode !== 'important') setLabelMode('important');
+  }
+  drawMap();
+
+  try { localStorage.setItem('fed_smap_readable', on ? 'true' : 'false'); } catch(e) {}
+}
+
+function setLabelPreset(preset) {
+  var val = 14;
+  if (preset === 'small') val = 10;
+  else if (preset === 'normal') val = 14;
+  else if (preset === 'large') val = 20;
+
+  document.querySelectorAll('.rm-label-preset').forEach(function(b) {
+    b.classList.toggle('active', b.dataset.preset === preset);
+  });
+
+  var range = document.getElementById('rm-label-range');
+  if (range) range.value = val;
+
+  setLabelSize(val);
+}
+
+function setLabelSize(val) {
+  rmLabelSize = parseInt(val) || 14;
+  drawMap();
+}
+
+function toggleFocusFaction() {
+  if (!selectedNode) {
+    var factions = mapData ? (mapData.factions || {}) : {};
+    var keys = Object.keys(factions);
+    if (keys.length > 0) {
+      rmFocusFactionId = keys[0];
+    } else {
+      return;
+    }
+  } else {
+    var node = mapData ? (mapData.nodes || []).find(function(n) { return n.id === selectedNode; }) : null;
+    if (node && node.faction_id) {
+      rmFocusFactionId = rmFocusFactionId === node.faction_id ? null : node.faction_id;
+    } else {
+      rmFocusFactionId = null;
+    }
+  }
+
+  var btn = document.getElementById('rm-focus-faction');
+  if (btn) {
+    if (rmFocusFactionId) {
+      btn.classList.add('active');
+      btn.innerHTML = '&#x1F513; Focus: ' + (FACTION_DISPLAY[rmFocusFactionId] || rmFocusFactionId);
+    } else {
+      btn.classList.remove('active');
+      btn.innerHTML = '&#x1F50D; Focus Selected Faction';
+    }
+  }
+
+  drawMap();
+}
+
+function initStarmapReadableMode() {
+  try {
+    var saved = localStorage.getItem('fed_smap_readable');
+    if (saved === 'true') {
+      toggleStarmapReadableMode();
+    }
+  } catch(e) {}
+}
 
 // --- Start ---
 init();
