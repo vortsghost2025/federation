@@ -22,10 +22,11 @@ body{background:#0a0a1a;color:#e0e0e0;font-family:'Courier New',monospace;overfl
 #tick-label{font-size:1rem;color:#78909c}
 
 /* Event sidebar — TV-scale */
-#sidebar{position:fixed;top:0;right:0;width:min(420px,30vw);height:100vh;background:rgba(10,10,26,0.95);border-left:1px solid rgba(79,195,247,0.2);overflow-y:auto;z-index:10;padding:80px 16px 16px 16px;font-size:1.125rem}
+#sidebar{position:fixed;top:0;right:0;width:min(420px,30vw);height:100vh;background:rgba(10,10,26,0.95);border-left:1px solid rgba(79,195,247,0.2);overflow-y:auto;z-index:10;padding:80px 16px 16px 16px;font-size:1.125rem}#event-filter{padding:6px 0 10px 0;border-bottom:1px solid rgba(79,195,247,0.1);margin-bottom:8px}#event-filter label{display:flex;align-items:center;gap:6px;color:#b0b0b0;font-size:0.9375rem;cursor:pointer}#event-filter input[type=checkbox]{width:16px;height:16px;accent-color:#4fc3f7}
 #sidebar::-webkit-scrollbar{width:5px}
 #sidebar::-webkit-scrollbar-thumb{background:rgba(79,195,247,0.3);border-radius:2px}
 #sidebar h2{color:#4fc3f7;font-size:1.375rem;margin:12px 0 10px 0;letter-spacing:2px;text-transform:uppercase;border-bottom:1px solid rgba(79,195,247,0.2);padding-bottom:8px}
+#event-list{max-height:400px;overflow-y:auto;padding-top:10px;}
 .ev-bucket{margin-bottom:10px}
 .ev-bucket-header{display:flex;align-items:center;gap:6px;padding:6px 8px;background:rgba(255,255,255,0.03);border-radius:4px;cursor:pointer;user-select:none;transition:background 0.15s;font-size:1rem}
 .ev-bucket-header:hover{background:rgba(79,195,247,0.08)}
@@ -33,10 +34,10 @@ body{background:#0a0a1a;color:#e0e0e0;font-family:'Courier New',monospace;overfl
 .ev-bucket-title{color:#e0e0e0;font-weight:bold;letter-spacing:0.5px}
 .ev-bucket-count{margin-left:auto;background:rgba(79,195,247,0.15);color:#4fc3f7;padding:1px 6px;border-radius:8px;font-size:0.75rem;font-weight:bold}
 .ev-bucket-arrow{color:#78909c;font-size:0.75rem;transition:transform 0.15s;margin-left:4px}
-.ev-bucket-arrow.open{transform:rotate(90deg)}
 .ev-bucket-body{padding:4px 0 4px 8px}
 .ev-bucket-body.collapsed{display:none}
-.ev-item{padding:4px 6px;margin-bottom:3px;border-left:2px solid #333;border-radius:0 3px 3px 0;background:rgba(255,255,255,0.02);font-size:0.875rem;line-height:1.3}
+.ev-bucket-arrow.open{transform:rotate(90deg)}
+.ev-item{padding:4px 6px;margin-bottom:3px;border-left:2px solid #333;border-radius:0 3px 3px 0;background:rgba(255,255,255,0.02);font-size:0.875rem;line-height:1.3;overflow-wrap:break-word;word-break:break-word}
 .ev-item:hover{border-left-color:#4fc3f7;background:rgba(79,195,247,0.05)}
 .ev-item-repeat{color:#78909c;font-size:0.6875rem;margin-left:4px}
 .ev-char{color:#4fc3f7;font-weight:bold;font-size:1rem}
@@ -59,9 +60,9 @@ body{background:#0a0a1a;color:#e0e0e0;font-family:'Courier New',monospace;overfl
 #detail-livesim:hover{background:rgba(79,195,247,0.3);border-color:#4fc3f7}
 
 /* View toggle — TV-scale */
-#view-toggle{position:fixed;top:72px;left:12px;z-index:10;display:flex;flex-wrap:wrap;gap:4px;margin-top:40px}
-.vt-btn{background:#0a0a1a;border:1px solid rgba(79,195,247,0.3);color:#78909c;padding:10px 20px;border-radius:6px;font-size:1.125rem;font-family:'Courier New',monospace;cursor:pointer;transition:all 0.2s;letter-spacing:1px;text-transform:uppercase}
-.vt-btn:hover{border-color:#4fc3f7;color:#4fc3f7}
+#view-toggle{position:fixed;top:72px;left:12px;z-index:10;display:flex;flex-wrap:wrap;gap:4px;margin-top:40px;background:rgba(10,10,26,0.92);padding:8px 10px;border-radius:10px;border:1px solid rgba(79,195,247,0.12)}
+.vt-btn{background:rgba(26,26,42,0.85);border:1px solid rgba(79,195,247,0.3);color:#78909c;padding:10px 20px;border-radius:6px;font-size:1.125rem;font-family:'Courier New',monospace;cursor:pointer;transition:all 0.2s;letter-spacing:1px;text-transform:uppercase}
+.vt-btn:hover{border-color:#4fc3f7;color:#4fc3f7;background:rgba(79,195,247,0.08)}
 .vt-btn.active{background:#1a1a2a;border-color:#4fc3f7;color:#4fc3f7;box-shadow:0 0 8px rgba(79,195,247,0.2)}
 
 /* Map legend — TV-scale */
@@ -149,9 +150,9 @@ body{background:#0a0a1a;color:#e0e0e0;font-family:'Courier New',monospace;overfl
 #mr-highlighted{outline:2px solid #ffd700;outline-offset:2px;box-shadow:0 0 12px rgba(255,215,0,0.3)}
 
 /* Label mode toggle — TV-scale */
-#label-toggle{position:fixed;top:72px;left:12px;z-index:10;display:flex;flex-wrap:wrap;gap:4px;margin-top:90px}
-.lt-btn{background:rgba(10,10,26,0.9);border:1px solid rgba(79,195,247,0.3);color:#78909c;padding:8px 16px;border-radius:6px;font-size:0.9375rem;font-family:'Courier New',monospace;cursor:pointer;transition:all 0.2s;letter-spacing:1px;text-transform:uppercase}
-.lt-btn:hover{border-color:#4fc3f7;color:#4fc3f7}
+#label-toggle{position:fixed;top:72px;left:12px;z-index:10;display:flex;flex-wrap:wrap;gap:4px;margin-top:90px;background:rgba(10,10,26,0.92);padding:8px 10px;border-radius:10px;border:1px solid rgba(79,195,247,0.12)}
+.lt-btn{background:rgba(26,26,42,0.85);border:1px solid rgba(79,195,247,0.3);color:#78909c;padding:8px 16px;border-radius:6px;font-size:0.9375rem;font-family:'Courier New',monospace;cursor:pointer;transition:all 0.2s;letter-spacing:1px;text-transform:uppercase}
+.lt-btn:hover{border-color:#4fc3f7;color:#4fc3f7;background:rgba(79,195,247,0.08)}
 .lt-btn.active{background:rgba(79,195,247,0.15);border-color:#ffd700;color:#ffd700;box-shadow:0 0 8px rgba(255,215,0,0.2)}
 
 /* Help overlay — TV-scale */
@@ -737,6 +738,18 @@ function buildNodes() {
     if (polyPoints.length >= 3) {
       // 3+ points: convex hull → pad → smooth
       let hull = convexHull(polyPoints);
+      // Fix: if hull returned < 3 points (colinear input), generate irregular polygon
+      if (hull.length < 3) {
+        hull = [];
+        const infl = fdata.influence || 20;
+        const baseR = Math.max(80, spread * (0.8 + (infl / 100) * 0.4));
+        const numPts = Math.max(6, 8 + Math.floor(infl / 10));
+        for (let pi = 0; pi < numPts; pi++) {
+          const pa = (pi / numPts) * Math.PI * 2 + (i * 0.17 + pi * 0.03);
+          const pr = baseR * (0.55 + seededRand(hashStr(fid + 'h' + pi))() * 0.6);
+          hull.push({ x: fcx + Math.cos(pa) * pr, y: fcy + Math.sin(pa) * pr });
+        }
+      }
       let padAmt = Math.max(30, 50 * (1 + ((fdata.influence||20) - 20) / 100));
       let padded = padPolygon(hull, padAmt);
       polygon = smoothPoly(padded, 2);
@@ -1397,12 +1410,18 @@ function draw() {
     const cohesion = fdata ? (fdata.cohesion || 50) : 50;
     const isHovered = hoveredFaction === z;
 
-    // Breathing offset for territory deformation
-    const breathAmp = 3 + (fdata.activity_rate || 0) * 6;
-    const breathPhase = z.zonePulse + t * 0.001 * (0.8 + (fdata.activity_rate || 0) * 0.4);
+    // Living territory deformation — warps edges using faction scores
+    const infl = (fdata.influence || 20) / 100;
+    const coh = (fdata.cohesion || 50) / 100;
+    const act = fdata.activity_rate || 0;
+    const breathAmp = 6 + act * 12 + infl * 8; // stronger warp for high influence/activity
+    const breathPhase = z.zonePulse + t * 0.001 * (0.6 + act * 0.6);
     const breathOffset = Math.sin(breathPhase) * breathAmp;
+    // Per-vertex instability: each vertex wobbles independently using its index as seed
+    const wobbleAmp = 2 + coh * 4; // low cohesion = more wobble
+    const wobbleSpeed = 0.0008 + (1 - coh) * 0.001;
 
-    // Deform polygon vertices by breathing offset along normal
+    // Deform polygon vertices by breathing offset + per-vertex wobble
     let deformedPoly = [];
     if (z.polygon.length >= 3) {
       const n = z.polygon.length;
@@ -1419,7 +1438,11 @@ function draw() {
         let nx = (n1x + n2x) / 2, ny = (n1y + n2y) / 2;
         const nlen = Math.sqrt(nx*nx + ny*ny) || 1;
         nx /= nlen; ny /= nlen;
-        deformedPoly.push({ x: curr.x + nx * breathOffset, y: curr.y + ny * breathOffset });
+        // Per-vertex wobble using i as seed, phase offset by faction pulse
+        const wobPhase = i * 2.7 + z.zonePulse + t * wobbleSpeed;
+        const wobble = Math.sin(wobPhase) * wobbleAmp;
+        const totalOffset = breathOffset + wobble;
+        deformedPoly.push({ x: curr.x + nx * totalOffset, y: curr.y + ny * totalOffset });
       }
     }
 
@@ -1487,11 +1510,11 @@ function draw() {
       const displayName = (fdata ? fdata.display_name : z.fid).toUpperCase();
       ctx.fillText(displayName, z.labelX, z.labelY);
 
-// Sub-label: sector type
-const sectorType = cohesion < 40 ? 'CONTESTED' : 'INFLUENCE ZONE';
-ctx.fillStyle = hexToRgba(z.color, isHovered ? 0.7 : 0.35);
-ctx.font = '14px Courier New';
-ctx.fillText(sectorType, z.labelX, z.labelY + 18);
+      // Sub-label: sector type
+      const sectorType = cohesion < 40 ? 'CONTESTED' : 'INFLUENCE ZONE';
+      ctx.fillStyle = hexToRgba(z.color, isHovered ? 0.7 : 0.35);
+      ctx.font = '14px Courier New';
+      ctx.fillText(sectorType, z.labelX, z.labelY + 18);
     } else {
       // --- CIRCLE FALLBACK (1 or 0 NPCs) ---
       ctx.beginPath();
@@ -1525,12 +1548,12 @@ ctx.fillText(sectorType, z.labelX, z.labelY + 18);
       ctx.fillStyle = hexToRgba(z.color, isHovered ? 1.0 : vp.labelAlpha);
       ctx.font = `bold ${vp.labelSize}px Courier New`;
       ctx.textAlign = 'center';
-      const displayName = (fdata ? fdata.display_name : z.fid).toUpperCase();
-ctx.fillText(displayName, z.fcx, z.fcy + z.zoneR + 22);
-const sectorType = cohesion < 40 ? 'CONTESTED' : 'INFLUENCE ZONE';
-ctx.fillStyle = hexToRgba(z.color, isHovered ? 0.7 : 0.35);
-ctx.font = '14px Courier New';
-ctx.fillText(sectorType, z.fcx, z.fcy + z.zoneR + 40);
+      const cDisplayName = (fdata ? fdata.display_name : z.fid).toUpperCase();
+      ctx.fillText(cDisplayName, z.fcx, z.fcy + z.zoneR + 22);
+      const cSectorType = cohesion < 40 ? 'CONTESTED' : 'INFLUENCE ZONE';
+      ctx.fillStyle = hexToRgba(z.color, isHovered ? 0.7 : 0.35);
+      ctx.font = '14px Courier New';
+      ctx.fillText(cSectorType, z.fcx, z.fcy + z.zoneR + 40);
     }
   }
 
@@ -1546,10 +1569,10 @@ ctx.fillText(sectorType, z.fcx, z.fcy + z.zoneR + 40);
   ctx.setLineDash([6, 4]);
   ctx.stroke();
   ctx.setLineDash([]);
-ctx.fillStyle = 'rgba(120,144,156,0.4)';
-ctx.font = '14px Courier New';
-ctx.textAlign = 'center';
-ctx.fillText('NEUTRAL / FEDERATION CORE', cx, cy + centerR + 20);
+  ctx.fillStyle = 'rgba(120,144,156,0.4)';
+  ctx.font = '14px Courier New';
+  ctx.textAlign = 'center';
+  ctx.fillText('NEUTRAL / FEDERATION CORE', cx, cy + centerR + 20);
 
   // Relationship lines
   if (mapData) {
@@ -2020,3 +2043,4 @@ init();
 </script>
 </body>
 </html>
+
