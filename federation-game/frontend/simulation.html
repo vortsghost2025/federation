@@ -2458,11 +2458,11 @@ var _sitroomData = null;
 var _latestNarration = null;
 
 function fetchNarrationData() {
-  apiFetch('/map/narration/latest', 5000).then(function(data) {
-    if (data && data.status === 'ok' && data.narration) {
-      _latestNarration = data.narration;
-    }
-  }).catch(function() { /* endpoint may not exist yet */ });
+    apiFetch('/map/narration/latest', 5000).then(function(data) {
+        if (data && data.narration) {
+            _latestNarration = data.narration;
+        }
+    }).catch(function(err) { console.warn('[fetchNarrationData]', err); });
 }
 
 function _sitCategorize(desc) {
@@ -2557,16 +2557,24 @@ function _sitBuildRegexes(data) {
 }
 
 function renderSituationRoom() {
-  var headlineEl = document.getElementById('sitroom-headline');
-  var bodyEl = document.getElementById('sitroom-body');
-  if (!headlineEl || !bodyEl) return;
+    var headlineEl = document.getElementById('sitroom-headline');
+    var bodyEl = document.getElementById('sitroom-body');
+    if (!headlineEl || !bodyEl) return;
 
-  // Fetch narration in background (non-blocking)
-  fetchNarrationData();
+    // Fetch narration FIRST so _latestNarration is populated before we render
+    var narrPromise = _latestNarration
+        ? Promise.resolve(_latestNarration)
+        : apiFetch('/map/narration/latest', 5000).then(function(data) {
+            if (data && data.narration) {
+                _latestNarration = data.narration;
+            }
+            return _latestNarration;
+        }).catch(function() { return _latestNarration; });
 
-  // We need /map/data for crisis_readout + events
-  apiFetch('/map/data', 8000).then(function(data) {
-    if (!data) { headlineEl.textContent = 'Signal interrupted...'; return; }
+    // We need /map/data for crisis_readout + events
+    Promise.all([apiFetch('/map/data', 8000), narrPromise]).then(function(results) {
+        var data = results[0];
+        if (!data) { headlineEl.textContent = 'Signal interrupted...'; return; }
 
     // Build dynamic NPC/faction regexes from live data
     _sitBuildRegexes(data);
@@ -2575,16 +2583,42 @@ function renderSituationRoom() {
     var crisis = data.crisis_readout || {};
     var events = data.events || [];
     var npcs = data.npcs || [];
-    var narr = _latestNarration;
-    var html = '';
+    // ── 0. FILTER LLM ARTIFACTS ──
+    // Detect LLM chain-of-thought leakage (unfinished thinking, meta-commentary)
+    function _isLLMLeak(text) {
+        if (!text) return false;
+        var t = text.trim().toLowerCase();
+        // Common LLM thinking patterns that leak into output
+        if (/^(okay|let me|let's|i need to|i should|the user|first,? i|perhaps|maybe i|maybe mention|i'll|so something like)/i.test(t)) return true;
+        // Half-sentence that trails off with "..."
+        if (/\.{3,}\s*$/.test(text) && text.length < 200) return true;
+        return false;
+    }
+    function _cleanNarr(n) {
+        if (!n) return n;
+        // Filter headline
+        if (_isLLMLeak(n.headline)) n.headline = '';
+        // Filter developments — remove leaked thinking
+        if (n.developments) {
+            n.developments = n.developments.filter(function(d) { return !_isLLMLeak(d); });
+        }
+        // Filter voices — remove empty/leaked
+        if (n.voices) {
+            n.voices = n.voices.filter(function(v) { return v && !_isLLMLeak(v); });
+        }
+        // Filter forewarning
+        if (_isLLMLeak(n.forewarning)) n.forewarning = '';
+        return n;
+    }
+    var narr = _cleanNarr(results[1] || _latestNarration);
 
     // ── 1. HEADLINE ──
     var headline = crisis.headline || '';
     if (!headline && narr && narr.headline) headline = narr.headline;
     if (!headline) {
-      var threat = ws.threat || 0;
-      var morale = ws.morale || 50;
-      var anomaly = ws.anomaly || 0;
+            var threat = ws.threat_level || ws.threat || 0;
+            var morale = ws.morale || 50;
+            var anomaly = ws.anomaly_activity || ws.anomaly || 0;
       if (threat > 70) headline = 'Threat level critical across the Federation';
       else if (anomaly > 70) headline = 'Anomalous readings sweeping the sector';
       else if (morale < 30) headline = 'Morale collapsing across factions';
@@ -3274,7 +3308,11 @@ function restoreToggleStates() {
 document.addEventListener('keydown',function(e){if(e.key==='Escape'){var overlay=document.getElementById('help-overlay');if(overlay.classList.contains('open'))toggleHelp()}});
 
 function init(){generateStarfield();restoreToggleStates();initReadableMode();refresh();setInterval(refreshLight,10000);setInterval(refreshNpcs,30000);setInterval(refreshQuests,20000);setInterval(refreshFactionTech,25000);setInterval(refreshChoices,20000);setInterval(updateTimeSince,1000);setInterval(renderSituationRoom,15000)}
-document.addEventListener('DOMContentLoaded',init);
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', init);
+} else {
+    init();
+}
 
 
 /* ═══ AI ASSISTANT CHAT ═══ */
