@@ -560,13 +560,13 @@ function padPolygon(polygon, padding) {
     const prev = polygon[(i - 1 + n) % n];
     const curr = polygon[i];
     const next = polygon[(i + 1) % n];
-    // Edge normals (outward = rotate edge 90° clockwise)
+    // Edge normals: rotate edge 90° counter-clockwise for outward normal on CCW polygons
     const e1x = curr.x - prev.x, e1y = curr.y - prev.y;
     const len1 = Math.sqrt(e1x*e1x + e1y*e1y) || 1;
-    const n1x = e1y / len1, n1y = -e1x / len1;
+    const n1x = -e1y / len1, n1y = e1x / len1;
     const e2x = next.x - curr.x, e2y = next.y - curr.y;
     const len2 = Math.sqrt(e2x*e2x + e2y*e2y) || 1;
-    const n2x = e2y / len2, n2y = -e2x / len2;
+    const n2x = -e2y / len2, n2y = e2x / len2;
     // Average normal
     let nx = (n1x + n2x) / 2, ny = (n1y + n2y) / 2;
     const nlen = Math.sqrt(nx*nx + ny*ny) || 1;
@@ -694,7 +694,10 @@ function buildNodes() {
 
     group.forEach((npc, j) => {
       const rng = seededRand(hashStr(npc.id || npc.name || (fid + j)));
-      const subAngle = (j / group.length) * Math.PI * 2;
+      // Add per-NPC jitter to break collinearity (especially for 2-NPC factions where
+      // NPCs would otherwise be placed at exactly 0° and 180°, making center+NPCs collinear)
+      const angleJitter = seededRand(hashStr(fid + '_jitter_' + j))() * 0.4 - 0.2;
+      const subAngle = (j / group.length) * Math.PI * 2 + angleJitter;
       const subR = spread * (0.3 + rng() * 0.7);
       const x = fcx + Math.cos(subAngle) * subR;
       const y = fcy + Math.sin(subAngle) * subR;
