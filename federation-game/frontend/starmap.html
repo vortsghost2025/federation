@@ -157,6 +157,23 @@ body{background:#0a0a1a;color:#e0e0e0;font-family:'Courier New',monospace;overfl
 .lt-btn:hover{border-color:#4fc3f7;color:#4fc3f7;background:rgba(79,195,247,0.08)}
 .lt-btn.active{background:rgba(79,195,247,0.15);border-color:#ffd700;color:#ffd700;box-shadow:0 0 8px rgba(255,215,0,0.2)}
 
+/* Quick Status panel (sidebar) */
+.sqs-row{font-size:0.9375rem;line-height:1.6;margin-bottom:4px;padding-left:4px}
+.sqs-good{color:#66bb6a}
+.sqs-bad{color:#ef5350}
+.sqs-neutral{color:#ffa726}
+.sqs-dim{color:#78909c}
+.sqs-name{color:#4fc3f7;font-weight:bold}
+.sqs-strong{color:#e0e0e0;font-weight:bold}
+.sqs-section{border-left:2px solid rgba(79,195,247,0.15);padding-left:8px;margin-bottom:8px}
+.sqs-section-title{color:#78909c;font-size:0.8125rem;text-transform:uppercase;letter-spacing:1px;margin-bottom:3px}
+.sqs-cat{font-size:0.875rem;line-height:1.5;padding:3px 0;border-bottom:1px solid rgba(255,255,255,0.04);color:#b0b0b0}
+.sqs-cat:last-child{border-bottom:none}
+.sqs-cat-label{color:#ab47bc;font-weight:bold;font-size:0.8125rem;text-transform:uppercase;letter-spacing:0.5px}
+.sqs-badge{display:inline-block;font-size:0.6875rem;font-weight:bold;padding:1px 5px;border-radius:3px;margin-left:3px}
+.sqs-badge.bad{background:rgba(244,67,54,0.15);color:#ef5350;border:1px solid rgba(244,67,54,0.25)}
+.sqs-badge.neutral{background:rgba(255,152,0,0.15);color:#ffa726;border:1px solid rgba(255,152,0,0.25)}
+
 /* Help overlay — TV-scale */
 .help-btn{background:none;border:1px solid rgba(79,195,247,0.3);color:#4fc3f7;font-size:1.375rem;cursor:pointer;padding:6px 14px;border-radius:6px;font-weight:700;transition:background 0.2s,border-color 0.2s;line-height:1}
 .help-btn:hover{background:rgba(79,195,247,0.15);border-color:#4fc3f7}
@@ -222,6 +239,11 @@ body{background:#0a0a1a;color:#e0e0e0;font-family:'Courier New',monospace;overfl
 <label><input type="checkbox" id="show-all-events"> Show All Events</label>
 </div>
 <div id="event-list"></div>
+<!-- Quick Status — compact overview panel -->
+<div id="starmap-qs" style="display:none;border-top:1px solid rgba(79,195,247,0.15);padding:10px 0;margin-top:6px">
+<div style="color:#4fc3f7;font-size:1rem;letter-spacing:2px;text-transform:uppercase;margin-bottom:8px;display:flex;align-items:center;gap:6px">&#x1F4CA; Quick Status <span id="sqs-tick" style="color:#78909c;font-size:0.8125rem;font-weight:400"></span></div>
+<div id="sqs-body"></div>
+</div>
 <!-- Map legend — tucked inside sidebar so it never floats over the canvas -->
 <div id="map-legend"></div>
 </div>
@@ -871,6 +893,97 @@ function buildNodes() {
 }
 
 // --- Update UI panels ---
+/* ═══ STARMAP QUICK STATUS ═══ */
+function renderStarmapQuickStatus() {
+  if (!mapData) return;
+  var ws = mapData.world_state || {};
+  var panel = document.getElementById('starmap-qs');
+  var body = document.getElementById('sqs-body');
+  var tickEl = document.getElementById('sqs-tick');
+  if (!panel || !body) return;
+
+  var morale = ws.morale != null ? ws.morale : 50;
+  var stability = ws.stability != null ? ws.stability : 50;
+  var resources = ws.resource_abundance != null ? ws.resource_abundance : 60;
+  var threat = ws.threat_level != null ? ws.threat_level : 30;
+  var tension = ws.tension_level != null ? ws.tension_level : 50;
+  var anomaly = ws.anomaly_activity != null ? ws.anomaly_activity : 20;
+  var worker = mapData.worker || {};
+  var tickCount = worker.tick_count || 0;
+  tickEl.textContent = 'Tick ' + tickCount;
+
+  panel.style.display = 'block';
+  var html = '';
+
+  /* Vitals */
+  var goodParts = [], badParts = [];
+  if (morale >= 75) goodParts.push('Morale (' + Math.round(morale) + ') strong');
+  else if (morale < 35) badParts.push('Morale collapsing (' + Math.round(morale) + ')');
+  if (stability >= 70) goodParts.push('Stability (' + Math.round(stability) + ') solid');
+  else if (stability < 40) badParts.push('Stability UNSTABLE (' + Math.round(stability) + ')');
+  if (resources >= 70) goodParts.push('Resources (' + Math.round(resources) + ') abundant');
+  else if (resources < 30) badParts.push('Resources scarce (' + Math.round(resources) + ')');
+  if (threat <= 30) goodParts.push('Threat (' + Math.round(threat) + ') low');
+  else if (threat > 70) badParts.push('Threat CRITICAL (' + Math.round(threat) + ')');
+  if (tension <= 30) goodParts.push('Tension (' + Math.round(tension) + ') low');
+  else if (tension > 70) badParts.push('Tension SEVERE (' + Math.round(tension) + ')');
+  if (anomaly > 70) badParts.push('Anomaly elevated (' + Math.round(anomaly) + ')');
+
+  if (goodParts.length > 0) {
+    html += '<div class="sqs-section"><div class="sqs-section-title">&#x2713; The Good</div><div class="sqs-row sqs-good">' + goodParts.join('. ') + '.</div></div>';
+  }
+  if (badParts.length > 0) {
+    html += '<div class="sqs-section"><div class="sqs-section-title">&#x26A0; The Bad</div><div class="sqs-row sqs-bad">' + badParts.join('. ') + '.</div></div>';
+  }
+
+  /* Under the Surface — from events */
+  var events = mapData.events || [];
+  var blackMarketNpcs = [], covertNpcs = [], disinfoNpcs = [];
+  for (var si = 0; si < events.length; si++) {
+    var ev = events[si];
+    var desc = (ev.description || ev.name || '').toLowerCase();
+    var src = ev.char_name || ev.source || '';
+    if (desc.indexOf('black market') !== -1 || desc.indexOf('illicit') !== -1 || desc.indexOf('smuggl') !== -1) {
+      if (src && blackMarketNpcs.indexOf(src) === -1) blackMarketNpcs.push(src);
+    }
+    if (desc.indexOf('covert') !== -1 || desc.indexOf('secret') !== -1 || desc.indexOf('vanish') !== -1) {
+      if (src && covertNpcs.indexOf(src) === -1) covertNpcs.push(src);
+    }
+    if (desc.indexOf('disinformation') !== -1 || desc.indexOf('planted') !== -1) {
+      if (src && disinfoNpcs.indexOf(src) === -1) disinfoNpcs.push(src);
+    }
+  }
+
+  var surfaceItems = [];
+  if (blackMarketNpcs.length > 0) surfaceItems.push('Black Markets: ' + blackMarketNpcs.join(', '));
+  if (covertNpcs.length > 0) surfaceItems.push('Covert Ops: ' + covertNpcs.join(', '));
+  if (disinfoNpcs.length > 0) surfaceItems.push('Disinformation: ' + disinfoNpcs.join(', '));
+  if (surfaceItems.length > 0) {
+    html += '<div class="sqs-section"><div class="sqs-section-title">&#x1F575; Under the Surface</div><div class="sqs-row sqs-dim">' + surfaceItems.join(' | ') + '</div></div>';
+  }
+
+  /* Major Catalysts */
+  var catalysts = [];
+  var cascadeEvents = events.filter(function(e){ return e.cascade || (e.event_type && e.event_type.toLowerCase() === 'cascade_reaction'); });
+  if (cascadeEvents.length >= 3) {
+    var catLabel = cascadeEvents[0].origin_event_type || 'Unknown';
+    catLabel = catLabel.replace(/_/g, ' ').replace(/\b\w/g, function(c){return c.toUpperCase();});
+    catalysts.push('<div class="sqs-cat"><span class="sqs-cat-label">&#x1F300; Cascade:</span> ' + cascadeEvents.length + ' reactions from ' + catLabel + '</div>');
+  }
+  if (anomaly > 70) {
+    catalysts.push('<div class="sqs-cat"><span class="sqs-cat-label">&#x2728; Anomaly:</span> Activity at ' + Math.round(anomaly) + '<span class="sqs-badge bad">ELEVATED</span></div>');
+  }
+  if (stability < 40) {
+    catalysts.push('<div class="sqs-cat"><span class="sqs-cat-label">&#x26A0; Stability:</span> At ' + Math.round(stability) + ' — factions may fragment<span class="sqs-badge bad">CRITICAL</span></div>');
+  }
+
+  if (catalysts.length > 0) {
+    html += '<div class="sqs-section"><div class="sqs-section-title">&#x26A1; Catalysts</div>' + catalysts.join('') + '</div>';
+  }
+
+  body.innerHTML = html || '<div style="color:#78909c;font-size:0.875rem">No significant activity</div>';
+}
+
 function updateUI() {
   if (!mapData) return;
   const ws = mapData.world_state || {};
@@ -888,11 +1001,21 @@ function updateUI() {
   dot.className = status === 'running' ? '' : 'stopped';
   document.getElementById('tick-label').textContent = `TICK ${tickCount} · ${status.toUpperCase()}`;
 
-  // Events sidebar — categorized buckets
+  // Events sidebar — categorized buckets (persisted to localStorage)
   if (!window._evBucketState) {
-    window._evBucketState = {
-      'exploration': true, 'defensive': true, 'covert': true, 'anomalies': false, 'other': false
-    };
+    try {
+      var saved = localStorage.getItem('fed_starmap_buckets');
+      if (saved) { window._evBucketState = JSON.parse(saved); }
+      else {
+        window._evBucketState = {
+          'exploration': true, 'defensive': true, 'covert': true, 'anomalies': false, 'other': false
+        };
+      }
+    } catch(e) {
+      window._evBucketState = {
+        'exploration': true, 'defensive': true, 'covert': true, 'anomalies': false, 'other': false
+      };
+    }
   }
   const categories = [
     { key: 'exploration', icon: '🚀', title: 'Exploration & Discoveries',
@@ -959,19 +1082,23 @@ function updateUI() {
    }
    el.innerHTML = html;
    // Collapse/expand toggle
-   el.querySelectorAll('.ev-bucket-header').forEach(hdr => {
-     hdr.addEventListener('click', function() {
-       const key = this.dataset.bucket;
-       window._evBucketState[key] = !window._evBucketState[key];
-       updateUI(); // re-render
-     });
-   });
+    el.querySelectorAll('.ev-bucket-header').forEach(hdr => {
+      hdr.addEventListener('click', function() {
+        const key = this.dataset.bucket;
+        window._evBucketState[key] = !window._evBucketState[key];
+        try { localStorage.setItem('fed_starmap_buckets', JSON.stringify(window._evBucketState)); } catch(e) {}
+        updateUI(); // re-render
+      });
+    });
 
   // Map legend — always visible
   buildLegend();
 
   // Map Read panel — update on every data fetch
   buildMapRead();
+
+  // Quick Status — compact overview
+  renderStarmapQuickStatus();
 }
 
 function buildLegend() {
@@ -1012,6 +1139,7 @@ function buildLegend() {
 
 // --- Crisis Readout: case-file panel ---
 let crisisReadoutCollapsed = false;
+try { crisisReadoutCollapsed = localStorage.getItem('fed_crisis_collapsed') === 'true'; } catch(e) {}
 let crisisHighlightIds = []; // NPC IDs to highlight on canvas
 
 function buildMapRead() {
@@ -1150,6 +1278,12 @@ function buildMapRead() {
   html += `<div id="mr-collapse" onclick="toggleCrisisReadout()">${crisisReadoutCollapsed ? '&#x25BC; Expand' : '&#x25B2; Collapse'}</div>`;
 
   body.innerHTML = html;
+
+  // Apply persisted collapse state
+  const panel = document.getElementById('map-read');
+  if (crisisReadoutCollapsed && panel) {
+    panel.style.maxHeight = '80px';
+  }
 }
 
 // --- Crisis Readout interactive actions ---
@@ -1193,6 +1327,7 @@ function crisisOpenLiveSim() {
 
 function toggleCrisisReadout() {
   crisisReadoutCollapsed = !crisisReadoutCollapsed;
+  try { localStorage.setItem('fed_crisis_collapsed', String(crisisReadoutCollapsed)); } catch(e) {}
   const panel = document.getElementById('map-read');
   if (crisisReadoutCollapsed) {
     panel.style.maxHeight = '80px';

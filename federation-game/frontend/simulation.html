@@ -462,6 +462,31 @@ html{height:auto;min-height:100vh}body{height:auto;min-height:100vh;overflow-x:h
 @media screen and (min-width:1024px){html{font-size:clamp(16px,1.2vw,24px)}}
 
 /* ═══ RESPONSIVE: Mobile/small-screen stack ═══ */
+/* ═══ QUICK STATUS PANEL ═══ */
+.qs-panel{background:linear-gradient(135deg,rgba(0,188,212,0.04),rgba(255,152,0,0.03));border:1px solid rgba(0,188,212,0.2);border-radius:10px;padding:14px 18px;margin-bottom:12px;position:relative;overflow:hidden}
+.qs-panel::before{content:'';position:absolute;top:0;left:0;width:3px;height:100%;background:linear-gradient(180deg,var(--cyan),var(--amber));border-radius:3px 0 0 3px}
+.qs-header{font-family:'Orbitron',sans-serif;font-size:0.6875rem;font-weight:900;letter-spacing:2px;text-transform:uppercase;color:var(--white);margin-bottom:10px;display:flex;align-items:center;gap:10px}
+.qs-header .qs-tick{font-size:0.625rem;color:var(--dim);font-weight:400;letter-spacing:1px}
+.qs-body{display:flex;flex-direction:column;gap:10px}
+.qs-section{border-left:2px solid rgba(255,255,255,0.06);padding-left:10px}
+.qs-section-title{font-family:'Orbitron',sans-serif;font-size:0.5625rem;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:var(--dim);margin-bottom:5px;display:flex;align-items:center;gap:6px}
+.qs-section-title .qs-num{color:var(--cyan);font-size:0.5rem;opacity:0.6}
+.qs-row{display:flex;flex-wrap:wrap;gap:4px 16px;font-size:0.8125rem;line-height:1.6}
+.qs-good{color:var(--green)}
+.qs-bad{color:var(--red)}
+.qs-neutral{color:var(--amber)}
+.qs-dim{color:var(--dim)}
+.qs-strong{font-weight:700;color:var(--white)}
+.qs-name{color:var(--cyan);font-weight:600}
+.qs-badge{display:inline-block;font-family:'Orbitron',sans-serif;font-size:0.5rem;font-weight:900;letter-spacing:1px;padding:1px 5px;border-radius:3px;margin-left:4px;vertical-align:middle}
+.qs-badge.good{background:rgba(76,175,80,0.15);color:var(--green);border:1px solid rgba(76,175,80,0.25)}
+.qs-badge.bad{background:rgba(244,67,54,0.15);color:var(--red);border:1px solid rgba(244,67,54,0.25)}
+.qs-badge.neutral{background:rgba(255,152,0,0.15);color:var(--amber);border:1px solid rgba(255,152,0,0.25)}
+.qs-catalyst{font-size:0.8125rem;color:var(--white);line-height:1.5;padding:4px 0;border-bottom:1px solid rgba(255,255,255,0.04)}
+.qs-catalyst:last-child{border-bottom:none}
+.qs-catalyst .qs-cat-label{font-family:'Orbitron',sans-serif;font-size:0.625rem;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--violet)}
+.qs-empty{font-size:0.8125rem;color:var(--dim);font-style:italic}
+
 @media screen and (max-width:900px){
   #app{grid-template-columns:1fr!important;grid-template-rows:auto!important;grid-template-areas:"top""sit""center""left""right""bottom"!important}
   #left,#right,#center{width:100%!important;height:auto!important;min-height:300px;border:none!important;border-bottom:1px solid var(--panel-border)!important}
@@ -636,6 +661,10 @@ html{height:auto;min-height:100vh}body{height:auto;min-height:100vh;overflow-x:h
 </section>
 
 <section id="center" class="panel">
+<div id="quick-status" class="qs-panel" style="display:none">
+<div class="qs-header">&#x1F4CA; Quick Status <span class="qs-tick" id="qs-tick"></span></div>
+<div class="qs-body" id="qs-body"></div>
+</div>
 <div class="section-title cyan">What Just Happened?</div>
 <div id="situation-room" class="sitroom">
 <div class="sitroom-label">Situation Room</div>
@@ -2358,12 +2387,237 @@ function renderSituationRoom() {
   });
 }
 
+/* ═══ QUICK STATUS SUMMARY ═══ */
+function renderQuickStatus() {
+  var panel = document.getElementById('quick-status');
+  var body = document.getElementById('qs-body');
+  var tickEl = document.getElementById('qs-tick');
+  if (!panel || !body) return;
+
+  var status = lastData.status;
+  var events = lastData.events;
+  if (!status) { panel.style.display = 'none'; return; }
+
+  var ws = status.world_state || status.worldState || status;
+  var metrics = {};
+  var mKeys = ['tension','resources','threat','stability','morale','anomaly'];
+  for (var i = 0; i < mKeys.length; i++) {
+    var k = mKeys[i], af = METRIC_FIELD_MAP[k] || k;
+    metrics[k] = ws[af] != null ? ws[af] : (ws[k] != null ? ws[k] : 50);
+  }
+  var cascade = status.cascade_summary || status.cascadeSummary || {};
+  var temp = cascade.temperature != null ? cascade.temperature : (cascade.cascade_temperature != null ? cascade.cascade_temperature : 0);
+  var cascadePct = temp > 1.5 ? temp : (temp * 100);
+
+  /* Tick display */
+  var tick = '\u2014';
+  if (status.last_tick_result && status.last_tick_result.tick_ts) tick = status.last_tick_result.tick_ts;
+  else if (status.last_tick_timestamp) tick = status.last_tick_timestamp;
+  else if (ws.tick_count != null) tick = ws.tick_count;
+  tickEl.textContent = 'Tick ' + tick;
+
+  panel.style.display = 'block';
+  var html = '';
+
+  /* ── 1. VITALS ── */
+  html += '<div class="qs-section">';
+  html += '<div class="qs-section-title"><span class="qs-num">1</span> Vitals</div>';
+
+  var goodParts = [];
+  if (metrics.morale >= 75) goodParts.push('Morale (' + Math.round(metrics.morale) + ') is strong');
+  else if (metrics.morale >= 50) goodParts.push('Morale (' + Math.round(metrics.morale) + ') is stable');
+  if (metrics.resources >= 70) goodParts.push('Resource Abundance (' + Math.round(metrics.resources) + ') is high');
+  else if (metrics.resources >= 45) goodParts.push('Resource Abundance (' + Math.round(metrics.resources) + ') is adequate');
+  if (metrics.stability >= 70) goodParts.push('Stability (' + Math.round(metrics.stability) + ') is solid');
+  if (metrics.threat <= 30) goodParts.push('Threat level (' + Math.round(metrics.threat) + ') is low');
+  if (metrics.tension <= 30) goodParts.push('Tension (' + Math.round(metrics.tension) + ') is low');
+
+  var badParts = [];
+  if (metrics.stability < 40) badParts.push('Stability is <span class="qs-bad">UNSTABLE</span> (' + Math.round(metrics.stability) + ')');
+  else if (metrics.stability < 60) badParts.push('Stability (' + Math.round(metrics.stability) + ') is weakening');
+  if (metrics.morale < 35) badParts.push('Morale is <span class="qs-bad">COLLAPSING</span> (' + Math.round(metrics.morale) + ')');
+  else if (metrics.morale < 55) badParts.push('Morale (' + Math.round(metrics.morale) + ') is low');
+  if (metrics.threat > 70) badParts.push('Threat level is <span class="qs-bad">CRITICAL</span> (' + Math.round(metrics.threat) + ')');
+  else if (metrics.threat > 55) badParts.push('Threat level (' + Math.round(metrics.threat) + ') is elevated');
+  if (metrics.tension > 70) badParts.push('Tension is <span class="qs-bad">SEVERE</span> (' + Math.round(metrics.tension) + ')');
+  else if (metrics.tension > 55) badParts.push('Tension (' + Math.round(metrics.tension) + ') is elevated');
+  if (metrics.anomaly > 70) badParts.push('Anomaly activity is <span class="qs-bad">ELEVATED</span> (' + Math.round(metrics.anomaly) + ')');
+
+  if (goodParts.length > 0) {
+    html += '<div class="qs-row"><span class="qs-good">&#x2713; The Good:</span> ' + goodParts.join('. ') + '.</div>';
+  }
+  if (badParts.length > 0) {
+    html += '<div class="qs-row"><span class="qs-bad">&#x26A0; The Bad:</span> ' + badParts.join('. ') + '.</div>';
+  }
+  if (goodParts.length === 0 && badParts.length === 0) {
+    html += '<div class="qs-row"><span class="qs-neutral">&#x2014; All metrics are in mid-range. No immediate concerns.</span></div>';
+  }
+  html += '</div>';
+
+  /* ── 2. UNDER THE SURFACE ── */
+  var surfaceItems = [];
+  if (events) {
+    var flat = [];
+    if (Array.isArray(events)) { flat = events; }
+    else if (typeof events === 'object') {
+      var we = events.world_events || []; var ce = events.cascade_events || []; var be = events.broadcast_events || [];
+      flat = we.concat(ce, be);
+    }
+    /* Scan for scheming/covert ops/black markets/disinformation */
+    var blackMarketNpcs = []; var covertNpcs = []; var disinfoNpcs = []; var espionageNpcs = [];
+    for (var ei = 0; ei < flat.length; ei++) {
+      var ev = flat[ei];
+      var desc = (ev.description || ev.name || ev.message || '').toLowerCase();
+      var srcName = ev.source_char_name || ev.character_name || ev.source_name || ev.source || '';
+      if (!srcName && ev.description) {
+        var srcMatch = ev.description.match(/^([A-Z][A-Za-z\s]+?)(?:\s+(?:gathered|planted|acquired|set|stumbled|exchanged|published|conducted|led|enforced|blocked|increased|ordered|sensed|explored|returned|chart|discovered|sabotage|heist|vanish|smuggl|broke|repelled|rallied|issued|confront|challenged|intercept|infiltrat))/);
+        if (srcMatch && srcMatch[1].trim().length > 2) srcName = srcMatch[1].trim();
+      }
+      if (desc.indexOf('black market') !== -1 || desc.indexOf('illicit') !== -1 || desc.indexOf('smuggl') !== -1) {
+        if (srcName && blackMarketNpcs.indexOf(srcName) === -1) blackMarketNpcs.push(srcName);
+      }
+      if (desc.indexOf('covert') !== -1 || desc.indexOf('secret') !== -1 || desc.indexOf('vanish') !== -1) {
+        if (srcName && covertNpcs.indexOf(srcName) === -1) covertNpcs.push(srcName);
+      }
+      if (desc.indexOf('disinformation') !== -1 || desc.indexOf('planted') !== -1) {
+        if (srcName && disinfoNpcs.indexOf(srcName) === -1) disinfoNpcs.push(srcName);
+      }
+      if (desc.indexOf('spy') !== -1 || desc.indexOf('espionage') !== -1 || desc.indexOf('infiltrat') !== -1 || desc.indexOf('intercept') !== -1) {
+        if (srcName && espionageNpcs.indexOf(srcName) === -1) espionageNpcs.push(srcName);
+      }
+      /* Also check event type for covert operations */
+      var evType = (ev.type || ev.event_type || '').toLowerCase();
+      if (evType === 'covert_operation' || evType === 'covert') {
+        if (srcName && covertNpcs.indexOf(srcName) === -1) covertNpcs.push(srcName);
+      }
+    }
+    if (blackMarketNpcs.length > 0) {
+      surfaceItems.push('<span class="qs-strong">Black Markets:</span> ' + blackMarketNpcs.length + ' active (' + blackMarketNpcs.map(function(n){return '<span class="qs-name">' + esc(n) + '</span>';}).join(', ') + ')');
+    }
+    if (covertNpcs.length > 0) {
+      surfaceItems.push('<span class="qs-strong">Covert Ops:</span> ' + covertNpcs.length + ' active (' + covertNpcs.map(function(n){return '<span class="qs-name">' + esc(n) + '</span>';}).join(', ') + ')');
+    }
+    if (disinfoNpcs.length > 0) {
+      surfaceItems.push('<span class="qs-strong">Disinformation:</span> ' + disinfoNpcs.map(function(n){return '<span class="qs-name">' + esc(n) + '</span>';}).join(', ') + ' spreading false narratives');
+    }
+    if (espionageNpcs.length > 0) {
+      surfaceItems.push('<span class="qs-strong">Espionage:</span> ' + espionageNpcs.length + ' active (' + espionageNpcs.map(function(n){return '<span class="qs-name">' + esc(n) + '</span>';}).join(', ') + ')');
+    }
+  }
+  if (surfaceItems.length > 0) {
+    html += '<div class="qs-section">';
+    html += '<div class="qs-section-title"><span class="qs-num">2</span> Under the Surface</div>';
+    html += '<div class="qs-row">' + surfaceItems.join(' <span class="qs-dim">|</span> ') + '</div>';
+    html += '</div>';
+  }
+
+  /* ── 3. MAJOR CATALYSTS ── */
+  var catalysts = [];
+
+  /* Cascade analysis */
+  var cascadeEvents = [];
+  if (events) {
+    var flat2 = [];
+    if (Array.isArray(events)) flat2 = events;
+    else if (typeof events === 'object') {
+      flat2 = (events.world_events || []).concat(events.cascade_events || [], events.broadcast_events || []);
+    }
+    for (var ci = 0; ci < flat2.length; ci++) {
+      var cev = flat2[ci];
+      var cevType = (cev.type || cev.event_type || '').toLowerCase();
+      if (cevType === 'cascade_reaction' || cev.cascade) cascadeEvents.push(cev);
+    }
+  }
+
+  if (cascadeEvents.length >= 3) {
+    var uniqueTypes = {};
+    for (var cti = 0; cti < cascadeEvents.length; cti++) {
+      var origin = cascadeEvents[cti].origin_event_type || cascadeEvents[cti].source_event_type || cascadeEvents[cti].cause || 'unknown';
+      uniqueTypes[origin] = (uniqueTypes[origin] || 0) + 1;
+    }
+    var dominantType = Object.keys(uniqueTypes).sort(function(a,b){return uniqueTypes[b] - uniqueTypes[a];})[0];
+    var catLabel = dominantType.replace(/_/g, ' ').replace(/\b\w/g, function(c){return c.toUpperCase();});
+    catalysts.push(
+      '<div class="qs-catalyst"><span class="qs-cat-label">&#x1F300; The ' + esc(catLabel) + ' Cascade:</span> ' +
+      cascadeEvents.length + ' NPC reactions triggered by a <span class="qs-name">' + esc(catLabel) + '</span> event' +
+      (cascadePct > 70 ? ' <span class="qs-badge bad">OVERHEATING</span>' : '') +
+      '</div>'
+    );
+  }
+
+  /* Large cascade chains */
+  var chainCount = cascade.total_chains || cascade.chain_count || 0;
+  if (chainCount >= 2) {
+    var totalReactions = cascade.total_cascade_reactions || cascade.reaction_count || 0;
+    catalysts.push(
+      '<div class="qs-catalyst"><span class="qs-cat-label">&#x1F52D; Chain Reactions:</span> ' +
+      chainCount + ' active chains with ' + totalReactions + ' total reactions' +
+      (cascadePct > 60 ? ' <span class="qs-badge neutral">' + Math.round(cascadePct) + '% temperature</span>' : '') +
+      '</div>'
+    );
+  }
+
+  /* Philosophical/cultural shifts from narration or crisis */
+  if (window._latestNarration) {
+    var narr = window._latestNarration;
+    if (narr.headline && (narr.headline.toLowerCase().indexOf('revolution') !== -1 || narr.headline.toLowerCase().indexOf('cultural') !== -1 || narr.headline.toLowerCase().indexOf('shift') !== -1)) {
+      catalysts.push(
+        '<div class="qs-catalyst"><span class="qs-cat-label">&#x1F4A1; Cultural Shift:</span> ' +
+        esc(narr.headline) + '</div>'
+      );
+    }
+    if (narr.developments && narr.developments.length > 0) {
+      for (var nd = 0; nd < Math.min(narr.developments.length, 2); nd++) {
+        var dev = narr.developments[nd];
+        if (dev.toLowerCase().indexOf('revolution') !== -1 || dev.toLowerCase().indexOf('massive') !== -1 || dev.toLowerCase().indexOf('unknown') !== -1) {
+          catalysts.push(
+            '<div class="qs-catalyst"><span class="qs-cat-label">&#x26A1; Development:</span> ' +
+            esc(dev) + '</div>'
+          );
+        }
+      }
+    }
+  }
+
+  /* Stability crisis catalyst */
+  if (metrics.stability < 30) {
+    catalysts.push(
+      '<div class="qs-catalyst"><span class="qs-cat-label">&#x26A0; Stability Crisis:</span> ' +
+      'Stability at ' + Math.round(metrics.stability) + ' — quests will begin failing, factions losing coordination ' +
+      '<span class="qs-badge bad">CRITICAL</span></div>'
+    );
+  }
+
+  /* Anomaly crisis */
+  if (metrics.anomaly > 70) {
+    catalysts.push(
+      '<div class="qs-catalyst"><span class="qs-cat-label">&#x2728; Anomaly Surge:</span> ' +
+      'Anomaly activity at ' + Math.round(metrics.anomaly) + ' — reality instability affecting NPC behavior' +
+      (metrics.anomaly > 85 ? ' <span class="qs-badge bad">BREACH</span>' : '') +
+      '</div>'
+    );
+  }
+
+  if (catalysts.length > 0) {
+    html += '<div class="qs-section">';
+    html += '<div class="qs-section-title"><span class="qs-num">3</span> Major Catalysts</div>';
+    html += '<div class="qs-row" style="flex-direction:column">' + catalysts.join('') + '</div>';
+    html += '</div>';
+  }
+
+  if (!html) {
+    html = '<div class="qs-empty">No data available</div>';
+  }
+
+  body.innerHTML = html;
+}
+
 async function refreshLight(){
 var results=await Promise.all([apiFetch('/simulation/status',8000),apiFetch('/simulation/factions',8000),apiFetch('/simulation/events',8000)]);
 var status=results[0],factions=results[1],events=results[2];
 var anyOk=status||factions||events;
 if(!anyOk){fetchErrorCount++;if(fetchErrorCount>=3)showSignalLost(true)}else{fetchErrorCount=0;showSignalLost(false);if(status)lastData.status=status;if(factions)lastData.factions=factions;if(events)lastData.events=events}
-if(lastData.status){updateTopBanner(lastData.status);updateSituation(lastData.status)}renderSituationRoom();
+if(lastData.status){updateTopBanner(lastData.status);updateSituation(lastData.status)}renderQuickStatus();renderSituationRoom();
 if(lastData.factions)renderFactions(lastData.factions);
 if(lastData.events)renderEvents(lastData.events);
 if(lastData.status)renderBottom(lastData.status);
@@ -2380,12 +2634,34 @@ await refreshLight();await refreshNpcs();await refreshQuests();await refreshFact
 for(var l2=0;l2<loadingEls.length;l2++)loadingEls[l2].classList.remove('loading-pulse');
 }
 
-function toggleRaw(){var btn=document.getElementById('raw-toggle'),wrap=document.getElementById('raw-wrap');btn.classList.toggle('open');wrap.classList.toggle('open');btn.setAttribute('aria-expanded',wrap.classList.contains('open'))}
+function toggleRaw(){var btn=document.getElementById('raw-toggle'),wrap=document.getElementById('raw-wrap');var nowOpen=!wrap.classList.contains('open');btn.classList.toggle('open');wrap.classList.toggle('open');btn.setAttribute('aria-expanded',String(nowOpen));try{localStorage.setItem('fed_raw_open',String(nowOpen))}catch(e){}}
 function toggleHelp(){var overlay=document.getElementById('help-overlay');overlay.classList.toggle('open');if(overlay.classList.contains('open')){overlay.focus();document.body.style.overflow='hidden'}else{document.body.style.overflow=''}}
-function toggleActivityLog(){var log=document.getElementById('activity-log');var bar=document.getElementById('activity-log-bar');var expanded=log.classList.toggle('expanded');bar.setAttribute('aria-expanded',expanded)}
+function toggleActivityLog(){var log=document.getElementById('activity-log');var bar=document.getElementById('activity-log-bar');var expanded=log.classList.toggle('expanded');bar.setAttribute('aria-expanded',String(expanded));try{localStorage.setItem('fed_activity_log_expanded',String(expanded))}catch(e){}}
+
+/* Restore persisted toggle states from localStorage */
+function restoreToggleStates() {
+  try {
+    /* Activity log */
+    var logExpanded = localStorage.getItem('fed_activity_log_expanded');
+    if (logExpanded === 'true') {
+      var log = document.getElementById('activity-log');
+      var bar = document.getElementById('activity-log-bar');
+      if (log) { log.classList.add('expanded'); }
+      if (bar) { bar.setAttribute('aria-expanded', 'true'); }
+    }
+    /* Raw events */
+    var rawOpen = localStorage.getItem('fed_raw_open');
+    if (rawOpen === 'true') {
+      var btn = document.getElementById('raw-toggle');
+      var wrap = document.getElementById('raw-wrap');
+      if (btn) { btn.classList.add('open'); btn.setAttribute('aria-expanded', 'true'); }
+      if (wrap) { wrap.classList.add('open'); }
+    }
+  } catch(e) { /* localStorage may not be available */ }
+}
 document.addEventListener('keydown',function(e){if(e.key==='Escape'){var overlay=document.getElementById('help-overlay');if(overlay.classList.contains('open'))toggleHelp()}});
 
-function init(){generateStarfield();refresh();setInterval(refreshLight,10000);setInterval(refreshNpcs,30000);setInterval(refreshQuests,20000);setInterval(refreshFactionTech,25000);setInterval(refreshChoices,20000);setInterval(updateTimeSince,1000);setInterval(renderSituationRoom,15000)}
+function init(){generateStarfield();restoreToggleStates();refresh();setInterval(refreshLight,10000);setInterval(refreshNpcs,30000);setInterval(refreshQuests,20000);setInterval(refreshFactionTech,25000);setInterval(refreshChoices,20000);setInterval(updateTimeSince,1000);setInterval(renderSituationRoom,15000)}
 document.addEventListener('DOMContentLoaded',init);
 
 
