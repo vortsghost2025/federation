@@ -206,262 +206,154 @@ body{background:#0a0a1a;color:#e0e0e0;font-family:'Courier New',monospace;overfl
   .vt-btn,.lt-btn{padding:8px 12px!important}
 }
 
-/* ═══ STARMAP READABILITY MODE V2 ═══ */
+/* ═══ STARMAP HUMAN READABILITY MODE ═══ */
 .readable-mode {
   font-size: 16px !important;
 }
+
 .readable-mode * {
-  line-height: 1.5 !important;
+  line-height: 1.45 !important;
 }
 
-/* World bar — readable sizing */
-.readable-mode #worldbar {
-  padding: 0 16px;
-  min-height: 64px;
-}
 .readable-mode .wb-label,
 .readable-mode .wb-val,
 .readable-mode #tick-label {
   font-size: 14px !important;
 }
+
 .readable-mode .wb-bar {
-  height: 16px !important;
+  height: 18px !important;
   min-width: 80px !important;
 }
+
 .readable-mode .wb-item {
-  min-height: 32px !important;
-  padding: 2px 6px !important;
-}
-.readable-mode .top-nav a {
-  font-size: 14px !important;
-  padding: 6px 12px !important;
+  min-height: 36px !important;
+  padding: 4px 8px !important;
 }
 
-/* Right sidebar — collapsible in readable mode */
 .readable-mode #sidebar {
   padding: 16px !important;
   font-size: 15px !important;
 }
+
 .readable-mode .ev-bucket-header {
   min-height: 40px !important;
   padding: 8px 12px !important;
   font-size: 15px !important;
 }
+
 .readable-mode .ev-bucket-title {
   font-size: 15px !important;
 }
+
 .readable-mode .ev-bucket-count {
   font-size: 14px !important;
 }
+
 .readable-mode .ev-item {
   padding: 8px 12px !important;
   font-size: 14px !important;
   min-height: 36px !important;
 }
+
 .readable-mode .ev-char,
 .readable-mode .ev-type,
 .readable-mode .ev-desc {
   font-size: 14px !important;
 }
 
-/* NPC detail panel — large info */
 .readable-mode #detail {
-  padding: 20px !important;
-  font-size: 18px !important;
-  min-width: 340px !important;
-  max-height: 70vh !important;
+  padding: 16px !important;
+  font-size: 16px !important;
+  min-width: 300px !important;
 }
+
 .readable-mode #detail-name {
-  font-size: 22px !important;
+  font-size: 18px !important;
   font-weight: 700 !important;
 }
+
 .readable-mode #detail-cat {
-  font-size: 16px !important;
+  font-size: 15px !important;
 }
+
 .readable-mode #detail-rows {
-  font-size: 16px !important;
+  font-size: 15px !important;
   line-height: 1.6 !important;
 }
+
 .readable-mode #detail-thought {
-  font-size: 16px !important;
+  font-size: 15px !important;
   line-height: 1.5 !important;
 }
 
-/* Left panel — toggle/search sizing */
 .readable-mode #left-panel {
   padding: 12px !important;
-  min-width: 220px !important;
+  min-width: 200px !important;
 }
-.readable-mode #search-input {
+
+.readable-mode #search-box input {
   font-size: 16px !important;
-  padding: 10px 14px !important;
-  min-height: 42px !important;
+  padding: 8px 12px !important;
+  min-height: 40px !important;
 }
+
 .readable-mode #view-toggle button,
 .readable-mode #label-toggle button {
   font-size: 14px !important;
   padding: 8px 14px !important;
-  min-height: 40px !important;
+  min-height: 38px !important;
 }
+
 .readable-mode #zoom-ctrl button {
   font-size: 18px !important;
-  min-width: 44px !important;
-  min-height: 44px !important;
+  min-width: 40px !important;
+  min-height: 40px !important;
   padding: 6px !important;
 }
 
-/* Map Read panel — large summary */
 .readable-mode #map-read {
-  padding: 18px !important;
-  font-size: 16px !important;
-  min-width: 360px !important;
-  top: 360px !important;
+  padding: 14px !important;
+  font-size: 15px !important;
 }
+
 .readable-mode #mr-title {
-  font-size: 18px !important;
-}
-.readable-mode #mr-body {
-  font-size: 16px !important;
-  line-height: 1.5 !important;
-}
-.readable-mode #mr-crisis {
-  font-size: 24px !important;
-}
-.readable-mode #mr-headline {
-  font-size: 18px !important;
-}
-.readable-mode #mr-why {
-  font-size: 16px !important;
-}
-.readable-mode #mr-plain {
-  font-size: 16px !important;
-}
-.readable-mode #mr-line {
-  font-size: 16px !important;
-}
-.readable-mode #mr-next {
   font-size: 16px !important;
 }
 
-/* Buttons — min touch targets */
+.readable-mode #mr-body {
+  font-size: 15px !important;
+  line-height: 1.5 !important;
+}
+
 .readable-mode button,
 .readable-mode .ev-bucket-header,
 .readable-mode .ev-item,
 .readable-mode #detail-lore-toggle {
-  min-height: 40px !important;
+  min-height: 36px !important;
 }
 
-/* Event filter */
 .readable-mode #event-filter label {
   font-size: 14px !important;
 }
+
 .readable-mode #event-filter input[type="checkbox"] {
-  width: 20px !important;
-  height: 20px !important;
+  width: 18px !important;
+  height: 18px !important;
 }
 
-/* Quick Status readability */
 .readable-mode #starmap-qs {
   padding: 16px 12px !important;
 }
+
 .readable-mode .sqs-row {
   font-size: 15px !important;
   line-height: 1.6 !important;
 }
+
 .readable-mode .sqs-badge {
-  font-size: 13px !important;
-  padding: 2px 8px !important;
-}
-
-/* View Presets for readable mode */
-.rm-view-presets {
-  display: none;
-  flex-wrap: wrap;
-  gap: 4px;
-  margin-top: 6px;
-}
-.rm-view-preset-btn {
-  font-family: 'Courier New', monospace;
   font-size: 12px !important;
-  padding: 6px 12px;
-  border-radius: 6px;
-  cursor: pointer;
-  border: 1px solid rgba(255,255,255,0.1);
-  background: rgba(255,255,255,0.03);
-  color: var(--dim, #78909c);
-  transition: all 0.2s;
-  flex: 1 1 auto;
-  text-align: center;
-  min-height: 36px !important;
-}
-.rm-view-preset-btn:hover {
-  background: rgba(79,195,247,0.08);
-  border-color: rgba(79,195,247,0.3);
-  color: #4fc3f7;
-}
-.rm-view-preset-btn.active {
-  background: rgba(79,195,247,0.15);
-  border-color: #4fc3f7;
-  color: #4fc3f7;
-}
-
-/* Sidebar collapse toggle */
-.rm-sidebar-toggle {
-  display: none;
-  font-family: 'Courier New', monospace;
-  font-size: 14px !important;
-  padding: 10px 16px;
-  border-radius: 6px;
-  cursor: pointer;
-  border: 1px solid rgba(79,195,247,0.3);
-  background: rgba(79,195,247,0.08);
-  color: #4fc3f7;
-  transition: all 0.2s;
-  text-align: center;
-  width: 100%;
-  min-height: 42px !important;
-  letter-spacing: 1px;
-  text-transform: uppercase;
-  margin-top: 8px;
-}
-.rm-sidebar-toggle:hover {
-  background: rgba(79,195,247,0.16);
-  border-color: #4fc3f7;
-}
-
-/* Canvas clutter reduction — applied via JS, CSS class for canvas container */
-.readable-mode .rm-node-dim {
-  opacity: 0.25 !important;
-  transition: opacity 0.3s ease;
-}
-.readable-mode .rm-edge-dim {
-  opacity: 0.08 !important;
-  transition: opacity 0.3s ease;
-}
-.readable-mode .rm-node-highlight {
-  opacity: 1 !important;
-}
-.readable-mode .rm-label-large {
-  font-size: 18px !important;
-  font-weight: 700 !important;
-}
-.readable-mode .rm-label-selected {
-  font-size: 22px !important;
-  font-weight: 900 !important;
-}
-
-/* Focus visible for keyboard users */
-.readable-mode *:focus-visible {
-  outline: 3px solid #4fc3f7 !important;
-  outline-offset: 3px !important;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  * {
-    animation-duration: 0.01ms !important;
-    animation-iteration-count: 1 !important;
-    transition-duration: 0.01ms !important;
-  }
+  padding: 2px 8px !important;
 }
 
 .rm-label-size {
@@ -555,6 +447,19 @@ body{background:#0a0a1a;color:#e0e0e0;font-family:'Courier New',monospace;overfl
   --dim: #b0bec5 !important;
   --panel-bg: rgba(0,0,0,0.97) !important;
 }
+
+.readable-mode *:focus {
+  outline: 3px solid var(--cyan) !important;
+  outline-offset: 3px !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
 </style>
 </head>
 <body>
@@ -585,8 +490,6 @@ body{background:#0a0a1a;color:#e0e0e0;font-family:'Courier New',monospace;overfl
 
 <!-- Event sidebar -->
 <div id="sidebar">
-  <button class="rm-sidebar-toggle" id="rm-sidebar-toggle" onclick="toggleRMSidebar()" style="display:none">&#x25B6; Events</button>
-  <div id="rm-sidebar-content">
 <h2>Live Events</h2>
 <div id="event-filter">
 <label><input type="checkbox" id="show-all-events"> Show All Events</label>
@@ -599,7 +502,6 @@ body{background:#0a0a1a;color:#e0e0e0;font-family:'Courier New',monospace;overfl
 </div>
 <!-- Map legend — tucked inside sidebar so it never floats over the canvas -->
 <div id="map-legend"></div>
-</div>
 </div>
 
 <!-- NPC detail panel -->
@@ -631,12 +533,6 @@ body{background:#0a0a1a;color:#e0e0e0;font-family:'Courier New',monospace;overfl
     <button class="lt-btn" data-labels="factions" onclick="setLabelMode('factions')">Factions Only</button>
     <button class="lt-btn active" data-labels="important" onclick="setLabelMode('important')">Important NPCs</button>
     <button class="lt-btn" data-labels="all" onclick="setLabelMode('all')">All Labels</button>
-  </div>
-  <div class="rm-view-presets" id="rm-view-presets">
-    <button class="rm-view-preset-btn active" data-rmview="overview" onclick="setRMView('overview')">Overview</button>
-    <button class="rm-view-preset-btn" data-rmview="crisis" onclick="setRMView('crisis')">Crisis</button>
-    <button class="rm-view-preset-btn" data-rmview="faction" onclick="setRMView('faction')">Faction</button>
-    <button class="rm-view-preset-btn" data-rmview="npc" onclick="setRMView('npc')">NPC</button>
   </div>
   <div class="rm-label-size" id="rm-label-size" style="display:none">
     <span style="font-size:12px;color:var(--dim);white-space:nowrap">Labels:</span>
@@ -2597,11 +2493,9 @@ document.addEventListener('keydown', function(e) {
   }
 });
 
-/* ═══ STARMAP READABILITY MODE V2 ═══ */
+/* ═══ STARMAP READABILITY MODE ═══ */
 var rmLabelSize = 14;
 var rmFocusFactionId = null;
-var rmCurrentView = 'overview';
-var rmSidebarOpen = false;
 
 function toggleStarmapReadableMode() {
   var on = document.body.classList.toggle('readable-mode');
@@ -2610,114 +2504,17 @@ function toggleStarmapReadableMode() {
 
   var labelSizeDiv = document.getElementById('rm-label-size');
   var focusBtn = document.getElementById('rm-focus-faction');
-  var viewPresets = document.getElementById('rm-view-presets');
-  var sidebarToggle = document.getElementById('rm-sidebar-toggle');
-  
   if (labelSizeDiv) labelSizeDiv.style.display = on ? 'flex' : 'none';
   if (focusBtn) focusBtn.style.display = on ? 'block' : 'none';
-  if (viewPresets) viewPresets.style.display = on ? 'flex' : 'none';
-  if (sidebarToggle) {
-    sidebarToggle.style.display = on ? 'block' : 'none';
-    if (on) {
-      var sidebarContent = document.getElementById('rm-sidebar-content');
-      if (sidebarContent) {
-        sidebarContent.style.display = 'none';
-        sidebarToggle.innerHTML = '&#x25B6; Events &#x25BC;';
-      }
-      rmSidebarOpen = false;
-    } else {
-      var sidebarContent = document.getElementById('rm-sidebar-content');
-      if (sidebarContent) sidebarContent.style.display = 'block';
-    }
-  }
 
   if (on) {
     setLabelPreset('normal');
-    if (typeof setLabelMode === 'function') setLabelMode('important');
-    setRMView('overview');
+    if (labelMode !== 'important') setLabelMode('important');
   }
-  
-  if (typeof drawMap === 'function') drawMap();
+  drawMap();
+
   try { localStorage.setItem('fed_smap_readable', on ? 'true' : 'false'); } catch(e) {}
 }
-
-function setRMView(view) {
-  rmCurrentView = view;
-  document.querySelectorAll('.rm-view-preset-btn').forEach(function(b) {
-    b.classList.toggle('active', b.dataset.rmview === view);
-  });
-  
-  if (typeof mapData === 'undefined' || !mapData) return;
-  var nodes = mapData.nodes || [];
-  var edges = mapData.edges || [];
-  
-  switch (view) {
-    case 'overview':
-      if (typeof setLabelMode === 'function') setLabelMode('important');
-      rmFocusFactionId = null;
-      break;
-    case 'crisis':
-      if (typeof setLabelMode === 'function') setLabelMode('factions');
-      break;
-    case 'faction':
-      if (!rmFocusFactionId && selectedNode) {
-        var node = nodes.find(function(n) { return n.id === selectedNode; });
-        if (node && node.faction_id) rmFocusFactionId = node.faction_id;
-      }
-      if (typeof setLabelMode === 'function') setLabelMode('factions');
-      break;
-    case 'npc':
-      if (typeof setLabelMode === 'function') setLabelMode('all');
-      break;
-  }
-  
-  if (typeof drawMap === 'function') drawMap();
-  updateMapSummary();
-}
-
-function toggleRMSidebar() {
-  rmSidebarOpen = !rmSidebarOpen;
-  var sidebarContent = document.getElementById('rm-sidebar-content');
-  var toggle = document.getElementById('rm-sidebar-toggle');
-  if (!sidebarContent || !toggle) return;
-  sidebarContent.style.display = rmSidebarOpen ? 'block' : 'none';
-  toggle.innerHTML = rmSidebarOpen ? '&#x25BC; Events &#x25B2;' : '&#x25B6; Events &#x25BC;';
-}
-
-function updateMapSummary() {
-  var mrBody = document.getElementById('mr-body');
-  if (!mrBody) return;
-  if (!document.body.classList.contains('readable-mode')) return;
-  
-  var viewNames = { 'overview': 'Full Map Overview', 'crisis': 'Crisis Mode', 'faction': 'Faction Focus', 'npc': 'NPC Focus' };
-  var viewName = viewNames[rmCurrentView] || 'Overview';
-  
-  var summaryEl = document.getElementById('rm-map-summary');
-  if (!summaryEl) {
-    summaryEl = document.createElement('div');
-    summaryEl.id = 'rm-map-summary';
-    summaryEl.style.cssText = 'margin-bottom:12px;padding:8px 12px;background:rgba(79,195,247,0.06);border-radius:6px;border-left:3px solid #4fc3f7;';
-    mrBody.parentNode.insertBefore(summaryEl, mrBody);
-  }
-  
-  var selectedName = 'None';
-  if (selectedNode && typeof mapData !== 'undefined' && mapData.nodes) {
-    var sn = mapData.nodes.find(function(n) { return n.id === selectedNode; });
-    if (sn) selectedName = sn.name || sn.id;
-  }
-  
-  summaryEl.innerHTML = '<div style="font-size:14px;color:#4fc3f7;font-weight:bold;letter-spacing:1px;text-transform:uppercase;">Map: ' + viewName + '</div>' +
-    '<div style="font-size:14px;color:#b0b0b0;margin-top:4px;">Selected: <strong style="color:#ffd700;">' + selectedName + '</strong>' +
-    (rmFocusFactionId ? ' &middot; Focused: <strong style="color:#4fc3f7;">' + (typeof FACTION_DISPLAY !== 'undefined' ? (FACTION_DISPLAY[rmFocusFactionId] || rmFocusFactionId) : rmFocusFactionId) + '</strong>' : '') + '</div>';
-}
-
-var origDrawMap = drawMap;
-drawMap = function() {
-  if (typeof origDrawMap === 'function') origDrawMap();
-  if (document.body.classList.contains('readable-mode')) {
-    updateMapSummary();
-  }
-};
 
 function setLabelPreset(preset) {
   var val = 14;
@@ -2737,7 +2534,7 @@ function setLabelPreset(preset) {
 
 function setLabelSize(val) {
   rmLabelSize = parseInt(val) || 14;
-  if (typeof drawMap === 'function') drawMap();
+  drawMap();
 }
 
 function toggleFocusFaction() {
@@ -2762,14 +2559,14 @@ function toggleFocusFaction() {
   if (btn) {
     if (rmFocusFactionId) {
       btn.classList.add('active');
-      btn.innerHTML = '&#x1F513; Focus: ' + (typeof FACTION_DISPLAY !== 'undefined' ? (FACTION_DISPLAY[rmFocusFactionId] || rmFocusFactionId) : rmFocusFactionId);
+      btn.innerHTML = '&#x1F513; Focus: ' + (FACTION_DISPLAY[rmFocusFactionId] || rmFocusFactionId);
     } else {
       btn.classList.remove('active');
       btn.innerHTML = '&#x1F50D; Focus Selected Faction';
     }
   }
 
-  if (typeof drawMap === 'function') drawMap();
+  drawMap();
 }
 
 function initStarmapReadableMode() {
