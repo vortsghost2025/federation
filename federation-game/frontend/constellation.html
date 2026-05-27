@@ -92,7 +92,7 @@ body.dragging{cursor:grabbing}
 // Full-screen autonomous universe visualization
 // ============================================================
 
-const API = '/api/map/data';
+const API = '/map/data';
 const POLL_MS = 4000;
 
 // --- Archetype poetic descriptors ---
@@ -231,7 +231,7 @@ detectChanges();
 
 async function fetchFactionTech() {
 try {
-const resp = await fetch('/api/simulation/faction-tech');
+const resp = await fetch('/simulation/faction-tech');
 if (!resp.ok) return;
 const data = await resp.json();
 prevFactionTech = {...factionTechData};
@@ -261,7 +261,7 @@ const activeNodes = [...nodes].sort((a, b) => (a.npc?.last_active || 0) > (b.npc
 for (const node of activeNodes) {
 if (!node.id) continue;
 try {
-const resp = await fetch(`/api/simulation/npc-quests/${encodeURIComponent(node.id)}`);
+const resp = await fetch(`/simulation/npc-quests/${encodeURIComponent(node.id)}`);
 if (!resp.ok) continue;
 const qData = await resp.json();
 questData[node.id] = qData;
