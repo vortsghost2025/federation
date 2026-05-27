@@ -26,7 +26,7 @@ body{background:#0a0a1a;color:#e0e0e0;font-family:'Courier New',monospace;overfl
 #sidebar::-webkit-scrollbar{width:5px}
 #sidebar::-webkit-scrollbar-thumb{background:rgba(79,195,247,0.3);border-radius:2px}
 #sidebar h2{color:#4fc3f7;font-size:1.375rem;margin:12px 0 10px 0;letter-spacing:2px;text-transform:uppercase;border-bottom:1px solid rgba(79,195,247,0.2);padding-bottom:8px}
-#event-list{max-height:400px;overflow-y:auto;padding-top:10px;}
+#event-list{max-height:45vh;overflow-y:auto;padding-top:10px;}
 .ev-bucket{margin-bottom:10px}
 .ev-bucket-header{display:flex;align-items:center;gap:6px;padding:6px 8px;background:rgba(255,255,255,0.03);border-radius:4px;cursor:pointer;user-select:none;transition:background 0.15s;font-size:1rem}
 .ev-bucket-header:hover{background:rgba(79,195,247,0.08)}
@@ -37,12 +37,12 @@ body{background:#0a0a1a;color:#e0e0e0;font-family:'Courier New',monospace;overfl
 .ev-bucket-body{padding:4px 0 4px 8px}
 .ev-bucket-body.collapsed{display:none}
 .ev-bucket-arrow.open{transform:rotate(90deg)}
-.ev-item{padding:4px 6px;margin-bottom:3px;border-left:2px solid #333;border-radius:0 3px 3px 0;background:rgba(255,255,255,0.02);font-size:0.875rem;line-height:1.3;overflow-wrap:break-word;word-break:break-word}
+.ev-item{padding:4px 6px;margin-bottom:4px;border-left:2px solid #333;border-radius:0 3px 3px 0;background:rgba(255,255,255,0.02);font-size:0.875rem;line-height:1.5;overflow-wrap:break-word;word-break:break-word}
 .ev-item:hover{border-left-color:#4fc3f7;background:rgba(79,195,247,0.05)}
 .ev-item-repeat{color:#78909c;font-size:0.6875rem;margin-left:4px}
 .ev-char{color:#4fc3f7;font-weight:bold;font-size:1rem}
 .ev-type{color:#78909c;font-size:0.875rem;margin-left:8px;text-transform:uppercase}
-.ev-desc{color:#b0b0b0;font-size:1rem;margin-top:3px;line-height:1.4}
+.ev-desc{color:#b0b0b0;font-size:1rem;margin-top:4px;line-height:1.5;padding-bottom:2px}
 .ev-mood{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:6px;vertical-align:middle}
 
 /* NPC detail panel — TV-scale */
@@ -59,9 +59,11 @@ body{background:#0a0a1a;color:#e0e0e0;font-family:'Courier New',monospace;overfl
 #detail-lore{display:none;margin-top:6px;padding:10px 12px;font-size:1.125rem;line-height:1.6;color:#e0c068;background:rgba(255,215,0,0.04);border-left:3px solid rgba(255,215,0,0.3);border-radius:0 4px 4px 0}
 #detail-livesim:hover{background:rgba(79,195,247,0.3);border-color:#4fc3f7}
 
-/* View toggle — TV-scale */
-#view-toggle{position:fixed;top:72px;left:12px;z-index:10;display:flex;flex-wrap:wrap;gap:4px;margin-top:40px;background:#0d1117;padding:8px 10px;border-radius:10px;border:1px solid #30363d}
-.vt-btn{background:#161b22;border:1px solid #30363d;color:#78909c;padding:10px 20px;border-radius:6px;font-size:1.125rem;font-family:'Courier New',monospace;cursor:pointer;transition:all 0.2s;letter-spacing:1px;text-transform:uppercase}
+/* Left panel — single container for search + view toggle + label toggle */
+#left-panel{position:fixed;top:72px;left:12px;z-index:10;background:#0d1117;border:1px solid #30363d;border-radius:10px;padding:12px;display:flex;flex-direction:column;gap:8px;min-width:260px}
+/* View toggle — inside left-panel, no longer fixed */
+#view-toggle{display:flex;flex-wrap:wrap;gap:4px}
+.vt-btn{background:#161b22;border:1px solid #30363d;color:#78909c;padding:10px 20px;border-radius:6px;font-size:1.125rem;font-family:'Courier New',monospace;cursor:pointer;transition:all 0.2s;letter-spacing:1px;text-transform:uppercase;flex:1 1 auto;min-width:70px;text-align:center}
 .vt-btn:hover{border-color:#4fc3f7;color:#4fc3f7;background:rgba(79,195,247,0.08)}
 .vt-btn.active{background:#1a1a2a;border-color:#4fc3f7;color:#4fc3f7;box-shadow:0 0 8px rgba(79,195,247,0.2)}
 
@@ -88,8 +90,8 @@ body{background:#0a0a1a;color:#e0e0e0;font-family:'Courier New',monospace;overfl
 .ft-contested{background:rgba(255,152,0,0.1);color:#ffa726;border:1px solid rgba(255,152,0,0.3)}
 .ft-neutral{background:rgba(120,144,156,0.1);color:#78909c;border:1px solid rgba(120,144,156,0.3)}
 
-/* Search — TV-scale */
-#search-box{position:fixed;top:72px;left:12px;z-index:10}
+/* Search — inside left-panel, no longer fixed */
+#search-box{}
 #search-input{background:#0d1117;border:1px solid #30363d;color:#e0e0e0;padding:10px 14px;border-radius:6px;font-size:1.125rem;font-family:'Courier New',monospace;width:280px;outline:none}
 #search-input:focus{border-color:#4fc3f7;box-shadow:0 0 8px rgba(79,195,247,0.2)}
 
@@ -107,7 +109,7 @@ body{background:#0a0a1a;color:#e0e0e0;font-family:'Courier New',monospace;overfl
 #audio-toggle:focus-visible{outline:2px solid #4fc3f7;outline-offset:2px}
 
 /* Map Read / Crisis Readout panel — TV-scale */
-#map-read{position:fixed;top:140px;left:12px;width:min(420px,30vw);background:#0d1117;border:1px solid #30363d;border-radius:8px;padding:14px 16px;z-index:10;font-size:1.25rem;line-height:1.5;max-height:calc(100vh - 160px);overflow-y:auto}
+#map-read{position:fixed;top:340px;left:12px;width:min(420px,30vw);background:#0d1117;border:1px solid #30363d;border-radius:8px;padding:14px 16px;z-index:10;font-size:1.25rem;line-height:1.5;max-height:calc(100vh - 360px);overflow-y:auto}
 #map-read::-webkit-scrollbar{width:4px}
 #map-read::-webkit-scrollbar-thumb{background:rgba(79,195,247,0.3);border-radius:2px}
 #mr-title{color:#4fc3f7;font-size:1.125rem;letter-spacing:2px;text-transform:uppercase;margin-bottom:8px;border-bottom:1px solid rgba(79,195,247,0.15);padding-bottom:6px;display:flex;align-items:center;gap:8px}
@@ -149,9 +151,9 @@ body{background:#0a0a1a;color:#e0e0e0;font-family:'Courier New',monospace;overfl
 #mr-next{margin-top:8px;padding-top:8px;border-top:1px solid rgba(255,215,0,0.15);color:#ffd700;font-size:1.0625rem;font-style:italic}
 #mr-highlighted{outline:2px solid #ffd700;outline-offset:2px;box-shadow:0 0 12px rgba(255,215,0,0.3)}
 
-/* Label mode toggle — TV-scale */
-#label-toggle{position:fixed;top:72px;left:12px;z-index:10;display:flex;flex-wrap:wrap;gap:4px;margin-top:90px;background:#0d1117;padding:8px 10px;border-radius:10px;border:1px solid #30363d}
-.lt-btn{background:#161b22;border:1px solid #30363d;color:#78909c;padding:8px 16px;border-radius:6px;font-size:0.9375rem;font-family:'Courier New',monospace;cursor:pointer;transition:all 0.2s;letter-spacing:1px;text-transform:uppercase}
+/* Label mode toggle — inside left-panel, no longer fixed */
+#label-toggle{display:flex;flex-wrap:wrap;gap:4px}
+.lt-btn{background:#161b22;border:1px solid #30363d;color:#78909c;padding:8px 16px;border-radius:6px;font-size:0.9375rem;font-family:'Courier New',monospace;cursor:pointer;transition:all 0.2s;letter-spacing:1px;text-transform:uppercase;flex:1 1 auto;min-width:65px;text-align:center}
 .lt-btn:hover{border-color:#4fc3f7;color:#4fc3f7;background:rgba(79,195,247,0.08)}
 .lt-btn.active{background:rgba(79,195,247,0.15);border-color:#ffd700;color:#ffd700;box-shadow:0 0 8px rgba(255,215,0,0.2)}
 
@@ -182,7 +184,7 @@ body{background:#0a0a1a;color:#e0e0e0;font-family:'Courier New',monospace;overfl
   #sidebar{position:relative!important;width:100%!important;height:auto!important;max-height:50vh;top:auto!important;right:auto!important;padding:16px!important}
   #detail{position:relative!important;width:100%!important;max-height:none!important;bottom:auto!important;left:auto!important}
   #map-read{position:relative!important;width:100%!important;top:auto!important;left:auto!important;max-height:none!important}
-  #search-box,#view-toggle,#label-toggle{position:relative!important;top:auto!important;left:auto!important;margin-top:8px!important}
+  #left-panel{position:relative!important;top:auto!important;left:auto!important;margin-top:8px!important}
   #zoom-ctrl{position:relative!important;transform:none!important;left:auto!important;bottom:auto!important;justify-content:center}
   .vt-btn,.lt-btn{padding:8px 12px!important}
 }
@@ -241,11 +243,19 @@ body{background:#0a0a1a;color:#e0e0e0;font-family:'Courier New',monospace;overfl
 <div id="ft-body"></div>
 </div>
 
-<!-- View toggle -->
-<div id="view-toggle">
-<button class="vt-btn active" data-view="territory" onclick="setView('territory')">Territory</button>
-<button class="vt-btn" data-view="network" onclick="setView('network')">Network</button>
-<button class="vt-btn" data-view="crisis" onclick="setView('crisis')">Crisis</button>
+<!-- Left panel: search + view toggle + label toggle (single container, no stacking) -->
+<div id="left-panel">
+  <div id="search-box"><input id="search-input" type="text" placeholder="Search NPC..."></div>
+  <div id="view-toggle">
+    <button class="vt-btn active" data-view="territory" onclick="setView('territory')">Territory</button>
+    <button class="vt-btn" data-view="network" onclick="setView('network')">Network</button>
+    <button class="vt-btn" data-view="crisis" onclick="setView('crisis')">Crisis</button>
+  </div>
+  <div id="label-toggle">
+    <button class="lt-btn" data-labels="factions" onclick="setLabelMode('factions')">Factions Only</button>
+    <button class="lt-btn active" data-labels="important" onclick="setLabelMode('important')">Important NPCs</button>
+    <button class="lt-btn" data-labels="all" onclick="setLabelMode('all')">All Labels</button>
+  </div>
 </div>
 
 <!-- Crisis Readout panel — case-file view -->
@@ -253,16 +263,6 @@ body{background:#0a0a1a;color:#e0e0e0;font-family:'Courier New',monospace;overfl
   <div id="mr-title">Crisis Readout</div>
   <div id="mr-body">Awaiting data&hellip;</div>
 </div>
-
-<!-- Label mode toggle -->
-<div id="label-toggle">
-<button class="lt-btn" data-labels="factions" onclick="setLabelMode('factions')">Factions Only</button>
-<button class="lt-btn active" data-labels="important" onclick="setLabelMode('important')">Important NPCs</button>
-<button class="lt-btn" data-labels="all" onclick="setLabelMode('all')">All Labels</button>
-</div>
-
-<!-- Search -->
-<div id="search-box"><input id="search-input" type="text" placeholder="Search NPC..."></div>
 
 <!-- Zoom controls -->
 <div id="zoom-ctrl">
