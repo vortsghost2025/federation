@@ -1275,6 +1275,7 @@ if (toggle) toggle.classList.toggle('on', window.npcFilterOn);
 if (toggle) toggle.setAttribute('aria-pressed', String(window.npcFilterOn));
 if (label) label.textContent = window.npcFilterOn ? 'Active Only' : 'Show All';
 applyNpcFilter();
+fedSaveUIState({npc_filter_on:window.npcFilterOn});
 }
 
 function applyNpcFilter() {
@@ -2634,30 +2635,82 @@ await refreshLight();await refreshNpcs();await refreshQuests();await refreshFact
 for(var l2=0;l2<loadingEls.length;l2++)loadingEls[l2].classList.remove('loading-pulse');
 }
 
-function toggleRaw(){var btn=document.getElementById('raw-toggle'),wrap=document.getElementById('raw-wrap');var nowOpen=!wrap.classList.contains('open');btn.classList.toggle('open');wrap.classList.toggle('open');btn.setAttribute('aria-expanded',String(nowOpen));try{localStorage.setItem('fed_raw_open',String(nowOpen))}catch(e){}}
-function toggleHelp(){var overlay=document.getElementById('help-overlay');overlay.classList.toggle('open');if(overlay.classList.contains('open')){overlay.focus();document.body.style.overflow='hidden'}else{document.body.style.overflow=''}}
-function toggleActivityLog(){var log=document.getElementById('activity-log');var bar=document.getElementById('activity-log-bar');var expanded=log.classList.toggle('expanded');bar.setAttribute('aria-expanded',String(expanded));try{localStorage.setItem('fed_activity_log_expanded',String(expanded))}catch(e){}}
+/* ═══ Fed UI Phenotype State (compact-restore pattern) ═══ */
+const FED_UI_SCHEMA = '1.0.0';
+const FED_UI_AUTH_FIELDS = ['activity_log_expanded','raw_open','npc_filter_on'];
+const FED_UI_MAX_AGE = 300000; // 5 minutes before stale
 
-/* Restore persisted toggle states from localStorage */
-function restoreToggleStates() {
+function _fedHash(s) {
+  var h=0; for(var i=0;i<s.length;i++){h=((h<<5)-h)+s.charCodeAt(i);h=h&h}
+  return 'h'+Math.abs(h).toString(36);
+}
+
+function fedSaveUIState(changes) {
   try {
-    /* Activity log */
-    var logExpanded = localStorage.getItem('fed_activity_log_expanded');
-    if (logExpanded === 'true') {
-      var log = document.getElementById('activity-log');
-      var bar = document.getElementById('activity-log-bar');
-      if (log) { log.classList.add('expanded'); }
-      if (bar) { bar.setAttribute('aria-expanded', 'true'); }
-    }
-    /* Raw events */
-    var rawOpen = localStorage.getItem('fed_raw_open');
-    if (rawOpen === 'true') {
-      var btn = document.getElementById('raw-toggle');
-      var wrap = document.getElementById('raw-wrap');
-      if (btn) { btn.classList.add('open'); btn.setAttribute('aria-expanded', 'true'); }
-      if (wrap) { wrap.classList.add('open'); }
-    }
-  } catch(e) { /* localStorage may not be available */ }
+    var existing = fedLoadRawUIState();
+    var state = {activity_log_expanded:false,raw_open:false,npc_filter_on:false};
+    if (existing&&existing.payload) for(var k in existing.payload) state[k]=existing.payload[k];
+    if (changes) for(var k in changes) state[k]=changes[k];
+    var packet = {
+      schema:FED_UI_SCHEMA,timestamp:Date.now(),source:'federation-dashboard',
+      authority:{fields_authoritative:FED_UI_AUTH_FIELDS,fields_advisory:[]},
+      payload:state,hash:''
+    };
+    packet.hash=_fedHash(packet.schema+'|'+packet.timestamp+'|'+packet.source+'|'+JSON.stringify(packet.payload)+'|'+JSON.stringify(packet.authority));
+    localStorage.setItem('fed_ui_phenotype',JSON.stringify(packet));
+    return true;
+  } catch(e){return false}
+}
+
+function fedLoadRawUIState() {
+  try {
+    var raw=localStorage.getItem('fed_ui_phenotype'); if(!raw) return null;
+    var p=JSON.parse(raw); if(!p.schema||!p.timestamp) return null;
+    var ch=p.hash; p.hash='';
+    var cmp=_fedHash(p.schema+'|'+p.timestamp+'|'+p.source+'|'+JSON.stringify(p.payload)+'|'+JSON.stringify(p.authority));
+    if(ch!==cmp) return null; // integrity fail — treat as no state
+    p.hash=ch; p._stale=(Date.now()-p.timestamp)>FED_UI_MAX_AGE;
+    return p;
+  } catch(e){return null}
+}
+
+function fedRestoreUIState() {
+  var p = fedLoadRawUIState();
+  if (!p) return null;
+  return p.payload;
+}
+/* ═══ End Phenotype State ═══ */
+
+function toggleRaw(){var btn=document.getElementById('raw-toggle'),wrap=document.getElementById('raw-wrap');var nowOpen=!wrap.classList.contains('open');btn.classList.toggle('open');wrap.classList.toggle('open');btn.setAttribute('aria-expanded',String(nowOpen));fedSaveUIState({raw_open:nowOpen})}
+function toggleHelp(){var overlay=document.getElementById('help-overlay');overlay.classList.toggle('open');if(overlay.classList.contains('open')){overlay.focus();document.body.style.overflow='hidden'}else{document.body.style.overflow=''}}
+function toggleActivityLog(){var log=document.getElementById('activity-log');var bar=document.getElementById('activity-log-bar');var expanded=log.classList.toggle('expanded');bar.setAttribute('aria-expanded',String(expanded));fedSaveUIState({activity_log_expanded:expanded})}
+
+/* Restore persisted toggle states from phenotype state packet */
+function restoreToggleStates() {
+  var state = fedRestoreUIState();
+  if (!state) return;
+  /* Activity log */
+  if (state.activity_log_expanded) {
+    var log = document.getElementById('activity-log');
+    var bar = document.getElementById('activity-log-bar');
+    if (log) { log.classList.add('expanded'); }
+    if (bar) { bar.setAttribute('aria-expanded', 'true'); }
+  }
+  /* Raw events */
+  if (state.raw_open) {
+    var btn = document.getElementById('raw-toggle');
+    var wrap = document.getElementById('raw-wrap');
+    if (btn) { btn.classList.add('open'); btn.setAttribute('aria-expanded', 'true'); }
+    if (wrap) { wrap.classList.add('open'); }
+  }
+  /* NPC filter */
+  if (state.npc_filter_on) {
+    window.npcFilterOn = true;
+    var toggle = document.getElementById('npc-noise-toggle');
+    var label = toggle ? toggle.querySelector('.npc-noise-toggle-label') : null;
+    if (toggle) { toggle.classList.add('on'); toggle.setAttribute('aria-pressed', 'true'); }
+    if (label) { label.textContent = 'Active Only'; }
+  }
 }
 document.addEventListener('keydown',function(e){if(e.key==='Escape'){var overlay=document.getElementById('help-overlay');if(overlay.classList.contains('open'))toggleHelp()}});
 
