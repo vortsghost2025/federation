@@ -379,6 +379,7 @@ class Creature:
     affinity_level: float = 0.0  # -1.0 hostile, 1.0 bonded
     is_tamed: bool = False
     spotted_locations: List[str] = field(default_factory=list)
+    current_sector_id: str = ""  # spatial system: which sector this NPC is in
 
     def attempt_tame(self, player_charisma: float, turn: int) -> Tuple[bool, str]:
         """Attempt to tame/befriend the creature"""
