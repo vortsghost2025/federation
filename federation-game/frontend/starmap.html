@@ -757,6 +757,8 @@ let spatialAdjacencies = []; // [{from, to, fromX, fromY, toX, toY}]
 let spatialSectorNodes = []; // sector center markers for click/hover
 let spatialBounds = null; // {minPx, maxPx, minPy, maxPy, sectorScale, midX, midY} — computed world-to-screen transform for FIT button
 const SPATIAL_FILL_RATIO = 0.65; // fraction of viewport that spatial map should fill
+// SPATIAL-03A: Selected faction for isolation/fade behavior
+let selectedFaction = null; // faction_id or null — when set, fade all other factions
 // Kill switch: URL params or env can force legacy layout
 const _urlParams = new URLSearchParams(window.location.search);
 const _forceLegacy = _urlParams.has('spatial') && _urlParams.get('spatial') === 'false'
@@ -814,17 +816,42 @@ function init() {
   canvas.addEventListener('mouseup', onMouseUp);
   canvas.addEventListener('wheel', onWheel);
   canvas.addEventListener('click', onClick);
-  canvas.addEventListener('dblclick', onDblClick);
+        canvas.addEventListener('dblclick', onDblClick);
+      // SPATIAL-03A: Escape key deselects faction
+      document.addEventListener('keydown', (e) => { if (e.key === 'Escape') { selectedFaction = null; selectedNode = null; showDetail(null); } });
   document.getElementById('zoom-in').addEventListener('click', () => { zoom = Math.min(4, zoom * 1.3); });
   document.getElementById('zoom-out').addEventListener('click', () => { zoom = Math.max(0.3, zoom / 1.3); });
   document.getElementById('zoom-reset').addEventListener('click', () => { zoom = 1; panX = 0; panY = 0; });
-document.getElementById('zoom-fit').addEventListener('click', () => {
-  if (spatialMode && spatialBounds) {
-    // SPATIAL-02.5: zoom to fit the spatial sector map in viewport
-    zoom = 1;
-    panX = 0;
-    panY = 0;
-  } else {
+        document.getElementById('zoom-fit').addEventListener('click', () => {
+          if (spatialMode && spatialBounds) {
+            // SPATIAL-03A: Fit all faction territories (including expanded homes) in viewport
+            // Find the bounding box of all faction zone centers + their radii
+            let minPx = Infinity, maxPx = -Infinity, minPy = Infinity, maxPy = -Infinity;
+            for (const z of factionZones) {
+              const r = z.zoneR + 60; // include label space
+              if (z.fcx - r < minPx) minPx = z.fcx - r;
+              if (z.fcx + r > maxPx) maxPx = z.fcx + r;
+              if (z.fcy - r < minPy) minPy = z.fcy - r;
+              if (z.fcy + r > maxPy) maxPy = z.fcy + r;
+            }
+            // Also include sector positions
+            for (const sn of spatialSectorNodes) {
+              if (sn.x - 20 < minPx) minPx = sn.x - 20;
+              if (sn.x + 20 > maxPx) maxPx = sn.x + 20;
+              if (sn.y - 20 < minPy) minPy = sn.y - 20;
+              if (sn.y + 20 > maxPy) maxPy = sn.y + 20;
+            }
+            const contentW = maxPx - minPx || 1;
+            const contentH = maxPy - minPy || 1;
+            const scaleX = W / contentW;
+            const scaleY = H / contentH;
+            zoom = Math.max(0.3, Math.min(2, Math.min(scaleX, scaleY) * 0.9));
+            // Center the content
+            const centerX = (minPx + maxPx) / 2;
+            const centerY = (minPy + maxPy) / 2;
+            panX = W / 2 - centerX * zoom;
+            panY = H / 2 - centerY * zoom;
+          } else {
     const factionRadius = Math.min(W, H) * 0.35;
     const needed = factionRadius * 2.6;
     zoom = Math.max(0.3, Math.min(W, H) / needed);
@@ -882,12 +909,13 @@ b.classList.toggle('active', b.dataset.labels === mode);
 }
 
 // --- Data fetch ---
-async function fetchData() {
+      async function fetchData() {
   try {
     const resp = await fetch(API);
     if (!resp.ok) return;
     mapData = await resp.json();
     lastUpdate = Date.now();
+    _sectorOwnerCache = {}; // SPATIAL-03A: clear sector owner cache on data refresh
     buildNodes();
     updateUI();
   } catch(e) {
@@ -1322,11 +1350,82 @@ function buildNodesSpatial() {
     };
   }
 
-  // Build sector lookup with canvas positions
+  // Build initial sector canvas positions
   spatialSectors = {};
   for (const s of sectors) {
     const pos = sectorToCanvas(s.x, s.y);
     spatialSectors[s.id] = { cx: pos.x, cy: pos.y, data: s };
+  }
+
+  // SPATIAL-03A: Push faction home sectors outward for visual separation
+  // Faction homes cluster near center because their raw coordinates are all inner/core.
+  // Strategy: compute centroid of faction homes, then push each home away from that centroid
+  // by a large expansion factor. Non-home sectors are repositioned relative to their nearest home.
+  const homeSectorIds = {}; // factionId → homeSectorId
+  for (const fid of FACTION_ORDER) {
+    const fdata = factions[fid];
+    if (fdata && fdata.home_sector_id) homeSectorIds[fid] = fdata.home_sector_id;
+  }
+  const homeIds = Object.values(homeSectorIds);
+  if (homeIds.length >= 2) {
+    // Centroid of faction homes
+    let hcx = 0, hcy = 0;
+    for (const hid of homeIds) {
+      const sp = spatialSectors[hid];
+      if (sp) { hcx += sp.cx; hcy += sp.cy; }
+    }
+    hcx /= homeIds.length;
+    hcy /= homeIds.length;
+
+    // Push each faction home outward from the centroid
+    const FACTION_HOME_EXPANSION = 2.8; // how much to multiply distance from centroid
+    const maxR = Math.min(W, H) * 0.42; // cap: don't push off screen
+    for (const [fid, hid] of Object.entries(homeSectorIds)) {
+      const sp = spatialSectors[hid];
+      if (!sp) continue;
+      const dx = sp.cx - hcx;
+      const dy = sp.cy - hcy;
+      const dist = Math.sqrt(dx * dx + dy * dy) || 1;
+      const newDist = Math.min(dist * FACTION_HOME_EXPANSION, maxR);
+      const scale = newDist / dist;
+      sp.cx = hcx + dx * scale;
+      sp.cy = hcy + dy * scale;
+    }
+
+    // Reposition non-home sectors: keep their offset from their owning faction's home,
+    // but scale it down to create tight clusters around each home
+    const sectorOwner = {};
+    for (const t of territories) { sectorOwner[t.sector_id] = t.faction_id; }
+    for (const s of sectors) {
+      if (homeIds.includes(s.id)) continue; // already repositioned
+      const sp = spatialSectors[s.id];
+      if (!sp) continue;
+      const ownerFid = sectorOwner[s.id];
+      // Find nearest faction home to anchor this sector
+      let anchorId = null, anchorDist = Infinity;
+      for (const hid of homeIds) {
+        const hp = spatialSectors[hid];
+        if (!hp) continue;
+        // Use ORIGINAL positions to determine nearest home (before expansion)
+        const origPos = sectorToCanvas(s.x, s.y);
+        const origHome = sectorToCanvas(spatialSectors[hid].data.x, spatialSectors[hid].data.y);
+        const d = Math.sqrt((origPos.x - origHome.x) ** 2 + (origPos.y - origHome.y) ** 2);
+        if (d < anchorDist) { anchorDist = d; anchorId = hid; }
+      }
+      if (anchorId && spatialSectors[anchorId]) {
+        const anchor = spatialSectors[anchorId];
+        // Original offset from the anchor home (before expansion)
+        const origAnchor = sectorToCanvas(spatialSectors[anchorId].data.x, spatialSectors[anchorId].data.y);
+        const origSelf = sectorToCanvas(s.x, s.y);
+        const offX = origSelf.x - origAnchor.x;
+        const offY = origSelf.y - origAnchor.y;
+        // Place sector at: new anchor position + scaled offset (0.5x = tighter cluster)
+        const CLUSTER_TIGHTNESS = 0.45;
+        sp.cx = anchor.cx + offX * CLUSTER_TIGHTNESS;
+        sp.cy = anchor.cy + offY * CLUSTER_TIGHTNESS;
+      }
+      // Sol-prime (unowned core): leave at its sectorToCanvas position, it stays central
+    }
   }
 
   // Build adjacencies (deduplicated — only draw A→B once)
@@ -1399,20 +1498,32 @@ function buildNodesSpatial() {
     npcsBySector[secId].push(npc);
   }
 
-  // Place NPCs at their sector positions with local spread
+  // Place NPCs at their sector positions with orbit-ring packing
+  // SPATIAL-03A: NPCs are arranged in concentric rings around their sector center,
+  // with smaller default dots and collision avoidance
   for (const [secId, sectorNpcs] of Object.entries(npcsBySector)) {
     const secPos = spatialSectors[secId];
     if (!secPos) continue;
-    const spreadRadius = Math.max(25, Math.min(80, sectorNpcs.length * 12));
+    const count = sectorNpcs.length;
+    // Ring packing: inner ring up to 6, then outer rings
+    const baseRadius = 18;
+    const ringSpacing = 16;
     sectorNpcs.forEach((npc, j) => {
       const rng = seededRand(hashStr(npc.id || npc.name || (secId + j)));
-      const subAngle = (j / sectorNpcs.length) * Math.PI * 2 + rng() * 0.5;
-      const subR = spreadRadius * (0.3 + rng() * 0.7);
-      const x = secPos.cx + Math.cos(subAngle) * subR;
-      const y = secPos.cy + Math.sin(subAngle) * subR;
+      // Determine ring and angle
+      let ring, slotInRing, slotsInRing;
+      if (j < 6) { ring = 0; slotInRing = j; slotsInRing = Math.min(6, count); }
+      else if (j < 14) { ring = 1; slotInRing = j - 6; slotsInRing = Math.min(8, count - 6); }
+      else { ring = 2; slotInRing = j - 14; slotsInRing = Math.min(10, count - 14); }
+      const ringR = baseRadius + ring * ringSpacing;
+      const angleStep = (Math.PI * 2) / Math.max(1, slotsInRing);
+      const subAngle = slotInRing * angleStep + rng() * angleStep * 0.4;
+      const x = secPos.cx + Math.cos(subAngle) * (ringR + rng() * 4);
+      const y = secPos.cy + Math.sin(subAngle) * (ringR + rng() * 4);
       const age = npc.last_active ? (now - npc.last_active) : 9999;
       const activity = Math.max(0.2, 1 - age / 3600);
-      const radius = 6 + activity * 10;
+      // SPATIAL-03A: Smaller NPC dots at default — was 6+activity*10, now 3+activity*5
+      const radius = 3 + activity * 5;
       const aff = npc.affiliation;
       const fColor = aff && factions[aff] ? factions[aff].color : '#9e9e9e';
       nodes.push({
@@ -1459,10 +1570,10 @@ function buildNodesSpatial() {
       .filter(Boolean)
       .map(sp => ({ x: sp.cx, y: sp.cy }));
 
-    if (sectorPositions.length >= 3) {
-      let hull = convexHull(sectorPositions);
-      let padded = padPolygon(hull, 40);
-      polygon = smoothPoly(padded, 2);
+        if (sectorPositions.length >= 3) {
+        let hull = convexHull(sectorPositions);
+        let padded = padPolygon(hull, 55); // SPATIAL-03A: increased padding from 40→55 for wider territories
+        polygon = smoothPoly(padded, 2);
     } else if (sectorPositions.length === 2) {
       // Two sectors: create an elongated polygon
       const p1 = sectorPositions[0], p2 = sectorPositions[1];
@@ -2001,13 +2112,16 @@ function setBar(name, val, max, color) {
   if (vl) vl.textContent = val || 0;
 }
 
-// --- Faction zone hover detection ---
+      // --- Faction zone hover/click detection ---
+// SPATIAL-03A: Use deformed polygon for hit testing when available (matches visual)
 function getFactionZoneAt(sx, sy) {
   const {x, y} = screenToWorld(sx, sy);
   for (const z of factionZones) {
-    if (z.polygon && z.polygon.length >= 3) {
+    // Prefer deformed polygon (what user actually sees)
+    const hitPoly = (z._deformedPoly && z._deformedPoly.length >= 3) ? z._deformedPoly : z.polygon;
+    if (hitPoly && hitPoly.length >= 3) {
       // Polygon hit-test
-      if (pointInPolygon(x, y, z.polygon)) return z;
+      if (pointInPolygon(x, y, hitPoly)) return z;
     } else {
       // Circle fallback for 0-1 NPC factions
       const dx = x - z.fcx, dy = y - z.fcy;
@@ -2067,6 +2181,17 @@ function hideFactionTip() {
 }
 
 // --- View-dependent rendering params ---
+// SPATIAL-03A: Lookup sector owner faction (uses territory data cached from buildNodesSpatial)
+let _sectorOwnerCache = {};
+function getSectorOwnerId(sectorId) {
+  if (_sectorOwnerCache[sectorId]) return _sectorOwnerCache[sectorId];
+  const territories = (mapData && mapData.faction_territories) || [];
+  for (const t of territories) {
+    if (t.sector_id === sectorId) { _sectorOwnerCache[sectorId] = t.faction_id; return t.faction_id; }
+  }
+  _sectorOwnerCache[sectorId] = null;
+  return null;
+}
 function getViewParams() {
 if (currentView === 'territory') {
 return {
@@ -2103,12 +2228,28 @@ labelAlpha: 0.6
 
 // --- Label priority system ---
 // Priority levels: 0=hidden, 1=low(ordinary), 2=medium(crisis/event), 3=high(selected/important), 4=critical(hovered)
+// SPATIAL-03A: In territory mode at default zoom, hide NPC labels to reduce clutter.
+// Show only faction labels + sector names. NPC labels appear when zoomed >1.5x or faction is selected.
 function getLabelPriority(node) {
   const isHovered = hoveredNode === node;
   const isSelected = selectedNode === node;
   if (isHovered || isSelected) return 4;
 
-  // Faction-affiliated NPCs are ALWAYS visible (you need to know who belongs where)
+  // SPATIAL-03A: In territory mode at low zoom, hide NPC labels (but show sector labels always)
+  if (currentView === 'territory' && spatialMode && !node.sectorData && zoom < 1.5 && !selectedFaction) {
+    // Only show important/active NPCs even at low zoom
+    if (isNodeImportant(node)) return 1; // low priority — may be culled by collision
+    return 0; // hide ordinary NPC labels in territory mode at default zoom
+  }
+  // If a faction is selected, show that faction's NPC labels
+  if (selectedFaction && node.faction === selectedFaction) {
+    return isNodeImportant(node) ? 3 : 2;
+  }
+  // Fade out labels for non-selected faction NPCs when faction is selected
+  if (selectedFaction && node.faction && node.faction !== selectedFaction) {
+    return 0;
+  }
+
   const hasFaction = !!node.faction;
 
   // Always show in 'all' mode
@@ -2217,52 +2358,92 @@ function draw() {
     ctx.fill();
   }
 
-  // SPATIAL-03: Adjacency lines and sector markers
-  if (spatialMode && spatialAdjacencies.length > 0) {
-    // Draw adjacency lines between connected sectors
-    for (const adj of spatialAdjacencies) {
-      ctx.beginPath();
-      ctx.moveTo(adj.fromX, adj.fromY);
-      ctx.lineTo(adj.toX, adj.toY);
-      ctx.strokeStyle = 'rgba(79,195,247,0.08)';
-      ctx.lineWidth = 1;
-      ctx.stroke();
-    }
-    // Draw sector markers
-    for (const sn of spatialSectorNodes) {
-      const isHov = hoveredNode === sn;
-      const regionColor = REGION_COLORS[sn.regionType] || '#78909c';
-      // Sector dot
-      ctx.beginPath();
-      ctx.arc(sn.x, sn.y, sn.radius * (isHov ? 1.3 : 1), 0, Math.PI * 2);
-      const secGrad = ctx.createRadialGradient(sn.x, sn.y, 0, sn.x, sn.y, sn.radius);
-      secGrad.addColorStop(0, hexToRgba(sn.color, 0.6));
-      secGrad.addColorStop(1, hexToRgba(sn.color, 0.15));
-      ctx.fillStyle = secGrad;
-      ctx.fill();
-      // Region-type ring
-      ctx.beginPath();
-      ctx.arc(sn.x, sn.y, sn.radius + 2, 0, Math.PI * 2);
-      ctx.strokeStyle = hexToRgba(regionColor, 0.3);
-      ctx.lineWidth = 1;
-      ctx.stroke();
-      // Sector name label (always show in spatial mode)
-      ctx.fillStyle = hexToRgba(regionColor, isHov ? 0.9 : 0.5);
-      ctx.font = (isHov ? 'bold ' : '') + (rmLabelSize || 12) + 'px Courier New';
-      ctx.textAlign = 'center';
-      ctx.fillText(sn.name.toUpperCase(), sn.x, sn.y - sn.radius - 8);
-      // Region type sub-label
-      ctx.fillStyle = hexToRgba(regionColor, isHov ? 0.6 : 0.25);
-      ctx.font = ((rmLabelSize || 12) - 2) + 'px Courier New';
-      ctx.fillText(sn.regionType.toUpperCase(), sn.x, sn.y - sn.radius - 22);
-    }
+        // SPATIAL-03A: Adjacency lines — view-dependent rendering
+      if (spatialMode && spatialAdjacencies.length > 0) {
+        // Territory mode: hide adjacency lines by default (show only if faction selected)
+        // Network mode: show all, fade non-selected
+        // Crisis mode: show only crisis-adjacent
+        const showAdj = currentView !== 'territory' || selectedFaction;
+        if (showAdj) {
+          for (const adj of spatialAdjacencies) {
+            // Determine if this adjacency is relevant to selected faction
+            let alpha = 0.08; // default very faint
+            if (currentView === 'territory' && selectedFaction) {
+              // Only show edges connected to selected faction's sectors
+              const fromSec = spatialSectors[adj.from];
+              const toSec = spatialSectors[adj.to];
+              const fromOwner = fromSec ? getSectorOwnerId(adj.from) : null;
+              const toOwner = toSec ? getSectorOwnerId(adj.to) : null;
+              if (fromOwner === selectedFaction || toOwner === selectedFaction) {
+                alpha = 0.25;
+              } else {
+                alpha = 0; // hide non-selected edges in territory mode
+              }
+            } else if (currentView === 'network') {
+              if (selectedFaction) {
+                const fromOwner = getSectorOwnerId(adj.from);
+                const toOwner = getSectorOwnerId(adj.to);
+                if (fromOwner === selectedFaction || toOwner === selectedFaction) {
+                  alpha = 0.35;
+                } else {
+                  alpha = 0.03; // fade non-selected
+                }
+              }
+            } else if (currentView === 'crisis') {
+              alpha = 0.04; // minimal in crisis mode
+            }
+            if (alpha <= 0) continue;
+            ctx.beginPath();
+            ctx.moveTo(adj.fromX, adj.fromY);
+            ctx.lineTo(adj.toX, adj.toY);
+            ctx.strokeStyle = `rgba(79,195,247,${alpha})`;
+            ctx.lineWidth = 1;
+            ctx.stroke();
+          }
+        }
+        // Draw sector markers
+      for (const sn of spatialSectorNodes) {
+        const isHov = hoveredNode === sn;
+        const regionColor = REGION_COLORS[sn.regionType] || '#78909c';
+        // SPATIAL-03A: Fade sectors not in selected faction
+        const secOwnerFid = getSectorOwnerId(sn.id.replace('sector:', '') || sn.sectorData?.id);
+        const secFade = selectedFaction ? (secOwnerFid === selectedFaction || !secOwnerFid ? 1.0 : 0.2) : 1.0;
+        // Sector dot
+        ctx.beginPath();
+        ctx.arc(sn.x, sn.y, sn.radius * (isHov ? 1.3 : 1), 0, Math.PI * 2);
+        const secGrad = ctx.createRadialGradient(sn.x, sn.y, 0, sn.x, sn.y, sn.radius);
+        secGrad.addColorStop(0, hexToRgba(sn.color, 0.6 * secFade));
+        secGrad.addColorStop(1, hexToRgba(sn.color, 0.15 * secFade));
+        ctx.fillStyle = secGrad;
+        ctx.fill();
+        // Region-type ring
+        ctx.beginPath();
+        ctx.arc(sn.x, sn.y, sn.radius + 2, 0, Math.PI * 2);
+        ctx.strokeStyle = hexToRgba(regionColor, 0.3 * secFade);
+        ctx.lineWidth = 1;
+        ctx.stroke();
+        // Sector name label — always show but fade with faction isolation
+        ctx.fillStyle = hexToRgba(regionColor, (isHov ? 0.9 : 0.5) * secFade);
+        ctx.font = (isHov ? 'bold ' : '') + (rmLabelSize || 12) + 'px Courier New';
+        ctx.textAlign = 'center';
+        ctx.fillText(sn.name.toUpperCase(), sn.x, sn.y - sn.radius - 8);
+        // Region type sub-label — SPATIAL-03A: hide at default zoom to reduce clutter
+        if (zoom >= 1.3 || isHov) {
+          ctx.fillStyle = hexToRgba(regionColor, (isHov ? 0.6 : 0.25) * secFade);
+          ctx.font = ((rmLabelSize || 12) - 2) + 'px Courier New';
+          ctx.fillText(sn.regionType.toUpperCase(), sn.x, sn.y - sn.radius - 22);
+        }
+      }
   }
 
-  // Faction territory zones — data-shaped polygons with living growth
-  for (const z of factionZones) {
-    const fdata = z.fdata;
-    const cohesion = fdata ? (fdata.cohesion || 50) : 50;
-    const isHovered = hoveredFaction === z;
+        // Faction territory zones — data-shaped polygons with living growth
+      for (const z of factionZones) {
+        const fdata = z.fdata;
+        const cohesion = fdata ? (fdata.cohesion || 50) : 50;
+        const isHovered = hoveredFaction === z;
+        // SPATIAL-03A: Fade non-selected factions when one is selected
+        const isSelectedFaction = selectedFaction === z.fid;
+        const factionFade = selectedFaction ? (isSelectedFaction ? 1.0 : 0.12) : 1.0;
 
     // Living territory deformation — warps edges using faction scores
     const infl = (fdata.influence || 20) / 100;
@@ -2316,9 +2497,9 @@ function draw() {
     }
     z._deformedPoly = deformedPoly;
 
-    const fillAlpha = isHovered ? vp.zoneFillAlpha * 2 : vp.zoneFillAlpha;
-    const borderAlpha = isHovered ? Math.min(1, vp.zoneBorderAlpha * 1.8) : vp.zoneBorderAlpha;
-    const borderW = isHovered ? vp.zoneBorderWidth + 1 : vp.zoneBorderWidth;
+        const fillAlpha = (isHovered ? vp.zoneFillAlpha * 2 : vp.zoneFillAlpha) * factionFade;
+        const borderAlpha = (isHovered ? Math.min(1, vp.zoneBorderAlpha * 1.8) : vp.zoneBorderAlpha) * factionFade;
+        const borderW = isHovered ? vp.zoneBorderWidth + 1 : vp.zoneBorderWidth;
 
     const renderPoly = z._deformedPoly && z._deformedPoly.length >= 3 ? z._deformedPoly : z.polygon;
     if (renderPoly.length >= 3) {
@@ -2357,25 +2538,25 @@ function draw() {
         ctx.setLineDash([]);
       }
 
-      // Faction label — at computed label position below polygon
-      ctx.fillStyle = hexToRgba(z.color, isHovered ? 1.0 : vp.labelAlpha);
-      ctx.font = `bold ${vp.labelSize}px Courier New`;
-      ctx.textAlign = 'center';
-      const displayName = (fdata ? fdata.display_name : z.fid).toUpperCase();
-      ctx.fillText(displayName, z.labelX, z.labelY);
+        // Faction label — at computed label position below polygon
+        ctx.fillStyle = hexToRgba(z.color, (isHovered ? 1.0 : vp.labelAlpha) * factionFade);
+        ctx.font = `bold ${vp.labelSize}px Courier New`;
+        ctx.textAlign = 'center';
+        const displayName = (fdata ? fdata.display_name : z.fid).toUpperCase();
+        ctx.fillText(displayName, z.labelX, z.labelY);
 
-  // Sub-label: sector type (spatial mode shows owned sectors, cosmetic shows INFLUENCE ZONE)
-  let sectorType;
-  if (spatialMode && z.ownedSectors && z.ownedSectors.length > 0) {
-    const sectorNames = z.ownedSectors.map(sid => {
-      const ss = spatialSectors[sid];
-      return ss ? ss.data.name : sid;
-    });
-    sectorType = 'SECTORS: ' + sectorNames.join(', ');
-  } else {
-    sectorType = cohesion < 40 ? 'CONTESTED' : 'INFLUENCE ZONE';
-  }
-      ctx.fillStyle = hexToRgba(z.color, isHovered ? 0.7 : 0.35);
+        // Sub-label: sector type (spatial mode shows owned sectors, cosmetic shows INFLUENCE ZONE)
+        let sectorType;
+        if (spatialMode && z.ownedSectors && z.ownedSectors.length > 0) {
+          const sectorNames = z.ownedSectors.map(sid => {
+            const ss = spatialSectors[sid];
+            return ss ? ss.data.name : sid;
+          });
+          sectorType = 'SECTORS: ' + sectorNames.join(', ');
+        } else {
+          sectorType = cohesion < 40 ? 'CONTESTED' : 'INFLUENCE ZONE';
+        }
+        ctx.fillStyle = hexToRgba(z.color, (isHovered ? 0.7 : 0.35) * factionFade);
       ctx.font = (rmLabelSize || 14) + 'px Courier New';
       ctx.fillText(sectorType, z.labelX, z.labelY + 18);
     } else {
@@ -2408,26 +2589,58 @@ function draw() {
         ctx.setLineDash([]);
       }
 
-      ctx.fillStyle = hexToRgba(z.color, isHovered ? 1.0 : vp.labelAlpha);
-      ctx.font = `bold ${vp.labelSize}px Courier New`;
-      ctx.textAlign = 'center';
-      const cDisplayName = (fdata ? fdata.display_name : z.fid).toUpperCase();
-      ctx.fillText(cDisplayName, z.fcx, z.fcy + z.zoneR + 22);
-      let cSectorType;
-  if (spatialMode && z.ownedSectors && z.ownedSectors.length > 0) {
-    const sectorNames = z.ownedSectors.map(sid => {
-      const ss = spatialSectors[sid];
-      return ss ? ss.data.name : sid;
-    });
-    cSectorType = 'SECTORS: ' + sectorNames.join(', ');
-  } else {
-    cSectorType = cohesion < 40 ? 'CONTESTED' : 'INFLUENCE ZONE';
-  }
-      ctx.fillStyle = hexToRgba(z.color, isHovered ? 0.7 : 0.35);
+        ctx.fillStyle = hexToRgba(z.color, (isHovered ? 1.0 : vp.labelAlpha) * factionFade);
+        ctx.font = `bold ${vp.labelSize}px Courier New`;
+        ctx.textAlign = 'center';
+        const cDisplayName = (fdata ? fdata.display_name : z.fid).toUpperCase();
+        ctx.fillText(cDisplayName, z.fcx, z.fcy + z.zoneR + 22);
+        let cSectorType;
+        if (spatialMode && z.ownedSectors && z.ownedSectors.length > 0) {
+          const sectorNames = z.ownedSectors.map(sid => {
+            const ss = spatialSectors[sid];
+            return ss ? ss.data.name : sid;
+          });
+          cSectorType = 'SECTORS: ' + sectorNames.join(', ');
+        } else {
+          cSectorType = cohesion < 40 ? 'CONTESTED' : 'INFLUENCE ZONE';
+        }
+        ctx.fillStyle = hexToRgba(z.color, (isHovered ? 0.7 : 0.35) * factionFade);
       ctx.font = (rmLabelSize || 14) + 'px Courier New';
-      ctx.fillText(cSectorType, z.fcx, z.fcy + z.zoneR + 40);
+        ctx.fillText(cSectorType, z.fcx, z.fcy + z.zoneR + 40);
+      }
     }
-  }
+
+    // SPATIAL-03A: Selection highlight — bright pulsing ring around selected faction zone
+    if (selectedFaction) {
+      const sz = factionZones.find(z => z.fid === selectedFaction);
+      if (sz) {
+        const selPulse = 0.6 + 0.4 * Math.sin(t * 0.004);
+        const selRenderPoly = (sz._deformedPoly && sz._deformedPoly.length >= 3) ? sz._deformedPoly : sz.polygon;
+        if (selRenderPoly.length >= 3) {
+          tracePolygonPath(ctx, selRenderPoly);
+          ctx.strokeStyle = `rgba(255,255,255,${0.4 * selPulse})`;
+          ctx.lineWidth = 3;
+          ctx.stroke();
+          // Outer glow
+          const padded = padPolygon(selRenderPoly, 12);
+          tracePolygonPath(ctx, padded);
+          ctx.strokeStyle = `rgba(255,255,255,${0.1 * selPulse})`;
+          ctx.lineWidth = 6;
+          ctx.stroke();
+        } else {
+          ctx.beginPath();
+          ctx.arc(sz.fcx, sz.fcy, sz.zoneR + 6, 0, Math.PI * 2);
+          ctx.strokeStyle = `rgba(255,255,255,${0.4 * selPulse})`;
+          ctx.lineWidth = 3;
+          ctx.stroke();
+          ctx.beginPath();
+          ctx.arc(sz.fcx, sz.fcy, sz.zoneR + 14, 0, Math.PI * 2);
+          ctx.strokeStyle = `rgba(255,255,255,${0.1 * selPulse})`;
+          ctx.lineWidth = 6;
+          ctx.stroke();
+        }
+      }
+    }
 
 // Center zone — neutral / Federation core (skip in spatial mode, Sol Prime rendered as sector marker)
 if (!spatialMode) {
@@ -2448,33 +2661,42 @@ if (!spatialMode) {
     ctx.fillText('NEUTRAL / FEDERATION CORE', cx, cy + centerR + 20);
 }
 
-  // Relationship lines
-  if (mapData) {
-    const nodeMap = {};
-    nodes.forEach(n => nodeMap[n.id] = n);
+      // Relationship lines
+      if (mapData) {
+        const nodeMap = {};
+        nodes.forEach(n => nodeMap[n.id] = n);
 
-    for (const node of nodes) {
-      const rels = node.npc.relationships || {};
-      for (const [otherId, score] of Object.entries(rels)) {
-        const other = nodeMap[otherId];
-        if (!other) continue;
-        if (node.id > otherId) continue;
+        for (const node of nodes) {
+          const rels = node.npc.relationships || {};
+          for (const [otherId, score] of Object.entries(rels)) {
+            const other = nodeMap[otherId];
+            if (!other) continue;
+            if (node.id > otherId) continue;
 
-        const strength = Math.abs(score) / 100;
-        if (strength < 0.1) continue;
+            const strength = Math.abs(score) / 100;
+            if (strength < 0.1) continue;
 
-        const dx = node.x - other.x, dy = node.y - other.y;
-        const dist = Math.sqrt(dx*dx + dy*dy);
-        const maxDist = Math.min(W, H) * 0.6;
-        const distFade = dist > maxDist ? 0.3 : (dist > maxDist * 0.5 ? 0.6 : 1.0);
+            const dx = node.x - other.x, dy = node.y - other.y;
+            const dist = Math.sqrt(dx*dx + dy*dy);
+            const maxDist = Math.min(W, H) * 0.6;
+            const distFade = dist > maxDist ? 0.3 : (dist > maxDist * 0.5 ? 0.6 : 1.0);
 
-        const isPositive = score > 50;
-        const isConflict = score < -30;
+            const isPositive = score > 50;
+            const isConflict = score < -30;
 
-        // Crisis view: only show conflict lines
-        if (currentView === 'crisis' && !isConflict && strength < 0.4) continue;
+            // Crisis view: only show conflict lines
+            if (currentView === 'crisis' && !isConflict && strength < 0.4) continue;
 
-        const baseAlpha = strength * 0.4 * distFade * vp.lineAlphaScale;
+            // SPATIAL-03A: Fade relationship lines when a faction is selected
+            let factionLineFade = 1.0;
+            if (selectedFaction) {
+              const nodeInFaction = node.faction === selectedFaction;
+              const otherInFaction = other.faction === selectedFaction;
+              if (!nodeInFaction && !otherInFaction) factionLineFade = 0.05;
+              else if (nodeInFaction || otherInFaction) factionLineFade = 0.7;
+            }
+
+            const baseAlpha = strength * 0.4 * distFade * vp.lineAlphaScale * factionLineFade;
 
         let lineColor;
         if (isPositive) {
@@ -2497,44 +2719,48 @@ if (!spatialMode) {
     }
   }
 
-  // NPC nodes
-  const pulse = Math.sin(t * 0.003) * 0.3 + 0.7;
-  for (const node of nodes) {
-    const isHovered = hoveredNode === node;
-    const isSelected = selectedNode === node;
-    const r = node.radius * (isHovered ? 1.4 : 1);
+      // NPC nodes
+      const pulse = Math.sin(t * 0.003) * 0.3 + 0.7;
+      for (const node of nodes) {
+        const isHovered = hoveredNode === node;
+        const isSelected = selectedNode === node;
+        const r = node.radius * (isHovered ? 1.4 : 1);
+        // SPATIAL-03A: Fade NPCs not in selected faction
+        const npcFade = selectedFaction ? (node.faction === selectedFaction ? 1.0 : 0.15) : 1.0;
+        // Skip drawing very faded NPCs (optimization)
+        if (npcFade < 0.1) continue;
 
     // Crisis view: highlight rivals and enigmas with pulse
     const isCrisisHighlight = currentView === 'crisis' && (node.category === 'rival' || node.category === 'enigma');
 
-    // High-activity NPC extra glow (pulses with faction breath)
-    if (node.activity > 0.7 && node.faction) {
-      const zone = factionZones.find(z => z.fid === node.faction);
-      if (zone) {
-        const bp = zone.zonePulse + t * 0.001 * (0.8 + node.activity * 0.4);
-        const glowSize = r * 3 + Math.sin(bp) * 4;
-        const aglow = ctx.createRadialGradient(node.x, node.y, r * 0.5, node.x, node.y, glowSize);
-        aglow.addColorStop(0, node.color + '33');
-        aglow.addColorStop(1, node.color + '00');
+        // High-activity NPC extra glow (pulses with faction breath)
+        if (node.activity > 0.7 && node.faction && npcFade > 0.5) {
+          const zone = factionZones.find(z => z.fid === node.faction);
+          if (zone) {
+            const bp = zone.zonePulse + t * 0.001 * (0.8 + node.activity * 0.4);
+            const glowSize = r * 3 + Math.sin(bp) * 4;
+            const aglow = ctx.createRadialGradient(node.x, node.y, r * 0.5, node.x, node.y, glowSize);
+            aglow.addColorStop(0, hexToRgba(node.color, 0.2 * npcFade));
+            aglow.addColorStop(1, hexToRgba(node.color, 0));
+            ctx.beginPath();
+            ctx.arc(node.x, node.y, glowSize, 0, Math.PI * 2);
+            ctx.fillStyle = aglow;
+            ctx.fill();
+          }
+        }
+
+        // Glow — SPATIAL-03A: apply npcFade
+        const glowR = r * 3;
+        const glow = ctx.createRadialGradient(node.x, node.y, r * 0.5, node.x, node.y, glowR);
+        glow.addColorStop(0, hexToRgba(node.color, (isCrisisHighlight ? 0.4 : 0.27) * npcFade));
+        glow.addColorStop(1, hexToRgba(node.color, 0));
         ctx.beginPath();
-        ctx.arc(node.x, node.y, glowSize, 0, Math.PI * 2);
-        ctx.fillStyle = aglow;
+        ctx.arc(node.x, node.y, glowR, 0, Math.PI * 2);
+        ctx.fillStyle = glow;
         ctx.fill();
-      }
-    }
 
-    // Glow
-    const glowR = r * 3;
-    const glow = ctx.createRadialGradient(node.x, node.y, r * 0.5, node.x, node.y, glowR);
-    glow.addColorStop(0, node.color + (isCrisisHighlight ? '66' : '44'));
-    glow.addColorStop(1, node.color + '00');
-    ctx.beginPath();
-    ctx.arc(node.x, node.y, glowR, 0, Math.PI * 2);
-    ctx.fillStyle = glow;
-    ctx.fill();
-
-    // Activity pulse ring
-    if (node.activity > 0.5 || isCrisisHighlight) {
+        // Activity pulse ring
+        if ((node.activity > 0.5 || isCrisisHighlight) && npcFade > 0.3) {
       ctx.beginPath();
       ctx.arc(node.x, node.y, r + 4 + pulse * 3, 0, Math.PI * 2);
       ctx.strokeStyle = isCrisisHighlight ? 'rgba(239,83,80,0.5)' : (node.color + '44');
@@ -2732,7 +2958,7 @@ function getNodeAt(sx, sy) {
   return null;
 }
 
-function onMouseMove(e) {
+      function onMouseMove(e) {
   const rect = canvas.getBoundingClientRect();
   const mx = e.clientX - rect.left;
   const my = e.clientY - rect.top;
@@ -2746,7 +2972,7 @@ function onMouseMove(e) {
   const node = getNodeAt(mx, my);
   hoveredNode = node;
 
-  // Check faction zone hover (only if not hovering an NPC)
+  // Check faction zone hover (only if not hovering an NPC/sector)
   if (!node) {
     const zone = getFactionZoneAt(mx, my);
     hoveredFaction = zone ? zone.fid : null;
@@ -2790,13 +3016,41 @@ function onWheel(e) {
   zoom = Math.max(0.3, Math.min(4, zoom * delta));
 }
 
-function onClick(e) {
+      function onClick(e) {
   const rect = canvas.getBoundingClientRect();
   const mx = e.clientX - rect.left;
   const my = e.clientY - rect.top;
   const node = getNodeAt(mx, my);
-  selectedNode = node;
-  showDetail(node);
+  if (node) {
+    selectedNode = node;
+    // SPATIAL-03A: If clicking an NPC, select their faction for isolation
+    if (node.faction && spatialMode) {
+      selectedFaction = node.faction;
+    } else if (node.sectorData && node.ownerFaction && spatialMode) {
+      // Clicking a sector node: select its owning faction
+      selectedFaction = node.ownerFaction;
+    }
+    showDetail(node);
+  } else {
+    // SPATIAL-03A: Check if clicking a faction zone
+    const zone = getFactionZoneAt(mx, my);
+    if (zone && spatialMode) {
+      // Select this faction — isolate it
+      if (selectedFaction === zone.fid) {
+        // Clicking same faction again: deselect
+        selectedFaction = null;
+        selectedNode = null;
+      } else {
+        selectedFaction = zone.fid;
+        selectedNode = null;
+      }
+    } else {
+      // Clicking empty space: deselect everything
+      selectedFaction = null;
+      selectedNode = null;
+      showDetail(null);
+    }
+  }
 }
 
 function onDblClick(e) {
@@ -2966,7 +3220,7 @@ function toggleStarmapReadableMode() {
     setLabelPreset('normal');
     if (labelMode !== 'important') setLabelMode('important');
   }
-  drawMap();
+  draw();
 
   try { localStorage.setItem('fed_smap_readable', on ? 'true' : 'false'); } catch(e) {}
 }
@@ -2989,7 +3243,7 @@ function setLabelPreset(preset) {
 
 function setLabelSize(val) {
   rmLabelSize = parseInt(val) || 14;
-  drawMap();
+  draw();
 }
 
 function toggleFocusFaction() {
@@ -3021,7 +3275,7 @@ function toggleFocusFaction() {
     }
   }
 
-  drawMap();
+  draw();
 }
 
 function initStarmapReadableMode() {
