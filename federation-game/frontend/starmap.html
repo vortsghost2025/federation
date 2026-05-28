@@ -1361,8 +1361,8 @@ function buildNodesSpatial() {
       const fac = factions[npc.affiliation];
       if (fac && fac.home_sector_id) secId = fac.home_sector_id;
     }
-    // Last resort: place at sol_prime
-    if (!secId) secId = 'sol_prime';
+// Last resort: place at sol-prime
+      if (!secId) secId = 'sol-prime';
     if (!npcsBySector[secId]) npcsBySector[secId] = [];
     npcsBySector[secId].push(npc);
   }
@@ -1408,7 +1408,7 @@ function buildNodesSpatial() {
     const color = fdata.color || '#333';
     const ownedSectors = factionHomeSectors[fid] || [];
     // Use home sector as anchor
-    const homeSecId = fdata.home_sector_id || (ownedSectors.length > 0 ? ownedSectors[0] : 'sol_prime');
+    const homeSecId = fdata.home_sector_id || (ownedSectors.length > 0 ? ownedSectors[0] : 'sol-prime');
     const homePos = spatialSectors[homeSecId];
     if (!homePos) continue;
     const fcx = homePos.cx;
