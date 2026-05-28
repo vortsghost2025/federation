@@ -2636,8 +2636,9 @@ node._labelBox = null;
 
 // Center marker (Federation core) — skip in spatial mode, Sol Prime rendered as sector marker
 if (!spatialMode) {
-  ctx.beginPath();
-  ctx.arc(cx, cy, 3, 0, Math.PI * 2);
+    const cx = W / 2, cy = H / 2;
+    ctx.beginPath();
+    ctx.arc(cx, cy, 3, 0, Math.PI * 2);
   ctx.fillStyle = '#4fc3f7';
   ctx.fill();
   ctx.beginPath();
