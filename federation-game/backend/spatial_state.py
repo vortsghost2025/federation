@@ -208,12 +208,16 @@ def get_all_territories() -> List[FactionTerritory]:
     """Get all territory records."""
     r = get_redis()
     keys = r.keys(f"{PREFIX_TERRITORY}*")
-    # Filter out index keys (which contain double-colon segments like territory:sector: or territory:faction:)
     territories = []
     for key in keys:
         # Only parse keys that match "territory:{faction_id}:{sector_id}" pattern
+        # Skip index keys: territory:sector:* and territory:faction:* (those are SETs, not strings)
         parts = key.split(":")
-        if len(parts) == 3 and parts[0] == "territory":
+        if (
+            len(parts) == 3
+            and parts[0] == "territory"
+            and parts[1] not in ("sector", "faction")
+        ):
             raw = r.get(key)
             if raw:
                 territories.append(FactionTerritory.from_dict(json.loads(raw)))
@@ -349,8 +353,9 @@ def get_all_discoveries() -> List[WorldDiscovery]:
     discoveries = []
     for key in keys:
         # Only parse direct discovery:{a}:{b} keys
+        # Skip index keys: discovery:faction:* (those are SETs, not strings)
         parts = key.split(":")
-        if len(parts) == 3 and parts[0] == "discovery":
+        if len(parts) == 3 and parts[0] == "discovery" and parts[1] != "faction":
             raw = r.get(key)
             if raw:
                 discoveries.append(WorldDiscovery.from_dict(json.loads(raw)))
