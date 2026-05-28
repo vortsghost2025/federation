@@ -679,15 +679,15 @@ def run_tick():
         elif err == "client_error":
             log.warning(f" {name}: client error {resp.status_code} — {resp.text[:120]}")
         else:
-                log.error(f" {name}: failed ({err})")
+            log.error(f" {name}: failed ({err})")
 
-            # ── Spatial tick placeholder (SPATIAL-01) ────────────
-            # Phase 4 will add real spatial mechanics here. For now,
-            # this is a no-op that confirms the spatial module is reachable.
-            if os.getenv("SPATIAL_ENABLED", "true").lower() in ("true", "1", "yes"):
-                log.debug(" Spatial tick: no-op (Phase 4 placeholder)")
+    # ── Spatial tick placeholder (SPATIAL-01) ────────────
+    # Phase 4 will add real spatial mechanics here. For now,
+    # this is a no-op that confirms the spatial module is reachable.
+    if os.getenv("SPATIAL_ENABLED", "true").lower() in ("true", "1", "yes"):
+        log.debug(" Spatial tick: no-op (Phase 4 placeholder)")
 
-            # ── Auto-save ──────────────────────────────────────
+        # ── Auto-save ──────────────────────────────────────
     resp, err = _call_endpoint("/state/save", "Auto-save", 30, retries=0)
     if err is None:
         log.info(f"  Auto-save: {resp.status_code}")
