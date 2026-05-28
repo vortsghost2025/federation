@@ -752,9 +752,16 @@ let factionZones = []; // {fid, fcx, fcy, zoneR, color, fdata, groupSize, polygo
 let stars = [];
 // --- Spatial state (SPATIAL-03) ---
 let spatialMode = false; // true when spatial data is available and rendering is enabled
-let spatialSectors = {};  // sectorId -> {cx, cy, data}  (canvas coords + raw sector data)
+let spatialSectors = {}; // sectorId -> {cx, cy, data} (canvas coords + raw sector data)
 let spatialAdjacencies = []; // [{from, to, fromX, fromY, toX, toY}]
 let spatialSectorNodes = []; // sector center markers for click/hover
+let spatialBounds = null; // {minPx, maxPx, minPy, maxPy, sectorScale, midX, midY} — computed world-to-screen transform for FIT button
+const SPATIAL_FILL_RATIO = 0.65; // fraction of viewport that spatial map should fill
+// Kill switch: URL params or env can force legacy layout
+const _urlParams = new URLSearchParams(window.location.search);
+const _forceLegacy = _urlParams.has('spatial') && _urlParams.get('spatial') === 'false'
+  || _urlParams.has('debug') && _urlParams.get('debug') === 'legacy-layout';
+// SPATIAL_RENDERING_ENABLED checked from API response — if backend sets it false, respect that
 const REGION_COLORS = { core: '#4fc3f7', inner: '#66bb6a', outer: '#ffa726', frontier: '#ef5350' };
 let zoom = 1;
 let panX = 0, panY = 0;
@@ -811,12 +818,20 @@ function init() {
   document.getElementById('zoom-in').addEventListener('click', () => { zoom = Math.min(4, zoom * 1.3); });
   document.getElementById('zoom-out').addEventListener('click', () => { zoom = Math.max(0.3, zoom / 1.3); });
   document.getElementById('zoom-reset').addEventListener('click', () => { zoom = 1; panX = 0; panY = 0; });
-  document.getElementById('zoom-fit').addEventListener('click', () => {
+document.getElementById('zoom-fit').addEventListener('click', () => {
+  if (spatialMode && spatialBounds) {
+    // SPATIAL-02.5: zoom to fit the spatial sector map in viewport
+    zoom = 1;
+    panX = 0;
+    panY = 0;
+  } else {
     const factionRadius = Math.min(W, H) * 0.35;
     const needed = factionRadius * 2.6;
     zoom = Math.max(0.3, Math.min(W, H) / needed);
-    panX = 0; panY = 0;
-  });
+    panX = 0;
+    panY = 0;
+  }
+});
   document.getElementById('search-input').addEventListener('input', onSearch);
 
   for (let i = 0; i < 400; i++) {
@@ -1029,10 +1044,24 @@ function tracePolygonPath(ctx, poly) {
 // --- Build node positions ---
 function buildNodes() {
   if (!mapData) return;
-  // SPATIAL-03: If spatial data is available, use real coordinates
-  if (mapData.sectors && mapData.sectors.length > 0) {
-    buildNodesSpatial();
-    return;
+  // SPATIAL-02.5: Check kill switches before entering spatial mode
+  // 1. URL params: ?spatial=false or ?debug=legacy-layout → force legacy
+  // 2. Backend flag: mapData.spatial_rendering_enabled === false → force legacy
+  // 3. Minimum visible-size: if computed scale would be too tiny, fall back
+  const sectors = mapData.sectors;
+  if (sectors && sectors.length > 0 && !_forceLegacy && mapData.spatial_rendering_enabled !== false) {
+    // Pre-check: would the spatial map be meaningfully visible?
+    let mnX=Infinity, mxX=-Infinity, mnY=Infinity, mxY=-Infinity;
+    for (const s of sectors) { if(s.x<mnX)mnX=s.x; if(s.x>mxX)mxX=s.x; if(s.y<mnY)mnY=s.y; if(s.y>mxY)mxY=s.y; }
+    const rX=Math.max(1,mxX-mnX), rY=Math.max(1,mxY-mnY);
+    const preScale = Math.min((W*SPATIAL_FILL_RATIO)/rX, (H*SPATIAL_FILL_RATIO)/rY);
+    // If scale < 0.3, the map is too compressed to be readable — fall back
+    if (preScale >= 0.3) {
+      buildNodesSpatial();
+      return;
+    }
+    // Scale too small — fall through to legacy layout
+    console.warn('[SPATIAL] Computed scale', preScale.toFixed(3), 'is below minimum 0.3 — falling back to legacy layout');
   }
   spatialMode = false; // fallback to cosmetic layout
   spatialSectors = {};
@@ -1268,6 +1297,7 @@ function buildNodesSpatial() {
   const now = Date.now() / 1000;
 
   // Coordinate transform: map sector (x,y) to canvas pixels
+  // SPATIAL-02.5: Use per-axis scaling so map fills ~65% of viewport, not a tiny clump
   const cx = W / 2;
   const cy = H / 2;
   // Find coordinate range
@@ -1278,15 +1308,17 @@ function buildNodesSpatial() {
   }
   const rangeX = Math.max(1, maxX - minX);
   const rangeY = Math.max(1, maxY - minY);
-  const sectorScale = Math.min(W, H) * 0.32 / Math.max(rangeX, rangeY);
-  // Center offset: shift so (0,0) maps to canvas center
-  const offsetX = cx - ((0 - minX) / rangeX - 0.5) * rangeX * sectorScale;
-  const offsetY = cy - ((0 - minY) / rangeY - 0.5) * rangeY * sectorScale;
+  const midX = (minX + maxX) / 2;
+  const midY = (minY + maxY) / 2;
+  // Per-axis scale: fill SPATIAL_FILL_RATIO (65%) of viewport, use the smaller to preserve aspect ratio
+  const scaleX = (W * SPATIAL_FILL_RATIO) / rangeX;
+  const scaleY = (H * SPATIAL_FILL_RATIO) / rangeY;
+  const sectorScale = Math.min(scaleX, scaleY);
 
   function sectorToCanvas(sx, sy) {
     return {
-      x: cx + (sx - (minX + maxX) / 2) * sectorScale,
-      y: cy + (sy - (minY + maxY) / 2) * sectorScale
+      x: cx + (sx - midX) * sectorScale,
+      y: cy + (sy - midY) * sectorScale
     };
   }
 
@@ -1466,6 +1498,9 @@ function buildNodesSpatial() {
   }
 
   spatialMode = true;
+
+  // Store spatial bounds for FIT button and future reference
+  spatialBounds = { midX, midY, sectorScale, rangeX, rangeY, minX, maxX, minY, maxY };
 }
 
 // --- Update UI panels ---
