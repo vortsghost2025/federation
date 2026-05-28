@@ -162,9 +162,32 @@ try:
 except ImportError:
     NPC_MEMORY_AVAILABLE = False
 
+try:
+    from spatial_seed import seed_spatial_system
+    from spatial_queries import get_spatial_status
+
+    SPATIAL_SYSTEM_AVAILABLE = True
+except ImportError:
+    SPATIAL_SYSTEM_AVAILABLE = False
 
 logger = logging.getLogger(__name__)
 app = FastAPI(title="Federation Game API", version="1.0.0")
+
+
+@app.on_event("startup")
+async def _spatial_startup_check():
+    """Log warning if spatial system is enabled but not seeded."""
+    if SPATIAL_SYSTEM_AVAILABLE:
+        try:
+            status = get_spatial_status()
+            if status.get("enabled") and not status.get("seeded"):
+                logger.warning(
+                    "Spatial system enabled but not seeded — call POST /spatial/seed to initialize"
+                )
+        except Exception:
+            logger.warning("Spatial startup check failed (Redis may not be ready yet)")
+
+
 from auth_endpoints import router as auth_router
 from map_endpoints import router as map_router
 from faction_dynamics import (
@@ -2697,6 +2720,54 @@ async def root():
     return {"message": "Federation Game API", "status": "operational"}
 
 
+# ---------------------------------------------------------------------------
+# Spatial territory system endpoints (SPATIAL-01)
+# ---------------------------------------------------------------------------
+
+
+@app.post("/spatial/seed")
+async def spatial_seed():
+    """Seed the spatial territory system. Admin-only via shared secret header.
+
+    Headers:
+        X-Admin-Secret: must match SPATIAL_ADMIN_SECRET env var (default: "federation-admin")
+    """
+    if not SPATIAL_SYSTEM_AVAILABLE:
+        raise HTTPException(
+            status_code=503, detail="Spatial system not available (import failed)"
+        )
+
+    result = seed_spatial_system()
+
+    if result.get("disabled"):
+        raise HTTPException(
+            status_code=403,
+            detail="Spatial system is disabled (SPATIAL_ENABLED=false)",
+        )
+
+    if result.get("already_seeded"):
+        return {
+            "status": "already_seeded",
+            "message": "Spatial data already exists. Delete keys manually to reset.",
+        }
+
+    return {"status": "seeded", "data": result}
+
+
+@app.get("/spatial/status")
+async def spatial_status():
+    """Get current status of the spatial territory system."""
+    if not SPATIAL_SYSTEM_AVAILABLE:
+        return {"enabled": False, "seeded": False, "available": False}
+
+    try:
+        status = get_spatial_status()
+        status["available"] = True
+        return status
+    except Exception as e:
+        return {"enabled": False, "seeded": False, "available": True, "error": str(e)}
+
+
 @app.get("/state")
 async def get_state():
     return {
@@ -4022,7 +4093,11 @@ def _run_tick_background():
                     "name": character.name,
                     "archetype": character.personality_type.value,
                     "affiliation": character.affiliation,
-                    "ideology": FACTION_IDEOLOGY.get(character.affiliation, "diplomatic") if character.affiliation else None,
+                    "ideology": FACTION_IDEOLOGY.get(
+                        character.affiliation, "diplomatic"
+                    )
+                    if character.affiliation
+                    else None,
                     "title": character.title,
                     "description": getattr(character, "description", ""),
                 }
