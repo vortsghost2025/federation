@@ -261,9 +261,10 @@ def get_all_npc_locations() -> List[NpcLocation]:
     keys = r.keys(f"{PREFIX_NPC_LOCATION}*")
     locations = []
     for key in keys:
-        # Only parse direct npc_location:{id} keys, not index keys
+        # Only parse direct npc_location:{id} or npc_location:{type}:{id} keys
+        # Skip index keys: npc_location:sector:* (those are SETs, not strings)
         parts = key.split(":")
-        if len(parts) == 2 and parts[0] == "npc_location":
+        if len(parts) >= 2 and parts[0] == "npc_location" and parts[1] != "sector":
             raw = r.get(key)
             if raw:
                 locations.append(NpcLocation.from_dict(json.loads(raw)))
