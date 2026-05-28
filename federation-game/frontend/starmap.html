@@ -750,6 +750,12 @@ let mapData = null;
 let nodes = [];
 let factionZones = []; // {fid, fcx, fcy, zoneR, color, fdata, groupSize, polygon:[], labelX, labelY}
 let stars = [];
+// --- Spatial state (SPATIAL-03) ---
+let spatialMode = false; // true when spatial data is available and rendering is enabled
+let spatialSectors = {};  // sectorId -> {cx, cy, data}  (canvas coords + raw sector data)
+let spatialAdjacencies = []; // [{from, to, fromX, fromY, toX, toY}]
+let spatialSectorNodes = []; // sector center markers for click/hover
+const REGION_COLORS = { core: '#4fc3f7', inner: '#66bb6a', outer: '#ffa726', frontier: '#ef5350' };
 let zoom = 1;
 let panX = 0, panY = 0;
 let dragging = false, dragStartX, dragStartY, panStartX, panStartY;
@@ -1023,6 +1029,15 @@ function tracePolygonPath(ctx, poly) {
 // --- Build node positions ---
 function buildNodes() {
   if (!mapData) return;
+  // SPATIAL-03: If spatial data is available, use real coordinates
+  if (mapData.sectors && mapData.sectors.length > 0) {
+    buildNodesSpatial();
+    return;
+  }
+  spatialMode = false; // fallback to cosmetic layout
+  spatialSectors = {};
+  spatialAdjacencies = [];
+  spatialSectorNodes = [];
   const npcs = mapData.npcs || [];
   const factions = mapData.factions || {};
   const now = Date.now() / 1000;
@@ -1240,6 +1255,217 @@ function buildNodes() {
       factionColor: CATEGORY_COLORS.unknown
     });
   });
+}
+
+// --- SPATIAL-03: Build nodes using real sector coordinates ---
+function buildNodesSpatial() {
+  if (!mapData || !mapData.sectors || mapData.sectors.length === 0) return;
+  const npcs = mapData.npcs || [];
+  const factions = mapData.factions || {};
+  const territories = mapData.faction_territories || [];
+  const npcLocations = mapData.npc_locations || [];
+  const sectors = mapData.sectors || [];
+  const now = Date.now() / 1000;
+
+  // Coordinate transform: map sector (x,y) to canvas pixels
+  const cx = W / 2;
+  const cy = H / 2;
+  // Find coordinate range
+  let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+  for (const s of sectors) {
+    if (s.x < minX) minX = s.x; if (s.x > maxX) maxX = s.x;
+    if (s.y < minY) minY = s.y; if (s.y > maxY) maxY = s.y;
+  }
+  const rangeX = Math.max(1, maxX - minX);
+  const rangeY = Math.max(1, maxY - minY);
+  const sectorScale = Math.min(W, H) * 0.32 / Math.max(rangeX, rangeY);
+  // Center offset: shift so (0,0) maps to canvas center
+  const offsetX = cx - ((0 - minX) / rangeX - 0.5) * rangeX * sectorScale;
+  const offsetY = cy - ((0 - minY) / rangeY - 0.5) * rangeY * sectorScale;
+
+  function sectorToCanvas(sx, sy) {
+    return {
+      x: cx + (sx - (minX + maxX) / 2) * sectorScale,
+      y: cy + (sy - (minY + maxY) / 2) * sectorScale
+    };
+  }
+
+  // Build sector lookup with canvas positions
+  spatialSectors = {};
+  for (const s of sectors) {
+    const pos = sectorToCanvas(s.x, s.y);
+    spatialSectors[s.id] = { cx: pos.x, cy: pos.y, data: s };
+  }
+
+  // Build adjacencies (deduplicated — only draw A→B once)
+  spatialAdjacencies = [];
+  const adjSeen = new Set();
+  for (const s of sectors) {
+    const adjIds = s.adjacent_sector_ids || [];
+    for (const adjId of adjIds) {
+      const key = [s.id, adjId].sort().join('|');
+      if (adjSeen.has(key)) continue;
+      adjSeen.add(key);
+      const from = spatialSectors[s.id];
+      const to = spatialSectors[adjId];
+      if (from && to) {
+        spatialAdjacencies.push({
+          from: s.id, to: adjId,
+          fromX: from.cx, fromY: from.cy,
+          toX: to.cx, toY: to.cy
+        });
+      }
+    }
+  }
+
+  // Build territory lookup: sectorId → factionId
+  const sectorOwner = {};
+  for (const t of territories) {
+    sectorOwner[t.sector_id] = t.faction_id;
+  }
+
+  // Build NPC location lookup: npc_id → sectorId
+  const npcSector = {};
+  for (const nl of npcLocations) {
+    npcSector[nl.npc_id] = nl.sector_id;
+  }
+
+  nodes = [];
+  factionZones = [];
+  spatialSectorNodes = [];
+
+  // Place sector markers (clickable/hoverable)
+  for (const s of sectors) {
+    const pos = spatialSectors[s.id];
+    const ownerFid = sectorOwner[s.id];
+    const ownerColor = ownerFid && factions[ownerFid] ? factions[ownerFid].color : null;
+    const regionColor = REGION_COLORS[s.region_type] || '#78909c';
+    spatialSectorNodes.push({
+      id: 'sector:' + s.id,
+      name: s.name || s.id,
+      x: pos.cx, y: pos.cy,
+      radius: s.region_type === 'core' ? 14 : (s.region_type === 'inner' ? 10 : 8),
+      color: ownerColor || regionColor,
+      sectorData: s,
+      ownerFaction: ownerFid || null,
+      regionType: s.region_type
+    });
+  }
+
+  // Group NPCs by their sector (use npc_sector_id from API, then npcSector lookup, then affiliation→home_sector)
+  const npcsBySector = {};
+  for (const npc of npcs) {
+    let secId = npc.sector_id || npcSector[npc.id] || null;
+    // Fallback: if NPC is faction-affiliated and has no sector, place at faction home
+    if (!secId && npc.affiliation) {
+      const fac = factions[npc.affiliation];
+      if (fac && fac.home_sector_id) secId = fac.home_sector_id;
+    }
+    // Last resort: place at sol_prime
+    if (!secId) secId = 'sol_prime';
+    if (!npcsBySector[secId]) npcsBySector[secId] = [];
+    npcsBySector[secId].push(npc);
+  }
+
+  // Place NPCs at their sector positions with local spread
+  for (const [secId, sectorNpcs] of Object.entries(npcsBySector)) {
+    const secPos = spatialSectors[secId];
+    if (!secPos) continue;
+    const spreadRadius = Math.max(25, Math.min(80, sectorNpcs.length * 12));
+    sectorNpcs.forEach((npc, j) => {
+      const rng = seededRand(hashStr(npc.id || npc.name || (secId + j)));
+      const subAngle = (j / sectorNpcs.length) * Math.PI * 2 + rng() * 0.5;
+      const subR = spreadRadius * (0.3 + rng() * 0.7);
+      const x = secPos.cx + Math.cos(subAngle) * subR;
+      const y = secPos.cy + Math.sin(subAngle) * subR;
+      const age = npc.last_active ? (now - npc.last_active) : 9999;
+      const activity = Math.max(0.2, 1 - age / 3600);
+      const radius = 6 + activity * 10;
+      const aff = npc.affiliation;
+      const fColor = aff && factions[aff] ? factions[aff].color : '#9e9e9e';
+      nodes.push({
+        id: npc.id, name: npc.name || npc.id, x, y, radius,
+        color: npc.mood_color || '#9e9e9e',
+        npc, category: npc.category || 'unknown',
+        faction: aff || null,
+        activity, age,
+        factionColor: fColor,
+        sectorId: secId
+      });
+    });
+  }
+
+  // Build faction zones from their home sector positions
+  // Each faction gets a territory zone centered on their home sector
+  const factionHomeSectors = {};
+  for (const t of territories) {
+    if (!factionHomeSectors[t.faction_id]) factionHomeSectors[t.faction_id] = [];
+    factionHomeSectors[t.faction_id].push(t.sector_id);
+  }
+
+  for (const fid of FACTION_ORDER) {
+    const fdata = factions[fid] || {};
+    const color = fdata.color || '#333';
+    const ownedSectors = factionHomeSectors[fid] || [];
+    // Use home sector as anchor
+    const homeSecId = fdata.home_sector_id || (ownedSectors.length > 0 ? ownedSectors[0] : 'sol_prime');
+    const homePos = spatialSectors[homeSecId];
+    if (!homePos) continue;
+    const fcx = homePos.cx;
+    const fcy = homePos.cy;
+
+    // Count NPCs in owned sectors
+    let groupSize = 0;
+    for (const secId of ownedSectors) {
+      groupSize += (npcsBySector[secId] || []).length;
+    }
+
+    // Build territory polygon from owned sector positions
+    let polygon = [];
+    const sectorPositions = ownedSectors
+      .map(sid => spatialSectors[sid])
+      .filter(Boolean)
+      .map(sp => ({ x: sp.cx, y: sp.cy }));
+
+    if (sectorPositions.length >= 3) {
+      let hull = convexHull(sectorPositions);
+      let padded = padPolygon(hull, 40);
+      polygon = smoothPoly(padded, 2);
+    } else if (sectorPositions.length === 2) {
+      // Two sectors: create an elongated polygon
+      const p1 = sectorPositions[0], p2 = sectorPositions[1];
+      const dx = p2.x - p1.x, dy = p2.y - p1.y;
+      const len = Math.sqrt(dx*dx + dy*dy) || 1;
+      const nx = -dy / len * 40, ny = dx / len * 40;
+      const pts = [
+        { x: p1.x + nx, y: p1.y + ny },
+        { x: p2.x + nx, y: p2.y + ny },
+        { x: p2.x - nx, y: p2.y - ny },
+        { x: p1.x - nx, y: p1.y - ny }
+      ];
+      polygon = smoothPoly(pts, 2);
+    }
+
+    // If only one sector or no polygon, use circle fallback
+    const zoneR = Math.max(60, groupSize * 10 + 40);
+
+    const bounds = polygon.length >= 3 ? polyBounds(polygon) : null;
+    const labelX = polygon.length >= 3 ? (bounds.minX + bounds.maxX) / 2 : fcx;
+    const labelY = polygon.length >= 3 ? bounds.maxY + 18 : fcy + zoneR + 22;
+
+    factionZones.push({
+      fid, fcx, fcy, zoneR, color, fdata,
+      groupSize,
+      polygon,
+      labelX, labelY,
+      zonePulse: Math.random() * Math.PI * 2,
+      historicalInfluence: fdata.influence || 20,
+      historicalCohesion: fdata.cohesion || 50,
+      ownedSectors // track which sectors this faction owns
+    });
+  }
+
+  spatialMode = true;
 }
 
 // --- Update UI panels ---
@@ -1516,6 +1742,19 @@ function buildLegend() {
   html += '<div class="ml-row"><div class="ml-dot" style="background:#9e9e9e;border:2px solid #4fc3f7"></div><span class="ml-name">Faction member (border = faction color)</span></div>';
   html += '<div class="ml-row"><div class="ml-dot" style="background:#9e9e9e;border:2px solid #546e7a"></div><span class="ml-name">Unaffiliated (grey border)</span></div>';
   html += '</div>';
+
+  // SPATIAL-03: Sector region types and adjacency lines
+  if (spatialMode) {
+    html += '<div class="ml-section"><div class="ml-section-title">Sector Regions</div>';
+    html += '<div class="ml-row"><div class="ml-dot" style="background:#4fc3f7"></div><span class="ml-name">Core sector</span></div>';
+    html += '<div class="ml-row"><div class="ml-dot" style="background:#66bb6a"></div><span class="ml-name">Inner sector</span></div>';
+    html += '<div class="ml-row"><div class="ml-dot" style="background:#ffa726"></div><span class="ml-name">Outer sector</span></div>';
+    html += '<div class="ml-row"><div class="ml-dot" style="background:#ef5350"></div><span class="ml-name">Frontier sector</span></div>';
+    html += '</div>';
+    html += '<div class="ml-section"><div class="ml-section-title">Spatial Lines</div>';
+    html += '<div class="ml-row"><div class="ml-line" style="background:rgba(79,195,247,0.25)"></div><span class="ml-name">Sector adjacency</span></div>';
+    html += '</div>';
+  }
 
   ml.innerHTML = html;
 }
@@ -1943,6 +2182,47 @@ function draw() {
     ctx.fill();
   }
 
+  // SPATIAL-03: Adjacency lines and sector markers
+  if (spatialMode && spatialAdjacencies.length > 0) {
+    // Draw adjacency lines between connected sectors
+    for (const adj of spatialAdjacencies) {
+      ctx.beginPath();
+      ctx.moveTo(adj.fromX, adj.fromY);
+      ctx.lineTo(adj.toX, adj.toY);
+      ctx.strokeStyle = 'rgba(79,195,247,0.08)';
+      ctx.lineWidth = 1;
+      ctx.stroke();
+    }
+    // Draw sector markers
+    for (const sn of spatialSectorNodes) {
+      const isHov = hoveredNode === sn;
+      const regionColor = REGION_COLORS[sn.regionType] || '#78909c';
+      // Sector dot
+      ctx.beginPath();
+      ctx.arc(sn.x, sn.y, sn.radius * (isHov ? 1.3 : 1), 0, Math.PI * 2);
+      const secGrad = ctx.createRadialGradient(sn.x, sn.y, 0, sn.x, sn.y, sn.radius);
+      secGrad.addColorStop(0, hexToRgba(sn.color, 0.6));
+      secGrad.addColorStop(1, hexToRgba(sn.color, 0.15));
+      ctx.fillStyle = secGrad;
+      ctx.fill();
+      // Region-type ring
+      ctx.beginPath();
+      ctx.arc(sn.x, sn.y, sn.radius + 2, 0, Math.PI * 2);
+      ctx.strokeStyle = hexToRgba(regionColor, 0.3);
+      ctx.lineWidth = 1;
+      ctx.stroke();
+      // Sector name label (always show in spatial mode)
+      ctx.fillStyle = hexToRgba(regionColor, isHov ? 0.9 : 0.5);
+      ctx.font = (isHov ? 'bold ' : '') + (rmLabelSize || 12) + 'px Courier New';
+      ctx.textAlign = 'center';
+      ctx.fillText(sn.name.toUpperCase(), sn.x, sn.y - sn.radius - 8);
+      // Region type sub-label
+      ctx.fillStyle = hexToRgba(regionColor, isHov ? 0.6 : 0.25);
+      ctx.font = ((rmLabelSize || 12) - 2) + 'px Courier New';
+      ctx.fillText(sn.regionType.toUpperCase(), sn.x, sn.y - sn.radius - 22);
+    }
+  }
+
   // Faction territory zones — data-shaped polygons with living growth
   for (const z of factionZones) {
     const fdata = z.fdata;
@@ -2049,8 +2329,17 @@ function draw() {
       const displayName = (fdata ? fdata.display_name : z.fid).toUpperCase();
       ctx.fillText(displayName, z.labelX, z.labelY);
 
-      // Sub-label: sector type
-      const sectorType = cohesion < 40 ? 'CONTESTED' : 'INFLUENCE ZONE';
+  // Sub-label: sector type (spatial mode shows owned sectors, cosmetic shows INFLUENCE ZONE)
+  let sectorType;
+  if (spatialMode && z.ownedSectors && z.ownedSectors.length > 0) {
+    const sectorNames = z.ownedSectors.map(sid => {
+      const ss = spatialSectors[sid];
+      return ss ? ss.data.name : sid;
+    });
+    sectorType = 'SECTORS: ' + sectorNames.join(', ');
+  } else {
+    sectorType = cohesion < 40 ? 'CONTESTED' : 'INFLUENCE ZONE';
+  }
       ctx.fillStyle = hexToRgba(z.color, isHovered ? 0.7 : 0.35);
       ctx.font = (rmLabelSize || 14) + 'px Courier New';
       ctx.fillText(sectorType, z.labelX, z.labelY + 18);
@@ -2089,14 +2378,24 @@ function draw() {
       ctx.textAlign = 'center';
       const cDisplayName = (fdata ? fdata.display_name : z.fid).toUpperCase();
       ctx.fillText(cDisplayName, z.fcx, z.fcy + z.zoneR + 22);
-      const cSectorType = cohesion < 40 ? 'CONTESTED' : 'INFLUENCE ZONE';
+      let cSectorType;
+  if (spatialMode && z.ownedSectors && z.ownedSectors.length > 0) {
+    const sectorNames = z.ownedSectors.map(sid => {
+      const ss = spatialSectors[sid];
+      return ss ? ss.data.name : sid;
+    });
+    cSectorType = 'SECTORS: ' + sectorNames.join(', ');
+  } else {
+    cSectorType = cohesion < 40 ? 'CONTESTED' : 'INFLUENCE ZONE';
+  }
       ctx.fillStyle = hexToRgba(z.color, isHovered ? 0.7 : 0.35);
       ctx.font = (rmLabelSize || 14) + 'px Courier New';
       ctx.fillText(cSectorType, z.fcx, z.fcy + z.zoneR + 40);
     }
   }
 
-  // Center zone — neutral / Federation core
+// Center zone — neutral / Federation core (skip in spatial mode, Sol Prime rendered as sector marker)
+if (!spatialMode) {
   const cx = W / 2, cy = H / 2;
   const centerR = 70;
   ctx.beginPath();
@@ -2111,7 +2410,8 @@ function draw() {
   ctx.fillStyle = 'rgba(120,144,156,0.4)';
   ctx.font = (rmLabelSize || 14) + 'px Courier New';
   ctx.textAlign = 'center';
-  ctx.fillText('NEUTRAL / FEDERATION CORE', cx, cy + centerR + 20);
+    ctx.fillText('NEUTRAL / FEDERATION CORE', cx, cy + centerR + 20);
+}
 
   // Relationship lines
   if (mapData) {
@@ -2334,7 +2634,8 @@ node._labelBox = null;
         ctx.fillText(node.name, node.x, lbl.y);
     }
 
-    // Center marker (Federation core)
+// Center marker (Federation core) — skip in spatial mode, Sol Prime rendered as sector marker
+if (!spatialMode) {
   ctx.beginPath();
   ctx.arc(cx, cy, 3, 0, Math.PI * 2);
   ctx.fillStyle = '#4fc3f7';
@@ -2344,6 +2645,7 @@ node._labelBox = null;
   ctx.strokeStyle = 'rgba(79,195,247,0.2)';
   ctx.lineWidth = 1;
   ctx.stroke();
+}
 
   ctx.restore();
   requestAnimationFrame(draw);
@@ -2377,10 +2679,19 @@ function screenToWorld(sx, sy) {
 
 function getNodeAt(sx, sy) {
   const {x, y} = screenToWorld(sx, sy);
+  // Check NPC nodes first (they're on top)
   for (let i = nodes.length - 1; i >= 0; i--) {
     const n = nodes[i];
     const dx = x - n.x, dy = y - n.y;
     if (dx*dx + dy*dy < (n.radius + 10) * (n.radius + 10)) return n;
+  }
+  // SPATIAL-03: Also check sector markers
+  if (spatialMode) {
+    for (let i = spatialSectorNodes.length - 1; i >= 0; i--) {
+      const sn = spatialSectorNodes[i];
+      const dx = x - sn.x, dy = y - sn.y;
+      if (dx*dx + dy*dy < (sn.radius + 12) * (sn.radius + 12)) return sn;
+    }
   }
   return null;
 }
@@ -2465,13 +2776,36 @@ function onDblClick(e) {
 }
 
 function showDetail(node) {
-    const panel = document.getElementById('detail');
-    if (!node) { panel.classList.remove('show'); return; }
+  const panel = document.getElementById('detail');
+  if (!node) { panel.classList.remove('show'); return; }
 
+  // SPATIAL-03: Handle sector node clicks
+  if (node.sectorData) {
     panel.classList.add('show');
     document.getElementById('detail-name').textContent = node.name;
-    const factionLabel = node.faction ? ' · ' + (FACTION_DISPLAY[node.faction] || node.faction.replace(/_/g,' ')).toUpperCase() : '';
-    document.getElementById('detail-cat').textContent = node.category.replace(/_/g,' ').toUpperCase() + factionLabel;
+    document.getElementById('detail-cat').textContent = 'SECTOR · ' + node.regionType.toUpperCase();
+    const sd = node.sectorData;
+    let rows = '';
+    if (node.ownerFaction) rows += `<div id="detail-row"><span class="dl">Faction</span><span class="dv" style="color:${node.color}">${FACTION_DISPLAY[node.ownerFaction] || node.ownerFaction}</span></div>`;
+    rows += `<div id="detail-row"><span class="dl">Region</span><span class="dv">${sd.region_type || 'unknown'}</span></div>`;
+    rows += `<div id="detail-row"><span class="dl">Resources</span><span class="dv">${sd.resource_profile || 'unknown'}</span></div>`;
+    rows += `<div id="detail-row"><span class="dl">Danger</span><span class="dv">${sd.danger_level != null ? sd.danger_level : '?'}</span></div>`;
+    if (sd.description) rows += `<div id="detail-row"><span class="dl">Info</span><span class="dv">${sd.description}</span></div>`;
+    const adj = (sd.adjacent_sector_ids || []).join(', ');
+    if (adj) rows += `<div id="detail-row"><span class="dl">Adjacent</span><span class="dv">${adj}</span></div>`;
+    document.getElementById('detail-rows').innerHTML = rows;
+    document.getElementById('detail-thought').textContent = '';
+    document.getElementById('detail-lore-toggle').style.display = 'none';
+    document.getElementById('detail-lore').style.display = 'none';
+    return;
+  }
+
+  panel.classList.add('show');
+  document.getElementById('detail-name').textContent = node.name;
+  const factionLabel = node.faction ? ' · ' + (FACTION_DISPLAY[node.faction] || node.faction.replace(/_/g,' ')).toUpperCase() : '';
+  // SPATIAL-03: Show sector info if available
+  const sectorLabel = node.sectorId ? ' · ' + node.sectorId.toUpperCase() : '';
+  document.getElementById('detail-cat').textContent = node.category.replace(/_/g,' ').toUpperCase() + factionLabel + sectorLabel;
 
     const npc = node.npc;
     let rows = '';
