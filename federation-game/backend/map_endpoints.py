@@ -1261,17 +1261,21 @@ async def get_map_data(spatial: bool = True):
             for fid, fentry in result.get("factions", {}).items():
                 home = get_faction_home(fid)
                 fentry["home_sector_id"] = home.home_sector_id if home else None
+            # Expose spatial rendering kill switch to frontend
+            result["spatial_rendering_enabled"] = True
         else:
             result["sectors"] = []
             result["faction_territories"] = []
             result["npc_locations"] = []
             result["discoveries"] = []
+            result["spatial_rendering_enabled"] = False
     except Exception as spatial_err:
         logger.warning("Spatial data section failed: %s", spatial_err)
         result.setdefault("sectors", [])
         result.setdefault("faction_territories", [])
         result.setdefault("npc_locations", [])
         result.setdefault("discoveries", [])
+        result["spatial_rendering_enabled"] = False
 
     return result
 
