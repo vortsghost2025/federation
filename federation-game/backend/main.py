@@ -164,7 +164,18 @@ except ImportError:
 
 try:
     from spatial_seed import seed_spatial_system
-    from spatial_queries import get_spatial_status
+    from spatial_queries import (
+        get_spatial_status,
+        get_all_sectors,
+        get_sector_by_id,
+        get_sector_summary,
+        get_all_discoveries,
+        get_faction_home,
+        get_faction_territories,
+        get_faction_discoveries,
+        get_adjacent_sector_ids,
+    )
+    from spatial_state import is_spatial_enabled
 
     SPATIAL_SYSTEM_AVAILABLE = True
 except ImportError:
@@ -2768,6 +2779,52 @@ async def spatial_status():
         return {"enabled": False, "seeded": False, "available": True, "error": str(e)}
 
 
+# ---------------------------------------------------------------------------
+# Spatial Query Endpoints (SPATIAL-02)
+# ---------------------------------------------------------------------------
+
+
+@app.get("/sectors")
+async def list_sectors():
+    """Return all sectors with adjacency data."""
+    if not SPATIAL_SYSTEM_AVAILABLE or not is_spatial_enabled():
+        return []
+    sectors = get_all_sectors()
+    result = []
+    for s in sectors:
+        d = s.to_dict()
+        d["adjacent_sector_ids"] = get_adjacent_sector_ids(s.id)
+        result.append(d)
+    return result
+
+
+@app.get("/sectors/{sector_id}")
+async def get_sector_detail(sector_id: str):
+    """Return single sector with territory state for all factions present."""
+    if not SPATIAL_SYSTEM_AVAILABLE or not is_spatial_enabled():
+        return {"error": "Spatial system not enabled"}
+    summary = get_sector_summary(sector_id)
+    if summary is None:
+        return {"error": f"Sector '{sector_id}' not found"}
+    result = {
+        "sector": summary["sector"].to_dict(),
+        "territories": [t.to_dict() for t in summary.get("territories", [])],
+        "npcs": [n.to_dict() for n in summary.get("npcs", [])],
+        "adjacent_sectors": summary.get("adjacent_sectors", []),
+        "dominant_faction": summary.get("dominant_faction"),
+    }
+    return result
+
+
+@app.get("/simulation/discoveries")
+async def simulation_discoveries():
+    """Return all faction contact/discovery states."""
+    if not SPATIAL_SYSTEM_AVAILABLE or not is_spatial_enabled():
+        return []
+    discoveries = get_all_discoveries()
+    return [d.to_dict() for d in discoveries]
+
+
 @app.get("/state")
 async def get_state():
     return {
@@ -4642,6 +4699,44 @@ async def simulation_factions():
             faction_data["power"] = float(power_raw) if power_raw else 0.0
         except Exception:
             pass
+
+        # Spatial fields (SPATIAL-02)
+        try:
+            if SPATIAL_SYSTEM_AVAILABLE and is_spatial_enabled():
+                home = get_faction_home(fid)
+                faction_data["home_sector_id"] = home.home_sector_id if home else None
+
+                territories = get_faction_territories(fid)
+                faction_data["territory"] = [
+                    {
+                        "sector_id": t.sector_id,
+                        "control_level": t.control_level,
+                        "claim_type": t.claim_type,
+                    }
+                    for t in territories
+                ]
+
+                faction_discoveries = get_faction_discoveries(fid)
+                faction_data["discovered_factions"] = [
+                    d.faction_b_id if d.faction_a_id == fid else d.faction_a_id
+                    for d in faction_discoveries
+                    if d.state in ("detected", "contacted", "relations_open")
+                ]
+
+                faction_data["expansion_policy"] = (
+                    home.expansion_policy if home else None
+                )
+            else:
+                faction_data["home_sector_id"] = None
+                faction_data["territory"] = []
+                faction_data["discovered_factions"] = []
+                faction_data["expansion_policy"] = None
+        except Exception:
+            faction_data["home_sector_id"] = None
+            faction_data["territory"] = []
+            faction_data["discovered_factions"] = []
+            faction_data["expansion_policy"] = None
+
         result[fid] = faction_data
     return result
 

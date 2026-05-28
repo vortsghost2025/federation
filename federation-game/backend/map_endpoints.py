@@ -27,6 +27,23 @@ except ImportError:
 
 REDIS_URL = os.environ.get("REDIS_URL", "redis://redis:6379/0")
 
+from spatial_state import is_spatial_enabled
+from spatial_queries import (
+    get_all_sectors,
+    get_all_sector_ids,
+    get_all_adjacencies,
+    get_all_faction_homes,
+    get_all_territories,
+    get_all_npc_locations,
+    get_all_discoveries,
+    get_faction_home,
+    get_faction_territories,
+    get_faction_discoveries,
+    get_npc_location,
+    get_sector,
+    get_adjacent_sector_ids,
+)
+
 _redis_client = None
 
 
@@ -1070,7 +1087,7 @@ async def get_narration_latest():
 
 
 @router.get("/data")
-async def get_map_data():
+async def get_map_data(spatial: bool = True):
     """Aggregate all visualization data for the star map frontend."""
     r = _get_redis()
     result = {
@@ -1215,6 +1232,46 @@ async def get_map_data():
         )
     except Exception:
         logger.debug("Crisis readout generation failed")
+
+    # --- Spatial Data (SPATIAL-02) ---
+    try:
+        if is_spatial_enabled() and spatial:
+            sectors = get_all_sectors()
+            result["sectors"] = [s.to_dict() for s in sectors]
+
+            territories = get_all_territories()
+            result["faction_territories"] = [t.to_dict() for t in territories]
+
+            npc_locations = get_all_npc_locations()
+            result["npc_locations"] = [loc.to_dict() for loc in npc_locations]
+
+            discoveries = get_all_discoveries()
+            result["discoveries"] = [d.to_dict() for d in discoveries]
+
+            # Enrich NPC entries with sector_id
+            for entry in result.get("npcs", []):
+                cid = entry.get("id", "")
+                loc = get_npc_location(cid)
+                if loc:
+                    entry["sector_id"] = loc.sector_id
+                else:
+                    entry["sector_id"] = ""
+
+            # Enrich faction entries with home_sector_id
+            for fid, fentry in result.get("factions", {}).items():
+                home = get_faction_home(fid)
+                fentry["home_sector_id"] = home.home_sector_id if home else None
+        else:
+            result["sectors"] = []
+            result["faction_territories"] = []
+            result["npc_locations"] = []
+            result["discoveries"] = []
+    except Exception as spatial_err:
+        logger.warning("Spatial data section failed: %s", spatial_err)
+        result.setdefault("sectors", [])
+        result.setdefault("faction_territories", [])
+        result.setdefault("npc_locations", [])
+        result.setdefault("discoveries", [])
 
     return result
 
