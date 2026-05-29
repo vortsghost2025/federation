@@ -701,83 +701,83 @@ def run_tick():
         log.warning(f"  Auto-save failed: {err}")
 
 
-# ── Crisis decay: regress extreme world_state values toward mean ──
-# Prevents doom loops where values get stuck at 0 or 100
-_MEAN_VALUES = {
-    "stability": 50,
-    "morale": 50,
-    "threat_level": 30,
-    "anomaly_activity": 50,
-    "tension_level": 30,
-    "resource_abundance": 70,
-    "treasury": 250,
-}
-_DECAY_RATE = 0.02  # 2% regression per tick toward mean
-try:
-    _ws = r.hgetall("world_state")
-    _updates = {}
-    for _key, _mean in _MEAN_VALUES.items():
-        _current = float(_ws.get(_key, str(_mean)))
-        if _current != _mean:
-            _new = _current + (_mean - _current) * _DECAY_RATE
-            _updates[_key] = str(round(_new, 2))
-    if _updates:
-        r.hset("world_state", mapping=_updates)
-        log.info(f"  Crisis decay applied: {_updates}")
-except Exception as _e:
-    log.warning(f"  Crisis decay failed: {_e}")
-
-    # ── Publish tick to Redis ──────────────────────────
+    # ── Crisis decay: regress extreme world_state values toward mean ──
+    # Prevents doom loops where values get stuck at 0 or 100
+    _MEAN_VALUES = {
+        "stability": 50,
+        "morale": 50,
+        "threat_level": 30,
+        "anomaly_activity": 50,
+        "tension_level": 30,
+        "resource_abundance": 70,
+        "treasury": 250,
+    }
+    _DECAY_RATE = 0.02  # 2% regression per tick toward mean
     try:
-        r.publish(
-            "federation:updates",
-            json.dumps(
-                {
-                    "event": "game:tick",
-                    "tick": tick_count,
-                    "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
-                    "async_outcomes": async_outcomes if async_outcomes else None,
-                }
-            ),
-        )
-        r.hset(
-            "worker:status",
-            mapping={
-                "last_tick": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
-                "tick_count": str(tick_count),
-                "backend_url": BACKEND_URL,
-                "enabled": "1",
-                "async_outcomes": json.dumps(async_outcomes)
-                if async_outcomes
-                else "{}",
-            },
-        )
-    except Exception as e:
-        log.warning(f"Redis publish failed: {e}")
-
-    # ── Check for significant events and notify ────────
-    try:
-        game_events = check_significant_events(history_data, political_data)
-        npc_events = check_npc_broadcasts()
-        notification = build_notification(game_events, npc_events)
-        if notification:
-            title, body = notification
-            send_notification(title, body)
-            log.info(
-                f"  Notification sent ({len(game_events + npc_events)} raw events)"
+        _ws = r.hgetall("world_state")
+        _updates = {}
+        for _key, _mean in _MEAN_VALUES.items():
+            _current = float(_ws.get(_key, str(_mean)))
+            if _current != _mean:
+                _new = _current + (_mean - _current) * _DECAY_RATE
+                _updates[_key] = str(round(_new, 2))
+        if _updates:
+            r.hset("world_state", mapping=_updates)
+            log.info(f"  Crisis decay applied: {_updates}")
+    except Exception as _e:
+        log.warning(f"  Crisis decay failed: {_e}")
+    
+        # ── Publish tick to Redis ──────────────────────────
+        try:
+            r.publish(
+                "federation:updates",
+                json.dumps(
+                    {
+                        "event": "game:tick",
+                        "tick": tick_count,
+                        "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+                        "async_outcomes": async_outcomes if async_outcomes else None,
+                    }
+                ),
             )
-        else:
-            total = len(game_events + npc_events)
-            if total > 0:
+            r.hset(
+                "worker:status",
+                mapping={
+                    "last_tick": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+                    "tick_count": str(tick_count),
+                    "backend_url": BACKEND_URL,
+                    "enabled": "1",
+                    "async_outcomes": json.dumps(async_outcomes)
+                    if async_outcomes
+                    else "{}",
+                },
+            )
+        except Exception as e:
+            log.warning(f"Redis publish failed: {e}")
+    
+        # ── Check for significant events and notify ────────
+        try:
+            game_events = check_significant_events(history_data, political_data)
+            npc_events = check_npc_broadcasts()
+            notification = build_notification(game_events, npc_events)
+            if notification:
+                title, body = notification
+                send_notification(title, body)
                 log.info(
-                    f"  Throttled: {total} events but notification suppressed (10-min dedupe)"
+                    f"  Notification sent ({len(game_events + npc_events)} raw events)"
                 )
             else:
-                log.info("  No significant events this tick")
-    except Exception as e:
-        log.warning(f"Event detection failed: {e}")
-
-
+                total = len(game_events + npc_events)
+                if total > 0:
+                    log.info(
+                        f"  Throttled: {total} events but notification suppressed (10-min dedupe)"
+                    )
+                else:
+                    log.info("  No significant events this tick")
+        except Exception as e:
+            log.warning(f"Event detection failed: {e}")
+    
+    
 # ── Health check ───────────────────────────────────────────
 
 
