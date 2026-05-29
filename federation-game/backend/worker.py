@@ -687,7 +687,7 @@ def run_tick():
     if os.getenv("SPATIAL_ENABLED", "true").lower() in ("true", "1", "yes"):
         log.debug(" Spatial tick: no-op (Phase 4 placeholder)")
 
-        # ── Auto-save ──────────────────────────────────────
+    # ── Auto-save ──────────────────────────────────────
     resp, err = _call_endpoint("/state/save", "Auto-save", 30, retries=0)
     if err is None:
         log.info(f"  Auto-save: {resp.status_code}")
@@ -700,32 +700,31 @@ def run_tick():
     else:
         log.warning(f"  Auto-save failed: {err}")
 
-
-# ── Crisis decay: regress extreme world_state values toward mean ──
-# Prevents doom loops where values get stuck at 0 or 100
-_MEAN_VALUES = {
-    "stability": 50,
-    "morale": 50,
-    "threat_level": 30,
-    "anomaly_activity": 50,
-    "tension_level": 30,
-    "resource_abundance": 70,
-    "treasury": 250,
-}
-_DECAY_RATE = 0.02  # 2% regression per tick toward mean
-try:
-    _ws = r.hgetall("world_state")
-    _updates = {}
-    for _key, _mean in _MEAN_VALUES.items():
-        _current = float(_ws.get(_key, str(_mean)))
-        if _current != _mean:
-            _new = _current + (_mean - _current) * _DECAY_RATE
-            _updates[_key] = str(round(_new, 2))
-    if _updates:
-        r.hset("world_state", mapping=_updates)
-        log.info(f"  Crisis decay applied: {_updates}")
-except Exception as _e:
-    log.warning(f"  Crisis decay failed: {_e}")
+    # ── Crisis decay: regress extreme world_state values toward mean ──
+    # Prevents doom loops where values get stuck at 0 or 100
+    _MEAN_VALUES = {
+        "stability": 50,
+        "morale": 50,
+        "threat_level": 30,
+        "anomaly_activity": 50,
+        "tension_level": 30,
+        "resource_abundance": 70,
+        "treasury": 250,
+    }
+    _DECAY_RATE = 0.02  # 2% regression per tick toward mean
+    try:
+        _ws = r.hgetall("world_state")
+        _updates = {}
+        for _key, _mean in _MEAN_VALUES.items():
+            _current = float(_ws.get(_key, str(_mean)))
+            if _current != _mean:
+                _new = _current + (_mean - _current) * _DECAY_RATE
+                _updates[_key] = str(round(_new, 2))
+        if _updates:
+            r.hset("world_state", mapping=_updates)
+            log.info(f"  Crisis decay applied: {_updates}")
+    except Exception as _e:
+        log.warning(f"  Crisis decay failed: {_e}")
 
 # ── Publish tick to Redis ──────────────────────────
 try:
