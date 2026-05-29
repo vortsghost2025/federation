@@ -727,55 +727,55 @@ try:
 except Exception as _e:
     log.warning(f"  Crisis decay failed: {_e}")
 
-    # ── Publish tick to Redis ──────────────────────────
-    try:
-        r.publish(
-            "federation:updates",
-            json.dumps(
-                {
-                    "event": "game:tick",
-                    "tick": tick_count,
-                    "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
-                    "async_outcomes": async_outcomes if async_outcomes else None,
-                }
-            ),
-        )
-        r.hset(
-            "worker:status",
-            mapping={
-                "last_tick": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
-                "tick_count": str(tick_count),
-                "backend_url": BACKEND_URL,
-                "enabled": "1",
-                "async_outcomes": json.dumps(async_outcomes)
-                if async_outcomes
-                else "{}",
-            },
-        )
-    except Exception as e:
-        log.warning(f"Redis publish failed: {e}")
+# ── Publish tick to Redis ──────────────────────────
+try:
+    r.publish(
+        "federation:updates",
+        json.dumps(
+            {
+                "event": "game:tick",
+                "tick": tick_count,
+                "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+                "async_outcomes": async_outcomes if async_outcomes else None,
+            }
+        ),
+    )
+    r.hset(
+        "worker:status",
+        mapping={
+            "last_tick": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+            "tick_count": str(tick_count),
+            "backend_url": BACKEND_URL,
+            "enabled": "1",
+            "async_outcomes": json.dumps(async_outcomes)
+            if async_outcomes
+            else "{}",
+        },
+    )
+except Exception as e:
+    log.warning(f"Redis publish failed: {e}")
 
-    # ── Check for significant events and notify ────────
-    try:
-        game_events = check_significant_events(history_data, political_data)
-        npc_events = check_npc_broadcasts()
-        notification = build_notification(game_events, npc_events)
-        if notification:
-            title, body = notification
-            send_notification(title, body)
+# ── Check for significant events and notify ────────
+try:
+    game_events = check_significant_events(history_data, political_data)
+    npc_events = check_npc_broadcasts()
+    notification = build_notification(game_events, npc_events)
+    if notification:
+        title, body = notification
+        send_notification(title, body)
+        log.info(
+            f"  Notification sent ({len(game_events + npc_events)} raw events)"
+        )
+    else:
+        total = len(game_events + npc_events)
+        if total > 0:
             log.info(
-                f"  Notification sent ({len(game_events + npc_events)} raw events)"
+                f"  Throttled: {total} events but notification suppressed (10-min dedupe)"
             )
         else:
-            total = len(game_events + npc_events)
-            if total > 0:
-                log.info(
-                    f"  Throttled: {total} events but notification suppressed (10-min dedupe)"
-                )
-            else:
-                log.info("  No significant events this tick")
-    except Exception as e:
-        log.warning(f"Event detection failed: {e}")
+            log.info("  No significant events this tick")
+except Exception as e:
+    log.warning(f"Event detection failed: {e}")
 
 
 # ── Health check ───────────────────────────────────────────
