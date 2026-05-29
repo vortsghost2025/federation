@@ -760,9 +760,11 @@ const SPATIAL_FILL_RATIO = 0.65; // fraction of viewport that spatial map should
 // SPATIAL-03A: Selected faction for isolation/fade behavior
 let selectedFaction = null; // faction_id or null — when set, fade all other factions
 // Kill switch: URL params or env can force legacy layout
+// SPATIAL-03A visual review failed — spatial frontend is opt-in until visual quality passes operator review
+// Default: legacy layout. Use ?spatial=true to opt into spatial territory rendering.
 const _urlParams = new URLSearchParams(window.location.search);
-const _forceLegacy = _urlParams.has('spatial') && _urlParams.get('spatial') === 'false'
-  || _urlParams.has('debug') && _urlParams.get('debug') === 'legacy-layout';
+const _forceLegacy = !_urlParams.has('spatial') || _urlParams.get('spatial') !== 'true'
+|| _urlParams.has('debug') && _urlParams.get('debug') === 'legacy-layout';
 // SPATIAL_RENDERING_ENABLED checked from API response — if backend sets it false, respect that
 const REGION_COLORS = { core: '#4fc3f7', inner: '#66bb6a', outer: '#ffa726', frontier: '#ef5350' };
 let zoom = 1;
