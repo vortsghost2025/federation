@@ -1586,32 +1586,26 @@ function buildNodesSpatial() {
     npcsBySector[secId].push(npc);
   }
 
-  // Place NPCs at their sector positions with orbit-ring packing
-  // SPATIAL-03A: NPCs are arranged in concentric rings around their sector center,
-  // with smaller default dots and collision avoidance
-  for (const [secId, sectorNpcs] of Object.entries(npcsBySector)) {
-    const secPos = spatialSectors[secId];
-    if (!secPos) continue;
-    const count = sectorNpcs.length;
-    // Ring packing: inner ring up to 6, then outer rings
-    const baseRadius = 18;
-    const ringSpacing = 16;
-    sectorNpcs.forEach((npc, j) => {
-      const rng = seededRand(hashStr(npc.id || npc.name || (secId + j)));
-      // Determine ring and angle
-      let ring, slotInRing, slotsInRing;
-      if (j < 6) { ring = 0; slotInRing = j; slotsInRing = Math.min(6, count); }
-      else if (j < 14) { ring = 1; slotInRing = j - 6; slotsInRing = Math.min(8, count - 6); }
-      else { ring = 2; slotInRing = j - 14; slotsInRing = Math.min(10, count - 14); }
-      const ringR = baseRadius + ring * ringSpacing;
-      const angleStep = (Math.PI * 2) / Math.max(1, slotsInRing);
-      const subAngle = slotInRing * angleStep + rng() * angleStep * 0.4;
-      const x = secPos.cx + Math.cos(subAngle) * (ringR + rng() * 4);
-      const y = secPos.cy + Math.sin(subAngle) * (ringR + rng() * 4);
-      const age = npc.last_active ? (now - npc.last_active) : 9999;
-      const activity = Math.max(0.2, 1 - age / 3600);
-      // SPATIAL-03A: Smaller NPC dots at default — was 6+activity*10, now 3+activity*5
-      const radius = 3 + activity * 5;
+// Place NPCs at their sector positions with orbit-ring packing
+// SPATIAL-03C: Wider orbit spacing to prevent dense central cluster
+const baseRadius = 25;  // SPATIAL-03C: was 18, wider spread
+const ringSpacing = 20; // SPATIAL-03C: was 16, wider rings
+sectorNpcs.forEach((npc, j) => {
+const rng = seededRand(hashStr(npc.id || npc.name || (secId + j)));
+// Determine ring and angle
+let ring, slotInRing, slotsInRing;
+if (j < 4) { ring = 0; slotInRing = j; slotsInRing = Math.min(4, count); } // SPATIAL-03C: max 4 inner
+else if (j < 10) { ring = 1; slotInRing = j - 4; slotsInRing = Math.min(6, count - 4); }
+else { ring = 2; slotInRing = j - 10; slotsInRing = Math.min(8, count - 10); }
+const ringR = baseRadius + ring * ringSpacing;
+const angleStep = (Math.PI * 2) / Math.max(1, slotsInRing);
+const subAngle = slotInRing * angleStep + rng() * angleStep * 0.4;
+const x = secPos.cx + Math.cos(subAngle) * (ringR + rng() * 6); // SPATIAL-03C: more spread
+const y = secPos.cy + Math.sin(subAngle) * (ringR + rng() * 6);
+const age = npc.last_active ? (now - npc.last_active) : 9999;
+const activity = Math.max(0.2, 1 - age / 3600);
+// SPATIAL-03C: Smaller NPC dots — was 3+activity*5, now 2+activity*3
+const radius = 2 + activity * 3;
       const aff = npc.affiliation;
       const fColor = aff && factions[aff] ? factions[aff].color : '#9e9e9e';
       nodes.push({
@@ -1656,26 +1650,26 @@ function buildNodesSpatial() {
   // Compute Voronoi cells — each faction gets a large territory region
   voronoiCells = computeVoronoiCells(voronoiSeeds, { minX: 0, minY: 0, maxX: W, maxY: H });
 
-  // Apply organic deformation to Voronoi cells (reuse breath/wobble from SPATIAL-03A)
-  // This prevents the territories from looking too geometric / "gamey"
-  for (const cell of voronoiCells) {
-    if (cell.polygon.length >= 3) {
-      // Slight inward jitter per vertex for organic feel
-      const fid = cell.factionId;
-      const fdata = factions[fid] || {};
-      const infl = (fdata.influence || 20) / 100;
-      const coh = (fdata.cohesion || 50) / 100;
-      const jitterAmp = 3 + (1 - coh) * 8; // low cohesion = more organic edges
-      const n = cell.polygon.length;
-      for (let i = 0; i < n; i++) {
-        const rng = seededRand(hashStr(fid + '_vcel_' + i));
-        cell.polygon[i].x += (rng() - 0.5) * jitterAmp * 2;
-        cell.polygon[i].y += (rng() - 0.5) * jitterAmp * 2;
-      }
-      // Smooth the jittered edges
-      cell.polygon = smoothPoly(cell.polygon, 1);
-      // Recompute centroid after deformation
-      cell.centroid = polyCentroid(cell.polygon);
+// Apply organic deformation to Voronoi cells
+// SPATIAL-03C: Stronger deformation for nebula/organic feel instead of flat polygons
+for (const cell of voronoiCells) {
+if (cell.polygon.length >= 3) {
+// Per-vertex jitter for organic edges
+const fid = cell.factionId;
+const fdata = factions[fid] || {};
+const infl = (fdata.influence || 20) / 100;
+const coh = (fdata.cohesion || 50) / 100;
+const jitterAmp = 8 + (1 - coh) * 16; // SPATIAL-03C: was 3+(1-coh)*8, much more organic
+const n = cell.polygon.length;
+for (let i = 0; i < n; i++) {
+const rng = seededRand(hashStr(fid + '_vcel_' + i));
+cell.polygon[i].x += (rng() - 0.5) * jitterAmp * 2;
+cell.polygon[i].y += (rng() - 0.5) * jitterAmp * 2;
+}
+// SPATIAL-03C: Two passes of smoothing for more natural curves
+cell.polygon = smoothPoly(cell.polygon, 2);
+// Recompute centroid after deformation
+cell.centroid = polyCentroid(cell.polygon);
     }
   }
 
@@ -2306,13 +2300,15 @@ function getSectorOwnerId(sectorId) {
 function getViewParams() {
   if (currentView === 'territory') {
     return {
-      zoneFillAlpha: 0.20,  // SPATIAL-03B: stronger fill for large Voronoi regions
-      zoneBorderAlpha: 0.80,  // SPATIAL-03B: strong borders for territory definition
-      zoneBorderWidth: 4.0,  // SPATIAL-03B: thicker borders for visibility
+      zoneFillAlpha: 0.22,  // SPATIAL-03C: slightly stronger for nebula feel
+      zoneBorderAlpha: 0.85,  // SPATIAL-03C: stronger borders
+      zoneBorderWidth: 4.5,  // SPATIAL-03C: thicker borders for map definition
       lineAlphaScale: 0,  // SPATIAL-03B: hide relationship lines in territory mode
-      npcFactionBorder: 1.0,  // SPATIAL-03B: thin NPC borders — territories carry the color
-      labelSize: 18,
-      labelAlpha: 0.95  // SPATIAL-03B: nearly opaque labels
+      npcFactionBorder: 1.0,  // SPATIAL-03B: thin NPC borders
+      labelSize: 22,  // SPATIAL-03C: large faction labels for instant readability
+      labelAlpha: 1.0,  // SPATIAL-03C: full opacity faction names
+      sectorLabelSize: 14,  // SPATIAL-03C: readable sector labels (was 12)
+      sectorLabelAlpha: 0.9  // SPATIAL-03C: high contrast sector text
     };
 } else if (currentView === 'network') {
 return {
@@ -2512,46 +2508,68 @@ function draw() {
             ctx.stroke();
           }
         }
-        // Draw sector markers
-      for (const sn of spatialSectorNodes) {
-        const isHov = hoveredNode === sn;
-        const regionColor = REGION_COLORS[sn.regionType] || '#78909c';
-        // SPATIAL-03A: Fade sectors not in selected faction
-        const secOwnerFid = getSectorOwnerId(sn.id.replace('sector:', '') || sn.sectorData?.id);
-        const secFade = selectedFaction ? (secOwnerFid === selectedFaction || !secOwnerFid ? 1.0 : 0.2) : 1.0;
-        // Sector dot
-        ctx.beginPath();
-        ctx.arc(sn.x, sn.y, sn.radius * (isHov ? 1.3 : 1), 0, Math.PI * 2);
-        const secGrad = ctx.createRadialGradient(sn.x, sn.y, 0, sn.x, sn.y, sn.radius);
-        secGrad.addColorStop(0, hexToRgba(sn.color, 0.6 * secFade));
-        secGrad.addColorStop(1, hexToRgba(sn.color, 0.15 * secFade));
-        ctx.fillStyle = secGrad;
-        ctx.fill();
-        // Region-type ring
-        ctx.beginPath();
-        ctx.arc(sn.x, sn.y, sn.radius + 2, 0, Math.PI * 2);
-        ctx.strokeStyle = hexToRgba(regionColor, 0.3 * secFade);
-        ctx.lineWidth = 1;
-        ctx.stroke();
-// Sector name label — always show but fade with faction isolation
-// SPATIAL-03B: Add background box for readability against territory fills
+// Draw sector markers
+// SPATIAL-03C: In territory mode at default zoom, hide frontier/outer sector labels to reduce clutter.
+// Only show core, inner, and home sectors as labeled. Others show as dots only.
+for (const sn of spatialSectorNodes) {
+const isHov = hoveredNode === sn;
+const regionColor = REGION_COLORS[sn.regionType] || '#78909c';
+// SPATIAL-03A: Fade sectors not in selected faction
+const secOwnerFid = getSectorOwnerId(sn.id.replace('sector:', '') || sn.sectorData?.id);
+const secFade = selectedFaction ? (secOwnerFid === selectedFaction || !secOwnerFid ? 1.0 : 0.2) : 1.0;
+// SPATIAL-03C: Determine if this sector's label should be shown in territory mode
+const isHomeSector = FACTION_ORDER.some(fid => {
+  const f = factions[fid]; return f && f.home_sector_id === (sn.sectorData?.id || sn.id.replace('sector:', ''));
+});
+const isCoreOrInner = sn.regionType === 'core' || sn.regionType === 'inner';
+const showLabelInTerritory = currentView !== 'territory' || isCoreOrInner || isHomeSector || isHov || zoom >= 1.5;
+// Sector dot
+ctx.beginPath();
+ctx.arc(sn.x, sn.y, sn.radius * (isHov ? 1.3 : 1), 0, Math.PI * 2);
+const secGrad = ctx.createRadialGradient(sn.x, sn.y, 0, sn.x, sn.y, sn.radius);
+secGrad.addColorStop(0, hexToRgba(sn.color, 0.6 * secFade));
+secGrad.addColorStop(1, hexToRgba(sn.color, 0.15 * secFade));
+ctx.fillStyle = secGrad;
+ctx.fill();
+// Region-type ring
+ctx.beginPath();
+ctx.arc(sn.x, sn.y, sn.radius + 2, 0, Math.PI * 2);
+ctx.strokeStyle = hexToRgba(regionColor, 0.3 * secFade);
+ctx.lineWidth = 1;
+ctx.stroke();
+// Sector name label — SPATIAL-03C: larger, higher contrast, boxed, with priority filtering
+if (showLabelInTerritory) {
 const secLabelText = sn.name.toUpperCase();
-ctx.font = (isHov ? 'bold ' : '') + (rmLabelSize || 12) + 'px Courier New';
+// SPATIAL-03C: Use vp.sectorLabelSize in territory mode (14px), fallback to rmLabelSize
+const secFontSize = vp.sectorLabelSize || (rmLabelSize || 12);
+ctx.font = (isHov || isHomeSector ? 'bold ' : '') + secFontSize + 'px Courier New';
 ctx.textAlign = 'center';
-const secLabelW = ctx.measureText(secLabelText).width + 8;
-const secLabelH = (rmLabelSize || 12) + 4;
+const secLabelW = ctx.measureText(secLabelText).width + 10;
+const secLabelH = secFontSize + 6;
 const secLabelX = sn.x - secLabelW / 2;
-const secLabelY = sn.y - sn.radius - 8 - secLabelH + 2;
-ctx.fillStyle = `rgba(10,10,26,${0.6 * secFade})`;
+const secLabelY = sn.y - sn.radius - 10 - secLabelH + 2;
+// SPATIAL-03C: Darker box with border for more contrast
+ctx.fillStyle = `rgba(8,8,22,${0.8 * secFade})`;
 ctx.fillRect(secLabelX, secLabelY, secLabelW, secLabelH);
-ctx.fillStyle = hexToRgba(regionColor, (isHov ? 0.9 : 0.7) * secFade);
-ctx.fillText(secLabelText, sn.x, sn.y - sn.radius - 8);
-        // Region type sub-label — SPATIAL-03A: hide at default zoom to reduce clutter
-        if (zoom >= 1.3 || isHov) {
-          ctx.fillStyle = hexToRgba(regionColor, (isHov ? 0.6 : 0.25) * secFade);
-          ctx.font = ((rmLabelSize || 12) - 2) + 'px Courier New';
-          ctx.fillText(sn.regionType.toUpperCase(), sn.x, sn.y - sn.radius - 22);
-        }
+// Faction color accent at top if owned
+if (secOwnerFid && factions[secOwnerFid]) {
+  ctx.fillStyle = hexToRgba(factions[secOwnerFid].color, 0.6 * secFade);
+  ctx.fillRect(secLabelX, secLabelY, secLabelW, 2);
+}
+// Thin box border
+ctx.strokeStyle = hexToRgba(regionColor, 0.3 * secFade);
+ctx.lineWidth = 0.5;
+ctx.strokeRect(secLabelX, secLabelY, secLabelW, secLabelH);
+// Text — SPATIAL-03C: high contrast (white or light, not region-muted)
+ctx.fillStyle = `rgba(220,225,240,${(isHov ? 1.0 : (vp.sectorLabelAlpha || 0.7)) * secFade})`;
+ctx.fillText(secLabelText, sn.x, sn.y - sn.radius - 10);
+} else {
+// Minor sector: tiny dot label or nothing
+ctx.fillStyle = hexToRgba(regionColor, 0.25 * secFade);
+ctx.font = '9px Courier New';
+ctx.textAlign = 'center';
+ctx.fillText(sn.name.toUpperCase().substring(0, 3), sn.x, sn.y - sn.radius - 6);
+}
       }
   }
 
@@ -2565,17 +2583,16 @@ ctx.fillText(secLabelText, sn.x, sn.y - sn.radius - 8);
     const isSelectedFaction = selectedFaction === z.fid;
     const factionFade = selectedFaction ? (isSelectedFaction ? 1.0 : 0.15) : 1.0;
 
-    // Living territory deformation — subtle breathing on Voronoi edges
-    const infl = (fdata.influence || 20) / 100;
-    const coh = (fdata.cohesion || 50) / 100;
-    const act = fdata.activity_rate || 0;
-    // SPATIAL-03B: Reduced breath amplitude — Voronoi cells are already large,
-    // subtle wobble is enough for organic feel without making borders unreadable
-    const breathAmp = 2 + act * 4 + infl * 3;
-    const breathPhase = z.zonePulse + t * 0.001 * (0.6 + act * 0.6);
-    const breathOffset = Math.sin(breathPhase) * breathAmp;
-    const wobbleAmp = 1 + (1 - coh) * 3;
-    const wobbleSpeed = 0.0008 + (1 - coh) * 0.001;
+// Living territory deformation — SPATIAL-03C: more organic, more wobble for nebula feel
+const infl = (fdata.influence || 20) / 100;
+const coh = (fdata.cohesion || 50) / 100;
+const act = fdata.activity_rate || 0;
+// SPATIAL-03C: Increased amplitudes for more organic, less geometric look
+const breathAmp = 4 + act * 6 + infl * 5;
+const breathPhase = z.zonePulse + t * 0.001 * (0.6 + act * 0.6);
+const breathOffset = Math.sin(breathPhase) * breathAmp;
+const wobbleAmp = 3 + (1 - coh) * 8; // SPATIAL-03C: more wobble at low cohesion
+const wobbleSpeed = 0.0008 + (1 - coh) * 0.001;
 
     let deformedPoly = [];
     if (z.polygon.length >= 3) {
@@ -2607,28 +2624,56 @@ ctx.fillText(secLabelText, sn.x, sn.y - sn.radius - 8);
 
     const renderPoly = z._deformedPoly && z._deformedPoly.length >= 3 ? z._deformedPoly : z.polygon;
     if (renderPoly.length >= 3) {
-      // --- VORONOI TERRITORY FILL ---
-      // Use gradient from faction home position: stronger center, lighter edges
-      const bounds = polyBounds(renderPoly);
-      const gradRadius = Math.max(bounds.maxX - bounds.minX, bounds.maxY - bounds.minY) * 0.7;
-      const grad = ctx.createRadialGradient(z.fcx, z.fcy, 0, z.fcx, z.fcy, gradRadius);
-      grad.addColorStop(0, hexToRgba(z.color, fillAlpha * 1.4));
-      grad.addColorStop(1, hexToRgba(z.color, fillAlpha * 0.6));
-      tracePolygonPath(ctx, renderPoly);
-      ctx.fillStyle = grad;
-      ctx.fill();
+// --- VORONOI TERRITORY FILL ---
+// Use gradient from faction home position: stronger center, lighter edges
+const bounds = polyBounds(renderPoly);
+const gradRadius = Math.max(bounds.maxX - bounds.minX, bounds.maxY - bounds.minY) * 0.7;
+const grad = ctx.createRadialGradient(z.fcx, z.fcy, 0, z.fcx, z.fcy, gradRadius);
+grad.addColorStop(0, hexToRgba(z.color, fillAlpha * 1.4));
+grad.addColorStop(1, hexToRgba(z.color, fillAlpha * 0.6));
+tracePolygonPath(ctx, renderPoly);
+ctx.fillStyle = grad;
+ctx.fill();
 
-      // --- TERRITORY BORDER — strong and visible ---
-      if (cohesion < 40) {
-        ctx.setLineDash([8, 6]);
-      } else {
-        ctx.setLineDash([]);
-      }
-      tracePolygonPath(ctx, renderPoly);
-      ctx.strokeStyle = hexToRgba(z.color, borderAlpha);
-      ctx.lineWidth = borderW;
-      ctx.stroke();
-      ctx.setLineDash([]);
+// SPATIAL-03C: Inner nebula glow — second radial gradient at centroid for depth
+// This prevents the "flat polygon" look by adding a luminous core
+const nebulaR = Math.max(60, Math.min(bounds.maxX - bounds.minX, bounds.maxY - bounds.minY) * 0.35);
+const nebula = ctx.createRadialGradient(z.fcx, z.fcy, 0, z.fcx, z.fcy, nebulaR);
+nebula.addColorStop(0, hexToRgba(z.color, fillAlpha * 0.8));
+nebula.addColorStop(0.5, hexToRgba(z.color, fillAlpha * 0.3));
+nebula.addColorStop(1, hexToRgba(z.color, 0));
+tracePolygonPath(ctx, renderPoly);
+ctx.fillStyle = nebula;
+ctx.fill();
+
+// SPATIAL-03C: Subtle edge vignette — darker at edges for depth
+const edgeGrad = ctx.createRadialGradient(
+  (bounds.minX + bounds.maxX) / 2, (bounds.minY + bounds.maxY) / 2, gradRadius * 0.3,
+  (bounds.minX + bounds.maxX) / 2, (bounds.minY + bounds.maxY) / 2, gradRadius * 1.1
+);
+edgeGrad.addColorStop(0, 'rgba(0,0,0,0)');
+edgeGrad.addColorStop(1, 'rgba(5,5,18,0.15)');
+tracePolygonPath(ctx, renderPoly);
+ctx.fillStyle = edgeGrad;
+ctx.fill();
+
+// --- TERRITORY BORDER — SPATIAL-03C: double-stroke for glow effect ---
+if (cohesion < 40) {
+ctx.setLineDash([8, 6]);
+} else {
+ctx.setLineDash([]);
+}
+// Outer glow border (wide, faint)
+tracePolygonPath(ctx, renderPoly);
+ctx.strokeStyle = hexToRgba(z.color, borderAlpha * 0.3);
+ctx.lineWidth = borderW + 4;
+ctx.stroke();
+// Inner solid border
+tracePolygonPath(ctx, renderPoly);
+ctx.strokeStyle = hexToRgba(z.color, borderAlpha);
+ctx.lineWidth = borderW;
+ctx.stroke();
+ctx.setLineDash([]);
 
       // Contested overlay
       if (z.voronoiCell) {
@@ -2649,36 +2694,47 @@ ctx.fillText(secLabelText, sn.x, sn.y - sn.radius - 8);
         }
       }
 
-      // --- FACTION LABEL — centered inside territory with background box ---
-      const displayName = (fdata ? fdata.display_name : z.fid).toUpperCase();
-      const labelFontSize = vp.labelSize;
-      ctx.font = `bold ${labelFontSize}px Courier New`;
-      ctx.textAlign = 'center';
-      const labelTextW = ctx.measureText(displayName).width;
-      const lx = z.labelX;
-      const ly = z.labelY - 4; // slight upward offset from centroid
+// --- FACTION LABEL — SPATIAL-03C: large, bold, bordered box for instant readability ---
+const displayName = (fdata ? fdata.display_name : z.fid).toUpperCase();
+const labelFontSize = vp.labelSize; // 22px in territory mode
+ctx.font = `bold ${labelFontSize}px Courier New`;
+ctx.textAlign = 'center';
+const labelTextW = ctx.measureText(displayName).width;
+const lx = z.labelX;
+const ly = z.labelY - 6;
 
-      // Background box for readability
-      const boxPad = 5;
-      ctx.fillStyle = `rgba(10,10,26,${0.75 * factionFade})`;
-      ctx.fillRect(lx - labelTextW / 2 - boxPad, ly - labelFontSize - boxPad,
-                    labelTextW + boxPad * 2, labelFontSize + boxPad * 2);
+// SPATIAL-03C: Bordered background box with faction color accent line at top
+const boxPad = 8;
+const boxW = labelTextW + boxPad * 2;
+const boxH = labelFontSize + boxPad * 2 + 16; // extra room for sub-label
+const boxX = lx - boxW / 2;
+const boxY = ly - labelFontSize - boxPad;
+// Dark fill
+ctx.fillStyle = `rgba(8,8,22,${0.85 * factionFade})`;
+ctx.fillRect(boxX, boxY, boxW, boxH);
+// Faction color accent line at top of box
+ctx.fillStyle = hexToRgba(z.color, 0.9 * factionFade);
+ctx.fillRect(boxX, boxY, boxW, 3);
+// Thin border around box
+ctx.strokeStyle = hexToRgba(z.color, 0.5 * factionFade);
+ctx.lineWidth = 1;
+ctx.strokeRect(boxX, boxY, boxW, boxH);
 
-      ctx.fillStyle = hexToRgba(z.color, (isHovered ? 1.0 : vp.labelAlpha) * factionFade);
-      ctx.fillText(displayName, lx, ly);
+// Faction name — bright and clear
+ctx.fillStyle = hexToRgba(z.color, (isHovered ? 1.0 : vp.labelAlpha) * factionFade);
+ctx.fillText(displayName, lx, ly);
 
-      // Sub-label: owned sector count (not comma-separated name list — too cluttered)
-      const sectorCount = (z.ownedSectors || []).length;
-      const subLabel = sectorCount > 0 ? `${sectorCount} SECTOR${sectorCount !== 1 ? 'S' : ''}` : 'TERRITORY';
-      const subFontSize = Math.max(11, labelFontSize - 4);
-      ctx.font = `${subFontSize}px Courier New`;
-      const subLabelW = ctx.measureText(subLabel).width;
-      // Sub-label background box
-      ctx.fillStyle = `rgba(10,10,26,${0.65 * factionFade})`;
-      ctx.fillRect(lx - subLabelW / 2 - boxPad, ly + 2 - subFontSize - boxPad + 2,
-                    subLabelW + boxPad * 2, subFontSize + boxPad * 2);
-      ctx.fillStyle = hexToRgba(z.color, (isHovered ? 0.7 : 0.5) * factionFade);
-      ctx.fillText(subLabel, lx, ly + 4);
+// Sub-label: owned sector count
+const sectorCount = (z.ownedSectors || []).length;
+const subLabel = sectorCount > 0 ? `${sectorCount} SECTOR${sectorCount !== 1 ? 'S' : ''}` : 'TERRITORY';
+const subFontSize = Math.max(12, labelFontSize - 6);
+ctx.font = `bold ${subFontSize}px Courier New`;
+const subLabelW = ctx.measureText(subLabel).width;
+// Sub-label background within the same box (slightly different shade)
+ctx.fillStyle = `rgba(8,8,22,${0.6 * factionFade})`;
+ctx.fillRect(lx - subLabelW / 2 - 4, ly + 4, subLabelW + 8, subFontSize + 6);
+ctx.fillStyle = hexToRgba(z.color, (isHovered ? 0.8 : 0.6) * factionFade);
+ctx.fillText(subLabel, lx, ly + 6 + subFontSize);
     } else {
       // --- CIRCLE FALLBACK (shouldn't happen with Voronoi, but safety) ---
       ctx.beginPath();
