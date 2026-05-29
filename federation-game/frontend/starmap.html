@@ -756,6 +756,7 @@ let spatialSectors = {}; // sectorId -> {cx, cy, data} (canvas coords + raw sect
 let spatialAdjacencies = []; // [{from, to, fromX, fromY, toX, toY}]
 let spatialSectorNodes = []; // sector center markers for click/hover
 let spatialBounds = null; // {minPx, maxPx, minPy, maxPy, sectorScale, midX, midY} — computed world-to-screen transform for FIT button
+let voronoiCells = []; // SPATIAL-03B: Voronoi territory cells [{factionId, polygon, centroid}]
 const SPATIAL_FILL_RATIO = 0.65; // fraction of viewport that spatial map should fill
 // SPATIAL-03A: Selected faction for isolation/fade behavior
 let selectedFaction = null; // faction_id or null — when set, fade all other factions
@@ -1042,6 +1043,91 @@ function polygonsOverlap(poly1, poly2) {
     if (pointInPolygon(poly1[i].x, poly1[i].y, poly2)) return true;
   }
   return false;
+}
+
+// --- SPATIAL-03B: Voronoi territory partition ---
+// Compute Voronoi cells for faction territories using half-plane intersection.
+// For N seeds, each cell is built by starting with the canvas rectangle and
+// clipping it against the perpendicular bisector of every other seed (keeping
+// the half-plane closer to this seed). O(N²) per cell but N≤9 so trivially fast.
+
+function computeVoronoiCells(seeds, bounds) {
+  // seeds: [{x, y, factionId}]
+  // bounds: {minX, minY, maxX, maxY}
+  // returns: [{factionId, polygon: [{x,y}...], centroid: {x,y}}]
+  const cells = [];
+  const canvasRect = [
+    { x: bounds.minX, y: bounds.minY },
+    { x: bounds.maxX, y: bounds.minY },
+    { x: bounds.maxX, y: bounds.maxY },
+    { x: bounds.minX, y: bounds.maxY }
+  ];
+  for (let i = 0; i < seeds.length; i++) {
+    let cell = canvasRect.slice(); // start with full canvas
+    const si = seeds[i];
+    for (let j = 0; j < seeds.length; j++) {
+      if (i === j) continue;
+      const sj = seeds[j];
+      // Perpendicular bisector of si–sj: the line where distance to si == distance to sj
+      // Midpoint
+      const mx = (si.x + sj.x) / 2;
+      const my = (si.y + sj.y) / 2;
+      // Direction of bisector (perpendicular to si→sj)
+      const dx = sj.x - si.x;
+      const dy = sj.y - si.y;
+      // The bisector passes through (mx, my) with direction (dy, -dx)
+      // We want the half-plane containing si: points P where (P - midpoint) · (si - sj) > 0
+      // i.e., (px - mx)*(-dx) + (py - my)*(-dy) > 0  →  (px - mx)*dx + (py - my)*dy < 0
+      // Clip the cell polygon to keep only the side where dot < 0 (closer to si)
+      cell = clipPolygonByLine(cell, mx, my, dx, dy, false);
+      if (cell.length < 3) break; // cell fully consumed, degenerate
+    }
+    const centroid = polyCentroid(cell);
+    cells.push({ factionId: si.factionId, polygon: cell, centroid });
+  }
+  return cells;
+}
+
+// Clip a convex polygon against an infinite line defined by point (lx, ly) and direction (dx, dy).
+// The line passes through (lx, ly) with direction vector (dx, dy).
+// keepSide=false: keep points where (P-linePoint)·direction < 0
+// keepSide=true: keep points where (P-linePoint)·direction >= 0
+// Uses Sutherland-Hodgman-style clipping for convex polygon × half-plane.
+function clipPolygonByLine(polygon, lx, ly, dx, dy, keepSide) {
+  if (polygon.length < 3) return polygon.slice();
+  const output = [];
+  const n = polygon.length;
+  for (let i = 0; i < n; i++) {
+    const curr = polygon[i];
+    const next = polygon[(i + 1) % n];
+    const currDot = (curr.x - lx) * dx + (curr.y - ly) * dy;
+    const nextDot = (next.x - lx) * dx + (next.y - ly) * dy;
+    const currInside = keepSide ? (currDot >= 0) : (currDot < 0);
+    const nextInside = keepSide ? (nextDot >= 0) : (nextDot < 0);
+    if (currInside) {
+      output.push(curr);
+      if (!nextInside) {
+        // Edge crosses from inside to outside — add intersection
+        const inter = lineIntersect(curr.x, curr.y, next.x, next.y, lx, ly, lx + dy, ly - dx);
+        if (inter) output.push(inter);
+      }
+    } else if (nextInside) {
+      // Edge crosses from outside to inside — add intersection then next
+      const inter = lineIntersect(curr.x, curr.y, next.x, next.y, lx, ly, lx + dy, ly - dx);
+      if (inter) output.push(inter);
+    }
+    // If both outside, add nothing
+  }
+  return output;
+}
+
+// Find intersection of line segment (x1,y1)→(x2,y2) with infinite line through (lx1,ly1)→(lx2,ly2)
+// Returns {x, y} or null if parallel
+function lineIntersect(x1, y1, x2, y2, lx1, ly1, lx2, ly2) {
+  const denom = (x1 - x2) * (ly1 - ly2) - (y1 - y2) * (lx1 - lx2);
+  if (Math.abs(denom) < 1e-10) return null; // parallel
+  const t = ((x1 - lx1) * (ly1 - ly2) - (y1 - ly1) * (lx1 - lx2)) / denom;
+  return { x: x1 + t * (x2 - x1), y: y1 + t * (y2 - y1) };
 }
 
 function polyBounds(poly) {
@@ -1540,24 +1626,75 @@ function buildNodesSpatial() {
     });
   }
 
-  // Build faction zones from their home sector positions
-  // Each faction gets a territory zone centered on their home sector
+  // SPATIAL-03B: Build faction territories using Voronoi partition
+  // Instead of tiny convex hulls around sector points, divide the entire canvas
+  // into large non-overlapping territory regions using Voronoi cells seeded by
+  // faction home positions. This guarantees full canvas coverage and produces
+  // the large colored territory regions the operator requires.
   const factionHomeSectors = {};
   for (const t of territories) {
     if (!factionHomeSectors[t.faction_id]) factionHomeSectors[t.faction_id] = [];
     factionHomeSectors[t.faction_id].push(t.sector_id);
   }
 
+  // Build Voronoi seeds from faction home positions
+  const voronoiSeeds = [];
+  for (const fid of FACTION_ORDER) {
+    const fdata = factions[fid] || {};
+    const ownedSectors = factionHomeSectors[fid] || [];
+    const homeSecId = fdata.home_sector_id || (ownedSectors.length > 0 ? ownedSectors[0] : 'sol-prime');
+    const homePos = spatialSectors[homeSecId];
+    if (!homePos) continue;
+    voronoiSeeds.push({ x: homePos.cx, y: homePos.cy, factionId: fid });
+  }
+  // Add sol-prime as neutral seed at center (prevents gap in the middle)
+  const solPos = spatialSectors['sol-prime'];
+  if (solPos) {
+    voronoiSeeds.push({ x: solPos.cx, y: solPos.cy, factionId: '_neutral' });
+  }
+
+  // Compute Voronoi cells — each faction gets a large territory region
+  voronoiCells = computeVoronoiCells(voronoiSeeds, { minX: 0, minY: 0, maxX: W, maxY: H });
+
+  // Apply organic deformation to Voronoi cells (reuse breath/wobble from SPATIAL-03A)
+  // This prevents the territories from looking too geometric / "gamey"
+  for (const cell of voronoiCells) {
+    if (cell.polygon.length >= 3) {
+      // Slight inward jitter per vertex for organic feel
+      const fid = cell.factionId;
+      const fdata = factions[fid] || {};
+      const infl = (fdata.influence || 20) / 100;
+      const coh = (fdata.cohesion || 50) / 100;
+      const jitterAmp = 3 + (1 - coh) * 8; // low cohesion = more organic edges
+      const n = cell.polygon.length;
+      for (let i = 0; i < n; i++) {
+        const rng = seededRand(hashStr(fid + '_vcel_' + i));
+        cell.polygon[i].x += (rng() - 0.5) * jitterAmp * 2;
+        cell.polygon[i].y += (rng() - 0.5) * jitterAmp * 2;
+      }
+      // Smooth the jittered edges
+      cell.polygon = smoothPoly(cell.polygon, 1);
+      // Recompute centroid after deformation
+      cell.centroid = polyCentroid(cell.polygon);
+    }
+  }
+
+  // Build factionZones from Voronoi cells for compatibility with existing draw/click code
   for (const fid of FACTION_ORDER) {
     const fdata = factions[fid] || {};
     const color = fdata.color || '#333';
     const ownedSectors = factionHomeSectors[fid] || [];
-    // Use home sector as anchor
     const homeSecId = fdata.home_sector_id || (ownedSectors.length > 0 ? ownedSectors[0] : 'sol-prime');
     const homePos = spatialSectors[homeSecId];
     if (!homePos) continue;
     const fcx = homePos.cx;
     const fcy = homePos.cy;
+
+    // Find the Voronoi cell for this faction
+    const cell = voronoiCells.find(c => c.factionId === fid);
+    const polygon = cell && cell.polygon.length >= 3 ? cell.polygon : [];
+    const labelX = cell ? cell.centroid.x : fcx;
+    const labelY = cell ? cell.centroid.y : fcy;
 
     // Count NPCs in owned sectors
     let groupSize = 0;
@@ -1565,38 +1702,9 @@ function buildNodesSpatial() {
       groupSize += (npcsBySector[secId] || []).length;
     }
 
-    // Build territory polygon from owned sector positions
-    let polygon = [];
-    const sectorPositions = ownedSectors
-      .map(sid => spatialSectors[sid])
-      .filter(Boolean)
-      .map(sp => ({ x: sp.cx, y: sp.cy }));
-
-        if (sectorPositions.length >= 3) {
-        let hull = convexHull(sectorPositions);
-        let padded = padPolygon(hull, 55); // SPATIAL-03A: increased padding from 40→55 for wider territories
-        polygon = smoothPoly(padded, 2);
-    } else if (sectorPositions.length === 2) {
-      // Two sectors: create an elongated polygon
-      const p1 = sectorPositions[0], p2 = sectorPositions[1];
-      const dx = p2.x - p1.x, dy = p2.y - p1.y;
-      const len = Math.sqrt(dx*dx + dy*dy) || 1;
-      const nx = -dy / len * 40, ny = dx / len * 40;
-      const pts = [
-        { x: p1.x + nx, y: p1.y + ny },
-        { x: p2.x + nx, y: p2.y + ny },
-        { x: p2.x - nx, y: p2.y - ny },
-        { x: p1.x - nx, y: p1.y - ny }
-      ];
-      polygon = smoothPoly(pts, 2);
-    }
-
-    // If only one sector or no polygon, use circle fallback
-    const zoneR = Math.max(60, groupSize * 10 + 40);
-
-    const bounds = polygon.length >= 3 ? polyBounds(polygon) : null;
-    const labelX = polygon.length >= 3 ? (bounds.minX + bounds.maxX) / 2 : fcx;
-    const labelY = polygon.length >= 3 ? bounds.maxY + 18 : fcy + zoneR + 22;
+    // zoneR no longer determines territory size — Voronoi cell does
+    // Keep a minimal zoneR for circle fallback (shouldn't be used, but safety)
+    const zoneR = 60;
 
     factionZones.push({
       fid, fcx, fcy, zoneR, color, fdata,
@@ -1606,7 +1714,8 @@ function buildNodesSpatial() {
       zonePulse: Math.random() * Math.PI * 2,
       historicalInfluence: fdata.influence || 20,
       historicalCohesion: fdata.cohesion || 50,
-      ownedSectors // track which sectors this faction owns
+      ownedSectors,
+      voronoiCell: cell || null // SPATIAL-03B: reference to Voronoi cell
     });
   }
 
@@ -2195,16 +2304,16 @@ function getSectorOwnerId(sectorId) {
   return null;
 }
 function getViewParams() {
-if (currentView === 'territory') {
-return {
-zoneFillAlpha: 0.12,
-zoneBorderAlpha: 0.5,
-zoneBorderWidth: 3.5,
-lineAlphaScale: 0.25,
-npcFactionBorder: 3.5,
-labelSize: 18,
-labelAlpha: 0.9
-};
+  if (currentView === 'territory') {
+    return {
+      zoneFillAlpha: 0.20,  // SPATIAL-03B: stronger fill for large Voronoi regions
+      zoneBorderAlpha: 0.80,  // SPATIAL-03B: strong borders for territory definition
+      zoneBorderWidth: 4.0,  // SPATIAL-03B: thicker borders for visibility
+      lineAlphaScale: 0,  // SPATIAL-03B: hide relationship lines in territory mode
+      npcFactionBorder: 1.0,  // SPATIAL-03B: thin NPC borders — territories carry the color
+      labelSize: 18,
+      labelAlpha: 0.95  // SPATIAL-03B: nearly opaque labels
+    };
 } else if (currentView === 'network') {
 return {
 zoneFillAlpha: 0.03,
@@ -2424,11 +2533,19 @@ function draw() {
         ctx.strokeStyle = hexToRgba(regionColor, 0.3 * secFade);
         ctx.lineWidth = 1;
         ctx.stroke();
-        // Sector name label — always show but fade with faction isolation
-        ctx.fillStyle = hexToRgba(regionColor, (isHov ? 0.9 : 0.5) * secFade);
-        ctx.font = (isHov ? 'bold ' : '') + (rmLabelSize || 12) + 'px Courier New';
-        ctx.textAlign = 'center';
-        ctx.fillText(sn.name.toUpperCase(), sn.x, sn.y - sn.radius - 8);
+// Sector name label — always show but fade with faction isolation
+// SPATIAL-03B: Add background box for readability against territory fills
+const secLabelText = sn.name.toUpperCase();
+ctx.font = (isHov ? 'bold ' : '') + (rmLabelSize || 12) + 'px Courier New';
+ctx.textAlign = 'center';
+const secLabelW = ctx.measureText(secLabelText).width + 8;
+const secLabelH = (rmLabelSize || 12) + 4;
+const secLabelX = sn.x - secLabelW / 2;
+const secLabelY = sn.y - sn.radius - 8 - secLabelH + 2;
+ctx.fillStyle = `rgba(10,10,26,${0.6 * secFade})`;
+ctx.fillRect(secLabelX, secLabelY, secLabelW, secLabelH);
+ctx.fillStyle = hexToRgba(regionColor, (isHov ? 0.9 : 0.7) * secFade);
+ctx.fillText(secLabelText, sn.x, sn.y - sn.radius - 8);
         // Region type sub-label — SPATIAL-03A: hide at default zoom to reduce clutter
         if (zoom >= 1.3 || isHov) {
           ctx.fillStyle = hexToRgba(regionColor, (isHov ? 0.6 : 0.25) * secFade);
@@ -2438,27 +2555,28 @@ function draw() {
       }
   }
 
-        // Faction territory zones — data-shaped polygons with living growth
-      for (const z of factionZones) {
-        const fdata = z.fdata;
-        const cohesion = fdata ? (fdata.cohesion || 50) : 50;
-        const isHovered = hoveredFaction === z;
-        // SPATIAL-03A: Fade non-selected factions when one is selected
-        const isSelectedFaction = selectedFaction === z.fid;
-        const factionFade = selectedFaction ? (isSelectedFaction ? 1.0 : 0.12) : 1.0;
+  // SPATIAL-03B: Faction territory zones — large Voronoi regions with strong fills
+  // Voronoi cells fill the entire canvas with non-overlapping territory regions.
+  // This replaces the old tiny convex hull approach that produced unreadable maps.
+  for (const z of factionZones) {
+    const fdata = z.fdata;
+    const cohesion = fdata ? (fdata.cohesion || 50) : 50;
+    const isHovered = hoveredFaction === z;
+    const isSelectedFaction = selectedFaction === z.fid;
+    const factionFade = selectedFaction ? (isSelectedFaction ? 1.0 : 0.15) : 1.0;
 
-    // Living territory deformation — warps edges using faction scores
+    // Living territory deformation — subtle breathing on Voronoi edges
     const infl = (fdata.influence || 20) / 100;
     const coh = (fdata.cohesion || 50) / 100;
     const act = fdata.activity_rate || 0;
-    const breathAmp = 6 + act * 12 + infl * 8; // stronger warp for high influence/activity
+    // SPATIAL-03B: Reduced breath amplitude — Voronoi cells are already large,
+    // subtle wobble is enough for organic feel without making borders unreadable
+    const breathAmp = 2 + act * 4 + infl * 3;
     const breathPhase = z.zonePulse + t * 0.001 * (0.6 + act * 0.6);
     const breathOffset = Math.sin(breathPhase) * breathAmp;
-    // Per-vertex instability: each vertex wobbles independently using its index as seed
-    const wobbleAmp = 2 + coh * 4; // low cohesion = more wobble
+    const wobbleAmp = 1 + (1 - coh) * 3;
     const wobbleSpeed = 0.0008 + (1 - coh) * 0.001;
 
-    // Deform polygon vertices by breathing offset + per-vertex wobble
     let deformedPoly = [];
     if (z.polygon.length >= 3) {
       const n = z.polygon.length;
@@ -2475,49 +2593,32 @@ function draw() {
         let nx = (n1x + n2x) / 2, ny = (n1y + n2y) / 2;
         const nlen = Math.sqrt(nx*nx + ny*ny) || 1;
         nx /= nlen; ny /= nlen;
-        // Per-vertex wobble using i as seed, phase offset by faction pulse
         const wobPhase = i * 2.7 + z.zonePulse + t * wobbleSpeed;
         const wobble = Math.sin(wobPhase) * wobbleAmp;
         const totalOffset = breathOffset + wobble;
         deformedPoly.push({ x: curr.x + nx * totalOffset, y: curr.y + ny * totalOffset });
       }
     }
-
-    // Check for overlapping polygons (contested)
-    let isContested = false;
-    for (const z2 of factionZones) {
-      if (z2.fid === z.fid) continue;
-      const p1 = deformedPoly.length >= 3 ? deformedPoly : z.polygon;
-      const p2 = z2._deformedPoly && z2._deformedPoly.length >= 3 ? z2._deformedPoly : z2.polygon;
-      if (p1.length >= 3 && p2.length >= 3) {
-        if (polygonsOverlap(p1, p2)) { isContested = true; break; }
-      } else {
-        const dx = z.fcx - z2.fcx, dy = z.fcy - z2.fcy;
-        const dist = Math.sqrt(dx*dx + dy*dy);
-        if (dist < z.zoneR + z2.zoneR - 30) { isContested = true; break; }
-      }
-    }
     z._deformedPoly = deformedPoly;
 
-        const fillAlpha = (isHovered ? vp.zoneFillAlpha * 2 : vp.zoneFillAlpha) * factionFade;
-        const borderAlpha = (isHovered ? Math.min(1, vp.zoneBorderAlpha * 1.8) : vp.zoneBorderAlpha) * factionFade;
-        const borderW = isHovered ? vp.zoneBorderWidth + 1 : vp.zoneBorderWidth;
+    const fillAlpha = (isHovered ? Math.min(0.35, vp.zoneFillAlpha * 1.5) : vp.zoneFillAlpha) * factionFade;
+    const borderAlpha = (isHovered ? Math.min(1, vp.zoneBorderAlpha * 1.3) : vp.zoneBorderAlpha) * factionFade;
+    const borderW = isHovered ? vp.zoneBorderWidth + 1 : vp.zoneBorderWidth;
 
     const renderPoly = z._deformedPoly && z._deformedPoly.length >= 3 ? z._deformedPoly : z.polygon;
     if (renderPoly.length >= 3) {
-      // --- POLYGON TERRITORY ---
-      // Fill with gradient: stronger near faction anchor, lighter at edges
-      const centroid = polyCentroid(renderPoly);
+      // --- VORONOI TERRITORY FILL ---
+      // Use gradient from faction home position: stronger center, lighter edges
       const bounds = polyBounds(renderPoly);
       const gradRadius = Math.max(bounds.maxX - bounds.minX, bounds.maxY - bounds.minY) * 0.7;
       const grad = ctx.createRadialGradient(z.fcx, z.fcy, 0, z.fcx, z.fcy, gradRadius);
-      grad.addColorStop(0, hexToRgba(z.color, fillAlpha * 1.5));
-      grad.addColorStop(1, hexToRgba(z.color, fillAlpha * 0.4));
+      grad.addColorStop(0, hexToRgba(z.color, fillAlpha * 1.4));
+      grad.addColorStop(1, hexToRgba(z.color, fillAlpha * 0.6));
       tracePolygonPath(ctx, renderPoly);
       ctx.fillStyle = grad;
       ctx.fill();
 
-      // Border — solid for stable, dashed for low cohesion
+      // --- TERRITORY BORDER — strong and visible ---
       if (cohesion < 40) {
         ctx.setLineDash([8, 6]);
       } else {
@@ -2529,88 +2630,80 @@ function draw() {
       ctx.stroke();
       ctx.setLineDash([]);
 
-      // Contested overlay: pulsing orange dashed outline
-      if (isContested) {
-        const contestAlpha = 0.15 + 0.15 * (0.5 + 0.5 * Math.sin(t * 0.003 + z.zonePulse));
-        tracePolygonPath(ctx, renderPoly);
-        ctx.strokeStyle = `rgba(255,152,0,${contestAlpha})`;
-        ctx.lineWidth = 1.5;
-        ctx.setLineDash([4, 4]);
-        ctx.stroke();
-        ctx.setLineDash([]);
+      // Contested overlay
+      if (z.voronoiCell) {
+        // Voronoi cells don't overlap by construction, but we check
+        // for contested status from territory data
+        const isContested = (z.ownedSectors || []).some(sid => {
+          const td = (mapData.faction_territories || []).find(tt => tt.sector_id === sid);
+          return td && td.control_level < 60;
+        });
+        if (isContested) {
+          const contestAlpha = 0.15 + 0.15 * (0.5 + 0.5 * Math.sin(t * 0.003 + z.zonePulse));
+          tracePolygonPath(ctx, renderPoly);
+          ctx.strokeStyle = `rgba(255,152,0,${contestAlpha})`;
+          ctx.lineWidth = 1.5;
+          ctx.setLineDash([4, 4]);
+          ctx.stroke();
+          ctx.setLineDash([]);
+        }
       }
 
-        // Faction label — at computed label position below polygon
-        ctx.fillStyle = hexToRgba(z.color, (isHovered ? 1.0 : vp.labelAlpha) * factionFade);
-        ctx.font = `bold ${vp.labelSize}px Courier New`;
-        ctx.textAlign = 'center';
-        const displayName = (fdata ? fdata.display_name : z.fid).toUpperCase();
-        ctx.fillText(displayName, z.labelX, z.labelY);
+      // --- FACTION LABEL — centered inside territory with background box ---
+      const displayName = (fdata ? fdata.display_name : z.fid).toUpperCase();
+      const labelFontSize = vp.labelSize;
+      ctx.font = `bold ${labelFontSize}px Courier New`;
+      ctx.textAlign = 'center';
+      const labelTextW = ctx.measureText(displayName).width;
+      const lx = z.labelX;
+      const ly = z.labelY - 4; // slight upward offset from centroid
 
-        // Sub-label: sector type (spatial mode shows owned sectors, cosmetic shows INFLUENCE ZONE)
-        let sectorType;
-        if (spatialMode && z.ownedSectors && z.ownedSectors.length > 0) {
-          const sectorNames = z.ownedSectors.map(sid => {
-            const ss = spatialSectors[sid];
-            return ss ? ss.data.name : sid;
-          });
-          sectorType = 'SECTORS: ' + sectorNames.join(', ');
-        } else {
-          sectorType = cohesion < 40 ? 'CONTESTED' : 'INFLUENCE ZONE';
-        }
-        ctx.fillStyle = hexToRgba(z.color, (isHovered ? 0.7 : 0.35) * factionFade);
-      ctx.font = (rmLabelSize || 14) + 'px Courier New';
-      ctx.fillText(sectorType, z.labelX, z.labelY + 18);
+      // Background box for readability
+      const boxPad = 5;
+      ctx.fillStyle = `rgba(10,10,26,${0.75 * factionFade})`;
+      ctx.fillRect(lx - labelTextW / 2 - boxPad, ly - labelFontSize - boxPad,
+                    labelTextW + boxPad * 2, labelFontSize + boxPad * 2);
+
+      ctx.fillStyle = hexToRgba(z.color, (isHovered ? 1.0 : vp.labelAlpha) * factionFade);
+      ctx.fillText(displayName, lx, ly);
+
+      // Sub-label: owned sector count (not comma-separated name list — too cluttered)
+      const sectorCount = (z.ownedSectors || []).length;
+      const subLabel = sectorCount > 0 ? `${sectorCount} SECTOR${sectorCount !== 1 ? 'S' : ''}` : 'TERRITORY';
+      const subFontSize = Math.max(11, labelFontSize - 4);
+      ctx.font = `${subFontSize}px Courier New`;
+      const subLabelW = ctx.measureText(subLabel).width;
+      // Sub-label background box
+      ctx.fillStyle = `rgba(10,10,26,${0.65 * factionFade})`;
+      ctx.fillRect(lx - subLabelW / 2 - boxPad, ly + 2 - subFontSize - boxPad + 2,
+                    subLabelW + boxPad * 2, subFontSize + boxPad * 2);
+      ctx.fillStyle = hexToRgba(z.color, (isHovered ? 0.7 : 0.5) * factionFade);
+      ctx.fillText(subLabel, lx, ly + 4);
     } else {
-      // --- CIRCLE FALLBACK (1 or 0 NPCs) ---
+      // --- CIRCLE FALLBACK (shouldn't happen with Voronoi, but safety) ---
       ctx.beginPath();
       ctx.arc(z.fcx, z.fcy, z.zoneR, 0, Math.PI * 2);
       ctx.fillStyle = hexToRgba(z.color, fillAlpha);
       ctx.fill();
-
-      if (cohesion < 40) {
-        ctx.setLineDash([8, 6]);
-      } else {
-        ctx.setLineDash([]);
-      }
+      if (cohesion < 40) { ctx.setLineDash([8, 6]); } else { ctx.setLineDash([]); }
       ctx.beginPath();
       ctx.arc(z.fcx, z.fcy, z.zoneR, 0, Math.PI * 2);
       ctx.strokeStyle = hexToRgba(z.color, borderAlpha);
       ctx.lineWidth = borderW;
       ctx.stroke();
       ctx.setLineDash([]);
-
-      if (isContested) {
-        const contestAlpha = 0.1 + 0.15 * (0.5 + 0.5 * Math.sin(t * 0.003 + z.zonePulse));
-        ctx.beginPath();
-        ctx.arc(z.fcx, z.fcy, z.zoneR + 4, 0, Math.PI * 2);
-        ctx.strokeStyle = `rgba(255,152,0,${contestAlpha})`;
-        ctx.lineWidth = 1;
-        ctx.setLineDash([4, 4]);
-        ctx.stroke();
-        ctx.setLineDash([]);
-      }
-
-        ctx.fillStyle = hexToRgba(z.color, (isHovered ? 1.0 : vp.labelAlpha) * factionFade);
-        ctx.font = `bold ${vp.labelSize}px Courier New`;
-        ctx.textAlign = 'center';
-        const cDisplayName = (fdata ? fdata.display_name : z.fid).toUpperCase();
-        ctx.fillText(cDisplayName, z.fcx, z.fcy + z.zoneR + 22);
-        let cSectorType;
-        if (spatialMode && z.ownedSectors && z.ownedSectors.length > 0) {
-          const sectorNames = z.ownedSectors.map(sid => {
-            const ss = spatialSectors[sid];
-            return ss ? ss.data.name : sid;
-          });
-          cSectorType = 'SECTORS: ' + sectorNames.join(', ');
-        } else {
-          cSectorType = cohesion < 40 ? 'CONTESTED' : 'INFLUENCE ZONE';
-        }
-        ctx.fillStyle = hexToRgba(z.color, (isHovered ? 0.7 : 0.35) * factionFade);
-      ctx.font = (rmLabelSize || 14) + 'px Courier New';
-        ctx.fillText(cSectorType, z.fcx, z.fcy + z.zoneR + 40);
-      }
+      // Circle fallback label with background box
+      const cDisplayName = (fdata ? fdata.display_name : z.fid).toUpperCase();
+      ctx.font = `bold ${vp.labelSize}px Courier New`;
+      ctx.textAlign = 'center';
+      const cLabelW = ctx.measureText(cDisplayName).width;
+      const clx = z.fcx, cly = z.fcy + z.zoneR + 22;
+      ctx.fillStyle = `rgba(10,10,26,0.75)`;
+      ctx.fillRect(clx - cLabelW / 2 - 5, cly - vp.labelSize - 5, cLabelW + 10, vp.labelSize + 10);
+      ctx.fillStyle = hexToRgba(z.color, (isHovered ? 1.0 : vp.labelAlpha) * factionFade);
+      ctx.fillText(cDisplayName, clx, cly);
     }
+  }
 
     // SPATIAL-03A: Selection highlight — bright pulsing ring around selected faction zone
     if (selectedFaction) {
@@ -2727,6 +2820,10 @@ if (!spatialMode) {
         const isHovered = hoveredNode === node;
         const isSelected = selectedNode === node;
         const r = node.radius * (isHovered ? 1.4 : 1);
+// SPATIAL-03B: Reduce NPC visual weight in territory mode — territories carry the color
+const npcTerritoryMode = currentView === 'territory';
+const rScale = npcTerritoryMode ? 0.5 : 1.0;
+const adjR = r * rScale;
         // SPATIAL-03A: Fade NPCs not in selected faction
         const npcFade = selectedFaction ? (node.faction === selectedFaction ? 1.0 : 0.15) : 1.0;
         // Skip drawing very faded NPCs (optimization)
@@ -2735,55 +2832,56 @@ if (!spatialMode) {
     // Crisis view: highlight rivals and enigmas with pulse
     const isCrisisHighlight = currentView === 'crisis' && (node.category === 'rival' || node.category === 'enigma');
 
-        // High-activity NPC extra glow (pulses with faction breath)
-        if (node.activity > 0.7 && node.faction && npcFade > 0.5) {
-          const zone = factionZones.find(z => z.fid === node.faction);
-          if (zone) {
-            const bp = zone.zonePulse + t * 0.001 * (0.8 + node.activity * 0.4);
-            const glowSize = r * 3 + Math.sin(bp) * 4;
-            const aglow = ctx.createRadialGradient(node.x, node.y, r * 0.5, node.x, node.y, glowSize);
-            aglow.addColorStop(0, hexToRgba(node.color, 0.2 * npcFade));
-            aglow.addColorStop(1, hexToRgba(node.color, 0));
-            ctx.beginPath();
-            ctx.arc(node.x, node.y, glowSize, 0, Math.PI * 2);
-            ctx.fillStyle = aglow;
-            ctx.fill();
-          }
-        }
+// High-activity NPC extra glow (pulses with faction breath)
+// SPATIAL-03B: Reduce glow in territory mode
+if (node.activity > 0.7 && node.faction && npcFade > 0.5) {
+const zone = factionZones.find(z => z.fid === node.faction);
+if (zone) {
+const bp = zone.zonePulse + t * 0.001 * (0.8 + node.activity * 0.4);
+const glowSize = adjR * (npcTerritoryMode ? 1.5 : 3) + Math.sin(bp) * 4;
+const aglow = ctx.createRadialGradient(node.x, node.y, adjR * 0.5, node.x, node.y, glowSize);
+aglow.addColorStop(0, hexToRgba(node.color, (npcTerritoryMode ? 0.1 : 0.2) * npcFade));
+aglow.addColorStop(1, hexToRgba(node.color, 0));
+ctx.beginPath();
+ctx.arc(node.x, node.y, glowSize, 0, Math.PI * 2);
+ctx.fillStyle = aglow;
+ctx.fill();
+}
+}
 
-        // Glow — SPATIAL-03A: apply npcFade
-        const glowR = r * 3;
-        const glow = ctx.createRadialGradient(node.x, node.y, r * 0.5, node.x, node.y, glowR);
-        glow.addColorStop(0, hexToRgba(node.color, (isCrisisHighlight ? 0.4 : 0.27) * npcFade));
-        glow.addColorStop(1, hexToRgba(node.color, 0));
-        ctx.beginPath();
-        ctx.arc(node.x, node.y, glowR, 0, Math.PI * 2);
-        ctx.fillStyle = glow;
-        ctx.fill();
+// Glow — SPATIAL-03A: apply npcFade; SPATIAL-03B: reduce in territory mode
+const glowR = adjR * (npcTerritoryMode ? 1.5 : 3);
+const glow = ctx.createRadialGradient(node.x, node.y, adjR * 0.5, node.x, node.y, glowR);
+glow.addColorStop(0, hexToRgba(node.color, (npcTerritoryMode ? 0.12 : (isCrisisHighlight ? 0.4 : 0.27)) * npcFade));
+glow.addColorStop(1, hexToRgba(node.color, 0));
+ctx.beginPath();
+ctx.arc(node.x, node.y, glowR, 0, Math.PI * 2);
+ctx.fillStyle = glow;
+ctx.fill();
 
-        // Activity pulse ring
-        if ((node.activity > 0.5 || isCrisisHighlight) && npcFade > 0.3) {
-      ctx.beginPath();
-      ctx.arc(node.x, node.y, r + 4 + pulse * 3, 0, Math.PI * 2);
-      ctx.strokeStyle = isCrisisHighlight ? 'rgba(239,83,80,0.5)' : (node.color + '44');
-      ctx.lineWidth = 1;
-      ctx.stroke();
-    }
+// Activity pulse ring
+if ((node.activity > 0.5 || isCrisisHighlight) && npcFade > 0.3 && !npcTerritoryMode) {
+ctx.beginPath();
+ctx.arc(node.x, node.y, adjR + 4 + pulse * 3, 0, Math.PI * 2);
+ctx.strokeStyle = isCrisisHighlight ? 'rgba(239,83,80,0.5)' : (node.color + '44');
+ctx.lineWidth = 1;
+ctx.stroke();
+}
 
-    // Main node
-    ctx.beginPath();
-    ctx.arc(node.x, node.y, r, 0, Math.PI * 2);
-    const grad = ctx.createRadialGradient(node.x - r*0.3, node.y - r*0.3, 0, node.x, node.y, r);
-    grad.addColorStop(0, lighten(node.color, 40));
-    grad.addColorStop(1, node.color);
-    ctx.fillStyle = grad;
-    ctx.fill();
+// Main node — SPATIAL-03B: use adjR for territory mode
+ctx.beginPath();
+ctx.arc(node.x, node.y, adjR, 0, Math.PI * 2);
+const grad = ctx.createRadialGradient(node.x - adjR*0.3, node.y - adjR*0.3, 0, node.x, node.y, adjR);
+grad.addColorStop(0, lighten(node.color, 40));
+grad.addColorStop(1, node.color);
+ctx.fillStyle = grad;
+ctx.fill();
 
-    // Faction affiliation border (colored ring around dot)
-    if (node.faction && node.factionColor) {
-      ctx.strokeStyle = node.factionColor;
-      ctx.lineWidth = vp.npcFactionBorder;
-      ctx.stroke();
+// Faction affiliation border (colored ring around dot) — SPATIAL-03B: vp.npcFactionBorder handles territory thinness
+if (node.faction && node.factionColor) {
+ctx.strokeStyle = node.factionColor;
+ctx.lineWidth = vp.npcFactionBorder;
+ctx.stroke();
     } else {
       // Unaffiliated: grey ring, thicker for companions, thinner for others
       const catColor = CATEGORY_COLORS[node.category] || CATEGORY_COLORS.unknown;
@@ -2793,10 +2891,10 @@ if (!spatialMode) {
       ctx.stroke();
     }
 
-// Selected highlight
+  // Selected highlight — SPATIAL-03B: use adjR
   if (isSelected) {
     ctx.beginPath();
-    ctx.arc(node.x, node.y, r + 3, 0, Math.PI * 2);
+    ctx.arc(node.x, node.y, adjR + 3, 0, Math.PI * 2);
     ctx.strokeStyle = '#4fc3f7';
     ctx.lineWidth = 2;
     ctx.stroke();
