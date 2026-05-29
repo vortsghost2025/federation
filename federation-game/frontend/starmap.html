@@ -2895,12 +2895,12 @@ const adjR = r * rScale;
 
 // High-activity NPC extra glow (pulses with faction breath)
 // SPATIAL-03B: Reduce glow in territory mode
-if (node.activity > 0.7 && node.faction && npcFade > 0.5) {
-const zone = factionZones.find(z => z.fid === node.faction);
-if (zone) {
-const bp = zone.zonePulse + t * 0.001 * (0.8 + node.activity * 0.4);
-const glowSize = adjR * (npcTerritoryMode ? 1.5 : 3) + Math.sin(bp) * 4;
-const aglow = ctx.createRadialGradient(node.x, node.y, adjR * 0.5, node.x, node.y, glowSize);
+    if (node.activity > 0.7 && node.faction && npcFade > 0.5) {
+    const zone = factionZones.find(z => z.fid === node.faction);
+    if (zone) {
+    const bp = zone.zonePulse + t * 0.001 * (0.8 + node.activity * 0.4);
+    const glowSize = Math.max(0, adjR * (npcTerritoryMode ? 1.5 : 3) + Math.sin(bp) * 4);
+    const aglow = ctx.createRadialGradient(node.x, node.y, adjR * 0.5, node.x, node.y, glowSize);
 aglow.addColorStop(0, hexToRgba(node.color, (npcTerritoryMode ? 0.1 : 0.2) * npcFade));
 aglow.addColorStop(1, hexToRgba(node.color, 0));
 ctx.beginPath();
