@@ -1455,6 +1455,11 @@ function buildNodesSpatial() {
     if (fdata && fdata.home_sector_id) homeSectorIds[fid] = fdata.home_sector_id;
   }
   const homeIds = Object.values(homeSectorIds);
+
+  // Build territory lookup: sectorId → factionId (used by home expansion and NPC placement)
+  const sectorOwner = {};
+  for (const t of territories) { sectorOwner[t.sector_id] = t.faction_id; }
+
   if (homeIds.length >= 2) {
     // Centroid of faction homes
     let hcx = 0, hcy = 0;
@@ -1482,8 +1487,6 @@ function buildNodesSpatial() {
 
     // Reposition non-home sectors: keep their offset from their owning faction's home,
     // but scale it down to create tight clusters around each home
-    const sectorOwner = {};
-    for (const t of territories) { sectorOwner[t.sector_id] = t.faction_id; }
     for (const s of sectors) {
       if (homeIds.includes(s.id)) continue; // already repositioned
       const sp = spatialSectors[s.id];
@@ -1537,11 +1540,7 @@ function buildNodesSpatial() {
     }
   }
 
-  // Build territory lookup: sectorId → factionId
-  const sectorOwner = {};
-  for (const t of territories) {
-    sectorOwner[t.sector_id] = t.faction_id;
-  }
+  // sectorOwner already declared above (faction home expansion block)
 
   // Build NPC location lookup: npc_id → sectorId
   const npcSector = {};
@@ -1587,25 +1586,30 @@ function buildNodesSpatial() {
   }
 
 // Place NPCs at their sector positions with orbit-ring packing
-// SPATIAL-03C: Wider orbit spacing to prevent dense central cluster
-const baseRadius = 25;  // SPATIAL-03C: was 18, wider spread
-const ringSpacing = 20; // SPATIAL-03C: was 16, wider rings
-sectorNpcs.forEach((npc, j) => {
-const rng = seededRand(hashStr(npc.id || npc.name || (secId + j)));
-// Determine ring and angle
-let ring, slotInRing, slotsInRing;
-if (j < 4) { ring = 0; slotInRing = j; slotsInRing = Math.min(4, count); } // SPATIAL-03C: max 4 inner
-else if (j < 10) { ring = 1; slotInRing = j - 4; slotsInRing = Math.min(6, count - 4); }
-else { ring = 2; slotInRing = j - 10; slotsInRing = Math.min(8, count - 10); }
-const ringR = baseRadius + ring * ringSpacing;
-const angleStep = (Math.PI * 2) / Math.max(1, slotsInRing);
-const subAngle = slotInRing * angleStep + rng() * angleStep * 0.4;
-const x = secPos.cx + Math.cos(subAngle) * (ringR + rng() * 6); // SPATIAL-03C: more spread
-const y = secPos.cy + Math.sin(subAngle) * (ringR + rng() * 6);
-const age = npc.last_active ? (now - npc.last_active) : 9999;
-const activity = Math.max(0.2, 1 - age / 3600);
-// SPATIAL-03C: Smaller NPC dots — was 3+activity*5, now 2+activity*3
-const radius = 2 + activity * 3;
+  // SPATIAL-03C: Wider orbit spacing to prevent dense central cluster
+  for (const secId in npcsBySector) {
+    const sectorNpcs = npcsBySector[secId];
+    const count = sectorNpcs.length;
+    const secPos = spatialSectors[secId];
+    if (!secPos) continue;
+    const baseRadius = 25; // SPATIAL-03C: was 18, wider spread
+    const ringSpacing = 20; // SPATIAL-03C: was 16, wider rings
+    sectorNpcs.forEach((npc, j) => {
+      const rng = seededRand(hashStr(npc.id || npc.name || (secId + j)));
+      // Determine ring and angle
+      let ring, slotInRing, slotsInRing;
+      if (j < 4) { ring = 0; slotInRing = j; slotsInRing = Math.min(4, count); } // SPATIAL-03C: max 4 inner
+      else if (j < 10) { ring = 1; slotInRing = j - 4; slotsInRing = Math.min(6, count - 4); }
+      else { ring = 2; slotInRing = j - 10; slotsInRing = Math.min(8, count - 10); }
+      const ringR = baseRadius + ring * ringSpacing;
+      const angleStep = (Math.PI * 2) / Math.max(1, slotsInRing);
+      const subAngle = slotInRing * angleStep + rng() * angleStep * 0.4;
+      const x = secPos.cx + Math.cos(subAngle) * (ringR + rng() * 6); // SPATIAL-03C: more spread
+      const y = secPos.cy + Math.sin(subAngle) * (ringR + rng() * 6);
+      const age = npc.last_active ? (now - npc.last_active) : 9999;
+      const activity = Math.max(0.2, 1 - age / 3600);
+      // SPATIAL-03C: Smaller NPC dots — was 3+activity*5, now 2+activity*3
+      const radius = 2 + activity * 3;
       const aff = npc.affiliation;
       const fColor = aff && factions[aff] ? factions[aff].color : '#9e9e9e';
       nodes.push({
