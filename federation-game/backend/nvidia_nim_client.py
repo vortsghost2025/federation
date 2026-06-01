@@ -66,7 +66,7 @@ MODEL_CHAIN = [
         "temperature_default": 0.7,
         "top_p_default": 0.8,
         "is_thinking_model": False,
-        "timeout": 30,
+        "timeout": 20,
     },
     {
         "id": "minimaxai/minimax-m2.7",
@@ -74,7 +74,7 @@ MODEL_CHAIN = [
         "temperature_default": 1.0,
         "top_p_default": 0.95,
         "is_thinking_model": True,
-        "timeout": 30,
+        "timeout": 20,
     },
     {
         "id": "google/gemma-4-31b-it",
@@ -82,7 +82,7 @@ MODEL_CHAIN = [
         "temperature_default": 1.0,
         "top_p_default": 0.95,
         "is_thinking_model": False,
-        "timeout": 60,
+        "timeout": 30,
     },
 ]
 
@@ -91,13 +91,18 @@ COOLDOWN_SECONDS = 60
 MAX_CALLS_PER_CYCLE = 30
 MAX_CALLS_PER_KEY_PER_MINUTE = 20
 
+# NIM per-attempt timeout — reduced from 20s to 12s for faster fail-over.
+# NIM typically responds in 2-8s; 12s gives ample margin while preventing
+# a single slow model from blocking the entire NPC tick.
+NIM_PER_ATTEMPT_TIMEOUT = 12
+
 # ---------------------------------------------------------------------------
 # Ollama configuration -- local GPU inference via Tailscale
-# HARDENED: concurrency=1, queue=3, cooldown=60s on 500s, tags cache 60s
+# HARDENED: concurrency=2, queue=5, cooldown=60s on 500s, tags cache 60s
 # ---------------------------------------------------------------------------
 OLLAMA_BASE_URL = os.environ.get("OLLAMA_BASE_URL", "http://100.95.92.117:11434/v1")
 OLLAMA_MODEL = os.environ.get("OLLAMA_MODEL", "qwen2.5-coder:3b-instruct-q4_K_M")
-OLLAMA_TIMEOUT = int(os.environ.get("OLLAMA_TIMEOUT", "45"))
+OLLAMA_TIMEOUT = int(os.environ.get("OLLAMA_TIMEOUT", "30"))
 OLLAMA_TAGS_CACHE_TTL = int(os.environ.get("OLLAMA_TAGS_CACHE_TTL", "60"))
 
 # Heavy model (7B) — DISABLED by default. Set OLLAMA_HEAVY_ENABLED=1 to allow.
@@ -105,9 +110,11 @@ OLLAMA_HEAVY_MODEL = os.environ.get("OLLAMA_HEAVY_MODEL", "qwen2.5-coder:7b")
 OLLAMA_HEAVY_KEEP_ALIVE = os.environ.get("OLLAMA_HEAVY_KEEP_ALIVE", "3m")
 OLLAMA_HEAVY_ENABLED = os.environ.get("OLLAMA_HEAVY_ENABLED", "") == "1"
 
-# Backpressure: max 1 active call, max 3 queued, cooldown 60s on 500/client-abort
-OLLAMA_MAX_ACTIVE = int(os.environ.get("OLLAMA_MAX_ACTIVE", "1"))
-OLLAMA_MAX_QUEUE = int(os.environ.get("OLLAMA_MAX_QUEUE", "3"))
+# Backpressure: max 2 active calls (Ollama can handle 2 concurrent on most GPUs),
+# max 5 queued, cooldown 60s on 500/client-abort. Increased from 1→2 active
+# to allow parallel NPC thought generation while respecting GPU limits.
+OLLAMA_MAX_ACTIVE = int(os.environ.get("OLLAMA_MAX_ACTIVE", "2"))
+OLLAMA_MAX_QUEUE = int(os.environ.get("OLLAMA_MAX_QUEUE", "5"))
 OLLAMA_COOLDOWN_SECONDS = int(os.environ.get("OLLAMA_COOLDOWN_SECONDS", "60"))
 
 _ollama_available: Optional[bool] = None
@@ -118,7 +125,7 @@ _ollama_checking: bool = False  # sentinel to prevent concurrent /api/tags polls
 class OllamaLane:
     """Thread-safe Ollama call scheduler with backpressure.
 
-    Enforces: max 1 active call, max 3 queued, cooldown 60s on 500/client-abort.
+    Enforces: max 2 active calls, max 5 queued, cooldown 60s on 500/client-abort.
     Logs per call: provider, model, timeout, queued_ms, success/fallback.
     """
 
@@ -1036,79 +1043,81 @@ class NimClient:
                 if client is None:
                     continue
 
-                try:
-                    resp = await asyncio.wait_for(
-                        client.chat.completions.create(
-                            model=model_id,
-                            messages=messages,
-                            max_tokens=mt,
-                            temperature=temperature,
-                            top_p=tp,
-                            stream=False,
-                            timeout=timeout,
-                        ),
-                        timeout=20.0,
+        try:
+            resp = await asyncio.wait_for(
+                client.chat.completions.create(
+                    model=model_id,
+                    messages=messages,
+                    max_tokens=mt,
+                    temperature=temperature,
+                    top_p=tp,
+                    stream=False,
+                    timeout=timeout,
+                ),
+                timeout=float(NIM_PER_ATTEMPT_TIMEOUT),
+            )
+
+            ks.mark_used()
+            ks.mark_success()
+            self._cycle_calls += 1
+            self._total_calls += 1
+
+            msg = resp.choices[0].message
+            content = msg.content
+
+            if (
+                not content
+                and hasattr(msg, "reasoning_content")
+                and msg.reasoning_content
+            ):
+                reasoning = msg.reasoning_content
+                sentences = [
+                    s.strip()
+                    for s in reasoning.replace("\n", ".").split(".")
+                    if len(s.strip()) > 10
+                ]
+                if sentences:
+                    content = sentences[-1]
+                if content.startswith(("The user", "So we", "Let me", "We need")):
+                    content = (
+                        ". ".join(sentences[-2:])
+                        if len(sentences) >= 2
+                        else sentences[-1]
                     )
 
-                    ks.mark_used()
-                    ks.mark_success()
-                    self._cycle_calls += 1
-                    self._total_calls += 1
+            if content:
+                content = content.strip().strip('"').strip("'")
+                if len(content) > 500:
+                    content = content[:500]
+                logger.debug(
+                    "NimClient: %s via %s... -> %d chars",
+                    model_id,
+                    ks.key[:12],
+                    len(content),
+                )
+                return content
 
-                    msg = resp.choices[0].message
-                    content = msg.content
+            logger.debug("NimClient: %s returned empty content", model_id)
 
-                    if (
-                        not content
-                        and hasattr(msg, "reasoning_content")
-                        and msg.reasoning_content
-                    ):
-                        reasoning = msg.reasoning_content
-                        sentences = [
-                            s.strip()
-                            for s in reasoning.replace("\n", ".").split(".")
-                            if len(s.strip()) > 10
-                        ]
-                        if sentences:
-                            content = sentences[-1]
-                        if content.startswith(
-                            ("The user", "So we", "Let me", "We need")
-                        ):
-                            content = (
-                                ". ".join(sentences[-2:])
-                                if len(sentences) >= 2
-                                else sentences[-1]
-                            )
+        except asyncio.TimeoutError:
+            ks.mark_error()
+            logger.warning(
+                "NimClient: %s call timed out (%ds limit)",
+                model_id,
+                NIM_PER_ATTEMPT_TIMEOUT,
+            )
+            self._total_failures += 1
 
-                    if content:
-                        content = content.strip().strip('"').strip("'")
-                        if len(content) > 500:
-                            content = content[:500]
-                        logger.debug(
-                            "NimClient: %s via %s... -> %d chars",
-                            model_id,
-                            ks.key[:12],
-                            len(content),
-                        )
-                        return content
-
-                    logger.debug("NimClient: %s returned empty content", model_id)
-
-                except asyncio.TimeoutError:
-                    ks.mark_error()
-                    logger.warning("NimClient: %s call timed out (20s limit)", model_id)
-                    self._total_failures += 1
-
-                except Exception as exc:
-                    exc_str = str(exc).lower()
-                    ks.mark_error()
-                    if "429" in exc_str or "rate" in exc_str:
-                        ks.mark_rate_limited()
-                    elif "timeout" in exc_str:
-                        logger.warning("NimClient: %s timed out", model_id)
-                    else:
-                        logger.warning("NimClient: %s error: %s", model_id, exc)
-                    self._total_failures += 1
+        except Exception as exc:
+            exc_str = str(exc).lower()
+            ks.mark_error()
+            if "429" in exc_str or "rate" in exc_str:
+                ks.mark_rate_limited()
+            elif "timeout" in exc_str:
+                logger.warning("NimClient: %s timed out", model_id)
+            else:
+                logger.warning("NimClient: %s error: %s", model_id, exc)
+            self._total_failures += 1
 
         return None
 
@@ -1286,17 +1295,17 @@ def _run_async(coro):
     If an event loop is already running (e.g. inside FastAPI),
     runs the coroutine in a separate thread to avoid blocking.
     Otherwise, uses asyncio.run() directly.
-    """
-    import asyncio
 
+    Uses a module-level shared ThreadPoolExecutor (max_workers=4) instead of
+    creating a new executor per call, which eliminates the overhead of
+    thread-pool creation/destruction and reduces contention when many NPC
+    threads call _call_llm() simultaneously during a tick.
+    """
     try:
         loop = asyncio.get_running_loop()
     except RuntimeError:
         loop = None
     if loop and loop.is_running():
-        import concurrent.futures
-
-        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
-            return pool.submit(asyncio.run, coro).result()
+        return _ASYNC_EXECUTOR.submit(asyncio.run, coro).result()
     else:
         return asyncio.run(coro)
