@@ -767,61 +767,6 @@ def generate_and_apply_events(max_events: int = 3) -> Dict:
 
     return results
 
-    try:
-        generator = EventGenerator()
-        event_system = EventSystem(generator)
-
-        num_events = random.randint(1, max_events)
-
-        for _ in range(num_events):
-            try:
-                event = generator.generate_random_event()
-
-                # Apply base effects autonomously (no player choice in autonomous mode)
-                for effect in event.effects:
-                    applied = _apply_event_effect_to_world(r, effect, ts)
-                    results["effects_applied"].append(applied)
-
-                # Store event in npc_world_events for cascade processing
-                event_summary = {
-                    "event_type": "game_event",
-                    "game_event_type": event.event_type.value,
-                    "name": event.name,
-                    "severity": event.severity.name,
-                    "description": event.description,
-                    "source": "event_system",
-                    "visibility": "public",
-                    "significance": min(1.0, event.severity.value * 0.3),
-                    "ts": int(ts),
-                }
-                r.zadd("npc_world_events", {json.dumps(event_summary): ts})
-
-                # Store in event-specific Redis key for observer dashboard
-                r.zadd("game_events_log", {json.dumps(event.to_dict()): ts})
-                r.zremrangebyrank("game_events_log", 0, -(101))  # Keep last 100
-
-                results["events_generated"].append(
-                    {
-                        "name": event.name,
-                        "type": event.event_type.value,
-                        "severity": event.severity.name,
-                        "effects_count": len(event.effects),
-                    }
-                )
-
-            except Exception as exc:
-                logger.error("Error generating/applying event: %s", exc)
-                results["errors"].append(str(exc))
-
-        # Clean up npc_world_events to keep last 50
-        r.zremrangebyrank("npc_world_events", 0, -(51))
-
-    except Exception as exc:
-        logger.error("Event system error: %s", exc)
-        results["errors"].append(str(exc))
-
-    return results
-
 
 def _apply_event_effect_to_world(r, effect, ts: float) -> Dict:
     """Apply a GameEffect directly to Redis world_state.

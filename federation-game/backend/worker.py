@@ -211,9 +211,17 @@ def check_significant_events(history_data, political_data):
 
     # ── Laws passed ────────────────────────────────────
     if political_data and isinstance(political_data, list):
-        for law in political_data[:3]:
-            law_name = law.get("law_name", law.get("name", "Unknown Law"))
-            events.append(("\u2696\ufe0f", "Law Passed", f"{law_name}"))
+        for item in political_data[:5]:
+            phase = item.get("phase", "")
+            if phase == "enacted":
+                law_name = item.get("law_name", item.get("name", "Unknown Law"))
+                events.append(("\u2696\ufe0f", "Law Passed", f"{law_name}"))
+            elif phase == "political_event":
+                desc = item.get("description", item.get("event_type", "Political event"))
+                events.append(("\U0001f3a4", "Political Event", desc[:100]))
+            elif phase == "vote" and item.get("passed"):
+                law_title = item.get("law_title", "Unknown")
+                events.append(("\U0001f5f3\ufe0f", "Council Vote", f"{law_title}: {item.get('for', 0)}-{item.get('against', 0)}"))
 
     return events
 
@@ -363,13 +371,13 @@ def _build_narrative_notification(cr, raw_events):
     _SEV_ORDER = {"STABLE": 0, "MODERATE": 1, "ELEVATED": 2, "SEVERE": 3, "CRITICAL": 4}
     severity_increased = _SEV_ORDER.get(cls, 0) > _SEV_ORDER.get(last_cls, 0)
 
-    # STABLE/MODERATE: never send Telegram
+ # STABLE/MODERATE/ELEVATED boundary: only send for ELEVATED+
     if cls in ("STABLE", "MODERATE"):
         return None
 
     # Same state within 10 minutes and severity didn't increase = skip
     if state_key == last_key and not severity_increased and mins_since < 10:
-        return None
+                return None
 
     _last_notification["classification"] = cls
     _last_notification["headline"] = headline
@@ -668,8 +676,24 @@ def run_tick():
             if data is not None:
                 if path == "/history-arc/advance":
                     history_data = data
-                if path == "/political/process-turn":
-                    political_data = data.get("details") or []
+            if path == "/political/process-turn":
+                political_data = data.get("details") or []
+                # Log political session results
+                for item in political_data:
+                    phase = item.get("phase", "")
+                    if phase == "proposal":
+                        log.info(f"  Political: {item.get('title', '?')} proposed by {item.get('proposed_by', '?')}")
+                    elif phase == "vote":
+                        result_str = "PASSED" if item.get("passed") else "REJECTED"
+                        super_str = " (supermajority!)" if item.get("supermajority") else ""
+                        log.info(f"  Political vote: {item.get('for', 0)} for / {item.get('against', 0)} against / {item.get('abstain', 0)} abstain — {result_str}{super_str}")
+                    elif phase == "enacted":
+                        effects = item.get("effects", {})
+                        log.info(f"  Law enacted: {item.get('law_name', '?')} effects={effects}")
+                    elif phase == "rejected":
+                        log.info(f"  Law rejected: {item.get('law_title', '?')}")
+                    elif phase == "political_event":
+                        log.info(f"  Political event: {item.get('description', item.get('event_type', '?'))}")
         elif err == "timeout":
             log.error(f" {name}: TIMEOUT after {read_timeout}s read (+ 1 retry)")
         elif err == "unreachable":
@@ -681,13 +705,18 @@ def run_tick():
         else:
             log.error(f" {name}: failed ({err})")
 
-    # ── Spatial tick placeholder (SPATIAL-01) ────────────
-    # Phase 4 will add real spatial mechanics here. For now,
-    # this is a no-op that confirms the spatial module is reachable.
+    # ── Spatial tick ────────────────────────────────────
     if os.getenv("SPATIAL_ENABLED", "true").lower() in ("true", "1", "yes"):
-        log.debug(" Spatial tick: no-op (Phase 4 placeholder)")
+        try:
+            from spatial_tick import run_spatial_tick
+            spatial_result = run_spatial_tick(tick_count)
+            # Logging is handled inside run_spatial_tick() — avoid duplicate log lines
+        except ImportError:
+            log.warning(" Spatial tick module not available")
+        except Exception as e:
+            log.warning(f" Spatial tick failed: {e}")
 
-        # ── Auto-save ──────────────────────────────────────
+    # ── Auto-save ──────────────────────────────────────
     resp, err = _call_endpoint("/state/save", "Auto-save", 30, retries=0)
     if err is None:
         log.info(f"  Auto-save: {resp.status_code}")
@@ -700,32 +729,31 @@ def run_tick():
     else:
         log.warning(f"  Auto-save failed: {err}")
 
-
-# ── Crisis decay: regress extreme world_state values toward mean ──
-# Prevents doom loops where values get stuck at 0 or 100
-_MEAN_VALUES = {
-    "stability": 50,
-    "morale": 50,
-    "threat_level": 30,
-    "anomaly_activity": 50,
-    "tension_level": 30,
-    "resource_abundance": 70,
-    "treasury": 250,
-}
-_DECAY_RATE = 0.02  # 2% regression per tick toward mean
-try:
-    _ws = r.hgetall("world_state")
-    _updates = {}
-    for _key, _mean in _MEAN_VALUES.items():
-        _current = float(_ws.get(_key, str(_mean)))
-        if _current != _mean:
-            _new = _current + (_mean - _current) * _DECAY_RATE
-            _updates[_key] = str(round(_new, 2))
-    if _updates:
-        r.hset("world_state", mapping=_updates)
-        log.info(f"  Crisis decay applied: {_updates}")
-except Exception as _e:
-    log.warning(f"  Crisis decay failed: {_e}")
+    # ── Crisis decay: regress extreme world_state values toward mean ──
+    # Prevents doom loops where values get stuck at 0 or 100
+    _MEAN_VALUES = {
+        "stability": 50,
+        "morale": 50,
+        "threat_level": 30,
+        "anomaly_activity": 50,
+        "tension_level": 30,
+        "resource_abundance": 70,
+        "treasury": 250,
+    }
+    _DECAY_RATE = 0.02  # 2% regression per tick toward mean
+    try:
+        _ws = r.hgetall("world_state")
+        _updates = {}
+        for _key, _mean in _MEAN_VALUES.items():
+            _current = float(_ws.get(_key, str(_mean)))
+            if _current != _mean:
+                _new = _current + (_mean - _current) * _DECAY_RATE
+                _updates[_key] = str(round(_new, 2))
+        if _updates:
+            r.hset("world_state", mapping=_updates)
+            log.info(f"  Crisis decay applied: {_updates}")
+    except Exception as _e:
+        log.warning(f"  Crisis decay failed: {_e}")
 
     # ── Publish tick to Redis ──────────────────────────
     try:

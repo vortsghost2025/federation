@@ -1,11 +1,27 @@
-fastapi>=0.100.0
-uvicorn>=0.23.0
-websockets>=11.0
+# Federation Game Backend - Python Dependencies
+# Generated from full import scan of all .py files
+
+# ── Web framework ──
+fastapi>=0.104.0
+uvicorn[standard]>=0.24.0
+pydantic>=2.0.0
+
+# ── Database ──
 sqlalchemy>=2.0.0
 psycopg2-binary>=2.9.0
-pydantic>=2.0.0
-python-dotenv>=1.0.0
-redis>=4.0.0
+
+# ── Cache / message bus ──
+redis>=5.0.0
+
+# ── HTTP clients ──
+httpx>=0.25.0
 requests>=2.31.0
-apprise>=1.6.0
+
+# ── LLM / AI ──
 openai>=1.0.0
+
+# ── Notifications ──
+apprise>=1.6.0
+
+# ── Testing ──
+pytest>=7.4.0

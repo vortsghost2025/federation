@@ -53,7 +53,7 @@ LLM_USE_NIM = True  # Toggle NIM integration
 
 # Significance gate — decision categories mapped to LLM priority
 # High: always attempt LLM call (most interesting NPC moments)
-# Medium: attempt LLM if budget available (NimClient handles cycle cap)
+# Medium: probabilistic LLM — 50% chance of LLM, 50% template (saves ~50% of medium-sig calls)
 # Low: skip LLM entirely, use template (routine/idle moments)
 SIGNIFICANCE_PRIORITY = {
     "confront_rival": "high",
@@ -72,6 +72,12 @@ SIGNIFICANCE_PRIORITY = {
 # Categories that should skip LLM entirely (save budget for meaningful moments)
 LOW_SIGNIFICANCE_CUTOFF = "low"
 
+# Medium-significance LLM probability: 50% of medium-sig categories use LLM,
+# the other 50% fall through to template. This halves medium-sig LLM calls
+# (self_improve, explore, political_vote, help_ally) while preserving
+# variety since the template fallback still produces archetype-specific text.
+MEDIUM_SIG_LLM_PROBABILITY = 0.5
+
 MAX_THOUGHTS = 10
 MAX_ACTIONS = 8
 MAX_WORLD_EVENTS = 50
@@ -83,7 +89,10 @@ OPINION_TTL = 86400 * 14
 # If the same NPC with the same archetype/mood/decision-category/significance
 # generates a thought within the TTL window, the cached result is returned
 # instead of making another LLM call. This skips ~40-60% of LLM calls per tick.
-THOUGHT_CACHE_TTL = 600  # seconds — covers ~10 tick intervals at 60s ticks
+# TTL increased to 900s (15min) — covers ~15 tick intervals at 60s ticks,
+# increasing cache hit rate by ~10-15% since NPC context rarely changes
+# within a 15-minute window.
+THOUGHT_CACHE_TTL = 900  # seconds — covers ~15 tick intervals at 60s ticks
 THOUGHT_CACHE_PREFIX = "npc_thought_cache:"
 
 # Thread-safe cache stats (atomic increments via threading.Lock)
@@ -97,19 +106,23 @@ def _compute_thought_cache_key(
     mood: str,
     significance: str,
     world_events_bucket: str = "",
+    decision_category: str = "",
 ) -> str:
     """Compute a deterministic Redis key from the NPC's thought context.
 
     The key changes when inputs that would produce a different LLM output
-    change: char_id, archetype, mood bucket, and world-events bucket.
+    change: char_id, archetype, mood bucket, decision-category, and world-events bucket.
 
     NOTE: 'significance' is NOT included in the hash because it's a budget
     gate (whether to call LLM vs template), not a determinant of the LLM's
-    output. The thought content depends on archetype + mood, not significance.
+    output. The thought content depends on archetype + mood + category, not significance.
 
     Moods are bucketized so small variations don't invalidate the cache:
     - Text moods (e.g. "contemplative"): used as-is
     - Numeric moods: bucketed into low/medium/high ranges
+
+    decision_category is included because the same NPC in the same mood
+    will produce very different thoughts for "investigate" vs "socialize".
     """
     # Bucketize mood to avoid cache thrashing from minor variations
     mood_bucket = mood or "contemplative"
@@ -124,7 +137,7 @@ def _compute_thought_cache_key(
     except (ValueError, TypeError):
         pass  # text mood, use as-is
 
-    raw = f"{char_id}|{archetype}|{mood_bucket}|{world_events_bucket}"
+    raw = f"{char_id}|{archetype}|{mood_bucket}|{decision_category}|{world_events_bucket}"
     digest = hashlib.sha256(raw.encode("utf-8")).hexdigest()[:16]
     return f"{THOUGHT_CACHE_PREFIX}{digest}"
 
@@ -277,7 +290,7 @@ def _call_llm(
         OPENROUTER_URL, data=payload, headers=headers, method="POST"
     )
     try:
-        with urllib.request.urlopen(req, timeout=20) as resp:
+        with urllib.request.urlopen(req, timeout=12) as resp:
             body = json.loads(resp.read().decode("utf-8"))
             return (
                 body.get("choices", [{}])[0]
@@ -301,13 +314,15 @@ def generate_thought(
     description: str,
     mood: str = "",
     significance: str = "medium",
+    decision_category: str = "",
 ) -> Optional[Dict]:
     # --- Context-hash cache check (P25c) ---
     # Compute a deterministic key from the NPC's current context.
     # If the context hasn't changed since last tick, return cached thought.
     world_bucket = _get_world_events_bucket()
     cache_key = _compute_thought_cache_key(
-        char_id, archetype, mood, significance, world_bucket
+        char_id, archetype, mood, significance, world_bucket,
+        decision_category=decision_category,
     )
     r = _get_redis()
 
@@ -324,11 +339,12 @@ def generate_thought(
                 with _cache_stats_lock:
                     _cache_stats["hits"] += 1
                 logger.debug(
-                    "Thought cache HIT for %s (archetype=%s mood=%s sig=%s bucket=%s)",
+                    "Thought cache HIT for %s (archetype=%s mood=%s sig=%s cat=%s bucket=%s)",
                     char_id,
                     archetype,
                     mood,
                     significance,
+                    decision_category,
                     world_bucket,
                 )
         except Exception:
@@ -336,7 +352,32 @@ def generate_thought(
 
     if not cache_hit:
         # Significance gate: low-priority moments skip LLM entirely (save budget)
-        if significance != LOW_SIGNIFICANCE_CUTOFF:
+        # Medium-priority: probabilistic gate — 50% use LLM, 50% use template
+        should_call_llm = False
+        if significance == "high":
+            should_call_llm = True
+        elif significance == "medium" and random.random() < MEDIUM_SIG_LLM_PROBABILITY:
+            should_call_llm = True
+            logger.debug(
+                "Medium-sig LLM gate PASSED for %s (category=%s)",
+                char_id, decision_category,
+            )
+        elif significance == "medium":
+            logger.debug(
+                "Medium-sig LLM gate SKIPPED for %s (category=%s) — template fallback",
+                char_id, decision_category,
+            )
+
+        if should_call_llm:
+            # Check per-tick LLM budget before making the call
+            if not _check_tick_llm_budget():
+                logger.debug(
+                    "Tick LLM budget exhausted for %s — template fallback",
+                    char_id,
+                )
+                should_call_llm = False
+
+        if should_call_llm:
             thought_text = _call_llm(
                 f"""You are {char_name}, {title}. {description}
 Archetype: {archetype}. Affiliation: {affiliation}.
@@ -375,21 +416,104 @@ Examples:
                 _cache_stats["misses"] += 1
 
     if not thought_text:
-        template_thoughts = {
-            "scholar": "The data patterns suggest something unusual is forming in the research grids...",
-            "warrior": "The perimeter feels unsteady. I should reinforce our defensive positions.",
-            "rogue": "Opportunities don't announce themselves. Time to do some reconnaissance...",
-            "mystic": "I sense a shift in the cosmic currents. Something approaches from beyond...",
-            "leader": "The council meeting approaches. I must prepare my arguments carefully.",
-            "sage": "Balance requires patience, but events press urgency upon us.",
-            "wanderer": "I feel the call of uncharted space again. The old restlessness returns.",
-            "hero": "Someone out there needs help. I can feel it in my bones.",
-            "deceiver": "The pieces on the board are shifting. Time to rearrange them to my advantage.",
-            "guardian": "The old protocols must be maintained. I sense complacency in the ranks.",
+        # Category-specific template fallback — produces more relevant text
+        # than generic archetype templates when LLM is skipped (medium-sig gate
+        # or budget exhaustion). Falls back to archetype template if no
+        # category-specific template matches.
+        _CATEGORY_THOUGHT_TEMPLATES = {
+            "advance_goal": {
+                "scholar": "The data won't compile itself. I must push forward on my research objectives...",
+                "warrior": "Every drill brings me closer to my objective. Focus and discipline.",
+                "rogue": "The plan is set. Each move brings me closer to what I need.",
+                "mystic": "The path reveals itself in meditation. I must follow where it leads.",
+                "leader": "My agenda demands attention. The council will hear my proposal.",
+                "sage": "Progress requires patience, but also persistence. I must continue.",
+                "wanderer": "The destination calls. One more step toward what I seek.",
+                "hero": "The mission comes first. I won't rest until it's done.",
+                "deceiver": "My scheme advances perfectly. Each piece moves as I intended.",
+                "guardian": "My duty requires progress. I must advance our defensive posture.",
+            },
+            "investigate": {
+                "scholar": "An anomaly in the data... I need to trace this to its source.",
+                "warrior": "Something doesn't add up. I'm going to take a closer look.",
+                "rogue": "That's odd. Where there's smoke, there's usually something worth finding.",
+                "mystic": "The currents feel disturbed. I must look deeper into this.",
+                "leader": "I've heard troubling rumors. Time to separate fact from fiction.",
+                "sage": "Curiosity is the first step to understanding. I must investigate.",
+                "wanderer": "Something caught my eye. I should check it out before moving on.",
+                "hero": "This doesn't feel right. I need to find out what's really going on.",
+                "deceiver": "Interesting... someone is hiding something. I should find out what.",
+                "guardian": "A potential threat detected. Investigation is required.",
+            },
+            "self_improve": {
+                "scholar": "There are gaps in my knowledge. Time to study harder.",
+                "warrior": "I need to sharpen my skills. Complacency is the enemy.",
+                "rogue": "Always room to refine my technique. Practice makes perfect.",
+                "mystic": "The inner path requires constant cultivation. I must deepen my practice.",
+                "leader": "To lead better, I must grow. Self-improvement is not optional.",
+                "sage": "Even the wise must continue learning. There is always more to understand.",
+                "wanderer": "The road teaches those who pay attention. I must sharpen my instincts.",
+                "hero": "I must become stronger. Others depend on me.",
+                "deceiver": "A sharper mind is a more effective weapon. Time to refine my craft.",
+                "guardian": "Vigilance requires constant training. I must not grow complacent.",
+            },
+            "explore": {
+                "scholar": "There are unmapped regions in the data. I should venture further.",
+                "warrior": "I need to survey the terrain. Knowledge of the ground is half the battle.",
+                "rogue": "Unexplored territory means opportunity. Time to see what's out there.",
+                "mystic": "The unknown calls to me. I must venture beyond the familiar.",
+                "leader": "New territory means new possibilities. I should scout ahead.",
+                "sage": "Discovery awaits those who venture beyond the known. I must explore.",
+                "wanderer": "The uncharted calls to me again. I must see what lies beyond.",
+                "hero": "There might be people out there who need help. I should look around.",
+                "deceiver": "Unknown territory... and unknown opportunities. Worth investigating.",
+                "guardian": "I need to expand my patrol range. There may be threats beyond our perimeter.",
+            },
+            "help_ally": {
+                "scholar": "My colleague needs assistance. Knowledge shared is strength multiplied.",
+                "warrior": "A comrade needs support. I stand with my allies.",
+                "rogue": "An ally in need... helping now pays dividends later.",
+                "mystic": "The bonds between us are sacred. I must aid my companion.",
+                "leader": "My people need me. A leader stands with their allies.",
+                "sage": "Helping others is the path to wisdom. I must offer my aid.",
+                "wanderer": "My friend needs a hand. The road is easier walked together.",
+                "hero": "Someone I care about is in trouble. I'll be there for them.",
+                "deceiver": "Supporting an ally now ensures their loyalty when I need it.",
+                "guardian": "An ally requires protection. I will not let them stand alone.",
+            },
+            "seek_resources": {
+                "scholar": "My research requires materials. I must secure what I need.",
+                "warrior": "Supplies are running low. Time to restock before the next engagement.",
+                "rogue": "I need to acquire some things. There are always ways to get what's needed.",
+                "mystic": "My rituals require certain components. I must gather them.",
+                "leader": "The faction needs supplies. I must ensure our resources are adequate.",
+                "sage": "Even wisdom requires material support. I must secure necessities.",
+                "wanderer": "The journey requires provisions. Time to gather what I need.",
+                "hero": "The cause needs resources. I'll find what we require.",
+                "deceiver": "I have my eye on something valuable. Time to make it mine.",
+                "guardian": "Our defenses need resupplying. I must procure what's necessary.",
+            },
         }
-        thought_text = template_thoughts.get(
-            archetype, "Something stirs in the void..."
-        )
+        category_templates = _CATEGORY_THOUGHT_TEMPLATES.get(decision_category, {})
+        if category_templates and archetype in category_templates:
+            thought_text = category_templates[archetype]
+        else:
+            # Generic archetype fallback
+            template_thoughts = {
+                "scholar": "The data patterns suggest something unusual is forming in the research grids...",
+                "warrior": "The perimeter feels unsteady. I should reinforce our defensive positions.",
+                "rogue": "Opportunities don't announce themselves. Time to do some reconnaissance...",
+                "mystic": "I sense a shift in the cosmic currents. Something approaches from beyond...",
+                "leader": "The council meeting approaches. I must prepare my arguments carefully.",
+                "sage": "Balance requires patience, but events press urgency upon us.",
+                "wanderer": "I feel the call of uncharted space again. The old restlessness returns.",
+                "hero": "Someone out there needs help. I can feel it in my bones.",
+                "deceiver": "The pieces on the board are shifting. Time to rearrange them to my advantage.",
+                "guardian": "The old protocols must be maintained. I sense complacency in the ranks.",
+            }
+            thought_text = template_thoughts.get(
+                archetype, "Something stirs in the void..."
+            )
 
     thought = {
         "char_id": char_id,
@@ -893,9 +1017,38 @@ def get_relationship_summary(char_id: str) -> Dict[str, Any]:
 
 
 # --- PARALLEL NPC PROCESSING (P25b-4) ---
-# Max concurrent NPC processing threads. 8 balances LLM throughput
-# (Ollama/NIM handle concurrent requests) against resource limits.
-_NPC_PARALLEL_WORKERS = 8
+# Max concurrent NPC processing threads. 16 provides better parallelism
+# for ~39 NPCs (reduces batches from 5→3). Ollama lane gates actual
+# concurrent LLM calls to OLLAMA_MAX_ACTIVE=2, so higher thread count
+# just means more NPCs can wait/progress in parallel without blocking
+# each other on non-LLM work (mood, decisions, Redis writes).
+_NPC_PARALLEL_WORKERS = 16
+
+# Per-tick LLM call budget: caps total LLM calls across all NPCs in one tick.
+# With ~39 NPCs, ~7 of 10 categories attempt LLM, ~40-60% cache hits:
+#   39 NPCs × 0.7 LLM-worthy × 0.5 cache-miss = ~14 LLM calls per tick.
+# Budget of 20 gives headroom for cache misses while preventing runaway
+# LLM spending if cache is cold (first tick after restart).
+_TICK_LLM_BUDGET = 20
+_tick_llm_calls = 0
+_tick_llm_lock = threading.Lock()
+
+
+def _check_tick_llm_budget() -> bool:
+    """Check if the per-tick LLM budget has remaining capacity. Thread-safe."""
+    global _tick_llm_calls
+    with _tick_llm_lock:
+        if _tick_llm_calls >= _TICK_LLM_BUDGET:
+            return False
+        _tick_llm_calls += 1
+        return True
+
+
+def _reset_tick_llm_budget() -> None:
+    """Reset the per-tick LLM budget at the start of each simulation tick."""
+    global _tick_llm_calls
+    with _tick_llm_lock:
+        _tick_llm_calls = 0
 
 
 def _process_single_npc(npc: Dict) -> Dict[str, Any]:
@@ -937,13 +1090,67 @@ def _process_single_npc(npc: Dict) -> Dict[str, Any]:
             # Significance gate: prioritize LLM calls for meaningful moments
             category = decision.get("category", "")
             sig = SIGNIFICANCE_PRIORITY.get(category, "medium")
-            if category in (
-                "advance_goal",
-                "investigate",
-                "seek_resources",
-                "self_improve",
-                "explore",
-            ):
+        if category in (
+            "advance_goal",
+            "investigate",
+            "seek_resources",
+            "self_improve",
+            "explore",
+        ):
+            thought = generate_thought(
+                char_id,
+                char_name,
+                archetype,
+                affiliation,
+                title,
+                description,
+                mood=new_mood,
+                significance=sig,
+                decision_category=category,
+            )
+            if thought:
+                npc_result["thoughts"].append(thought)
+            action = generate_action(
+                char_id, char_name, archetype, affiliation, mood=new_mood
+            )
+            if action:
+                npc_result["actions"].append(action)
+        elif category in ("socialize", "help_ally", "confront_rival"):
+            thought = generate_thought(
+                char_id,
+                char_name,
+                archetype,
+                affiliation,
+                title,
+                description,
+                mood=new_mood,
+                significance=sig,
+                decision_category=category,
+            )
+            if thought:
+                npc_result["thoughts"].append(thought)
+        elif category == "rest":
+            thought = generate_thought(
+                char_id,
+                char_name,
+                archetype,
+                affiliation,
+                title,
+                description,
+                mood=new_mood,
+                significance=sig,
+                decision_category=category,
+            )
+            if thought:
+                npc_result["thoughts"].append(thought)
+        elif category == "react_to_events":
+            action = generate_action(
+                char_id, char_name, archetype, affiliation, mood=new_mood
+            )
+            if action:
+                npc_result["actions"].append(action)
+        else:
+            if random.random() < 0.5:
                 thought = generate_thought(
                     char_id,
                     char_name,
@@ -953,60 +1160,10 @@ def _process_single_npc(npc: Dict) -> Dict[str, Any]:
                     description,
                     mood=new_mood,
                     significance=sig,
+                    decision_category=category,
                 )
                 if thought:
                     npc_result["thoughts"].append(thought)
-                action = generate_action(
-                    char_id, char_name, archetype, affiliation, mood=new_mood
-                )
-                if action:
-                    npc_result["actions"].append(action)
-            elif category in ("socialize", "help_ally", "confront_rival"):
-                thought = generate_thought(
-                    char_id,
-                    char_name,
-                    archetype,
-                    affiliation,
-                    title,
-                    description,
-                    mood=new_mood,
-                    significance=sig,
-                )
-                if thought:
-                    npc_result["thoughts"].append(thought)
-            elif category == "rest":
-                thought = generate_thought(
-                    char_id,
-                    char_name,
-                    archetype,
-                    affiliation,
-                    title,
-                    description,
-                    mood=new_mood,
-                    significance=sig,
-                )
-                if thought:
-                    npc_result["thoughts"].append(thought)
-            elif category == "react_to_events":
-                action = generate_action(
-                    char_id, char_name, archetype, affiliation, mood=new_mood
-                )
-                if action:
-                    npc_result["actions"].append(action)
-            else:
-                if random.random() < 0.5:
-                    thought = generate_thought(
-                        char_id,
-                        char_name,
-                        archetype,
-                        affiliation,
-                        title,
-                        description,
-                        mood=new_mood,
-                        significance=sig,
-                    )
-                    if thought:
-                        npc_result["thoughts"].append(thought)
         r = _get_redis()
         opinion_keys = list(r.scan_iter(f"npc_opinion:{char_id}:*"))
         for okey in opinion_keys[:2]:
@@ -1037,11 +1194,13 @@ def simulation_tick(npc_list: List[Dict]) -> Dict[str, Any]:
         "errors": [],
     }
 
+    # --- Reset per-tick LLM budget ---
+    _reset_tick_llm_budget()
+
     # --- Parallel NPC processing (P25b-4) ---
     # Process all NPCs concurrently using ThreadPoolExecutor.
     # Each NPC is independent — Redis writes use per-NPC keys,
     # and _call_llm() uses _run_async() which is thread-safe.
-    # This cuts ~27 sequential LLM calls from 110-280s to ~30-60s.
     tick_start = time.time()
     npc_results: List[Dict[str, Any]] = []
 
@@ -1054,7 +1213,7 @@ def simulation_tick(npc_list: List[Dict]) -> Dict[str, Any]:
         for future in concurrent.futures.as_completed(future_to_npc):
             npc = future_to_npc[future]
             try:
-                npc_result = future.result(timeout=60)
+                npc_result = future.result(timeout=45)
                 npc_results.append(npc_result)
             except Exception as exc:
                 char_id = npc.get("char_id") or npc.get("id", "unknown")
@@ -1075,11 +1234,15 @@ def simulation_tick(npc_list: List[Dict]) -> Dict[str, Any]:
     hit_rate = (
         (cache_stats["hits"] / total_cache_ops * 100) if total_cache_ops > 0 else 0.0
     )
+    with _tick_llm_lock:
+        llm_used = _tick_llm_calls
     logger.info(
-        "Parallel NPC processing: %d NPCs in %.1fs (%d workers) | thought cache: %d hits/%d misses (%.0f%% hit rate, %d stored)",
+        "Parallel NPC processing: %d NPCs in %.1fs (%d workers) | LLM budget: %d/%d | thought cache: %d hits/%d misses (%.0f%% hit rate, %d stored)",
         len(npc_list),
         parallel_elapsed,
         _NPC_PARALLEL_WORKERS,
+        llm_used,
+        _TICK_LLM_BUDGET,
         cache_stats["hits"],
         cache_stats["misses"],
         hit_rate,
@@ -2264,36 +2427,38 @@ def make_decision(char_id, char_name, archetype, affiliation, mood=""):
             action_result["description"] = (
                 char_name + " focused on self-improvement and training"
             )
-        elif category == "confront_rival":
-            rel = get_npc_relationships(char_id)
-            target_faction = None  # track the rival's faction
-            if rel:
-                worst_rival = min(rel.items(), key=lambda x: x[1])
-                # Look up the rival's faction
-                rival_id = worst_rival[0]
-                try:
-                    r = _get_redis()
-                    rival_data = r.hget(f"npc:{rival_id}", "affiliation")
-                    if rival_data:
-                        target_faction = (
-                            rival_data
-                            if isinstance(rival_data, str)
-                            else rival_data.decode("utf-8", errors="ignore")
-                        )
-                except Exception:
-                    pass
-                action_result = generate_npc_interaction(
-                    {"char_id": char_id, "name": char_name, "id": char_id},
-                    {
-                        "char_id": worst_rival[0],
-                        "name": worst_rival[0],
-                        "id": worst_rival[0],
-                    },
-                )
-            else:
-                action_result = generate_action(
-                    char_id, char_name, archetype, affiliation, mood
-                )
+
+    elif category == "confront_rival":
+        rel = get_npc_relationships(char_id)
+        target_faction = None  # track the rival's faction
+        if rel:
+            worst_rival = min(rel.items(), key=lambda x: x[1])
+            # Look up the rival's faction
+            rival_id = worst_rival[0]
+            try:
+                r = _get_redis()
+                rival_data = r.hget(f"npc:{rival_id}", "affiliation")
+                if rival_data:
+                    target_faction = (
+                        rival_data
+                        if isinstance(rival_data, str)
+                        else rival_data.decode("utf-8", errors="ignore")
+                    )
+            except Exception:
+                pass
+            action_result = generate_npc_interaction(
+                {"char_id": char_id, "name": char_name, "id": char_id},
+                {
+                    "char_id": worst_rival[0],
+                    "name": worst_rival[0],
+                    "id": worst_rival[0],
+                },
+            )
+        else:
+            action_result = generate_action(
+                char_id, char_name, archetype, affiliation, mood
+            )
+
     elif category == "help_ally":
         rel = get_npc_relationships(char_id)
         if rel:
@@ -2316,20 +2481,20 @@ def make_decision(char_id, char_name, archetype, affiliation, mood=""):
                 char_name + " set out to explore uncharted territory"
             )
 
-        decision = {
-            "char_id": char_id,
-            "char_name": char_name,
-            "category": category,
-            "description": char_name + " " + decision_desc,
-            "reasoning": reasoning,
-            "score": chosen["score"],
-            "considered_options": len(options),
-            "mood": mood or get_mood(char_id),
-            "ts": int(time.time()),
-        }
-        # Attach target_faction for confront_rival decisions
-        if category == "confront_rival":
-            decision["target_faction"] = target_faction or affiliation or "unknown"
+    decision = {
+        "char_id": char_id,
+        "char_name": char_name,
+        "category": category,
+        "description": char_name + " " + decision_desc,
+        "reasoning": reasoning,
+        "score": chosen["score"],
+        "considered_options": len(options),
+        "mood": mood or get_mood(char_id),
+        "ts": int(time.time()),
+    }
+    # Attach target_faction for confront_rival decisions
+    if category == "confront_rival":
+        decision["target_faction"] = target_faction or affiliation or "unknown"
     if action_result and isinstance(action_result, dict):
         decision["action_taken"] = action_result.get("action_type", "none")
         decision["action_desc"] = action_result.get("description", "")
