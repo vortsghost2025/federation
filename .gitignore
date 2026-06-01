@@ -98,6 +98,16 @@ federation-game/backend/timeline.py
 nul
 **/nul
 
+# Local temp scratch workspace
+/tmp/
+/session/
+/_archive/
+/.kilo/plans/
+node_modules/
+
+# Accidental Windows temp-path filenames created in the repo root
+/C*Usersseand*
+
 # Decode/transfer helper scripts (local only)
 decode_b64.ps1
 make_b64.py
