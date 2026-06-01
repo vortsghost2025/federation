@@ -86,6 +86,17 @@ federation-game/backend/check_*.py
 federation-game/backend/npc_autonomy.py
 federation-game/backend/npc_chat.py
 federation-game/backend/faction_dynamics.py
+federation-game/backend/_*.py
+federation-game/backend/kilo3_*.py
+federation-game/backend/smoke_test.*
+federation-game/backend/spatial_tick.py
+federation-game/backend/strip_duplicates.py
+federation-game/backend/syntax_check.py
+federation-game/backend/vps_test.py
+federation-game/backend/worker_vps.py
+federation-game/backend/main_vps.py
+federation-game/backend/fix2.py
+federation-game/_deploy_compose.py
 
 # VPS backend stubs (old names before refactor, kept on server for compatibility)
 federation-game/backend/factions.py
