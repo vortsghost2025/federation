@@ -1,0 +1,45 @@
+
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#050510;color:#e0e0e0;font-family:'Courier New',monospace;overflow:hidden;height:100vh;width:100vw;cursor:grab}
+body.dragging{cursor:grabbing}
+#canvas{position:absolute;top:0;left:0;width:100%;height:100%}
+
+/* Minimal HUD — world state as floating bars, top-left */
+#hud{position:fixed;top:16px;left:16px;z-index:10;display:flex;flex-direction:column;gap:8px;pointer-events:none;opacity:0;animation:fadeIn 2s ease 0.5s forwards}
+.hud-row{display:flex;align-items:center;gap:8px;opacity:0.7;transition:opacity 0.5s}
+.hud-row.active{opacity:1}
+.hud-label{font-size:11px;text-transform:uppercase;letter-spacing:2px;min-width:72px;text-align:right}
+.hud-bar{width:100px;height:4px;background:rgba(255,255,255,0.06);border-radius:2px;overflow:hidden}
+.hud-fill{height:100%;border-radius:2px;transition:width 1.5s ease,background 1.5s ease}
+.hud-val{font-size:12px;min-width:24px;opacity:0.6}
+
+/* Tick pulse — bottom-left */
+#tick-hud{position:fixed;bottom:20px;left:20px;z-index:10;display:flex;align-items:center;gap:10px;pointer-events:none;opacity:0;animation:fadeIn 2s ease 0.8s forwards;transition:opacity 0.5s}
+#tick-hud.flash{opacity:1}
+#tick-ring{width:12px;height:12px;border-radius:50%;border:2px solid #4caf50;transition:border-color 0.5s,box-shadow 0.5s}
+#tick-ring.tension{border-color:#ef5350;box-shadow:0 0 8px #ef5350}
+#tick-ring.stable{border-color:#4caf50;box-shadow:0 0 8px #4caf50}
+#tick-text{font-size:11px;letter-spacing:2px;text-transform:uppercase}
+
+/* Hover tooltip — atmospheric, translucent, borderless */
+#tooltip{position:fixed;z-index:20;pointer-events:none;background:rgba(5,5,16,0.85);border:none;border-radius:8px;padding:10px 14px;display:none;max-width:300px;backdrop-filter:blur(12px)}
+#tooltip.show{display:block}
+#tt-name{font-size:14px;font-weight:bold;margin-bottom:2px}
+#tt-faction{font-size:10px;text-transform:uppercase;letter-spacing:1px;opacity:0.5;margin-bottom:4px}
+#tt-archetype{font-size:10px;letter-spacing:1px;opacity:0.4;margin-bottom:4px;font-style:italic}
+#tt-mood{font-size:11px;margin-bottom:2px}
+#tt-thought{font-size:11px;font-style:italic;opacity:0.6;line-height:1.4;margin-top:4px;padding-top:4px;border-top:1px solid rgba(255,255,255,0.06)}
+
+/* Faction legend — bottom-right, minimal */
+#legend{position:fixed;bottom:16px;right:16px;z-index:10;font-size:10px;pointer-events:none;opacity:0;animation:fadeIn 2s ease 1s forwards;transition:opacity 0.5s}
+.lrow{display:flex;align-items:center;gap:6px;margin-bottom:3px}
+.ldot{width:6px;height:6px;border-radius:50%}
+.lname{letter-spacing:1px;text-transform:uppercase}
+
+/* Navigation — top-right, ghost-like until hovered */
+#nav{position:fixed;top:16px;right:16px;z-index:10;display:flex;gap:16px;opacity:0.2;transition:opacity 0.5s;animation:fadeIn 2s ease 0.3s forwards}
+#nav:hover{opacity:0.8}
+#nav a{font-size:11px;text-transform:uppercase;letter-spacing:2px;color:#e0e0e0;text-decoration:none;pointer-events:auto;transition:color 0.3s}
+#nav a:hover{color:#4fc3f7}
+
+@keyframes fadeIn{from{opacity:0}to{opacity:1}}
