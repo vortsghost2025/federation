@@ -1,63 +1,89 @@
-# Federation Game — Star Trek LCARS Edition
+# Federation Game Deployment Surface
 
-A turn-based federation management simulation with a full LCARS web interface, deployed as Docker containers.
+This directory contains the live Federation simulation surface: frontend pages, backend API, worker process, Docker stack, and monitoring assets.
 
-## Two Game Surfaces
+## Frontend Pages
 
-### Starship Simulator (`index.html`)
-Kid-friendly LCARS interface. Big buttons, immediate feedback, one-tap actions.
+The active frontend pages are:
 
-### Adult Control Plane (`adult.html`)
-Full strategic interface. Faction politics, technology trees, NPC relationships, quest management, and the decision ledger.
+- `index.html` - kid-facing simulator surface
+- `adult.html` - adult control plane
+- `bridge.html` - bridge command view
+- `starmap.html` - spatial and faction map
+- `simulation.html` - live simulation view
+- `earth.html` - Earth status view
+- `constellation.html` - constellation view
+- `spectator.html` - spectator mode
+- `worldguide.html` - lore and world reference
 
-## Quick Start (Docker)
+Each page now lives with companion assets in `frontend/` instead of carrying large inline CSS/JS blocks.
+
+## Backend Layout
+
+- `backend/main.py`
+  Composition entrypoint for the FastAPI app
+- `backend/routes/`
+  Split route modules for the active API surface
+- `backend/worker.py`
+  Background autonomous tick worker
+- `backend/npc_autonomy.py`
+  NPC thoughts, moods, actions, goals, and related world updates
+- `backend/simulation_engine.py`
+  Simulation support logic
+- `backend/smoke_test.py`
+  Basic route verification used during backend checks
+
+WebSocket handling already lives in `backend/routes/websocket.py`.
+
+## Runtime Stack
+
+The live VPS stack is described in `docker-compose-vps.yml` and currently consists of:
+
+- Traefik reverse proxy
+- Frontend nginx container
+- FastAPI backend container
+- Worker container
+- PostgreSQL
+- Redis
+- Optional observability services such as Prometheus and Grafana
+
+## How Updates Work
+
+### Frontend
+
+Frontend files live in `frontend/`, but the VPS serves them from the bind-mounted directory:
+
+- VPS source: `/docker/federation-game/public_html/`
+- Container path: `/usr/share/nginx/html`
+
+Frontend changes need the updated files copied into the VPS bind mount. A full dev server is not required.
+
+### Backend
+
+Backend files live in `backend/`, and the VPS backend container reads from:
+
+- VPS source: `/docker/federation-game/backend/`
+- Container path: `/app`
+
+Backend code changes usually require a backend container restart after sync.
+
+## Verification
+
+Useful checks:
 
 ```bash
-# Start all services
-docker-compose up --build
-
-# Open the Starship Simulator
-open http://localhost:3000
-
-# Open the Adult Control Plane
-open http://localhost:3000/adult.html
+curl -s -o /dev/null -w "%{http_code}" http://localhost:3000/
+curl -s -o /dev/null -w "%{http_code}" http://localhost:8000/healthz
+python backend/smoke_test.py
 ```
 
-## Ports
+Live verification snapshot from June 1, 2026:
 
-| Service | Port |
-|---------|------|
-| Frontend (nginx) | 3000 |
-| Backend API (FastAPI) | 8000 |
-| PostgreSQL | 5432 |
+- 9 of 9 frontend pages returned `200`
+- Static page links and checked assets returned `200`
+- Backend smoke sweep passed `13/13`
+- `/cognition`, `/narrator`, `/world`, and `/simulation` now return `200`
 
-## How It Works
+## Live URL
 
-The backend (`main.py`) is a thin FastAPI shim that imports the game engine modules bind-mounted from the parent directory:
-
-```
-backend container /app/
-├── main.py              ← FastAPI shim (this directory)
-├── game_engine.py       ← bind-mounted from ../federation_game_console.py
-├── events.py            ← bind-mounted from ../federation_game_events.py
-├── factions.py          ← bind-mounted from ../federation_game_factions.py
-├── npcs.py              ← bind-mounted from ../federation_game_npcs.py
-├── quests.py            ← bind-mounted from ../federation_game_quests.py
-├── state.py             ← bind-mounted from ../federation_game_state.py
-├── technology.py        ← bind-mounted from ../federation_game_technology.py
-└── turns.py             ← bind-mounted from ../federation_game_turns.py
-```
-
-**Backend changes** take effect with `docker compose restart backend` (source is bind-mounted).
-
-**Frontend changes** require `docker compose build frontend && docker compose up -d frontend` (HTML is baked into the nginx image).
-
-## VPS Deployment
-
-The live deployment runs on a Hostinger VPS with 7 containers (Traefik, frontend, backend, worker, postgres, redis, reverse-proxy).
-
-Live at **[federation-game.deliberatefederation.cloud](https://federation-game.deliberatefederation.cloud)**
-
----
-
-*Made with love for a son 3000km away.*
+- `https://federation-game.deliberatefederation.cloud`
