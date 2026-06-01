@@ -38,12 +38,13 @@ jobs:
         run: |
           echo "Deploying backend Python files..."
           install -g docker -m 664 federation-game/backend/*.py /docker/federation-game/backend/
+          install -g docker -m 664 federation-game/docker-compose-vps.yml /docker/federation-game/docker-compose.yml
           if [ "${{ inputs.skip_validate }}" != "true" ]; then
             echo "Validating Python files..."
             python3 -c "import py_compile; import glob; files=glob.glob('/docker/federation-game/backend/*.py'); [py_compile.compile(f, doraise=True) for f in files]; print(f'All {len(files)} files valid')"
           fi
-          echo "Restarting backend..."
-          cd /docker/federation-game && docker compose restart backend
+          echo "Recreating backend with refreshed compose labels..."
+          cd /docker/federation-game && docker compose up -d backend
           echo "Backend deployed"
 
       - name: Deploy Worker
@@ -59,33 +60,70 @@ jobs:
           cd /docker/federation-game && docker compose build worker && docker compose up -d worker
           echo "Worker deployed"
 
-      - name: Deploy Frontend (all HTML)
+      - name: Deploy Frontend (static assets)
         if: inputs.target == 'frontend' || inputs.target == 'all'
         run: |
-          echo "Deploying all HTML files..."
-          install -g docker -m 664 federation-game/frontend/*.html /docker/federation-game/public_html/
-          install -g docker -m 664 federation-game/frontend/*.html /docker/federation-game/frontend/
-          echo "Restarting frontend..."
-          cd /docker/federation-game && docker compose restart frontend
+          echo "Deploying frontend HTML/CSS/JS assets..."
+          mapfile -t ASSETS < <(find federation-game/frontend -maxdepth 1 -type f \( -name '*.html' -o -name '*.css' -o -name '*.js' \) | sort)
+          if [ ${#ASSETS[@]} -eq 0 ]; then
+            echo "No frontend assets found"
+            exit 1
+          fi
+          install -g docker -m 664 "${ASSETS[@]}" /docker/federation-game/public_html/
+          install -g docker -m 664 "${ASSETS[@]}" /docker/federation-game/frontend/
+          echo "Recreating frontend..."
+          cd /docker/federation-game && docker compose up -d frontend
           echo "Frontend deployed"
 
-      - name: Deploy Single HTML File
+      - name: Deploy Single Frontend Entry
         if: inputs.target == 'html-only' && inputs.html_file != ''
         run: |
           FILE="${{ inputs.html_file }}"
-          echo "Deploying ${FILE}..."
-          install -g docker -m 664 "federation-game/frontend/${FILE}" /docker/federation-game/public_html/
-          install -g docker -m 664 "federation-game/frontend/${FILE}" /docker/federation-game/frontend/
-          echo "Restarting frontend..."
-          cd /docker/federation-game && docker compose restart frontend
+          if [ ! -f "federation-game/frontend/${FILE}" ]; then
+            echo "Missing frontend file: ${FILE}"
+            exit 1
+          fi
+          ASSETS=("federation-game/frontend/${FILE}")
+          case "$FILE" in
+            *.html)
+              BASE="${FILE%.html}"
+              for EXT in css js; do
+                CANDIDATE="federation-game/frontend/${BASE}.${EXT}"
+                if [ -f "$CANDIDATE" ]; then
+                  ASSETS+=("$CANDIDATE")
+                fi
+              done
+              ;;
+          esac
+          echo "Deploying ${FILE} bundle..."
+          install -g docker -m 664 "${ASSETS[@]}" /docker/federation-game/public_html/
+          install -g docker -m 664 "${ASSETS[@]}" /docker/federation-game/frontend/
+          echo "Recreating frontend..."
+          cd /docker/federation-game && docker compose up -d frontend
           echo "${FILE} deployed"
 
       - name: Verify Deployment
         if: always()
         run: |
+          check_json() {
+            local url="$1"
+            echo "Checking JSON route: ${url}"
+            curl -fsS "${url}" | python3 -c 'import json, sys; json.load(sys.stdin)' >/dev/null
+          }
+
           echo "Container status:"
           cd /docker/federation-game && docker compose ps --format "table {{.Name}}\t{{.Status}}" || true
           echo ""
-          echo "HTTP check:"
-          curl -s -o /dev/null -w "HTTP %{http_code}" https://federation-game.deliberatefederation.cloud/ || true
-          echo ""
+          ROOT_CODE=$(curl -s -o /dev/null -w "%{http_code}" https://federation-game.deliberatefederation.cloud/ || echo 000)
+          WORLDGUIDE_CODE=$(curl -s -o /dev/null -w "%{http_code}" https://federation-game.deliberatefederation.cloud/worldguide.html || echo 000)
+          WORLDGUIDE_CSS_CODE=$(curl -s -o /dev/null -w "%{http_code}" https://federation-game.deliberatefederation.cloud/worldguide.css || echo 000)
+          echo "Root route: HTTP ${ROOT_CODE}"
+          echo "World Guide route: HTTP ${WORLDGUIDE_CODE}"
+          echo "World Guide CSS route: HTTP ${WORLDGUIDE_CSS_CODE}"
+          [ "${ROOT_CODE}" = "200" ]
+          [ "${WORLDGUIDE_CODE}" = "200" ]
+          [ "${WORLDGUIDE_CSS_CODE}" = "200" ]
+          check_json https://federation-game.deliberatefederation.cloud/event
+          check_json https://federation-game.deliberatefederation.cloud/simulation
+          check_json https://federation-game.deliberatefederation.cloud/spatial/status
+          check_json https://federation-game.deliberatefederation.cloud/sectors
