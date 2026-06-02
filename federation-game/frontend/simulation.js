@@ -201,7 +201,7 @@ else if (metrics.tension < 25) parts.push('peaceful');
 if (metrics.threat > 70) parts.push('under threat');
 if (metrics.anomaly > 70) parts.push('anomaly activity elevated');
 if (cascadePct > 80) parts.push('cascade chains spreading rapidly');
-else if (cascadePct < 30) parts.push('events calm');
+else if (cascadePct < 30) parts.push('experiencing calm events');
 
 var sitText = parts.length ? 'The Federation is ' + parts.join(', ') + '.' : 'The Federation is in a balanced state.';
 document.getElementById('sit-current-text').textContent = sitText;
