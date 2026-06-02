@@ -59,78 +59,95 @@ try:
         RivalFederation,
         RivalFederationSimulator,
     )
+
     RIVAL_SYSTEM_AVAILABLE = True
 except ImportError:
     RIVAL_SYSTEM_AVAILABLE = False
 
 try:
     from federation_game_console import ConsciousnessSheet
+
     CONSCIOUSNESS_SYSTEM_AVAILABLE = True
 except ImportError:
     CONSCIOUSNESS_SYSTEM_AVAILABLE = False
 
 try:
     from federation_game_state import GameState as FederationGameState
+
     GAME_STATE_V2_AVAILABLE = True
 except ImportError:
     GAME_STATE_V2_AVAILABLE = False
 
 try:
     from federation_game_history_arc import HistoryArcOrchestrator
+
     HISTORY_ARC_AVAILABLE = True
 except ImportError:
     HISTORY_ARC_AVAILABLE = False
 
 try:
     from federation_game_political_integration import PoliticalEngine
+
     POLITICAL_SYSTEM_AVAILABLE = True
 except ImportError:
     POLITICAL_SYSTEM_AVAILABLE = False
 
 try:
     from federation_game_console import FederationConsole
+
     CONSOLE_ENGINE_AVAILABLE = True
 except ImportError:
     CONSOLE_ENGINE_AVAILABLE = False
 
 try:
     from simulation_engine import autonomous_tick, bridge_world_state_to_game_state
+
     SIMULATION_ENGINE_AVAILABLE = True
 except ImportError:
     SIMULATION_ENGINE_AVAILABLE = False
 
 try:
     from faction_ai import run_all_factions, resolve_pending_items, FACTION_IDEOLOGY
+
     FACTION_AI_AVAILABLE = True
 except ImportError:
     FACTION_AI_AVAILABLE = False
 
 try:
-    from event_cascade import process_cascade, process_faction_cascade, get_cascade_summary
+    from event_cascade import (
+        process_cascade,
+        process_faction_cascade,
+        get_cascade_summary,
+    )
+
     EVENT_CASCADE_AVAILABLE = True
 except ImportError:
     EVENT_CASCADE_AVAILABLE = False
 
 try:
     from npc_cognition import run_cognition, get_cognition_stats
+
     COGNITION_AVAILABLE = True
 except ImportError:
     COGNITION_AVAILABLE = False
 
 try:
     from narrator import generate_narration, get_narration_history
+
     NARRATOR_AVAILABLE = True
 except ImportError:
     NARRATOR_AVAILABLE = False
 
 try:
     from llm_router import get_router_stats
+
     LLM_ROUTER_AVAILABLE = True
 except ImportError:
     LLM_ROUTER_AVAILABLE = False
 
 try:
     from npc_memory import get_memories, get_memory_summary, generate_reflective_summary
+
     NPC_MEMORY_AVAILABLE = True
 except ImportError:
     NPC_MEMORY_AVAILABLE = False
@@ -138,11 +155,18 @@ except ImportError:
 try:
     from spatial_seed import seed_spatial_system
     from spatial_queries import (
-        get_spatial_status, get_all_sectors, get_sector_by_id,
-        get_sector_summary, get_all_discoveries, get_faction_home,
-        get_faction_territories, get_faction_discoveries, get_adjacent_sector_ids,
+        get_spatial_status,
+        get_all_sectors,
+        get_sector_by_id,
+        get_sector_summary,
+        get_all_discoveries,
+        get_faction_home,
+        get_faction_territories,
+        get_faction_discoveries,
+        get_adjacent_sector_ids,
     )
     from spatial_state import is_spatial_enabled
+
     SPATIAL_SYSTEM_AVAILABLE = True
 except ImportError:
     SPATIAL_SYSTEM_AVAILABLE = False
@@ -155,25 +179,46 @@ logger = logging.getLogger(__name__)
 # ============================================================================
 
 PERCENT_METRICS = {
-    "fuel", "shields", "hull", "crew_morale",
-    "federation_stability", "public_trust", "council_support",
-    "constitutional_integrity", "rights_protection", "emergency_powers",
+    "fuel",
+    "shields",
+    "hull",
+    "crew_morale",
+    "federation_stability",
+    "public_trust",
+    "council_support",
+    "constitutional_integrity",
+    "rights_protection",
+    "emergency_powers",
 }
 
 VICTORY_TURN = 100
 
 LEDGER_METRICS = [
-    "credits", "fuel", "shields", "hull", "crew_morale",
-    "discovered_sectors", "allies", "federation_stability",
-    "public_trust", "council_support", "constitutional_integrity",
-    "rights_protection", "emergency_powers",
+    "credits",
+    "fuel",
+    "shields",
+    "hull",
+    "crew_morale",
+    "discovered_sectors",
+    "allies",
+    "federation_stability",
+    "public_trust",
+    "council_support",
+    "constitutional_integrity",
+    "rights_protection",
+    "emergency_powers",
 ]
 
 METRIC_LABELS = {
-    "credits": "credits", "fuel": "fuel", "shields": "shields",
-    "hull": "hull", "crew_morale": "crew morale",
-    "discovered_sectors": "sectors", "allies": "allies",
-    "federation_stability": "stability", "public_trust": "public trust",
+    "credits": "credits",
+    "fuel": "fuel",
+    "shields": "shields",
+    "hull": "hull",
+    "crew_morale": "crew morale",
+    "discovered_sectors": "sectors",
+    "allies": "allies",
+    "federation_stability": "stability",
+    "public_trust": "public trust",
     "council_support": "council support",
     "constitutional_integrity": "constitutional integrity",
     "rights_protection": "rights protection",
@@ -224,28 +269,88 @@ EVENT_LANE_DEFAULTS = {
 FEDERATION_ATLAS = {
     "npc_system": {
         "summary": "39+ NPCs, 10 recruitable companions, betrayal, corruption, relationships, dialogue, and faction integration.",
-        "archetypes": ["Hero", "Scholar", "Rogue", "Warrior", "Mystic", "Leader", "Sage", "Wanderer", "Deceiver", "Guardian"],
-        "companion_bonuses": ["Morale", "Research", "Combat", "Diplomacy", "Exploration", "Defense", "Stealth"],
+        "archetypes": [
+            "Hero",
+            "Scholar",
+            "Rogue",
+            "Warrior",
+            "Mystic",
+            "Leader",
+            "Sage",
+            "Wanderer",
+            "Deceiver",
+            "Guardian",
+        ],
+        "companion_bonuses": [
+            "Morale",
+            "Research",
+            "Combat",
+            "Diplomacy",
+            "Exploration",
+            "Defense",
+            "Stealth",
+        ],
     },
     "creature_codex": {
         "summary": "Mystical and consciousness-bearing species with habitats, evolutionary pressures, anomalies, taming, and affinity.",
-        "species": ["Quantum Consciousness Beings", "Crystalline Collectives", "Temporal Drifters", "Mythic Anomalies",
-                    "Dimensional Weavers", "Void Skippers", "Echo Entities", "Synthesis Collective", "Chaos Weavers", "Harmony Beings"],
-        "game_creatures": ["Sky-Furk", "Plasma-Kite", "Thrumback", "Cloud Gnasher", "Void Skipper", "Dream Wyrm",
-                           "Harmonic Maw", "Prism Assembly"],
+        "species": [
+            "Quantum Consciousness Beings",
+            "Crystalline Collectives",
+            "Temporal Drifters",
+            "Mythic Anomalies",
+            "Dimensional Weavers",
+            "Void Skippers",
+            "Echo Entities",
+            "Synthesis Collective",
+            "Chaos Weavers",
+            "Harmony Beings",
+        ],
+        "game_creatures": [
+            "Sky-Furk",
+            "Plasma-Kite",
+            "Thrumback",
+            "Cloud Gnasher",
+            "Void Skipper",
+            "Dream Wyrm",
+            "Harmonic Maw",
+            "Prism Assembly",
+        ],
     },
     "technology_tree": {
         "summary": "57+ technologies across 5 tiers, 7 eras, and 4 research philosophies with dependency chains and unlocks.",
-        "eras": ["Ancient", "Classical", "Medieval", "Industrial", "Modern", "Future", "Transcendent"],
+        "eras": [
+            "Ancient",
+            "Classical",
+            "Medieval",
+            "Industrial",
+            "Modern",
+            "Future",
+            "Transcendent",
+        ],
         "philosophies": ["Military", "Scientific", "Cultural", "Consciousness"],
-        "capstones": ["Artificial Intelligence", "Consciousness Technology", "Dimensional Engineering",
-                      "Reality Manipulation", "Time Mastery", "Federation Ascension"],
+        "capstones": [
+            "Artificial Intelligence",
+            "Consciousness Technology",
+            "Dimensional Engineering",
+            "Reality Manipulation",
+            "Time Mastery",
+            "Federation Ascension",
+        ],
     },
     "uss_chaosbringer": {
         "summary": "Narrative/continuity laboratory: anomaly court, gossip graph, memory graph, temporal systems, mood feedback, and continuity black box.",
-        "systems": ["Anomaly Court", "Continuity Black Box", "Gossip Graph", "Memory Graph", "Narrative Physics",
-                    "Temporal Gardening", "Paradox Fire Department", "What-If Simulator", "Signalharvester Ship",
-                    "Quantum Patch Notes"],
+        "systems": [
+            "Anomaly Court",
+            "Continuity Black Box",
+            "Gossip Graph",
+            "Memory Graph",
+            "Narrative Physics",
+            "Temporal Gardening",
+            "Paradox Fire Department",
+            "What-If Simulator",
+            "Signalharvester Ship",
+            "Quantum Patch Notes",
+        ],
     },
 }
 
@@ -397,6 +502,7 @@ GOVERNANCE_PROPOSALS = [
 # HELPER FUNCTIONS (used by route handlers)
 # ============================================================================
 
+
 def clamp_percent(value: int) -> int:
     return max(0, min(100, value))
 
@@ -411,7 +517,9 @@ def enrich_event(event: Dict[str, Any]) -> Dict[str, Any]:
     enriched.setdefault("pressure", "Every decision mutates the system.")
     enriched.setdefault(
         "rationale",
-        defaults.get("rationale", "Decision requires explicit state-transition review."),
+        defaults.get(
+            "rationale", "Decision requires explicit state-transition review."
+        ),
     )
     choices = []
     for choice in enriched.get("choices", []):
@@ -420,7 +528,9 @@ def enrich_event(event: Dict[str, Any]) -> Dict[str, Any]:
         c.setdefault("rationale", enriched["rationale"])
         c.setdefault(
             "next_safe_action",
-            defaults.get("next_safe_action", "Record the decision and verify the next state."),
+            defaults.get(
+                "next_safe_action", "Record the decision and verify the next state."
+            ),
         )
         choices.append(c)
     enriched["choices"] = choices
@@ -450,7 +560,9 @@ def summarize_delta_direction(deltas: Dict[str, int], positive: bool) -> str:
     return ", ".join(values[:3])
 
 
-def build_explainability(event: Dict[str, Any], choice: Dict[str, Any], deltas: Dict[str, int]) -> Dict[str, str]:
+def build_explainability(
+    event: Dict[str, Any], choice: Dict[str, Any], deltas: Dict[str, int]
+) -> Dict[str, str]:
     domain = event.get("domain", "Exploration")
     risk = event.get("constitutional_risk", "operational")
 
@@ -470,12 +582,22 @@ def build_explainability(event: Dict[str, Any], choice: Dict[str, Any], deltas: 
     return {
         "domain": domain,
         "risk": risk,
-        "affected_lane": choice.get("affected_lane", event.get("affected_lane", "Control Plane")),
+        "affected_lane": choice.get(
+            "affected_lane", event.get("affected_lane", "Control Plane")
+        ),
         "constitutional_pressure": constitutional_pressure,
         "short_term_gain": summarize_delta_direction(deltas, positive=True),
         "long_term_cost": summarize_delta_direction(deltas, positive=False),
-        "rationale": choice.get("rationale", event.get("rationale", "Decision recorded for bounded simulator continuity.")),
-        "next_safe_action": choice.get("next_safe_action", "Record the decision, verify the next state, and continue only inside lane boundaries."),
+        "rationale": choice.get(
+            "rationale",
+            event.get(
+                "rationale", "Decision recorded for bounded simulator continuity."
+            ),
+        ),
+        "next_safe_action": choice.get(
+            "next_safe_action",
+            "Record the decision, verify the next state, and continue only inside lane boundaries.",
+        ),
     }
 
 
@@ -516,47 +638,67 @@ def build_governance_event() -> Dict[str, Any]:
                 "text": "HOLD VOTE",
                 "outcome": "consensus",
                 "reward": {
-                    "public_trust": 8, "council_support": 10, "federation_stability": 4,
-                    "constitutional_integrity": 3, "emergency_powers": -6,
+                    "public_trust": 8,
+                    "council_support": 10,
+                    "federation_stability": 4,
+                    "constitutional_integrity": 3,
+                    "emergency_powers": -6,
                 },
                 "policy": proposal["policies"]["vote"],
                 "affected_lane": proposal["affected_lane"],
                 "rationale": proposal["rationale"],
                 "next_safe_action": proposal["next_safe_actions"]["vote"],
                 "lesson": "Legitimacy rises when people can see the process.",
-                "faction_affinity": {"diplomatic_corps": 0.10, "cultural_ministry": 0.03},
+                "faction_affinity": {
+                    "diplomatic_corps": 0.10,
+                    "cultural_ministry": 0.03,
+                },
             },
             {
                 "id": "emergency_order",
                 "text": "EMERGENCY ORDER",
                 "outcome": "swift action",
                 "reward": {
-                    "credits": 120, "public_trust": -10, "council_support": -8,
-                    "federation_stability": -6, "constitutional_integrity": -10,
-                    "rights_protection": -8, "emergency_powers": 18,
+                    "credits": 120,
+                    "public_trust": -10,
+                    "council_support": -8,
+                    "federation_stability": -6,
+                    "constitutional_integrity": -10,
+                    "rights_protection": -8,
+                    "emergency_powers": 18,
                 },
                 "policy": proposal["policies"]["emergency_order"],
                 "affected_lane": proposal["affected_lane"],
                 "rationale": proposal["rationale"],
                 "next_safe_action": proposal["next_safe_actions"]["emergency_order"],
                 "lesson": "Power used without checks solves one problem by creating another.",
-                "faction_affinity": {"military_command": 0.08, "preservation_society": -0.05},
+                "faction_affinity": {
+                    "military_command": 0.08,
+                    "preservation_society": -0.05,
+                },
             },
             {
                 "id": "court_review",
                 "text": "COURT REVIEW",
                 "outcome": "rights protected",
                 "reward": {
-                    "public_trust": 12, "council_support": -3, "federation_stability": 8,
-                    "credits": -40, "constitutional_integrity": 10,
-                    "rights_protection": 12, "emergency_powers": -10,
+                    "public_trust": 12,
+                    "council_support": -3,
+                    "federation_stability": 8,
+                    "credits": -40,
+                    "constitutional_integrity": 10,
+                    "rights_protection": 12,
+                    "emergency_powers": -10,
                 },
                 "policy": proposal["policies"]["court_review"],
                 "affected_lane": proposal["affected_lane"],
                 "rationale": proposal["rationale"],
                 "next_safe_action": proposal["next_safe_actions"]["court_review"],
                 "lesson": "Rights are slower than orders, but they keep the system trustworthy.",
-                "faction_affinity": {"preservation_society": 0.10, "diplomatic_corps": 0.03},
+                "faction_affinity": {
+                    "preservation_society": 0.10,
+                    "diplomatic_corps": 0.03,
+                },
             },
         ],
     }
@@ -583,6 +725,7 @@ def apply_governance_pressure(choice: Dict[str, Any]) -> None:
 # ============================================================================
 # GAME STATE CLASS
 # ============================================================================
+
 
 class GameState:
     def __init__(self):
@@ -614,8 +757,12 @@ class GameState:
         self.quest_system: QuestSystem = create_quest_library()
         self.tech_tree: TechTree = create_technology_tree()
 
-        self.rival_simulator = RivalFederationSimulator() if RIVAL_SYSTEM_AVAILABLE else None
-        self.consciousness_sheet = ConsciousnessSheet() if CONSCIOUSNESS_SYSTEM_AVAILABLE else None
+        self.rival_simulator = (
+            RivalFederationSimulator() if RIVAL_SYSTEM_AVAILABLE else None
+        )
+        self.consciousness_sheet = (
+            ConsciousnessSheet() if CONSCIOUSNESS_SYSTEM_AVAILABLE else None
+        )
         self.game_state_v2 = FederationGameState() if GAME_STATE_V2_AVAILABLE else None
         self.history_arc = None
         self.political_engine = None
@@ -623,12 +770,29 @@ class GameState:
 
         self.engine_systems = {
             "quest_system": {"loaded": True, "active_quests": 0, "completed_quests": 0},
-            "faction_system": {"loaded": True, "known_factions": len(self.faction_system.factions), "player_standing": {}},
-            "technology_tree": {"loaded": True, "research_points": 0, "unlocked_techs": []},
+            "faction_system": {
+                "loaded": True,
+                "known_factions": len(self.faction_system.factions),
+                "player_standing": {},
+            },
+            "technology_tree": {
+                "loaded": True,
+                "research_points": 0,
+                "unlocked_techs": [],
+            },
             "npc_system": {"loaded": True, "known_npcs": 0, "active_relationships": {}},
             "event_registry": {"loaded": True, "total_events": 0, "events_seen": []},
-            "consciousness_metrics": {"loaded": True, "coherence": 50.0, "stability": 50.0, "complexity": 50.0},
-            "turn_progression": {"loaded": True, "current_phase": "early_exploration", "turns_in_phase": 0},
+            "consciousness_metrics": {
+                "loaded": True,
+                "coherence": 50.0,
+                "stability": 50.0,
+                "complexity": 50.0,
+            },
+            "turn_progression": {
+                "loaded": True,
+                "current_phase": "early_exploration",
+                "turns_in_phase": 0,
+            },
             "persistence": {"loaded": True, "last_checkpoint": None, "save_slots": 3},
         }
 
@@ -654,7 +818,9 @@ class GameState:
                 if snapshot:
                     self._restore_from_snapshot(snapshot)
                     self.engine_systems["persistence"]["loaded"] = True
-                    self.engine_systems["persistence"]["last_checkpoint"] = snapshot.get("created_at")
+                    self.engine_systems["persistence"]["last_checkpoint"] = (
+                        snapshot.get("created_at")
+                    )
                 else:
                     self.engine_systems["persistence"]["loaded"] = True
             else:
@@ -666,7 +832,9 @@ class GameState:
         if POLITICAL_SYSTEM_AVAILABLE:
             try:
                 faction_ids = list(self.faction_system.factions.keys())
-                fed_state = self.game_state_v2.federation if self.game_state_v2 else None
+                fed_state = (
+                    self.game_state_v2.federation if self.game_state_v2 else None
+                )
                 if fed_state:
                     self.political_engine = PoliticalEngine(faction_ids, fed_state)
                     self.political_engine.initialize()
@@ -678,20 +846,36 @@ class GameState:
             try:
                 self.rival_simulator.initialize_rivals()
             except Exception:
-                logger.warning("Rival simulator initialization failed; continuing without rivals")
+                logger.warning(
+                    "Rival simulator initialization failed; continuing without rivals"
+                )
 
-        self.engine_systems.update({
-            "rival_simulator": {
-                "loaded": self.rival_simulator is not None,
-                "active_rivals": len(self.rival_simulator.rivals)
-                if self.rival_simulator and hasattr(self.rival_simulator, "rivals") else 0,
-            },
-            "consciousness_sheet": {"loaded": self.consciousness_sheet is not None, "coherence": 0.0, "stability": 0.0},
-            "history_arc": {"loaded": self.history_arc is not None, "current_era": "genesis", "year": 0},
-            "political_engine": {"loaded": self.political_engine is not None, "laws_passed": 0},
-            "game_state_v2": {"loaded": self.game_state_v2 is not None},
-            "console_engine": {"loaded": self.console_engine is not None},
-        })
+        self.engine_systems.update(
+            {
+                "rival_simulator": {
+                    "loaded": self.rival_simulator is not None,
+                    "active_rivals": len(self.rival_simulator.rivals)
+                    if self.rival_simulator and hasattr(self.rival_simulator, "rivals")
+                    else 0,
+                },
+                "consciousness_sheet": {
+                    "loaded": self.consciousness_sheet is not None,
+                    "coherence": 0.0,
+                    "stability": 0.0,
+                },
+                "history_arc": {
+                    "loaded": self.history_arc is not None,
+                    "current_era": "genesis",
+                    "year": 0,
+                },
+                "political_engine": {
+                    "loaded": self.political_engine is not None,
+                    "laws_passed": 0,
+                },
+                "game_state_v2": {"loaded": self.game_state_v2 is not None},
+                "console_engine": {"loaded": self.console_engine is not None},
+            }
+        )
 
     def _restore_from_snapshot(self, snapshot: Dict[str, Any]) -> None:
         try:
@@ -713,7 +897,9 @@ class GameState:
                 fed.morale = federation_data.get("morale", 0.5)
                 fed.identity_strength = federation_data.get("identity_strength", 0.3)
                 fed.stability = federation_data.get("stability", 0.6)
-                fed.technological_level = federation_data.get("technological_level", 0.2)
+                fed.technological_level = federation_data.get(
+                    "technological_level", 0.2
+                )
                 fed.military_power = federation_data.get("military_power", 0.3)
                 fed.treasury = federation_data.get("treasury", 1000)
                 fed.population = federation_data.get("population", 10000)
@@ -721,6 +907,7 @@ class GameState:
                 _lu = federation_data.get("last_updated")
                 if _lu:
                     from datetime import datetime as _dt
+
                     fed.last_updated = _dt.fromisoformat(_lu)
                 subsystems_data = fed_data.get("subsystems", {})
                 self.game_state_v2._restore_subsystems(subsystems_data)
@@ -737,6 +924,7 @@ class GameState:
                 phase_str = fed_data.get("game_phase", "genesis")
                 try:
                     from federation_game_state import GamePhase
+
                     self.game_state_v2.game_phase = GamePhase(phase_str)
                 except Exception:
                     print(f"Warning: could not set game_phase to '{phase_str}'")
@@ -762,13 +950,23 @@ class GameState:
         try:
             game_state_json = json.dumps(
                 {
-                    "turn": self.turn, "credits": self.credits, "fuel": self.fuel,
-                    "shields": self.shields, "hull": self.hull, "crew_morale": self.crew_morale,
-                    "discovered_sectors": self.discovered_sectors, "allies": self.allies,
-                    "federation_stability": self.federation_stability, "public_trust": self.public_trust,
-                    "council_support": self.council_support, "constitutional_integrity": self.constitutional_integrity,
-                    "rights_protection": self.rights_protection, "emergency_powers": self.emergency_powers,
-                    "active_policy": self.active_policy, "federation_name": self.federation_name,
+                    "turn": self.turn,
+                    "credits": self.credits,
+                    "fuel": self.fuel,
+                    "shields": self.shields,
+                    "hull": self.hull,
+                    "crew_morale": self.crew_morale,
+                    "discovered_sectors": self.discovered_sectors,
+                    "allies": self.allies,
+                    "federation_stability": self.federation_stability,
+                    "public_trust": self.public_trust,
+                    "council_support": self.council_support,
+                    "constitutional_integrity": self.constitutional_integrity,
+                    "rights_protection": self.rights_protection,
+                    "emergency_powers": self.emergency_powers,
+                    "active_policy": self.active_policy,
+                    "federation_name": self.federation_name,
+                    "current_event": self.current_event,
                 },
                 default=str,
             )
@@ -784,7 +982,9 @@ class GameState:
                     "statistics": asdict(self.game_state_v2.statistics),
                     "action_history": self.game_state_v2._serialize_action_history(),
                     "game_phase": self.game_state_v2.game_phase.value,
-                    "victory_type": self.game_state_v2.victory_type.value if self.game_state_v2.victory_type else None,
+                    "victory_type": self.game_state_v2.victory_type.value
+                    if self.game_state_v2.victory_type
+                    else None,
                     "defeat_reason": self.game_state_v2.defeat_reason,
                     "is_game_over": self.game_state_v2.is_game_over,
                     "technology_data": self.game_state_v2.technology_data,
@@ -799,7 +999,9 @@ class GameState:
         history_arc_json = None
         try:
             if self.history_arc:
-                history_arc_json = json.dumps(self.history_arc.export_full_state(), default=str)
+                history_arc_json = json.dumps(
+                    self.history_arc.export_full_state(), default=str
+                )
         except Exception:
             history_arc_json = None
 
@@ -814,18 +1016,29 @@ class GameState:
         try:
             raw = json.dumps(
                 {
-                    "turn": self.turn, "credits": self.credits, "fuel": self.fuel,
-                    "shields": self.shields, "hull": self.hull, "crew_morale": self.crew_morale,
-                    "federation_stability": self.federation_stability, "public_trust": self.public_trust,
-                    "council_support": self.council_support, "constitutional_integrity": self.constitutional_integrity,
-                    "rights_protection": self.rights_protection, "emergency_powers": self.emergency_powers,
-                    "active_policy": self.active_policy, "discovered_sectors": self.discovered_sectors, "allies": self.allies,
+                    "turn": self.turn,
+                    "credits": self.credits,
+                    "fuel": self.fuel,
+                    "shields": self.shields,
+                    "hull": self.hull,
+                    "crew_morale": self.crew_morale,
+                    "federation_stability": self.federation_stability,
+                    "public_trust": self.public_trust,
+                    "council_support": self.council_support,
+                    "constitutional_integrity": self.constitutional_integrity,
+                    "rights_protection": self.rights_protection,
+                    "emergency_powers": self.emergency_powers,
+                    "active_policy": self.active_policy,
+                    "discovered_sectors": self.discovered_sectors,
+                    "allies": self.allies,
                 },
                 sort_keys=True,
             )
             state_hash = hashlib.sha256(raw.encode()).hexdigest()[:16]
         except Exception:
-            logger.warning("State hash computation failed; snapshot will proceed without hash")
+            logger.warning(
+                "State hash computation failed; snapshot will proceed without hash"
+            )
 
         return db_manager.save_snapshot(
             game_state_json=game_state_json,

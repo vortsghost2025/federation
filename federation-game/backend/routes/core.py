@@ -663,6 +663,8 @@ async def make_choice(choice_id: str):
     except Exception:
         pass
 
+    gs.current_event = None
+
     return {
         "outcome": choice["outcome"],
         "reward": reward,
