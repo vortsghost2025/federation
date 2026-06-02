@@ -304,23 +304,6 @@ async def simulation_status():
     except Exception:
         pass
 
-    # Tick info — expose turn count and last tick timestamp for the frontend
-    try:
-        from tick_engine import get_tick_redis, _TICK_REDIS_KEY, _AUTO_TICK_REDIS_KEY
-        from state import game_state
-
-        tick_info = get_tick_redis(_TICK_REDIS_KEY)
-        auto_tick_info = get_tick_redis(_AUTO_TICK_REDIS_KEY)
-        result["tick_count"] = game_state.turn
-        if tick_info and tick_info.get("last_end"):
-            result["last_tick_timestamp"] = int(tick_info["last_end"])
-        elif auto_tick_info and auto_tick_info.get("last_end"):
-            result["last_tick_timestamp"] = int(auto_tick_info["last_end"])
-        if tick_info and tick_info.get("last_result"):
-            result["last_tick_result"] = tick_info["last_result"]
-    except Exception:
-        pass
-
     return result
 
 
