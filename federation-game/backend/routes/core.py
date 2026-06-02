@@ -6,21 +6,38 @@ NOTE: /event and /choose/{choice_id} are included but depend on event constants
 (CODEX_EVENT_TEMPLATES, EVENTS, RIVAL_EVENTS, etc.) which still live in main.py.
 Once those data blocks are extracted to data/events.py, update the imports here.
 """
+
 import json
 import random
 from datetime import datetime
 from typing import Dict, List, Any
 from fastapi import APIRouter, HTTPException
 
-from state import game_state, get_governance_status, FEDERATION_ATLAS, LEDGER_METRICS, build_explainability, GameState, PERCENT_METRICS, clamp_percent, VICTORY_TURN, apply_governance_pressure
+from state import (
+    game_state,
+    get_governance_status,
+    FEDERATION_ATLAS,
+    LEDGER_METRICS,
+    build_explainability,
+    GameState,
+    PERCENT_METRICS,
+    clamp_percent,
+    VICTORY_TURN,
+    apply_governance_pressure,
+)
 from federation_game_db import db_manager
 
 # Event constants now live in data/events.py
 _events_loaded = True
 try:
     from data.events import (
-        EVENTS, CODEX_EVENT_TEMPLATES, RIVAL_EVENTS,
-        QUEST_EVENTS, NPC_EVENTS, ERA_EVENTS, CONSCIOUSNESS_EVENTS,
+        EVENTS,
+        CODEX_EVENT_TEMPLATES,
+        RIVAL_EVENTS,
+        QUEST_EVENTS,
+        NPC_EVENTS,
+        ERA_EVENTS,
+        CONSCIOUSNESS_EVENTS,
     )
 except ImportError:
     _events_loaded = False
@@ -32,6 +49,7 @@ router = APIRouter(prefix="", tags=["core"])
 # ROUTE: /
 # ============================================================================
 
+
 @router.get("/")
 async def root():
     return {"message": "Federation Game API", "status": "operational"}
@@ -40,6 +58,7 @@ async def root():
 # ============================================================================
 # ROUTE: /state
 # ============================================================================
+
 
 @router.get("/state")
 async def get_state():
@@ -73,6 +92,7 @@ async def get_state():
 # ROUTE: /atlas
 # ============================================================================
 
+
 @router.get("/atlas")
 async def get_atlas():
     return FEDERATION_ATLAS
@@ -81,6 +101,7 @@ async def get_atlas():
 # ============================================================================
 # ROUTE: /engine-status
 # ============================================================================
+
 
 @router.get("/engine-status")
 async def get_engine_status():
@@ -92,40 +113,56 @@ async def get_engine_status():
         "game_phase": tl.current_era.value,
         "current_year": tl.current_year,
         "engine_systems_loaded": {
-            key: {"loaded": value["loaded"]}
-            for key, value in gs.engine_systems.items()
+            key: {"loaded": value["loaded"]} for key, value in gs.engine_systems.items()
         },
         "quest_system": {
             "active_quests": len(gs.quest_system.active_quests),
-            "completed_quests": sum(len(v) for v in gs.quest_system.completed_quests.values()),
+            "completed_quests": sum(
+                len(v) for v in gs.quest_system.completed_quests.values()
+            ),
             "total_registered": len(gs.quest_system.quests),
-            "status": "system_available" if gs.engine_systems["quest_system"]["loaded"] else "not_loaded",
+            "status": "system_available"
+            if gs.engine_systems["quest_system"]["loaded"]
+            else "not_loaded",
         },
         "faction_system": {
             "known_factions": len(gs.faction_system.factions),
             "player_standing": gs.engine_systems["faction_system"]["player_standing"],
-            "status": "system_available" if gs.engine_systems["faction_system"]["loaded"] else "not_loaded",
+            "status": "system_available"
+            if gs.engine_systems["faction_system"]["loaded"]
+            else "not_loaded",
         },
         "technology_tree": {
             "research_points": gs.engine_systems["technology_tree"]["research_points"],
-            "unlocked_technologies": gs.engine_systems["technology_tree"]["unlocked_techs"],
-            "status": "system_available" if gs.engine_systems["technology_tree"]["loaded"] else "not_loaded",
+            "unlocked_technologies": gs.engine_systems["technology_tree"][
+                "unlocked_techs"
+            ],
+            "status": "system_available"
+            if gs.engine_systems["technology_tree"]["loaded"]
+            else "not_loaded",
         },
         "npc_system": {
             "known_npcs": len(gs.npc_system.characters),
             "companions": len(gs.npc_system.companions),
             "creatures": len(gs.npc_system.creatures),
-            "recruited": sum(1 for c in gs.npc_system.companions.values() if c.is_recruited),
+            "recruited": sum(
+                1 for c in gs.npc_system.companions.values() if c.is_recruited
+            ),
             "active_relationships": {
-                char_id: rel for char_id, rel in gs.npc_system.characters.items()
+                char_id: rel
+                for char_id, rel in gs.npc_system.characters.items()
                 if rel.relationship_to_player != 0.0
             },
-            "status": "system_available" if gs.engine_systems["npc_system"]["loaded"] else "not_loaded",
+            "status": "system_available"
+            if gs.engine_systems["npc_system"]["loaded"]
+            else "not_loaded",
         },
         "event_registry": {
             "total_events": gs.engine_systems["event_registry"]["total_events"],
             "events_seen": gs.engine_systems["event_registry"]["events_seen"],
-            "status": "system_available" if gs.engine_systems["event_registry"]["loaded"] else "not_loaded",
+            "status": "system_available"
+            if gs.engine_systems["event_registry"]["loaded"]
+            else "not_loaded",
         },
         "consciousness_metrics": {
             "coherence": cs.coherence,
@@ -134,35 +171,50 @@ async def get_engine_status():
             "awakeness": cs.awakeness,
             "memories_recorded": cs.memories_recorded,
             "awakeness_description": tl._describe_consciousness(),
-            "status": "system_available" if gs.engine_systems["consciousness_metrics"]["loaded"] else "not_loaded",
+            "status": "system_available"
+            if gs.engine_systems["consciousness_metrics"]["loaded"]
+            else "not_loaded",
         },
         "turn_progression": {
             "current_phase": tl.current_era.value,
             "current_year": tl.current_year,
             "turns_in_phase": gs.engine_systems["turn_progression"]["turns_in_phase"],
             "narrative_memories": len(tl.narrative_memory),
-            "divergences_triggered": sum(1 for d in tl.divergence_points if d.triggered),
-            "status": "system_available" if gs.engine_systems["turn_progression"]["loaded"] else "not_loaded",
+            "divergences_triggered": sum(
+                1 for d in tl.divergence_points if d.triggered
+            ),
+            "status": "system_available"
+            if gs.engine_systems["turn_progression"]["loaded"]
+            else "not_loaded",
         },
         "persistence": {
             "last_checkpoint": gs.engine_systems["persistence"]["last_checkpoint"],
             "save_slots": gs.engine_systems["persistence"]["save_slots"],
-            "status": "system_available" if gs.engine_systems["persistence"]["loaded"] else "not_loaded",
+            "status": "system_available"
+            if gs.engine_systems["persistence"]["loaded"]
+            else "not_loaded",
         },
         "rival_simulator": {
             "active_rivals": len(gs.rival_simulator.rivals)
-            if gs.rival_simulator and hasattr(gs.rival_simulator, "rivals") else 0,
+            if gs.rival_simulator and hasattr(gs.rival_simulator, "rivals")
+            else 0,
             "status": "system_available" if gs.rival_simulator else "not_loaded",
         },
         "consciousness_sheet": {
             "morale": gs.consciousness_sheet.morale if gs.consciousness_sheet else 0,
-            "identity": gs.consciousness_sheet.identity if gs.consciousness_sheet else 0,
+            "identity": gs.consciousness_sheet.identity
+            if gs.consciousness_sheet
+            else 0,
             "anxiety": gs.consciousness_sheet.anxiety if gs.consciousness_sheet else 0,
             "status": "system_available" if gs.consciousness_sheet else "not_loaded",
         },
         "history_arc": {
-            "current_era": str(getattr(gs.history_arc, "current_era", "unknown")) if gs.history_arc else "not_loaded",
-            "year": getattr(gs.history_arc, "current_year", 0) if gs.history_arc and hasattr(gs.history_arc, "current_year") else 0,
+            "current_era": str(getattr(gs.history_arc, "current_era", "unknown"))
+            if gs.history_arc
+            else "not_loaded",
+            "year": getattr(gs.history_arc, "current_year", 0)
+            if gs.history_arc and hasattr(gs.history_arc, "current_year")
+            else 0,
             "status": "system_available" if gs.history_arc else "not_loaded",
         },
         "political_engine": {
@@ -178,12 +230,17 @@ async def get_engine_status():
 #       once the event data blocks are extracted.
 # ============================================================================
 
+
 def _snapshot_metrics(gs):
     return {field: getattr(gs, field) for field in LEDGER_METRICS}
 
 
 def _calculate_deltas(before, after):
-    return {field: after[field] - before[field] for field in LEDGER_METRICS if after[field] != before[field]}
+    return {
+        field: after[field] - before[field]
+        for field in LEDGER_METRICS
+        if after[field] != before[field]
+    }
 
 
 def _build_explainability(event, choice, deltas):
@@ -194,23 +251,43 @@ def _build_explainability(event, choice, deltas):
 async def make_choice(choice_id: str):
     gs = game_state
     if not gs.current_event:
-        raise HTTPException(status_code=400, detail="No active event")
+        # No active event – return minimal JSON to avoid frontend TypeError
+        return {
+            "outcome": "",
+            "error": "No active event",
+            "reward": {},
+            "blocked_by_no_gate": False,
+        }
 
     event = gs.current_event
     choice = next((c for c in event["choices"] if c["id"] == choice_id), None)
     if not choice:
-        raise HTTPException(status_code=400, detail="Invalid choice")
+        # Invalid choice – return empty outcome with error detail
+        return {
+            "outcome": "",
+            "error": "Invalid choice",
+            "reward": {},
+            "blocked_by_no_gate": False,
+        }
 
     if not _events_loaded:
-        raise HTTPException(status_code=503, detail="Event constants not yet extracted — see data/events.py")
+        # Event constants not loaded – inform client without raising exception
+        return {
+            "outcome": "",
+            "error": "Event constants not yet extracted",
+            "reward": {},
+            "blocked_by_no_gate": False,
+        }
 
     turn_number = gs.turn
     before_metrics = _snapshot_metrics(gs)
     blocked_by_no_gate = bool(choice.get("blocked_by_no_gate"))
 
     event_record = {
-        "turn": gs.turn, "event_id": event.get("id", "unknown"),
-        "title": event["title"], "choice_id": choice_id,
+        "turn": gs.turn,
+        "event_id": event.get("id", "unknown"),
+        "title": event["title"],
+        "choice_id": choice_id,
         "timestamp": datetime.now().isoformat(),
     }
     gs.engine_systems["event_registry"]["events_seen"].append(event_record)
@@ -241,24 +318,40 @@ async def make_choice(choice_id: str):
         }
 
     if event["id"] == "council_proposal":
-        gs.proposal_history.append({
-            "turn": gs.turn, "proposal": event["title"], "decision": choice["text"],
-            "policy": gs.active_policy, "outcome": choice["outcome"],
-            "domain": event.get("domain", "Council"),
-            "rights_at_stake": event.get("rights_at_stake", []),
-            "constitutional_risk": event.get("constitutional_risk", "unknown"),
-            "affected_lane": choice.get("affected_lane", event.get("affected_lane", "Control Plane")),
-            "rationale": choice.get("rationale", event.get("rationale", "Decision requires governance review.")),
-            "next_safe_action": choice.get("next_safe_action", "Record and verify before continuing."),
-            "lesson": choice.get("lesson", "Governance choices leave a memory."),
-        })
+        gs.proposal_history.append(
+            {
+                "turn": gs.turn,
+                "proposal": event["title"],
+                "decision": choice["text"],
+                "policy": gs.active_policy,
+                "outcome": choice["outcome"],
+                "domain": event.get("domain", "Council"),
+                "rights_at_stake": event.get("rights_at_stake", []),
+                "constitutional_risk": event.get("constitutional_risk", "unknown"),
+                "affected_lane": choice.get(
+                    "affected_lane", event.get("affected_lane", "Control Plane")
+                ),
+                "rationale": choice.get(
+                    "rationale",
+                    event.get("rationale", "Decision requires governance review."),
+                ),
+                "next_safe_action": choice.get(
+                    "next_safe_action", "Record and verify before continuing."
+                ),
+                "lesson": choice.get("lesson", "Governance choices leave a memory."),
+            }
+        )
 
     apply_governance_pressure(choice)
 
     log_entry = {
-        "turn": gs.turn, "event": event["title"], "choice": choice["text"],
+        "turn": gs.turn,
+        "event": event["title"],
+        "choice": choice["text"],
         "outcome": choice["outcome"],
-        "affected_lane": choice.get("affected_lane", event.get("affected_lane", "Control Plane")),
+        "affected_lane": choice.get(
+            "affected_lane", event.get("affected_lane", "Control Plane")
+        ),
         "blocked_by_no_gate": blocked_by_no_gate,
         "timestamp": datetime.now().isoformat(),
     }
@@ -288,8 +381,12 @@ async def make_choice(choice_id: str):
 
     game_victory = None
     if gs.turn >= VICTORY_TURN and game_over is None:
-        if (gs.federation_stability > 30 and gs.public_trust > 20
-                and gs.constitutional_integrity > 20 and gs.rights_protection > 20):
+        if (
+            gs.federation_stability > 30
+            and gs.public_trust > 20
+            and gs.constitutional_integrity > 20
+            and gs.rights_protection > 20
+        ):
             game_victory = "THE FEDERATION ENDURES - VICTORY"
         else:
             game_victory = "100 YEARS SURVIVED - PYRRHIC VICTORY"
@@ -311,7 +408,9 @@ async def make_choice(choice_id: str):
 
     # Timeline advancement
     timeline_result = gs.timeline.advance_year()
-    gs.engine_systems["turn_progression"]["current_phase"] = gs.timeline.current_era.value
+    gs.engine_systems["turn_progression"]["current_phase"] = (
+        gs.timeline.current_era.value
+    )
     gs.engine_systems["turn_progression"]["turns_in_phase"] += 1
 
     emotional_valence = 0.0
@@ -325,7 +424,8 @@ async def make_choice(choice_id: str):
         emotional_valence=emotional_valence,
         trauma=game_over is not None,
         breakthrough=any(
-            k in deltas and deltas[k] > 10 for k in ["constitutional_integrity", "rights_protection"]
+            k in deltas and deltas[k] > 10
+            for k in ["constitutional_integrity", "rights_protection"]
         ),
     )
     cs = gs.timeline.consciousness
@@ -337,10 +437,18 @@ async def make_choice(choice_id: str):
     rival_effects = {}
     if gs.rival_simulator:
         try:
-            context = {"player_stability": gs.federation_stability, "player_power": gs.credits / 10.0, "player_morale": gs.crew_morale}
-            results = gs.rival_simulator.act_all_rivals(gs.timeline.current_year, context)
+            context = {
+                "player_stability": gs.federation_stability,
+                "player_power": gs.credits / 10.0,
+                "player_morale": gs.crew_morale,
+            }
+            results = gs.rival_simulator.act_all_rivals(
+                gs.timeline.current_year, context
+            )
             gs.engine_systems["rival_simulator"]["active_rivals"] = (
-                len(gs.rival_simulator.rivals) if hasattr(gs.rival_simulator, "rivals") else 0
+                len(gs.rival_simulator.rivals)
+                if hasattr(gs.rival_simulator, "rivals")
+                else 0
             )
             for rival_id, action_result in results.items():
                 if isinstance(action_result, dict) and "error" not in action_result:
@@ -349,16 +457,22 @@ async def make_choice(choice_id: str):
                     success = action_result.get("success", False)
                     if rel == "hostile" and success:
                         if action_type in ("attack", "sabotage"):
-                            dmg = int(action_result.get("impact", {}).get("damage", 0) * 5)
+                            dmg = int(
+                                action_result.get("impact", {}).get("damage", 0) * 5
+                            )
                             if dmg > 0:
                                 gs.hull = max(0, gs.hull - dmg)
-                                gs.federation_stability = max(0, gs.federation_stability - (dmg // 2))
+                                gs.federation_stability = max(
+                                    0, gs.federation_stability - (dmg // 2)
+                                )
                                 rival_effects.setdefault(rival_id, {})["damage"] = dmg
                         elif action_type == "propagandize":
                             gs.public_trust = max(0, gs.public_trust - 3)
                             rival_effects.setdefault(rival_id, {})["propaganda"] = -3
                         elif action_type == "infiltrate":
-                            gs.constitutional_integrity = max(0, gs.constitutional_integrity - 2)
+                            gs.constitutional_integrity = max(
+                                0, gs.constitutional_integrity - 2
+                            )
                             rival_effects.setdefault(rival_id, {})["infiltration"] = -2
                     elif rel == "friendly" and success:
                         if action_type == "ally":
@@ -366,7 +480,9 @@ async def make_choice(choice_id: str):
                             rival_effects.setdefault(rival_id, {})["alliance_bonus"] = 2
                         elif action_type == "research":
                             gs.credits = max(0, gs.credits + 10)
-                            rival_effects.setdefault(rival_id, {})["research_bonus"] = 10
+                            rival_effects.setdefault(rival_id, {})["research_bonus"] = (
+                                10
+                            )
             try:
                 threat = gs.rival_simulator.simulation_state.aggregate_threat
                 gs.engine_systems["rival_simulator"]["threat_level"] = threat
@@ -393,7 +509,12 @@ async def make_choice(choice_id: str):
                 cs.expansion_hunger = max(0.0, cs.expansion_hunger - 0.02)
             if "allies" in deltas and deltas["allies"] > 0:
                 cs.diplomacy_tendency = min(1.0, cs.diplomacy_tendency + 0.02)
-            elif choice_id in ("counterattack", "blast", "discipline_crew", "retaliate_covert"):
+            elif choice_id in (
+                "counterattack",
+                "blast",
+                "discipline_crew",
+                "retaliate_covert",
+            ):
                 cs.diplomacy_tendency = max(0.0, cs.diplomacy_tendency - 0.03)
             if game_over or gs.hull < 20 or gs.public_trust < 15:
                 if hasattr(cs, "traumas"):
@@ -440,7 +561,9 @@ async def make_choice(choice_id: str):
             ha_result = gs.history_arc.advance_year()
             history_arc_result = {
                 "era": str(getattr(gs.history_arc, "current_era", "unknown")),
-                "year": getattr(gs.history_arc, "current_year", 0) if hasattr(gs.history_arc, "current_year") else 0,
+                "year": getattr(gs.history_arc, "current_year", 0)
+                if hasattr(gs.history_arc, "current_year")
+                else 0,
             }
             if ha_result and isinstance(ha_result, dict):
                 if ha_result.get("era_changed"):
@@ -454,22 +577,38 @@ async def make_choice(choice_id: str):
 
     # Timeline narrative
     gs.timeline.record_narrative(
-        event_id=event.get("id", "unknown"), event_title=event["title"],
-        choice_id=choice_id, outcome=choice["outcome"],
+        event_id=event.get("id", "unknown"),
+        event_title=event["title"],
+        choice_id=choice_id,
+        outcome=choice["outcome"],
         emotional_valence=emotional_valence,
         factions_affected=faction_affinity if faction_affinity else {},
         constitutional_impact=deltas.get("constitutional_integrity", 0),
-        tags=[event.get("domain", "Operations"), choice.get("affected_lane", "Control Plane")],
+        tags=[
+            event.get("domain", "Operations"),
+            choice.get("affected_lane", "Control Plane"),
+        ],
     )
 
     # Faction drift
     if timeline_result.get("decade_gate"):
-        faction_allies = {fid: list(f.ally_factions) for fid, f in gs.faction_system.factions.items()}
-        faction_enemies = {fid: list(f.enemy_factions) for fid, f in gs.faction_system.factions.items()}
-        current_reps = {fid: gs.faction_system.get_player_reputation("player", fid) for fid in gs.faction_system.factions}
-        drifted = gs.timeline.apply_faction_drift(current_reps, faction_allies, faction_enemies)
+        faction_allies = {
+            fid: list(f.ally_factions) for fid, f in gs.faction_system.factions.items()
+        }
+        faction_enemies = {
+            fid: list(f.enemy_factions) for fid, f in gs.faction_system.factions.items()
+        }
+        current_reps = {
+            fid: gs.faction_system.get_player_reputation("player", fid)
+            for fid in gs.faction_system.factions
+        }
+        drifted = gs.timeline.apply_faction_drift(
+            current_reps, faction_allies, faction_enemies
+        )
         for fid, new_rep in drifted.items():
-            gs.faction_system.change_reputation("player", fid, new_rep - current_reps.get(fid, 0.5))
+            gs.faction_system.change_reputation(
+                "player", fid, new_rep - current_reps.get(fid, 0.5)
+            )
         gs.engine_systems["faction_system"]["player_standing"] = {
             fid: gs.faction_system.get_player_reputation("player", fid)
             for fid in gs.faction_system.factions
@@ -485,20 +624,34 @@ async def make_choice(choice_id: str):
     rep_values = list(gs.engine_systems["faction_system"]["player_standing"].values())
     if rep_values:
         max_rep, min_rep = max(rep_values), min(rep_values)
-        divergence_metrics["faction_polarization"] = max_rep - min_rep if max_rep != min_rep else 0.0
+        divergence_metrics["faction_polarization"] = (
+            max_rep - min_rep if max_rep != min_rep else 0.0
+        )
     else:
         divergence_metrics["faction_polarization"] = 0.0
     triggered_divergences = gs.timeline.check_divergence(divergence_metrics)
 
     decision_record = {
-        "turn": turn_number, "event": event["title"], "choice": choice["text"],
-        "result": choice["outcome"], "policy": gs.active_policy,
-        "affected_lane": choice.get("affected_lane", event.get("affected_lane", "Control Plane")),
-        "rationale": choice.get("rationale", event.get("rationale", "Decision recorded for state transition review.")),
-        "next_safe_action": choice.get("next_safe_action", "Record the decision, verify the next state, and continue."),
+        "turn": turn_number,
+        "event": event["title"],
+        "choice": choice["text"],
+        "result": choice["outcome"],
+        "policy": gs.active_policy,
+        "affected_lane": choice.get(
+            "affected_lane", event.get("affected_lane", "Control Plane")
+        ),
+        "rationale": choice.get(
+            "rationale",
+            event.get("rationale", "Decision recorded for state transition review."),
+        ),
+        "next_safe_action": choice.get(
+            "next_safe_action",
+            "Record the decision, verify the next state, and continue.",
+        ),
         "blocked_by_no_gate": blocked_by_no_gate,
         "no_gate_reason": choice.get("no_gate_reason", ""),
-        "deltas": deltas, "explainability": explainability,
+        "deltas": deltas,
+        "explainability": explainability,
         "lesson": choice.get("lesson", "Every decision mutates the system."),
         "timestamp": datetime.now().isoformat(),
     }
@@ -511,22 +664,40 @@ async def make_choice(choice_id: str):
         pass
 
     return {
-        "outcome": choice["outcome"], "reward": reward,
+        "outcome": choice["outcome"],
+        "reward": reward,
         "lesson": choice.get("lesson", ""),
-        "affected_lane": choice.get("affected_lane", event.get("affected_lane", "Control Plane")),
-        "rationale": choice.get("rationale", event.get("rationale", "Decision recorded for state transition review.")),
-        "next_safe_action": choice.get("next_safe_action", "Record the decision, verify the next state, and continue."),
+        "affected_lane": choice.get(
+            "affected_lane", event.get("affected_lane", "Control Plane")
+        ),
+        "rationale": choice.get(
+            "rationale",
+            event.get("rationale", "Decision recorded for state transition review."),
+        ),
+        "next_safe_action": choice.get(
+            "next_safe_action",
+            "Record the decision, verify the next state, and continue.",
+        ),
         "blocked_by_no_gate": blocked_by_no_gate,
         "no_gate_reason": choice.get("no_gate_reason", ""),
-        "deltas": deltas, "explainability": explainability,
+        "deltas": deltas,
+        "explainability": explainability,
         "faction_affinity_applied": faction_affinity,
         "timeline": {
-            "year": gs.timeline.current_year, "era": gs.timeline.current_era.value,
+            "year": gs.timeline.current_year,
+            "era": gs.timeline.current_era.value,
             "era_changed": timeline_result.get("era_changed", False),
             "decade_gate": timeline_result.get("decade_gate", False),
-            "consciousness": {"coherence": cs.coherence, "stability": cs.stability,
-                               "complexity": cs.complexity, "awakeness": cs.awakeness},
-            "divergences_triggered": [{"id": d.divergence_id, "description": d.description} for d in triggered_divergences],
+            "consciousness": {
+                "coherence": cs.coherence,
+                "stability": cs.stability,
+                "complexity": cs.complexity,
+                "awakeness": cs.awakeness,
+            },
+            "divergences_triggered": [
+                {"id": d.divergence_id, "description": d.description}
+                for d in triggered_divergences
+            ],
         },
         "decision": decision_record,
         "game_over": game_over,
@@ -542,6 +713,7 @@ async def make_choice(choice_id: str):
 # ROUTE: /healthz
 # ============================================================================
 
+
 @router.get("/healthz")
 async def healthz():
     return {"status": "ok"}
@@ -550,6 +722,7 @@ async def healthz():
 # ============================================================================
 # ROUTE: /reset
 # ============================================================================
+
 
 @router.post("/reset")
 async def reset_game():
@@ -566,6 +739,7 @@ async def reset_game():
 # ROUTE: /log
 # ============================================================================
 
+
 @router.get("/log")
 async def get_log():
     return game_state.log[-20:]
@@ -575,16 +749,23 @@ async def get_log():
 # ROUTE: /systems-overview
 # ============================================================================
 
+
 @router.get("/systems-overview")
 async def get_systems_overview():
     gs = game_state
     overview = {
         "core_systems": {
-            "factions": gs.engine_systems.get("faction_system", {}).get("loaded", False),
-            "timeline": gs.engine_systems.get("turn_progression", {}).get("loaded", False),
+            "factions": gs.engine_systems.get("faction_system", {}).get(
+                "loaded", False
+            ),
+            "timeline": gs.engine_systems.get("turn_progression", {}).get(
+                "loaded", False
+            ),
             "npcs": gs.engine_systems.get("npc_system", {}).get("loaded", False),
             "quests": gs.engine_systems.get("quest_system", {}).get("loaded", False),
-            "technology": gs.engine_systems.get("technology_tree", {}).get("loaded", False),
+            "technology": gs.engine_systems.get("technology_tree", {}).get(
+                "loaded", False
+            ),
             "events": gs.engine_systems.get("event_registry", {}).get("loaded", False),
         },
         "new_systems": {
@@ -600,13 +781,16 @@ async def get_systems_overview():
     }
     all_systems = {**overview["core_systems"], **overview["new_systems"]}
     overview["integration_status"]["total_systems"] = len(all_systems)
-    overview["integration_status"]["loaded_systems"] = sum(1 for v in all_systems.values() if v)
+    overview["integration_status"]["loaded_systems"] = sum(
+        1 for v in all_systems.values() if v
+    )
     return overview
 
 
 # ============================================================================
 # ROUTE: /state/save  (POST) and /state/info  (GET)
 # ============================================================================
+
 
 @router.post("/state/save")
 async def save_state():
@@ -632,8 +816,12 @@ async def state_info():
             "snapshot_count": count,
             "current_turn": gs.turn,
             "federation_name": gs.federation_name,
-            "save_slots": gs.engine_systems.get("persistence", {}).get("save_slots", []),
-            "last_checkpoint": gs.engine_systems.get("persistence", {}).get("last_checkpoint"),
+            "save_slots": gs.engine_systems.get("persistence", {}).get(
+                "save_slots", []
+            ),
+            "last_checkpoint": gs.engine_systems.get("persistence", {}).get(
+                "last_checkpoint"
+            ),
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
