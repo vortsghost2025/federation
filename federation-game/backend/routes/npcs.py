@@ -3,12 +3,15 @@
 from fastapi import APIRouter, HTTPException
 from state import game_state
 
+
 def _get_observer_redis():
     import redis, os
+
     return redis.from_url(
         os.environ.get("REDIS_URL", "redis://redis:6379/0"),
         decode_responses=True,
     )
+
 
 router = APIRouter(prefix="", tags=["npcs"])
 
@@ -26,17 +29,20 @@ async def list_npcs(
     for char_id, char in characters.items():
         if affiliation and getattr(char, "affiliation", "") != affiliation:
             continue
-        char_status = str(getattr(char, "status", "active"))
+        _status = getattr(char, "status", "active")
+        char_status = _status.value if hasattr(_status, "value") else str(_status)
         if status and char_status != status:
             continue
-        results.append({
-            "char_id": char_id,
-            "name": getattr(char, "name", "Unknown"),
-            "title": getattr(char, "title", ""),
-            "affiliation": getattr(char, "affiliation", ""),
-            "personality_type": getattr(char, "personality_type", ""),
-            "status": char_status,
-        })
+        results.append(
+            {
+                "char_id": char_id,
+                "name": getattr(char, "name", "Unknown"),
+                "title": getattr(char, "title", ""),
+                "affiliation": getattr(char, "affiliation", ""),
+                "personality_type": getattr(char, "personality_type", ""),
+                "status": char_status,
+            }
+        )
     total = len(results)
     return {
         "npcs": results[offset : offset + limit],
@@ -66,7 +72,9 @@ async def get_npc(char_id: str):
         "ambition": getattr(char, "ambition", 0),
         "corruption_level": getattr(char, "corruption_level", 0),
         "rumor_level": getattr(char, "rumor_level", 0),
-        "status": str(getattr(char, "status", "active")),
+        "status": (lambda v: v.value if hasattr(v, "value") else str(v))(
+            getattr(char, "status", "active")
+        ),
         "current_quest": getattr(char, "current_quest", None),
         "relationship_to_player": getattr(char, "relationship_to_player", "neutral"),
         "skills": getattr(char, "skills", []),
