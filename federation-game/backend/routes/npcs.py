@@ -13,6 +13,39 @@ def _get_observer_redis():
 router = APIRouter(prefix="", tags=["npcs"])
 
 
+@router.get("/npcs")
+async def list_npcs(
+    affiliation: str | None = None,
+    status: str | None = None,
+    limit: int = 50,
+    offset: int = 0,
+):
+    """List all NPCs with optional filtering and pagination."""
+    characters = game_state.npc_system.characters
+    results = []
+    for char_id, char in characters.items():
+        if affiliation and getattr(char, "affiliation", "") != affiliation:
+            continue
+        char_status = str(getattr(char, "status", "active"))
+        if status and char_status != status:
+            continue
+        results.append({
+            "char_id": char_id,
+            "name": getattr(char, "name", "Unknown"),
+            "title": getattr(char, "title", ""),
+            "affiliation": getattr(char, "affiliation", ""),
+            "personality_type": getattr(char, "personality_type", ""),
+            "status": char_status,
+        })
+    total = len(results)
+    return {
+        "npcs": results[offset : offset + limit],
+        "total": total,
+        "limit": limit,
+        "offset": offset,
+    }
+
+
 @router.get("/npcs/{char_id}")
 async def get_npc(char_id: str):
     """Return NPC character data by char_id."""
