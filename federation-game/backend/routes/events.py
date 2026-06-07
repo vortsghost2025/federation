@@ -1,8 +1,16 @@
 """Event route handlers — extracted from main.py"""
 import logging
 import random
-from fastapi import APIRouter, HTTPException
-from state import game_state, build_governance_event, enrich_event
+from uuid import uuid4
+
+from fastapi import APIRouter
+
+from state import (
+    PENDING_CHOICE_TTL_SECONDS,
+    build_governance_event,
+    enrich_event,
+    game_state,
+)
 
 router = APIRouter(prefix="", tags=["events"])
 logger = logging.getLogger("federation_game")
@@ -25,6 +33,26 @@ except ImportError:
     NPC_EVENTS = []
     ERA_EVENTS = []
     CONSCIOUSNESS_EVENTS = []
+
+
+def _event_error(message: str):
+    return {
+        "id": "event_unavailable",
+        "title": "Event generation unavailable",
+        "description": "The federation could not generate a new event right now.",
+        "choices": [],
+        "error": message,
+    }
+
+
+def _issue_choice_token(event: dict):
+    game_state.sweep_expired_pending_choices(ttl_seconds=PENDING_CHOICE_TTL_SECONDS)
+    choice_token = str(uuid4())
+    game_state.register_pending_choice(choice_token, event)
+    game_state.current_event = event
+    response = dict(event)
+    response["choice_token"] = choice_token
+    return response
 
 
 @router.get("/event")
@@ -88,8 +116,7 @@ async def get_random_event():
         # Fallback to governance if candidates list somehow empty
         if not candidates:
             ev = build_governance_event()
-            game_state.current_event = ev
-            return ev
+            return _issue_choice_token(ev)
 
         categories = [c[0] for c in candidates]
         weights = [c[1] for c in candidates]
@@ -136,14 +163,12 @@ async def get_random_event():
         except Exception:
             logger.warning("enrich_event failed, returning raw event", exc_info=True)
 
-        game_state.current_event = event
-        return event
+        return _issue_choice_token(event)
 
     except Exception as e:
         logger.error("get_random_event failed: %s", e, exc_info=True)
         try:
             fallback = build_governance_event()
-            game_state.current_event = fallback
-            return fallback
+            return _issue_choice_token(fallback)
         except Exception:
-            raise HTTPException(status_code=503, detail="Event generation unavailable")
+            return _event_error("Event generation unavailable")

@@ -179,8 +179,14 @@ async function makeChoice(choiceId) {
     const resp = await fetch(`${API_URL}/choose/${choiceId}`, { method: 'POST' });
     const data = await resp.json();
 
+    if (data.error && !data.outcome) {
+      await fetchState();
+      await newEvent();
+      return;
+    }
+
     // Show outcome
-    document.getElementById('outcomeText').textContent = data.outcome.toUpperCase();
+    document.getElementById('outcomeText').textContent = (data.outcome || 'Decision recorded').toUpperCase();
 
     // Victory display
     const victoryEl = document.getElementById('outcomeVictory');
@@ -366,7 +372,7 @@ async function fetchRivals() {
     const rivalKeys = Object.keys(rivalEntries).filter(k => typeof rivalEntries[k] === 'object' && rivalEntries[k].name);
     rivalList.innerHTML = rivalKeys.map(key => {
       const r = rivalEntries[key];
-      const relToPlayer = r.relationships?.player || 'neutral';
+      const relToPlayer = (r.relationships && r.relationships.player) || 'neutral';
       const relClass = relToPlayer === 'hostile' ? 'hostile' : relToPlayer === 'friendly' ? 'friendly' : '';
       return `<div class="rival-card ${relClass}">
         <div class="rival-name">${r.name || key}</div>
