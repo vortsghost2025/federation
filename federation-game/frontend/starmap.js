@@ -255,18 +255,14 @@ function toggleReadableSpatialMode() {
 
 // --- Data fetch ---
       async function fetchData() {
-  try {
-    const resp = await fetch(API);
-    if (!resp.ok) return;
-    mapData = await resp.json();
+    const data = await fedFetch('mapData', API);
+    if (!data) return;
+    mapData = data;
     lastUpdate = Date.now();
     _sectorOwnerCache = {}; // SPATIAL-03A: clear sector owner cache on data refresh
     buildNodes();
     updateUI();
-  } catch(e) {
-    console.error('Map data fetch failed', e);
   }
-}
 
 function hashStr(s) {
   let h = 0;
@@ -2923,17 +2919,13 @@ async function aiChatSend() {
   aiChatRender();
 
   try {
-    var ctl = new AbortController();
-    var timer = setTimeout(function(){ ctl.abort() }, 15000);
-    var r = await fetch("/map/assistant", {
+    const data = await fedFetch('mapAssistant', "/map/assistant", {
       method: "POST",
       headers: {"Content-Type": "application/json", "Accept": "application/json"},
       body: JSON.stringify({question: question}),
-      signal: ctl.signal
+      timeout: 15000
     });
-    clearTimeout(timer);
-    if (!r.ok) throw new Error("HTTP " + r.status);
-    var data = await r.json();
+    if (!data) return;
 
     aiChatHistory = aiChatHistory.filter(function(m){ return m.role !== "thinking"; });
 

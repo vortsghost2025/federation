@@ -153,37 +153,22 @@ const API_URL = '';
         }
 
   async function fetchAtlas() {
-    try {
-      const response = await fetch(`${API_URL}/atlas`);
-      if (!response.ok) throw new Error(`Atlas ${response.status}`);
-      renderAtlas(await response.json());
-    } catch (e) {
-      console.error('Failed to fetch atlas:', e);
-      document.getElementById('federationAtlas').innerHTML = '<p class="error">Atlas unavailable</p>';
-    }
+    const data = await fedFetch('atlas', `${API_URL}/atlas`);
+    if (!data) return;
+    renderAtlas(data);
   }
 
         async function fetchEngineStatus() {
-            try {
-                const response = await fetch(`${API_URL}/engine-status`);
-                const data = await response.json();
-                renderEngineStatus(data);
-            } catch (error) {
-                console.error('Failed to fetch engine status:', error);
-                document.getElementById('engineStatus').innerHTML = '<p class="error">Engine status unavailable</p>';
-            }
+            const data = await fedFetch('engineStatus', `${API_URL}/engine-status`);
+            if (!data) return;
+            renderEngineStatus(data);
         }
 
 async function fetchState() {
-  try {
-    const resp = await fetch(`${API_URL}/state`);
-    if (!resp.ok) throw new Error(`State ${resp.status}`);
-    const data = await resp.json();
-    updateState(data);
-    return data;
-  } catch (e) {
-    console.error('Failed to fetch state:', e);
-  }
+  const data = await fedFetch('state', `${API_URL}/state`);
+  if (!data) return;
+  updateState(data);
+  return data;
 }
 
 function updateEvent(event) {
@@ -216,43 +201,34 @@ function updateEvent(event) {
 }
 
   async function loadEvent() {
-    try {
-      const resp = await fetch(`${API_URL}/event`);
-      if (!resp.ok) throw new Error(`Event ${resp.status}`);
-      const data = await resp.json();
-      currentChoiceToken = data.choice_token || null;
-      updateEvent(data);
-    } catch (e) {
-      console.error('Failed to fetch event:', e);
-    }
+    const data = await fedFetch('event', `${API_URL}/event`);
+    if (!data) return;
+    currentChoiceToken = data.choice_token || null;
+    updateEvent(data);
   }
 
 async function choose(choiceId) {
-  try {
-    const response = await fetch(`${API_URL}/choose/${choiceId}?choice_token=${currentChoiceToken || ''}`, { method: 'POST' });
-    const result = await response.json();
+  const data = await fedFetch('choose', `${API_URL}/choose/${choiceId}?choice_token=${currentChoiceToken || ''}`, { method: 'POST' });
+  if (!data) return;
 
-    if (result.error && !result.outcome) {
-      if (String(result.error).includes('choice token')) {
-        currentChoiceToken = null;
-      }
-      await fetchState();
-      await loadEvent();
-      return;
+  if (data.error && !data.outcome) {
+    if (String(data.error).includes('choice token')) {
+      currentChoiceToken = null;
     }
-
-    if (result.new_state) {
-      updateState(result.new_state);
-      const turnEl = document.getElementById('turnCounter');
-      if (turnEl && result.new_state.turn) turnEl.textContent = result.new_state.turn;
-    }
-    showOutcome(result);
-    fetchConsciousness();
-    fetchRivals();
-    fetchPolitical();
-  } catch (e) {
-    console.error('Failed to make choice:', e);
+    await fetchState();
+    await loadEvent();
+    return;
   }
+
+  if (data.new_state) {
+    updateState(data.new_state);
+    const turnEl = document.getElementById('turnCounter');
+    if (turnEl && data.new_state.turn) turnEl.textContent = data.new_state.turn;
+  }
+  showOutcome(data);
+  fetchConsciousness();
+  fetchRivals();
+  fetchPolitical();
 }
 
 function showOutcome(data) {
@@ -445,22 +421,16 @@ function resetFromGameover() {
   }
 
   async function resetGame() {
-    try {
-      const response = await fetch(`${API_URL}/reset`, { method: 'POST' });
-      const result = await response.json();
-      if (result.state) updateState(result.state);
-      await loadEvent();
-    } catch (e) {
-      console.error('Failed to reset:', e);
-    }
+    const data = await fedFetch('reset', `${API_URL}/reset`, { method: 'POST' });
+    if (!data) return;
+    if (data.state) updateState(data.state);
+    await loadEvent();
   }
 
-        // Render rival federations
+// Render rival federations
   async function fetchRivals() {
-    try {
-      const resp = await fetch(`${API_URL}/rivals`);
-      if (!resp.ok) throw new Error(`Rivals ${resp.status}`);
-    const data = await resp.json();
+    const data = await fedFetch('rivals', `${API_URL}/rivals`);
+    if (!data) return;
     const grid = document.getElementById('rivalGrid');
     if (!data.system_available || !data.rivals) {
       grid.innerHTML = '<div style="color: var(--muted); font-size: 0.85rem;">Rival system unavailable</div>';
@@ -483,17 +453,12 @@ function resetFromGameover() {
     if (keys.length > 6) {
       grid.innerHTML += `<div style="color: var(--muted); font-size: 0.8rem;">+${keys.length - 6} more rivals</div>`;
     }
-  } catch (e) {
-    console.error('Failed to fetch rivals:', e);
   }
-}
 
 // Render consciousness sheet
   async function fetchConsciousness() {
-    try {
-      const resp = await fetch(`${API_URL}/consciousness`);
-      if (!resp.ok) throw new Error(`Consciousness ${resp.status}`);
-    const data = await resp.json();
+    const data = await fedFetch('consciousness', `${API_URL}/consciousness`);
+    if (!data) return;
     if (!data.system_available) return;
     document.getElementById('csIdentity').textContent = data.identity.toFixed(2);
     document.getElementById('csIdentityBar').style.width = (data.identity * 100) + '%';
@@ -513,17 +478,12 @@ function resetFromGameover() {
     (data.traumas || []).forEach(t => { html += `<span class="cs-tag trauma">Trauma: ${t}</span>`; });
     (data.archetypes || []).forEach(a => { html += `<span class="cs-tag archetype">${a}</span>`; });
     tags.innerHTML = html;
-  } catch (e) {
-    console.error('Failed to fetch consciousness:', e);
   }
-}
 
 // Render political engine status
   async function fetchPolitical() {
-    try {
-      const resp = await fetch(`${API_URL}/political`);
-      if (!resp.ok) throw new Error(`Political ${resp.status}`);
-    const data = await resp.json();
+    const data = await fedFetch('political', `${API_URL}/political`);
+    if (!data) return;
     const div = document.getElementById('politicalStatus');
     if (!data.system_available) {
       div.innerHTML = '<div style="color: var(--muted);">Political system not loaded</div>';
@@ -543,18 +503,12 @@ function resetFromGameover() {
     }
     html += '</div>';
     div.innerHTML = html;
-  } catch (e) {
-    console.error('Failed to fetch political:', e);
-    document.getElementById('politicalStatus').innerHTML = '<div style="color: var(--muted);">Political data unavailable</div>';
   }
-}
 
 // Render systems overview
   async function fetchSystemsOverview() {
-    try {
-      const resp = await fetch(`${API_URL}/systems-overview`);
-      if (!resp.ok) throw new Error(`Systems ${resp.status}`);
-    const data = await resp.json();
+    const data = await fedFetch('systemsOverview', `${API_URL}/systems-overview`);
+    if (!data) return;
     const grid = document.getElementById('systemsGrid');
     const summary = document.getElementById('systemsSummary');
     const allSystems = { ...data.core_systems, ...data.new_systems };
@@ -568,10 +522,7 @@ function resetFromGameover() {
     }
     grid.innerHTML = html;
     summary.textContent = `${data.integration_status.loaded_systems}/${data.integration_status.total_systems} systems loaded · Turn ${data.turn}`;
-  } catch (e) {
-    console.error('Failed to fetch systems overview:', e);
   }
-}
 
 // Initialize
 fetchState().then((data) => {

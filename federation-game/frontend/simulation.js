@@ -440,7 +440,12 @@ function md(text){
 function clamp(v,lo,hi){return Math.max(lo,Math.min(hi,v))}
 function timeAgo(isoStr){if(!isoStr)return '';var t=Date.parse(isoStr);if(isNaN(t))return String(isoStr);var diff=Date.now()-t;if(diff<0)diff=0;var s=Math.floor(diff/1000);if(s<60)return s+'s ago';var m=Math.floor(s/60);if(m<60)return m+'m ago';var h=Math.floor(m/60);if(h<24)return h+'h ago';var d=Math.floor(h/24);return d+'d ago'}
 
-async function apiFetch(endpoint,timeoutMs){var ctl=new AbortController();var timer=setTimeout(function(){ctl.abort()},timeoutMs||8000);try{var r=await fetch(endpoint,{headers:{'Accept':'application/json'},signal:ctl.signal});clearTimeout(timer);if(!r.ok)throw new Error(r.status);return await r.json()}catch(e){clearTimeout(timer);console.warn('[apiFetch]',endpoint,e.message||e);return null}}
+/* ═══ API FETCH - now uses fedFetch ═══ */
+async function apiFetch(endpoint, timeoutMs) {
+  const key = endpoint.replace(/^\/simulation\//, '').replace(/^\/map\//, '').replace(/\//g, '_');
+  const data = await fedFetch(key, endpoint, {timeout: timeoutMs || 8000});
+  return data;
+}
 
 function switchLeftTab(tab){activeLeftTab=tab;var btns=document.querySelectorAll('#left-tabs .tab-btn');for(var i=0;i<btns.length;i++){btns[i].classList.remove('active-amber');if(btns[i].dataset.tab===tab)btns[i].classList.add('active-amber')}document.getElementById('left-factions').classList.toggle('visible',tab==='factions');document.getElementById('left-faction-tech').classList.toggle('visible',tab==='faction-tech');if(tab==='faction-tech'&&!lastData.factionTech)refreshFactionTech()}
 function switchRightTab(tab){activeRightTab=tab;var btns=document.querySelectorAll('#right-tabs .tab-btn');for(var i=0;i<btns.length;i++){btns[i].classList.remove('active-violet');if(btns[i].dataset.tab===tab)btns[i].classList.add('active-violet')}document.getElementById('right-npcs').classList.toggle('visible',tab==='npcs');document.getElementById('right-npc-quests').classList.toggle('visible',tab==='npc-quests');document.getElementById('right-choices').classList.toggle('visible',tab==='choices');if(tab==='npc-quests'&&!lastData.quests)refreshQuests();if(tab==='choices'&&!lastData.choices)refreshChoices()}

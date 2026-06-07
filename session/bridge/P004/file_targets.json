@@ -1,0 +1,43 @@
+{
+  "creates": [
+    {
+      "path": "federation-game/frontend/fed-fetch.js",
+      "description": "Shared fetch error module: fedFetch(key, url, opts), showToast, updateLinkHealth"
+    }
+  ],
+  "modifies": [
+    {
+      "path": "federation-game/frontend/adult.js",
+      "priority": "P0",
+      "description": "Patch choose() crash L230-256 + fetchEngineStatus() L168-174 + 7 other fetches → fedFetch"
+    },
+    {
+      "path": "federation-game/frontend/index.js",
+      "priority": "P1",
+      "description": "Patch 5 fetches (L158 state, L168 event, L181 choose, L200 vote, L207 flag) → fedFetch; find actual submitVote/flagEvent function names"
+    },
+    {
+      "path": "federation-game/frontend/starmap.js",
+      "priority": "P2",
+      "description": "Patch fetchData() L257-268 → fedFetch('mapData'); patch POST /map/assistant L2928 → fedFetch('mapAssistant', {timeout:15000})"
+    },
+    {
+      "path": "federation-game/frontend/constellation.js",
+      "priority": "P2",
+      "description": "Patch fetchData() L132-141, fetchFactionTech() L143-166, fetchQuestBatch() L168-194 → fedFetch"
+    },
+    {
+      "path": "federation-game/frontend/simulation.js",
+      "priority": "P3",
+      "description": "Replace internal apiFetch L443 with fedFetch at 13 call sites; preserve Promise.all stale fallback L1890"
+    }
+  ],
+  "html_script_tags": [
+    "federation-game/frontend/adult.html",
+    "federation-game/frontend/index.html",
+    "federation-game/frontend/starmap.html",
+    "federation-game/frontend/constellation.html",
+    "federation-game/frontend/simulation.html"
+  ],
+  "notes": "Insert <script src=\"fed-fetch.js\"></script> BEFORE each page's main JS script tag"
+}

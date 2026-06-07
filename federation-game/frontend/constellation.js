@@ -130,67 +130,57 @@ if (mapData) buildNodes();
 // DATA FETCH
 // ============================================================
 async function fetchData() {
-try {
-const resp = await fetch(API);
-if (!resp.ok) return;
-mapData = await resp.json();
-buildNodes();
-updateHUD();
-detectChanges();
-} catch(e) { /* silent */ }
+  const data = await fedFetch('constellationData', API);
+  if (!data) return;
+  mapData = data;
+  buildNodes();
+  updateHUD();
+  detectChanges();
 }
 
 async function fetchFactionTech() {
-try {
-const resp = await fetch('/simulation/faction-tech');
-if (!resp.ok) return;
-const data = await resp.json();
-prevFactionTech = {...factionTechData};
-factionTechData = {};
-const factions = data.factions || data;
-if (Array.isArray(factions)) {
-factions.forEach(f => { factionTechData[f.faction_id || f.id] = f; });
-} else if (typeof factions === 'object') {
-factionTechData = factions;
-}
-for (const [fid, fdata] of Object.entries(factionTechData)) {
-const prevCompleted = ((prevFactionTech[fid] && prevFactionTech[fid].completed_techs) || []).map(t => typeof t === 'string' ? t : t.name || t.id);
-const curCompleted = (fdata.completed_techs || []).map(t => typeof t === 'string' ? t : t.name || t.id);
-for (const techName of curCompleted) {
-if (!prevCompleted.includes(techName)) {
-spawnStarflare(fid, techName);
-}
-}
-}
-} catch(e) { /* silent */ }
+  const data = await fedFetch('factionTech', '/simulation/faction-tech');
+  if (!data) return;
+  prevFactionTech = {...factionTechData};
+  factionTechData = {};
+  const factions = data.factions || data;
+  if (Array.isArray(factions)) {
+    factions.forEach(f => { factionTechData[f.faction_id || f.id] = f; });
+  } else if (typeof factions === 'object') {
+    factionTechData = factions;
+  }
+  for (const [fid, fdata] of Object.entries(factionTechData)) {
+    const prevCompleted = ((prevFactionTech[fid] && prevFactionTech[fid].completed_techs) || []).map(t => typeof t === 'string' ? t : t.name || t.id);
+    const curCompleted = (fdata.completed_techs || []).map(t => typeof t === 'string' ? t : t.name || t.id);
+    for (const techName of curCompleted) {
+      if (!prevCompleted.includes(techName)) {
+        spawnStarflare(fid, techName);
+      }
+    }
+  }
 }
 
 async function fetchQuestBatch() {
-try {
-if (!nodes.length) return;
-const activeNodes = [...nodes].sort((a, b) => ((a.npc && a.npc.last_active) || 0) > ((b.npc && b.npc.last_active) || 0) ? -1 : 1).slice(0, 10);
-for (const node of activeNodes) {
-if (!node.id) continue;
-try {
-const resp = await fetch(`/simulation/npc-quests/${encodeURIComponent(node.id)}`);
-if (!resp.ok) continue;
-const qData = await resp.json();
-questData[node.id] = qData;
-const activeQuests = qData.active_quests || qData.quests || [];
-if (activeQuests.length > 0) {
-let existing = questRings.find(r => r.nodeId === node.id);
-if (!existing) {
-existing = { nodeId: node.id, quests: activeQuests, phase: 0 };
-questRings.push(existing);
-} else {
-existing.quests = activeQuests;
-}
-} else {
-questRings = questRings.filter(r => r.nodeId !== node.id);
-}
-} catch(e) { /* skip this npc */ }
-}
-} catch(e) { /* silent */ }
+  if (!nodes.length) return;
+  const activeNodes = [...nodes].sort((a, b) => ((a.npc && a.npc.last_active) || 0) > ((b.npc && b.npc.last_active) || 0) ? -1 : 1).slice(0, 10);
+  for (const node of activeNodes) {
+    if (!node.id) continue;
+    const qData = await fedFetch('npcQuests', `/simulation/npc-quests/${encodeURIComponent(node.id)}`);
+    if (!qData) continue;
+    questData[node.id] = qData;
+    const activeQuests = qData.active_quests || qData.quests || [];
+    if (activeQuests.length > 0) {
+      let existing = questRings.find(r => r.nodeId === node.id);
+      if (!existing) {
+        existing = { nodeId: node.id, quests: activeQuests, phase: 0 };
+        questRings.push(existing);
+      } else {
+        existing.quests = activeQuests;
+      }
+    } else {
+      questRings = questRings.filter(r => r.nodeId !== node.id);
+    }
+  }
 }
 
 function spawnStarflare(factionId, techName) {
