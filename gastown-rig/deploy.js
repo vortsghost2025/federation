@@ -24,7 +24,7 @@ import { execFileSync } from 'node:child_process';
 
 const VPS_HOST = process.env.VPS_HOST || '187.77.3.56';
 const VPS_USER = process.env.VPS_USER || 'root';
-const VPS_KEY_PATH = process.env.VPS_KEY_PATH || join(homedir(), '.ssh', 'id_ed25519');
+const VPS_KEY_PATH = process.env.VPS_KEY_PATH || join(homedir(), '.ssh', 'id_rsa');
 const FEDERATION_DIR = process.env.FEDERATION_DIR || process.cwd();
 const VPS_BASE_DIR = process.env.VPS_BASE_DIR || '/docker/federation-game';
 

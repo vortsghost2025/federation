@@ -18,7 +18,7 @@ import { homedir } from 'node:os';
 
 const VPS_HOST = process.env.VPS_HOST || '187.77.3.56';
 const VPS_USER = process.env.VPS_USER || 'root';
-const VPS_KEY_PATH = process.env.VPS_KEY_PATH || join(homedir(), '.ssh', 'id_ed25519');
+const VPS_KEY_PATH = process.env.VPS_KEY_PATH || join(homedir(), '.ssh', 'id_rsa');
 
 // Parse --cmd argument
 const cmdIdx = process.argv.indexOf('--cmd');
