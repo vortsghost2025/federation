@@ -56,10 +56,32 @@ for _i in range(1, 9):
     if _k and _k not in NIM_API_KEYS:
         NIM_API_KEYS.append(_k)
 
-# Model priority chain -- Qwen3 Coder is best for content (not a thinking model)
-# Minimax is a thinking model (reasoning_content) -- handled but less ideal
-# Gemma is slow but works as last resort
+# Model priority chain -- Fast models first, no slow Google models
 MODEL_CHAIN = [
+    {
+        "id": "nvidia/gpt-oss-120b",
+        "max_tokens_default": 4096,
+        "temperature_default": 0.7,
+        "top_p_default": 0.8,
+        "is_thinking_model": False,
+        "timeout": 15,
+    },
+    {
+        "id": "zhipu/glm-5.1",
+        "max_tokens_default": 8192,
+        "temperature_default": 0.7,
+        "top_p_default": 0.8,
+        "is_thinking_model": False,
+        "timeout": 15,
+    },
+    {
+        "id": "nvidia/nemotron-3-ultra",
+        "max_tokens_default": 4096,
+        "temperature_default": 0.7,
+        "top_p_default": 0.8,
+        "is_thinking_model": False,
+        "timeout": 12,
+    },
     {
         "id": "qwen/qwen3-coder-480b-a35b-instruct",
         "max_tokens_default": 4096,
@@ -76,14 +98,6 @@ MODEL_CHAIN = [
         "is_thinking_model": True,
         "timeout": 20,
     },
-    {
-        "id": "google/gemma-4-31b-it",
-        "max_tokens_default": 16384,
-        "temperature_default": 1.0,
-        "top_p_default": 0.95,
-        "is_thinking_model": False,
-        "timeout": 30,
-    },
 ]
 
 # Rate limit config
@@ -91,10 +105,9 @@ COOLDOWN_SECONDS = 60
 MAX_CALLS_PER_CYCLE = 30
 MAX_CALLS_PER_KEY_PER_MINUTE = 20
 
-# NIM per-attempt timeout — reduced from 20s to 12s for faster fail-over.
-# NIM typically responds in 2-8s; 12s gives ample margin while preventing
-# a single slow model from blocking the entire NPC tick.
-NIM_PER_ATTEMPT_TIMEOUT = 12
+# NIM per-attempt timeout — reduced to 10s for faster fail-over with faster models.
+# GPT-OSS-120B, GLM-5.1, Nemotron-3-Ultra typically respond in 3-8s.
+NIM_PER_ATTEMPT_TIMEOUT = 10
 
 # ---------------------------------------------------------------------------
 # Ollama configuration -- local GPU inference via Tailscale
