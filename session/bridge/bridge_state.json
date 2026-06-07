@@ -1,14 +1,20 @@
 {
   "version": "1.0",
   "schema_version": "1.0",
-  "active_plan": "P001",
-  "active_plan_path": "session/bridge/P001/",
+  "active_plan": "P002",
+  "active_plan_path": "session/bridge/P002/",
   "status": "completed",
   "last_sync": "2026-06-07T00:00:00Z",
   "plan_history": [
     {
       "plan_id": "P001",
       "title": "Build Agent Bridge System",
+      "status": "completed",
+      "completed_at": "2026-06-07T00:00:00Z"
+    },
+    {
+      "plan_id": "P002",
+      "title": "Frontend choice_token Integration",
       "status": "completed",
       "completed_at": "2026-06-07T00:00:00Z"
     }

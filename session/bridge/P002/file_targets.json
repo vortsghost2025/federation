@@ -1,0 +1,9 @@
+{
+  "create": [],
+  "modify": [
+    "federation-game/frontend/index.js",
+    "federation-game/frontend/bridge.js",
+    "federation-game/frontend/adult.js"
+  ],
+  "delete": []
+}

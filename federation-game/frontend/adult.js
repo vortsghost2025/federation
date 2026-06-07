@@ -17,6 +17,7 @@ const API_URL = '';
 
         let state = null;
         let currentEvent = null;
+        let currentChoiceToken = null;
 
         function listPreview(items, limit = 6) {
             return (items || []).slice(0, limit).map(item => `<span class="tag">${item}</span>`).join('');
@@ -218,7 +219,9 @@ function updateEvent(event) {
     try {
       const resp = await fetch(`${API_URL}/event`);
       if (!resp.ok) throw new Error(`Event ${resp.status}`);
-      updateEvent(await resp.json());
+      const data = await resp.json();
+      currentChoiceToken = data.choice_token || null;
+      updateEvent(data);
     } catch (e) {
       console.error('Failed to fetch event:', e);
     }
@@ -226,10 +229,13 @@ function updateEvent(event) {
 
 async function choose(choiceId) {
   try {
-    const response = await fetch(`${API_URL}/choose/${choiceId}`, { method: 'POST' });
+    const response = await fetch(`${API_URL}/choose/${choiceId}?choice_token=${currentChoiceToken || ''}`, { method: 'POST' });
     const result = await response.json();
 
     if (result.error && !result.outcome) {
+      if (String(result.error).includes('choice token')) {
+        currentChoiceToken = null;
+      }
       await fetchState();
       await loadEvent();
       return;
