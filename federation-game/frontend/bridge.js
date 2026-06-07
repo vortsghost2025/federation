@@ -2,6 +2,7 @@ const API = '';
 let currentEvent = null;
 let gameState = null;
 let consciousness = null;
+let currentChoiceToken = null;
 let rivalsData = null;
 let factionsData = null;
 let decisionLog = [];
@@ -788,6 +789,7 @@ async function fetchEvent() {
   try {
     const data = await trackedFetch('event', `${API}/event`);
     currentEvent = data;
+    currentChoiceToken = data.choice_token || null;
     loadEvent(data);
   } catch(e) {
     addComms('EVENT LINK UNSTABLE');
@@ -852,9 +854,12 @@ async function makeChoice(choiceId) {
   playChoiceSound();
 
   try {
-    const data = await trackedFetch('choose', `${API}/choose/${choiceId}`, { method: 'POST' });
+    const data = await trackedFetch('choose', `${API}/choose/${choiceId}?choice_token=${currentChoiceToken || ''}`, { method: 'POST' });
 
     if (data.error && !data.outcome) {
+      if (String(data.error).includes('choice token')) {
+        currentChoiceToken = null;
+      }
       currentEvent = null;
       await fetchState();
       await fetchEvent();

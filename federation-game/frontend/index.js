@@ -14,6 +14,7 @@ const API_URL = '';
 
         let gameState = null;
         let currentEvent = null;
+        let currentChoiceToken = null;
 
         const METRIC_LABELS = {
             credits: 'credits',
@@ -166,6 +167,7 @@ const API_URL = '';
             try {
                 const resp = await fetch(`${API_URL}/event`);
                 const data = await resp.json();
+                currentChoiceToken = data.choice_token || null;
                 loadEvent(data);
             } catch (e) {
                 console.error('Failed to fetch event:', e);
@@ -176,10 +178,13 @@ async function makeChoice(choiceId) {
   if (!currentEvent) return;
 
   try {
-    const resp = await fetch(`${API_URL}/choose/${choiceId}`, { method: 'POST' });
+    const resp = await fetch(`${API_URL}/choose/${choiceId}?choice_token=${currentChoiceToken || ''}`, { method: 'POST' });
     const data = await resp.json();
 
     if (data.error && !data.outcome) {
+      if (String(data.error).includes('choice token')) {
+        currentChoiceToken = null;
+      }
       await fetchState();
       await newEvent();
       return;
