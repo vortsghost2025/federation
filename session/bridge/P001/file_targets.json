@@ -1,0 +1,15 @@
+{
+  "create": [
+    "session/bridge/bridge_state.json",
+    ".opencode/skills/bridge-write/SKILL.md",
+    ".opencode/skills/bridge-read/SKILL.md",
+    ".opencode/skills/bridge-sync/SKILL.md",
+    "session/bridge/P001/plan.md",
+    "session/bridge/P001/context_pack.md",
+    "session/bridge/P001/file_targets.json",
+    "session/bridge/P001/constraints.md",
+    "session/bridge/P001/verification.md"
+  ],
+  "modify": [],
+  "delete": []
+}
