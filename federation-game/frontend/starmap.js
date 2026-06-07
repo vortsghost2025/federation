@@ -62,6 +62,8 @@ const _forceLegacy = (_urlParams.has('spatial') && _urlParams.get('spatial') ===
 || (_urlParams.has('debug') && _urlParams.get('debug') === 'legacy-layout');
 // SPATIAL_RENDERING_ENABLED checked from API response — if backend sets it false, respect that
 const REGION_COLORS = { core: '#4fc3f7', inner: '#66bb6a', outer: '#ffa726', frontier: '#ef5350' };
+// Track if spatial mode was ever successfully activated (sticky)
+let _spatialModeEverActivated = false;
 let zoom = 1;
 let panX = 0, panY = 0;
 let dragging = false, dragStartX, dragStartY, panStartX, panStartY;
@@ -504,26 +506,32 @@ function buildNodes() {
   // 1. URL params: ?spatial=false or ?debug=legacy-layout → force legacy
   // 2. Backend flag: mapData.spatial_rendering_enabled === false → force legacy
   // 3. Minimum visible-size: if computed scale would be too tiny, fall back
+  // 4. Sticky spatial mode: if spatial mode was ever successfully activated, stay in spatial mode
   const sectors = mapData.sectors;
-  if (sectors && sectors.length > 0 && !_forceLegacy && mapData.spatial_rendering_enabled !== false) {
+  const forceSpatial = _spatialModeEverActivated && !_forceLegacy;
+  if ((sectors && sectors.length > 0 && !_forceLegacy && mapData.spatial_rendering_enabled !== false) || forceSpatial) {
     // Pre-check: would the spatial map be meaningfully visible?
     let mnX=Infinity, mxX=-Infinity, mnY=Infinity, mxY=-Infinity;
     for (const s of sectors) { if(s.x<mnX)mnX=s.x; if(s.x>mxX)mxX=s.x; if(s.y<mnY)mnY=s.y; if(s.y>mxY)mxY=s.y; }
     const rX=Math.max(1,mxX-mnX), rY=Math.max(1,mxY-mnY);
     const preScale = Math.min((W*SPATIAL_FILL_RATIO)/rX, (H*SPATIAL_FILL_RATIO)/rY);
-    // If scale < 0.3, the map is too compressed to be readable — fall back
-    if (preScale >= 0.3) {
+    // If scale < 0.3, the map is too compressed to be readable — fall back (unless sticky)
+    if (preScale >= 0.3 || forceSpatial) {
       buildNodesSpatial();
       return;
     }
-    // Scale too small — fall through to legacy layout
-    console.warn('[SPATIAL] Computed scale', preScale.toFixed(3), 'is below minimum 0.3 — falling back to legacy layout');
-}
- console.log('[SPATIAL] Falling back to legacy layout (kill switch or small scale)');
-  spatialMode = false; // fallback to cosmetic layout
-  spatialSectors = {};
-  spatialAdjacencies = [];
-  spatialSectorNodes = [];
+    // Scale too small — fall through to legacy layout (unless sticky)
+    if (!forceSpatial) {
+      console.warn('[SPATIAL] Computed scale', preScale.toFixed(3), 'is below minimum 0.3 — falling back to legacy layout');
+    }
+  }
+  if (!forceSpatial) {
+    console.log('[SPATIAL] Falling back to legacy layout (kill switch or small scale)');
+    spatialMode = false; // fallback to cosmetic layout
+    spatialSectors = {};
+    spatialAdjacencies = [];
+    spatialSectorNodes = [];
+  }
   let npcs = mapData.npcs || [];
   const npcLocations = mapData.npc_locations || [];
   // Merge npcs with npc_locations: add missing NPCs from locations, and add position data to existing NPCs
@@ -1112,6 +1120,8 @@ cell.centroid = polyCentroid(cell.polygon);
   }
 
   spatialMode = true;
+  _spatialModeEverActivated = true; // sticky: once spatial mode works, stay in spatial mode
+  try { localStorage.setItem('fed_smap_spatial', 'true'); } catch(e) {}
 
   // Store spatial bounds for FIT button and future reference
   spatialBounds = { midX, midY, sectorScale, rangeX, rangeY, minX, maxX, minY, maxY };
@@ -2854,6 +2864,8 @@ function toggleFocusFaction() {
 
 function initStarmapReadableMode() {
   try {
+    var spatialSaved = localStorage.getItem('fed_smap_spatial');
+    if (spatialSaved === 'true') _spatialModeEverActivated = true;
     var saved = localStorage.getItem('fed_smap_readable');
     if (saved === 'true') {
       toggleStarmapReadableMode();
