@@ -57,9 +57,11 @@ for _i in range(1, 9):
         NIM_API_KEYS.append(_k)
 
 # Model priority chain -- Fast models first, no slow Google models
+# gpt-oss-120b is the primary model (user preference)
+# GLM-5.1 and Nemotron-3-Ultra as fast fallbacks
 MODEL_CHAIN = [
     {
-        "id": "nvidia/gpt-oss-120b",
+        "id": "openai/gpt-oss-120b",
         "max_tokens_default": 4096,
         "temperature_default": 0.7,
         "top_p_default": 0.8,
@@ -75,7 +77,7 @@ MODEL_CHAIN = [
         "timeout": 15,
     },
     {
-        "id": "nvidia/nemotron-3-ultra",
+        "id": "nvidia/nemotron-3-ultra-550b-a55b",
         "max_tokens_default": 4096,
         "temperature_default": 0.7,
         "top_p_default": 0.8,
