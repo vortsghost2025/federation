@@ -1,4 +1,3 @@
-<style>
 
 :root{--amber:#FF9800;--amber-dim:rgba(255,152,0,0.15);--cyan:#00BCD4;--cyan-dim:rgba(0,188,212,0.12);--violet:#CE93D8;--red:#F44336;--red-dim:rgba(244,67,54,0.12);--green:#4CAF50;--green-dim:rgba(76,175,80,0.12);--white:#e0e0e0;--dim:#90A4AE;--panel-bg:rgba(8,12,20,0.94);--panel-border:rgba(0,188,212,0.15);--glow-cyan:0 0 10px rgba(0,188,212,0.25);--glow-amber:0 0 10px rgba(255,152,0,0.25);--sev-critical:#F44336;--sev-severe:#E91E63;--sev-high:#FF9800;--sev-medium:#FFC107;--sev-low:#4CAF50;--sev-stable:#00BCD4;--sev-calm:#81C784}
 *{margin:0;padding:0;box-sizing:border-box}
@@ -903,4 +902,3 @@ html{height:auto;min-height:100vh}body{height:auto;min-height:100vh;overflow-x:h
 .readable-mode .npc-noise-toggle {
   display: flex !important;
 }
-</style>

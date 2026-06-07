@@ -204,7 +204,7 @@ async function fetchPolitical() {
   document.getElementById('pol-status').textContent = data.system_available ? 'Online' : 'Offline';
   document.getElementById('pol-status').style.color = data.system_available ? 'var(--green)' : 'var(--dim)';
   if (data.status) {
-    document.getElementById('pol-laws').textContent = data.status.laws_processed ?? data.status.total_laws ?? '--';
+    document.getElementById('pol-laws').textContent = (data.status.laws_processed != null ? data.status.laws_processed : (data.status.total_laws != null ? data.status.total_laws : '--'));
   }
   return data;
 }
@@ -230,9 +230,9 @@ async function fetchFactions() {
 async function fetchConsciousness() {
   const data = await apiFetch('/consciousness');
   if (!data || !data.system_available) return;
-  setCC('cc-coherence', 'ccv-coherence', data.morale ?? data.coherence, 100);
-  setCC('cc-stability', 'ccv-stability', data.stability ?? data.identity, 100);
-  setCC('cc-awakeness', 'ccv-awakeness', data.confidence ?? data.awakeness, 100);
+  setCC('cc-coherence', 'ccv-coherence', (data.morale != null ? data.morale : data.coherence), 100);
+  setCC('cc-stability', 'ccv-stability', (data.stability != null ? data.stability : data.identity), 100);
+  setCC('cc-awakeness', 'ccv-awakeness', (data.confidence != null ? data.confidence : data.awakeness), 100);
   setCC('cc-anxiety', 'ccv-anxiety', data.anxiety, 100);
   setCC('cc-diplomacy', 'ccv-diplomacy', data.diplomacy_tendency, 100);
   return data;
@@ -242,7 +242,7 @@ async function fetchHistoryArc() {
   const data = await apiFetch('/history-arc');
   if (!data) return;
   document.getElementById('era-name').textContent = (data.current_era || '--').toUpperCase() + ' ERA';
-  document.getElementById('era-year').textContent = 'YEAR ' + (data.year ?? '--');
+  document.getElementById('era-year').textContent = 'YEAR ' + (data.year != null ? data.year : '--');
   document.getElementById('era-status').textContent = data.initialized ? 'ACTIVE' : 'DORMANT';
   document.getElementById('era-status').style.color = data.initialized ? 'var(--green)' : 'var(--dim)';
   if (data.current_era) document.getElementById('top-era').textContent = data.current_era.toUpperCase();
@@ -284,7 +284,7 @@ async function fetchMapData() {
       const color = domain.includes('rival') || domain.includes('hostile') ? 'var(--red)' :
                     domain.includes('constitutional') ? 'var(--violet)' :
                     domain.includes('consciousness') ? 'var(--green)' : 'var(--dim)';
-      html += `<div style="padding:2px 0;border-bottom:1px solid rgba(79,195,247,0.04)"><span style="color:${color};font-size:9px">${domain.toUpperCase()}</span> <span>${e.title || e.description?.substring(0,40) || 'Event'}</span></div>`;
+      html += `<div style="padding:2px 0;border-bottom:1px solid rgba(79,195,247,0.04)"><span style="color:${color};font-size:9px">${domain.toUpperCase()}</span> <span>${e.title || (e.description && e.description.substring(0,40)) || 'Event'}</span></div>`;
     }
     panel.innerHTML = html;
   } else {

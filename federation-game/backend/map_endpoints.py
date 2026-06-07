@@ -1114,7 +1114,16 @@ async def get_map_data(spatial: bool = True):
     # --- NPCs (each built in its own function call) ---
     try:
         mood_keys = r.keys("npc_mood:*")
-        npc_ids = [k.replace("npc_mood:", "") for k in mood_keys]
+        npc_ids = set(k.replace("npc_mood:", "") for k in mood_keys)
+
+        # Also include spatial NPCs that might not have traditional mood keys
+        spatial_keys = r.keys("npc_location:*")
+        for key in spatial_keys:
+            parts = key.split(":")
+            if len(parts) >= 3 and parts[0] == "npc_location" and parts[1] != "sector":
+                npc_id = ":".join(parts[2:])
+                npc_ids.add(npc_id)
+
         npc_ids = [nid for nid in npc_ids if not nid.startswith("test_")]
 
         enriched = []

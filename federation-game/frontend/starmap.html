@@ -1,11 +1,202 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <link rel="stylesheet" href="starmap.css">
+<link rel="stylesheet" href="starmap.css">
+<link rel="preload" href="./photos/Helix-Nebula-Chandra-Archive-7f9c730.webp" as="image" />
 
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Federation Star Map</title>
+<title>🌌 Federation Galaxy</title>
+
+  <style>
+    :root {
+      /* Midnight Cosmos Theme */
+      --midnight-canvas: rgba(15, 25, 50, 0.9);
+      --shockwave-accent: rgba(79, 195, 247, 0.8);
+      --nebula-pink: rgba(145, 71, 126, 0.6);
+      --nebula-teal: rgba(115, 120, 69, 0.5);
+      --cosmic-text: rgba(226, 223, 208, 0.9);
+      --cosmic-edge: rgba(79, 195, 247, 0.1);
+    }
+
+    /* Event Card Astral Styling */
+    .event-card {
+      position: relative;
+      background-color: rgba(20, 25, 50, 0.85);
+      border: 1px solid var(--shockwave-accent);
+      border-radius: 6px;
+      margin-bottom: 12px;
+      overflow: hidden;
+      color: var(--cosmic-text);
+      backdrop-filter: blur(6px);
+      animation: fadeInCard 0.4s cubic-bezier(0.25, 0.8, 0.25, 1) both;
+    }
+    .event-header {
+      display: flex;
+      justify-content: space-between;
+      padding: 6px 10px;
+      border-bottom: 1px solid var(--cosmic-edge);
+      font-size: 0.8rem;
+      letter-spacing: 0.05em;
+    }
+    .event-stamp {
+      opacity: 0.8;
+    }
+    .event-badge {
+      padding: 2px 6px;
+      border-radius: 3px;
+      font-size: 0.7rem;
+      font-weight: 600;
+    }
+    .cosmic-info { background-color: rgba(79, 195, 247, 0.2); border: 1px solid #4fc3f7; }
+    .cosmic-major { background-color: rgba(255, 215, 0, 0.2); border: 1px solid #ffd700; }
+    .cosmic-dim { background-color: rgba(158, 158, 158, 0.2); border: 1px solid #9e9e9e; }
+    .cosmic-anomaly { background-color: rgba(171, 71, 188, 0.2); border: 1px solid #ab47bc; }
+    .event-body {
+      padding: 10px;
+      font-size: 0.85rem;
+    }
+    .event-body p {
+      margin: 0;
+      line-height: 1.4;
+    }
+    .astro-alert {
+      margin-top: 6px;
+      padding: 4px 6px;
+      background-color: rgba(171, 71, 188, 0.1);
+      border-left: 3px solid #ab47bc;
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      font-size: 0.75rem;
+      border-radius: 0 0 3px 3px;
+    }
+    .cosmic-text {
+      text-shadow: 0 1px 2px rgba(0, 0, 0, 0.8);
+    }
+    .galaxy-svg {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      opacity: 0.1;
+      z-index: -1;
+    }
+
+    @keyframes fadeInCard {
+      from { opacity: 0; transform: translateY(8px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    /* Masonry layout */
+    #bulletin-feed {
+      columns: 2;
+      column-gap: 12px;
+      padding: 12px;
+      height: 60vh;
+      overflow-y: auto;
+    }
+
+  /* Astral Mode */
+  body {
+    background-color: var(--midnight-canvas);
+    color: #e2dfd0;
+    font-family: "Titillium Web", "Courier New", monospace;
+  }
+  body.galaxy-mode-astral {
+    background-image: url("./photos/Helix-Nebula-Chandra-Archive-7f9c730.webp");
+    background-size: cover;
+    background-position: center;
+    background-attachment: fixed;
+  }
+
+  /* WCAG Readable Mode */
+  body.readable-mode {
+    background-color: #f5f5f5;
+    color: #1a237e;
+  }
+  body.readable-mode.galaxy-mode-astral {
+    background-image: none;
+  }
+
+  .radial-gauge {
+    width: 48px;
+    height: 48px;
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .gauge-svg {
+    transform: rotate(-90deg);
+  }
+  .gauge-bg {
+    stroke: rgba(255, 255, 255, 0.1);
+    stroke-width: 4;
+    fill: none;
+  }
+  .gauge-progress {
+    stroke: var(--gauge-color);
+    stroke-width: 4;
+    fill: none;
+    stroke-linecap: round;
+    transition: stroke-dashoffset 0.4s cubic-bezier(0.25, 0.8, 0.25, 1);
+  }
+  .gauge-label {
+    font-size: 0.7rem;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    fill: rgba(226, 223, 208, 0.9);
+    text-shadow: 0 2px 4px rgba(0, 0, 0, 0.5);
+  }
+
+  /* Faction Banner Tooltips */
+  .faction-tooltip {
+    position: absolute;
+    opacity: 0;
+    max-width: 320px;
+    height: auto;
+    background-color: rgba(20, 25, 50, 0.95);
+    color: #e2dfd0;
+    border: 1px solid var(--shockwave-accent);
+    border-radius: 6px;
+    padding: 12px;
+    font-size: 0.875rem;
+    backdrop-filter: blur(8px);
+    transition: opacity 0.3s;
+    pointer-events: none;
+  }
+  .faction-tooltip h3 {
+    font-family: "Orbitron", monospace;
+    font-size: 1.125rem;
+    margin-bottom: 6px;
+    font-weight: 700;
+  }
+  .faction-slogan {
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: rgba(226, 223, 208, 0.7);
+    margin-bottom: 12px;
+  }
+
+  /* Narrative Feed */
+  .narrative-feed .event-card {
+    background-image: url("./photos/Helix-Nebula-Chandra-Archive-7f9c730.webp");
+    background-size: cover;
+    background-position: center;
+    border-radius: 4px;
+    margin-bottom: 6px;
+    color: white;
+    padding: 12px;
+    font-size: 0.875rem;
+    backdrop-filter: blur(4px);
+    border: 1px solid var(--shockwave-accent);
+    box-shadow: 0 2px 12px rgba(0, 0, 0, 0.5);
+  }
+</style>
+
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&family=Titillium+Web:wght@300;400;600&display=swap" rel="stylesheet">
 
 </head>
 <body>
@@ -13,12 +204,48 @@
 <canvas id="starmap"></canvas>
 
 <!-- World state bar -->
-<div id="worldbar">
-<div class="wb-item"><span class="wb-label">Tension</span><div class="wb-bar"><div class="wb-fill" id="wb-tension" style="background:#ef5350"></div></div><span class="wb-val" id="wv-tension">0</span></div>
-<div class="wb-item"><span class="wb-label">Stability</span><div class="wb-bar"><div class="wb-fill" id="wb-stability" style="background:#66bb6a"></div></div><span class="wb-val" id="wv-stability">0</span></div>
-<div class="wb-item"><span class="wb-label">Morale</span><div class="wb-bar"><div class="wb-fill" id="wb-morale" style="background:#ffd700"></div></div><span class="wb-val" id="wv-morale">0</span></div>
-<div class="wb-item"><span class="wb-label">Threat</span><div class="wb-bar"><div class="wb-fill" id="wb-threat" style="background:#f44336"></div></div><span class="wb-val" id="wv-threat">0</span></div>
-<div class="wb-item"><span class="wb-label">Anomaly</span><div class="wb-bar"><div class="wb-fill" id="wb-anomaly" style="background:#ab47bc"></div></div><span class="wb-val" id="wv-anomaly">0</span></div>
+    <div id="worldbar">
+        <!-- Radial Gauges -->
+        <div class="radial-gauge" data-key="tension" style="--gauge-color: #ef5350;">
+            <svg class="gauge-svg" width="48" height="48" viewBox="0 0 48 48">
+                <circle class="gauge-bg" cx="24" cy="24" r="20"></circle>
+                <circle class="gauge-progress" id="gauge-tension" cx="24" cy="24" r="20" stroke-dasharray="125.6" stroke-dashoffset="125.6"></circle>
+                <text x="12" y="32" class="gauge-label">T</text>
+            </svg>
+            <span class="gauge-value" id="wv-tension">0</span>
+        </div>
+        <div class="radial-gauge" data-key="stability" style="--gauge-color: #66bb6a;">
+            <svg class="gauge-svg" width="48" height="48" viewBox="0 0 48 48">
+                <circle class="gauge-bg" cx="24" cy="24" r="20"></circle>
+                <circle class="gauge-progress" id="gauge-stability" cx="24" cy="24" r="20" stroke-dasharray="125.6" stroke-dashoffset="125.6"></circle>
+                <text x="12" y="32" class="gauge-label">S</text>
+            </svg>
+            <span class="gauge-value" id="wv-stability">0</span>
+        </div>
+        <div class="radial-gauge" data-key="morale" style="--gauge-color: #ffd700;">
+            <svg class="gauge-svg" width="48" height="48" viewBox="0 0 48 48">
+                <circle class="gauge-bg" cx="24" cy="24" r="20"></circle>
+                <circle class="gauge-progress" id="gauge-morale" cx="24" cy="24" r="20" stroke-dasharray="125.6" stroke-dashoffset="125.6"></circle>
+                <text x="12" y="32" class="gauge-label">M</text>
+            </svg>
+            <span class="gauge-value" id="wv-morale">0</span>
+        </div>
+        <div class="radial-gauge" data-key="threat" style="--gauge-color: #f44336;">
+            <svg class="gauge-svg" width="48" height="48" viewBox="0 0 48 48">
+                <circle class="gauge-bg" cx="24" cy="24" r="20"></circle>
+                <circle class="gauge-progress" id="gauge-threat" cx="24" cy="24" r="20" stroke-dasharray="125.6" stroke-dashoffset="125.6"></circle>
+                <text x="12" y="32" class="gauge-label">T</text>
+            </svg>
+            <span class="gauge-value" id="wv-threat">0</span>
+        </div>
+        <div class="radial-gauge" data-key="anomaly" style="--gauge-color: #ab47bc;">
+            <svg class="gauge-svg" width="48" height="48" viewBox="0 0 48 48">
+                <circle class="gauge-bg" cx="24" cy="24" r="20"></circle>
+                <circle class="gauge-progress" id="gauge-anomaly" cx="24" cy="24" r="20" stroke-dasharray="125.6" stroke-dashoffset="125.6"></circle>
+                <text x="10" y="32" class="gauge-label">A</text>
+            </svg>
+            <span class="gauge-value" id="wv-anomaly">0</span>
+        </div>
 <div id="tick-indicator"><div id="tick-dot"></div><span id="tick-label">TICK 0</span></div>
 <nav style="margin-left:auto;display:flex;flex-wrap:wrap;gap:4px">
 <a href="/bridge.html" style="color:#78909c;font-size:1rem;text-decoration:none;padding:8px 14px;letter-spacing:1px;text-transform:uppercase;transition:color 0.2s">Bridge</a>
@@ -29,27 +256,33 @@
 <a href="/worldguide.html" style="color:#78909c;font-size:1rem;text-decoration:none;padding:8px 14px;letter-spacing:1px;text-transform:uppercase;transition:color 0.2s">World Guide</a>
 <a href="/earth.html" style="color:#78909c;font-size:1rem;text-decoration:none;padding:8px 14px;letter-spacing:1px;text-transform:uppercase;transition:color 0.2s">Earth</a>
 <button class="help-btn" onclick="toggleHelp()" aria-label="How to read this map" title="How to read this map">?</button>
-<button id="audio-toggle" title="Toggle audio (M)" aria-label="Toggle audio on/off">&#9835;</button>
-<button class="rm-starmap-toggle" id="rm-smap-toggle" onclick="toggleStarmapReadableMode()" aria-label="Toggle readable mode" title="Toggle readable mode">Aa</button>
+        <button id="audio-toggle" title="Toggle audio (M)" aria-label="Toggle audio on/off">&#9835;</button>
+        <button class="astro-mode-toggle" id="astro-mode-toggle" onclick="toggleAstroMode()" aria-label="Toggle galaxy view" title="Toggle galaxy view">🌌</button>
+        <button class="rm-starmap-toggle" id="rm-smap-toggle" onclick="toggleStarmapReadableMode()" aria-label="Toggle readable mode" title="Toggle readable mode">Aa</button>
 </nav>
 </div>
 
-<!-- Event sidebar -->
-<div id="sidebar">
-<h2>Live Events</h2>
-<div id="event-filter">
-<label><input type="checkbox" id="show-all-events"> Show All Events</label>
-</div>
-<div id="event-list"></div>
+    <!-- Event sidebar → Galactic Bulletin Board -->
+    <div id="sidebar">
+        <h2>📜 Galactic Bulletin Board</h2>
+        <div id="bulletin-feed" style="height: 60vh; overflow-y: auto;">
+            <!-- Narrative event cards injected here -->
+            <div id="event-list" style="display:none;"></div>
+        </div>
 <!-- Quick Status — compact overview panel -->
 <div id="starmap-qs" style="display:none;border-top:1px solid rgba(79,195,247,0.15);padding:10px 0;margin-top:6px">
 <div style="color:#4fc3f7;font-size:1rem;letter-spacing:2px;text-transform:uppercase;margin-bottom:8px;display:flex;align-items:center;gap:6px">&#x1F4CA; Quick Status <span id="sqs-tick" style="color:#78909c;font-size:0.8125rem;font-weight:400"></span></div>
 <div id="sqs-body"></div>
 </div>
-<!-- Map legend — tucked inside sidebar so it never floats over the canvas -->
-<div id="map-legend"></div>
+    <!-- Faction Banner Tooltips -->
+    <div id="faction-tooltip-container" class="faction-tooltip-container">
+      <!-- JS-driven dynamic tooltips -->
+    </div>
 
-</div>
+    <!-- Map legend — tucked inside sidebar so it never floats over the canvas -->
+    <div id="map-legend"></div>
+
+    </div>
 </div><!-- AI Assistant Chat -->
 <div class="ai-chat" id="ai-chat">
 <div class="ai-chat-label">Federation Intelligence</div>
@@ -59,10 +292,10 @@
 <button class="ai-chat-send" id="ai-chat-send" onclick="aiChatSend()">Ask</button>
 </div>
 <div class="ai-chat-suggestions" id="ai-chat-suggestions">
-<span class="ai-chat-suggestion" onclick="aiChatAsk(this.textContent)">What's happening in this sector?</span>
-<span class="ai-chat-suggestion" onclick="aiChatAsk(this.textContent)">Which faction controls this system?</span>
-<span class="ai-chat-suggestion" onclick="aiChatAsk(this.textContent)">Who are the key NPCs nearby?</span>
-<span class="ai-chat-suggestion" onclick="aiChatAsk(this.textContent)">What's the current crisis level?</span>
+        <span class="ai-chat-suggestion" onclick="aiChatAsk(this.textContent)">Briefing requested: current situation in Andromeda Nexus</span>
+        <span class="ai-chat-suggestion" onclick="aiChatAsk(this.textContent)">Galactic Intelligence: tensions escalating in contested sectors?</span>
+        <span class="ai-chat-suggestion" onclick="aiChatAsk(this.textContent)">Sector scan query: correlations between plasma vortex and morale?</span>
+        <span class="ai-chat-suggestion" onclick="aiChatAsk(this.textContent)">What catalytic event triggered Cycle 7 anomalies?</span>
 </div>
 
 <!-- NPC detail panel -->

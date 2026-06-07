@@ -154,7 +154,7 @@ factions.forEach(f => { factionTechData[f.faction_id || f.id] = f; });
 factionTechData = factions;
 }
 for (const [fid, fdata] of Object.entries(factionTechData)) {
-const prevCompleted = (prevFactionTech[fid]?.completed_techs || []).map(t => typeof t === 'string' ? t : t.name || t.id);
+const prevCompleted = ((prevFactionTech[fid] && prevFactionTech[fid].completed_techs) || []).map(t => typeof t === 'string' ? t : t.name || t.id);
 const curCompleted = (fdata.completed_techs || []).map(t => typeof t === 'string' ? t : t.name || t.id);
 for (const techName of curCompleted) {
 if (!prevCompleted.includes(techName)) {
@@ -168,7 +168,7 @@ spawnStarflare(fid, techName);
 async function fetchQuestBatch() {
 try {
 if (!nodes.length) return;
-const activeNodes = [...nodes].sort((a, b) => (a.npc?.last_active || 0) > (b.npc?.last_active || 0) ? -1 : 1).slice(0, 10);
+const activeNodes = [...nodes].sort((a, b) => ((a.npc && a.npc.last_active) || 0) > ((b.npc && b.npc.last_active) || 0) ? -1 : 1).slice(0, 10);
 for (const node of activeNodes) {
 if (!node.id) continue;
 try {
@@ -950,8 +950,8 @@ const c = hexToRgb(sf.color);
 if (flashAlpha > 0) {
 const fg = ctx.createRadialGradient(sf.x, sf.y, 0, sf.x, sf.y, 80 * flashAlpha);
 fg.addColorStop(0, `rgba(255,255,255,${flashAlpha * 0.6})`);
-fg.addColorStop(0.4, `rgba(${c?.r||200},${c?.g||200},${c?.b||255},${flashAlpha * 0.3})`);
-fg.addColorStop(1, `rgba(${c?.r||200},${c?.g||200},${c?.b||255},0)`);
+fg.addColorStop(0.4, `rgba(${(c&&c.r)||200},${(c&&c.g)||200},${(c&&c.b)||255},${flashAlpha * 0.3})`);
+                fg.addColorStop(1, `rgba(${(c&&c.r)||200},${(c&&c.g)||200},${(c&&c.b)||255},0)`);
 ctx.beginPath();
 ctx.arc(sf.x, sf.y, 80, 0, Math.PI * 2);
 ctx.fillStyle = fg;
@@ -960,7 +960,7 @@ ctx.fill();
 
 ctx.beginPath();
 ctx.arc(sf.x, sf.y, ringR, 0, Math.PI * 2);
-ctx.strokeStyle = `rgba(${c?.r||200},${c?.g||200},${c?.b||255},${ringAlpha * 0.6})`;
+ctx.strokeStyle = `rgba(${(c&&c.r)||200},${(c&&c.g)||200},${(c&&c.b)||255},${ringAlpha * 0.6})`;
 ctx.lineWidth = 2 + (1 - progress) * 3;
 ctx.stroke();
 
@@ -1049,7 +1049,7 @@ frag.alpha = (1 - progress) * 0.8;
 ctx.beginPath();
 ctx.arc(frag.x, frag.y, 1.5 * (1 - progress), 0, Math.PI * 2);
 const c = hexToRgb(sa.color);
-ctx.fillStyle = `rgba(${c?.r||200},${c?.g||200},${c?.b||255},${frag.alpha})`;
+ctx.fillStyle = `rgba(${(c&&c.r)||200},${(c&&c.g)||200},${(c&&c.b)||255},${frag.alpha})`;
 ctx.fill();
 }
 if (progress < 0.15) {
@@ -1083,7 +1083,7 @@ ctx.beginPath();
 ctx.moveTo(cc.x1, cc.y1);
 ctx.lineTo(cc.x2, cc.y2);
 const c = hexToRgb(cc.color);
-ctx.strokeStyle = `rgba(${c?.r||79},${c?.g||195},${c?.b||247},${alpha})`;
+ctx.strokeStyle = `rgba(${(c&&c.r)||79},${(c&&c.g)||195},${(c&&c.b)||247},${alpha})`;
 ctx.lineWidth = 2;
 ctx.stroke();
 ctx.restore();

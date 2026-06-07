@@ -57,6 +57,19 @@ Frontend files live in `frontend/`, but the VPS serves them from the bind-mounte
 - Container path: `/usr/share/nginx/html`
 
 Frontend changes need the updated files copied into the VPS bind mount. A full dev server is not required.
+The frontend container does **not** serve JS/CSS from `frontend/` once the bind mount is attached, so editing `frontend/starmap.js` alone will not update production.
+To avoid stale-asset regressions, sync the changed frontend files into **both** remote directories, then restart the frontend container:
+
+```powershell
+.\scripts\sync_federation_frontend_to_vps.ps1 -Files starmap.js
+```
+
+That command copies the selected files to:
+
+- `/docker/federation-game/public_html/` (the live bind mount)
+- `/docker/federation-game/frontend/` (the mirrored source directory on the VPS)
+
+Then it restarts `frontend` and curl-checks the public URLs for `200`.
 
 ### Backend
 

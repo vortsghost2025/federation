@@ -82,11 +82,66 @@ async def get_npc(char_id: str):
     }
 
 
+@router.get("/npcs/{char_id}/cognition")
+async def get_npc_cognition(char_id: str):
+    if char_id not in game_state.npc_system.characters:
+        raise HTTPException(status_code=404, detail="Character not found")
+    
+    from npc_cognition import (
+        get_npc_tier, 
+        _is_on_cooldown, 
+        _get_redis,
+        LEADER_COOLDOWN,
+        SPECIALIST_COOLDOWN
+    )
+    
+    r = _get_redis()
+    tier = get_npc_tier(char_id)
+    cooldown_period = LEADER_COOLDOWN if tier == "leader" else SPECIALIST_COOLDOWN
+    
+    result = {
+        "char_id": char_id,
+        "name": game_state.npc_system.characters[char_id].name,
+        "tier": tier,
+        "cooldown_seconds": cooldown_period,
+        "on_cooldown": _is_on_cooldown(char_id, tier),
+        "cognition_state": {},
+        "recent_decisions": [],
+        "last_cognition": None,
+    }
+    
+    # Get cognition state from Redis
+    try:
+        cog_state = r.hgetall(f"npc_cognition:{char_id}")
+        if cog_state:
+            result["cognition_state"] = cog_state
+            if cog_state.get("timestamp"):
+                result["last_cognition"] = float(cog_state["timestamp"])
+    except Exception:
+        pass
+    
+    # Get recent decisions
+    try:
+        decisions_raw = r.zrevrange(f"npc_decisions:{char_id}", 0, 4, withscores=True)
+        for item, score in decisions_raw:
+            try:
+                result["recent_decisions"].append({
+                    "timestamp": score,
+                    "data": json.loads(item)
+                })
+            except (json.JSONDecodeError, TypeError):
+                pass
+    except Exception:
+        pass
+    
+    return result
+
+
 @router.get("/npcs/{char_id}/decisions")
 async def npc_decisions(char_id: str, limit: int = 5):
     if char_id not in game_state.npc_system.characters:
         raise HTTPException(status_code=404, detail="Character not found")
-    from npc_decision_system import get_decision_log
+    from npc_autonomy import get_decision_log
 
     decisions = get_decision_log(char_id, limit=limit)
     return {"char_id": char_id, "decisions": decisions, "count": len(decisions)}
@@ -99,7 +154,7 @@ async def npc_evaluate_decisions(char_id: str):
     character = game_state.npc_system.characters[char_id]
     archetype = character.personality_type.value
     affiliation = character.affiliation
-    from npc_decision_system import evaluate_decision_options, get_mood
+    from npc_autonomy import evaluate_decision_options, get_mood
 
     mood = get_mood(char_id)
     options = evaluate_decision_options(

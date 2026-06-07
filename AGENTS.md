@@ -96,6 +96,24 @@ Agent tests, fixes, reports in plain language
 
 ---
 
+## CRITICAL ARCHITECTURE CONSTRAINTS
+
+**Any agent editing Federation backend code MUST respect these constraints. Violating them re-introduces a 2-hour production bug.**
+
+### 1. NO `--workers` FLAG IN DOCKER-COMPOSE
+The backend runs a single `game_state` singleton in memory. If `--workers N` (N > 1) is added to `docker-compose.yml`, each worker gets its own `game_state` — causing `/event` to set `current_event` on worker A and `/choose` to find `current_event=None` on worker B. **This MUST stay single-process.** If scaling is needed, use an external state store (Redis/DB), not Uvicorn workers.
+
+### 2. `/choose` ENDPOINT MUST ALWAYS RETURN `"outcome"` KEY
+The frontend calls `data.outcome.toUpperCase()` on every response. If any error path returns a bare `HTTPException` (400/503) instead of a JSON object with `"outcome": ""`, the frontend crashes with a TypeError. **All error returns from `/choose` must include `"outcome": ""`** — never `raise HTTPException`.
+
+### 3. `gs.current_event = None` AFTER SUCCESSFUL CHOICE IS INTENTIONAL
+At the end of `make_choice()` in `core.py`, the line `gs.current_event = None` clears the event after the player has chosen. This is correct — without it, the same event could be chosen again. **Do not remove this line.**
+
+### 4. VPS HAS NO GIT REPO
+Files at `/docker/federation-game/` are deployed via `scp`. There is no `.git` on the VPS. If you edit files there, you are editing production directly. Always verify after editing.
+
+---
+
 ## THE WORDS THAT MATTER
 
 "Working. Here is what you see:"

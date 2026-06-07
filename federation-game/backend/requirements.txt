@@ -23,5 +23,8 @@ openai>=1.0.0
 # ── Notifications ──
 apprise>=1.6.0
 
+# ── Migrations ──
+alembic>=1.12.0
+
 # ── Testing ──
 pytest>=7.4.0

@@ -228,6 +228,13 @@ async function choose(choiceId) {
   try {
     const response = await fetch(`${API_URL}/choose/${choiceId}`, { method: 'POST' });
     const result = await response.json();
+
+    if (result.error && !result.outcome) {
+      await fetchState();
+      await loadEvent();
+      return;
+    }
+
     if (result.new_state) {
       updateState(result.new_state);
       const turnEl = document.getElementById('turnCounter');
@@ -458,7 +465,7 @@ function resetFromGameover() {
     const keys = Object.keys(entries).filter(k => typeof entries[k] === 'object' && entries[k].name);
     grid.innerHTML = keys.slice(0, 6).map(key => {
       const r = entries[key];
-      const rel = r.relationships?.player || 'neutral';
+      const rel = (r.relationships && r.relationships.player) || 'neutral';
       const relClass = rel === 'hostile' ? 'hostile' : rel === 'friendly' ? 'friendly' : 'neutral';
       return `<div class="rival-entry ${relClass}">
         <strong>${r.name}</strong>

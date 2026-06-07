@@ -23,6 +23,11 @@ services:
 
   backend:
     build: /docker/federation-game/backend
+    # ── DO NOT ADD --workers FLAG ──
+    # The backend uses a single in-memory game_state singleton.
+    # Multiple workers = multiple singletons = /event sets current_event
+    # on worker A but /choose reads None on worker B = 2-hour production bug.
+    # If you need scaling, use Redis or an external state store instead.
     command:
       - uvicorn
       - main:app
@@ -50,10 +55,6 @@ services:
       - redis
     networks:
       - fed-net
-    deploy:
-      resources:
-        limits:
-          cpus: "1.0"
     labels:
       - traefik.enable=true
       - "traefik.http.routers.fed-api.rule=Host(`federation-game.deliberatefederation.cloud`) && (PathPrefix(`/npcs`) || PathPrefix(`/world`) || Path(`/simulation`) || PathPrefix(`/simulation/`) || PathPrefix(`/spatial`) || PathPrefix(`/sectors`) || Path(`/event`) || PathPrefix(`/political`) || PathPrefix(`/factions`) || PathPrefix(`/broadcast-events`) || PathPrefix(`/quests`) || PathPrefix(`/technology`) || PathPrefix(`/history-arc`) || PathPrefix(`/atlas`) || PathPrefix(`/consciousness`) || PathPrefix(`/engine-status`) || PathPrefix(`/map/`) || PathPrefix(`/state`) || PathPrefix(`/systems-overview`) || PathPrefix(`/timeline`) || PathPrefix(`/rivals`) || PathPrefix(`/reset`) || PathPrefix(`/log`) || PathPrefix(`/choose`) || PathPrefix(`/ws`) || PathPrefix(`/healthz`) || PathPrefix(`/docs`) || PathPrefix(`/openapi.json`) || PathPrefix(`/redoc`) || PathPrefix(`/cognition`) || PathPrefix(`/narrator`))"
@@ -80,6 +81,11 @@ services:
       - "traefik.http.routers.fed-api-http.priority=100"
       - traefik.http.routers.fed-api-http.service=fed-api-http-svc
       - traefik.http.services.fed-api-http-svc.loadbalancer.server.port=8000
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 512M
 
   frontend:
     build: /docker/federation-game/frontend
@@ -138,6 +144,7 @@ services:
       resources:
         limits:
           cpus: "0.50"
+          memory: 256M
 
   postgres:
     image: postgres:15-alpine
@@ -156,6 +163,10 @@ services:
       start_period: 10s
     networks:
       - fed-net
+    deploy:
+      resources:
+        limits:
+          memory: 256M
 
   redis:
     image: redis:7-alpine
@@ -171,6 +182,10 @@ services:
       start_period: 5s
     networks:
       - fed-net
+    deploy:
+      resources:
+        limits:
+          memory: 128M
 
   adminer:
     image: adminer:latest

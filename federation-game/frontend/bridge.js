@@ -853,6 +853,15 @@ async function makeChoice(choiceId) {
 
   try {
     const data = await trackedFetch('choose', `${API}/choose/${choiceId}`, { method: 'POST' });
+
+    if (data.error && !data.outcome) {
+      currentEvent = null;
+      await fetchState();
+      await fetchEvent();
+      addComms('EVENT REFRESHED');
+      return;
+    }
+
     showOutcome(data);
     gameState = data.new_state || gameState;
     updateTopRibbon(gameState);
@@ -1131,7 +1140,7 @@ function showOutcome(data) {
     if (data.game_victory) {
       titleEl.textContent = data.game_victory;
       titleEl.style.color = 'var(--green)';
-      textEl.textContent = `The Federation survived ${gameState?.turn || 100} turns.`;
+      textEl.textContent = `The Federation survived ${(gameState && gameState.turn) || 100} turns.`;
       playTone(523, 0.3, 0.08, 'sine');
       setTimeout(() => playTone(659, 0.3, 0.08, 'sine'), 200);
       setTimeout(() => playTone(784, 0.5, 0.1, 'sine'), 400);

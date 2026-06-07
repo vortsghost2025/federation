@@ -66,7 +66,7 @@ class DatabaseManager:
                     max_attempts,
                 )
                 self._engine = create_engine(database_url, pool_pre_ping=True)
-                Base.metadata.create_all(self._engine)
+                self._run_alembic_upgrade(database_url)
                 self._SessionLocal = sessionmaker(bind=self._engine)
                 self._initialized = True
                 logger.info("DB initialized successfully on attempt %d", attempt)
@@ -81,6 +81,45 @@ class DatabaseManager:
         self._SessionLocal = None
         self._initialized = False
         return False
+
+    def _run_alembic_upgrade(self, database_url: str) -> None:
+        try:
+            from alembic.config import Config as AlembicConfig
+            from alembic.script import ScriptDirectory
+            from alembic.runtime.migration import MigrationContext
+            from sqlalchemy import inspect as sa_inspect
+
+            alembic_cfg = AlembicConfig()
+            alembic_cfg.set_main_option("script_location", "alembic")
+            alembic_cfg.set_main_option("sqlalchemy.url", database_url)
+
+            with self._engine.connect() as conn:
+                context = MigrationContext.configure(conn)
+                current_rev = context.get_current_revision()
+
+            script = ScriptDirectory.from_config(alembic_cfg)
+            head_rev = script.get_current_head()
+
+            if current_rev is None:
+                inspector = sa_inspect(self._engine)
+                existing_tables = inspector.get_table_names()
+                if "game_snapshots" in existing_tables:
+                    from alembic import command
+                    logger.info("Existing tables found — stamping Alembic at %s", head_rev)
+                    command.stamp(alembic_cfg, head_rev)
+                else:
+                    from alembic import command
+                    logger.info("No existing tables — running Alembic upgrade to %s", head_rev)
+                    command.upgrade(alembic_cfg, head_rev)
+            elif current_rev != head_rev:
+                from alembic import command
+                logger.info("Migrating from %s to %s", current_rev, head_rev)
+                command.upgrade(alembic_cfg, head_rev)
+            else:
+                logger.info("Alembic already at head (%s)", head_rev)
+        except Exception as exc:
+            logger.warning("Alembic migration skipped (non-fatal): %s", exc)
+            Base.metadata.create_all(self._engine)
 
     def save_snapshot(
         self,

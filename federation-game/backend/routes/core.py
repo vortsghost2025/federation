@@ -10,8 +10,9 @@ Once those data blocks are extracted to data/events.py, update the imports here.
 import json
 import random
 from datetime import datetime
-from typing import Dict, List, Any
-from fastapi import APIRouter, HTTPException
+from typing import Any, Dict, List, Optional
+
+from fastapi import APIRouter, Query
 
 from state import (
     game_state,
@@ -248,9 +249,22 @@ def _build_explainability(event, choice, deltas):
 
 
 @router.post("/choose/{choice_id}")
-async def make_choice(choice_id: str):
+async def make_choice(choice_id: str, choice_token: Optional[str] = Query(None)):
     gs = game_state
-    if not gs.current_event:
+    choice_token = choice_token.strip() if isinstance(choice_token, str) else None
+
+    if choice_token:
+        event = gs.pop_pending_choice_event(choice_token)
+        if not event:
+            return {
+                "outcome": "",
+                "error": "Invalid choice token",
+                "reward": {},
+                "blocked_by_no_gate": False,
+            }
+    elif gs.current_event:
+        event = gs.current_event
+    else:
         # No active event – return minimal JSON to avoid frontend TypeError
         return {
             "outcome": "",
@@ -259,7 +273,6 @@ async def make_choice(choice_id: str):
             "blocked_by_no_gate": False,
         }
 
-    event = gs.current_event
     choice = next((c for c in event["choices"] if c["id"] == choice_id), None)
     if not choice:
         # Invalid choice – return empty outcome with error detail
@@ -728,8 +741,9 @@ async def healthz():
 
 @router.post("/reset")
 async def reset_game():
-    global game_state
-    game_state = GameState()
+    fresh_state = GameState(load_latest_snapshot=False)
+    game_state.__dict__.clear()
+    game_state.__dict__.update(fresh_state.__dict__)
     try:
         game_state.save_to_db(snapshot_type="reset")
     except Exception:
