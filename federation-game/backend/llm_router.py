@@ -900,6 +900,29 @@ TASK_MODELS = {
             "timeout": 30,
         },
     },
+    "npc_memory": {
+        "primary": {
+            "provider": "nim",
+            "model": "nvidia/llama-3.1-nemotron-super-49b-v1",
+            "max_tokens": 400,
+            "temperature": 0.8,
+            "timeout": 25,
+        },
+        "fallback_nim": {
+            "provider": "nim",
+            "model": "nvidia/llama-3.1-nemotron-ultra-251b",
+            "max_tokens": 400,
+            "temperature": 0.8,
+            "timeout": 35,
+        },
+        "fallback_openrouter": {
+            "provider": "openrouter",
+            "model": "meta-llama/llama-3.3-70b-instruct:free",
+            "max_tokens": 400,
+            "temperature": 0.8,
+            "timeout": 30,
+        },
+    },
 }
 
 # ── Key Rotation ────────────────────────────────────────────────────
@@ -1253,9 +1276,8 @@ def route_call(
 ) -> Dict:
     """Route an LLM call through the multi-provider tiered system.
 
-    Fallback chain:
-      Ollama(3B) → Cloudflare → Together → NIM primary → NIM fallback
-      → Gemini → Grok → OpenRouter → template fallback
+    Fallback chain (ALL priority modes):
+      NIM primary → NIM fallback → Ollama(3B) → OpenRouter free → template fallback
 
     Args:
         task_class: One of "leader", "specialist", "worker", "narrator"
@@ -1305,83 +1327,17 @@ def route_call(
         else primary_config.get("temperature", 0.8)
     )
 
-    # ── Expanded fallback chain ──────────────────────────────────────
-    # Each entry: (provider_name, check_func, call_func, model_name)
-    # check_func returns bool; call_func returns (ok, content, latency_ms)
-    provider_chain = [
-        (
-            "ollama",
-            lambda: _check_ollama_available() and not _is_circuit_open("ollama"),
-            lambda: _call_ollama(messages, mt, temp),
-            OLLAMA_MODEL,
-        ),
-        (
-            "cloudflare",
-            lambda: _check_cloudflare_available()
-            and not _is_circuit_open("cloudflare"),
-            lambda: _call_cloudflare(messages, mt, temp),
-            CF_MODEL,
-        ),
-        (
-            "together",
-            lambda: _check_together_available() and not _is_circuit_open("together"),
-            lambda: _call_together(messages, mt, temp),
-            TOGETHER_MODEL,
-        ),
-        (
-            "gemini",
-            lambda: _check_gemini_available() and not _is_circuit_open("gemini"),
-            lambda: _call_gemini(messages, mt, temp),
-            GEMINI_MODEL,
-        ),
-        (
-            "grok",
-            lambda: _check_grok_available() and not _is_circuit_open("grok"),
-            lambda: _call_grok(messages, mt, temp),
-            GROK_MODEL,
-        ),
+    # ── NIM-first fallback chain ──────────────────────────────────────
+    # 1. NIM primary model (from TASK_MODELS)
+    # 2. NIM fallback model (from TASK_MODELS)
+    # 3. Ollama local (3B via Tailscale)
+    # 4. OpenRouter free (from TASK_MODELS)
+    nim_tiers = [
+        ("primary", config.get("primary")),
+        ("fallback_nim", config.get("fallback_nim")),
     ]
 
-    for provider_name, check_fn, call_fn, model_name in provider_chain:
-        if not check_fn():
-            continue
-        result["attempts"] += 1
-        ok, content, latency = call_fn()
-        if ok and content:
-            result["success"] = True
-            result["content"] = content
-            result["provider"] = provider_name
-            result["model"] = model_name
-            result["latency_ms"] = latency
-            # Audit log
-            try:
-                r = _get_redis()
-                audit_entry = {
-                    "ts": time.time(),
-                    "provider": provider_name,
-                    "model": model_name,
-                    "task_class": task_class,
-                    "success": True,
-                    "latency_ms": round(latency, 1),
-                    "content_preview": content[:100],
-                }
-                r.zadd("llm_audit", {json.dumps(audit_entry): time.time()})
-            except Exception:
-                pass
-            return result
-        else:
-            result["errors"].append(f"{provider_name}/{model_name}: {content[:150]}")
-            result["latency_ms"] += latency
-            logger.debug(
-                "Provider %s failed for %s, trying next: %s",
-                provider_name,
-                task_class,
-                content[:80],
-            )
-
-    # ── NIM tiers (legacy TASK_MODELS config) ────────────────────────
-    for tier_name in ("primary", "fallback_nim", "fallback_openrouter"):
-        tier_config = config.get(tier_name)
+    for tier_name, tier_config in nim_tiers:
         if not tier_config:
             continue
 
@@ -1440,6 +1396,77 @@ def route_call(
                 tier_name,
                 content[:100],
             )
+
+    # ── Ollama local fallback ─────────────────────────────────────────
+    if _check_ollama_available() and not _is_circuit_open("ollama"):
+        result["attempts"] += 1
+        ok, content, latency = _call_ollama(messages, mt, temp)
+        if ok and content:
+            result["success"] = True
+            result["content"] = content
+            result["provider"] = "ollama"
+            result["model"] = OLLAMA_MODEL
+            result["latency_ms"] = latency
+            try:
+                r = _get_redis()
+                audit_entry = {
+                    "ts": time.time(),
+                    "provider": "ollama",
+                    "model": OLLAMA_MODEL,
+                    "task_class": task_class,
+                    "success": True,
+                    "latency_ms": round(latency, 1),
+                    "content_preview": content[:100],
+                }
+                r.zadd("llm_audit", {json.dumps(audit_entry): time.time()})
+            except Exception:
+                pass
+            return result
+        else:
+            result["errors"].append(f"ollama/{OLLAMA_MODEL}: {content[:150]}")
+            result["latency_ms"] += latency
+
+    # ── OpenRouter free fallback (last resort) ────────────────────────
+    or_config = config.get("fallback_openrouter")
+    if or_config:
+        provider = or_config["provider"]
+        model = or_config["model"]
+        tier_mt = max_tokens if max_tokens is not None else or_config["max_tokens"]
+        tier_temp = (
+            temperature if temperature is not None else or_config["temperature"]
+        )
+        tier_timeout = or_config.get("timeout", 25)
+
+        if not _is_circuit_open(provider):
+            result["attempts"] += 1
+            ok, content, latency = _call_provider(
+                provider, model, messages, tier_mt, tier_temp, tier_timeout
+            )
+            _record_provider_result(provider, ok)
+            if ok and content:
+                result["success"] = True
+                result["content"] = content
+                result["provider"] = provider
+                result["model"] = model
+                result["latency_ms"] = latency
+                try:
+                    r = _get_redis()
+                    audit_entry = {
+                        "ts": time.time(),
+                        "provider": provider,
+                        "model": model,
+                        "task_class": task_class,
+                        "success": True,
+                        "latency_ms": round(latency, 1),
+                        "content_preview": content[:100],
+                    }
+                    r.zadd("llm_audit", {json.dumps(audit_entry): time.time()})
+                except Exception:
+                    pass
+                return result
+            else:
+                result["errors"].append(f"{provider}/{model}: {content[:150]}")
+                result["latency_ms"] += latency
 
     logger.error(
         "All LLM providers failed for task_class=%s: %s",
