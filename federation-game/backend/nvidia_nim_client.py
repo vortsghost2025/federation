@@ -1,30 +1,23 @@
 #!/usr/bin/env python3
 """NVIDIA NIM Client + Multi-Provider Offload -- LLM client for NPC cognition.
 
-Provides a tiered LLM routing system:
- Tier 0 (local): Ollama (qwen2.5-coder:3b-q4_K_M via Tailscale, 7B only for high-significance)
-Tier 0.5 (free):    Cloudflare Workers AI (llama-3.1-8b)
-Tier 1.5 (free):    Together AI, Google Gemini Flash
-Tier 2 (cloud):     NVIDIA NIM (6 keys, Qwen3/Minimax/Gemma)
-Tier 2.5 (cloud):   Grok/xAI
-Tier 3 (last resort): None (returns None for template fallback)
+Routing order (ALL priority modes):
+  Tier 1 (primary):    NVIDIA NIM (6 keys, Nemotron/GPT-OSS/Llama)
+  Tier 2 (fallback):   Ollama local (qwen2.5-coder:3b via Tailscale)
+  Tier 3 (last resort): OpenRouter free models
 
 Features:
-- Ollama offload: high-volume NPC thoughts go to local GPU, saving NIM budget
-- Cloudflare Workers AI: free, fast, good for NPC thoughts when Ollama is down
-- Together AI: free tier, OpenAI-compatible, good for mid-tier routing
-- Google Gemini Flash: free, fast, high quality for important calls
-- Grok/xAI: high quality, for faction/diplomacy calls
+- NIM first: primary provider for all call types (user has 8B credits/month)
+- OpenRouter: free-tier fallback with key rotation
+- Ollama: local GPU fallback, concurrency-gated
 - Round-robin key rotation across multiple NIM API keys
-- Primary/fallback model chain (Qwen3 Coder -> Minimax -> Gemma) on NIM
 - Rate-limit tracking per key with cooldown windows
 - Token budget management (max calls per tick cycle)
 - Automatic reasoning_content extraction for thinking models
 - Circuit breaker: if a provider fails, gracefully degrades
-- Priority routing: "local" (Ollama→CF→NIM), "cloud" (Gemini→Grok→NIM)
 
 Architecture:
-npc_autonomy._call_llm() -> NimClient.call(priority=...) -> Ollama/CF/Together/Gemini/NIM/Grok
+npc_autonomy._call_llm() -> NimClient.call(priority=...) -> NIM -> Ollama -> OpenRouter
 """
 
 import asyncio
@@ -56,10 +49,19 @@ for _i in range(1, 9):
     if _k and _k not in NIM_API_KEYS:
         NIM_API_KEYS.append(_k)
 
-# Model priority chain -- Fast models first, no slow Google models
-# gpt-oss-120b is the primary model (user preference)
-# GLM-5.1 and Nemotron-3-Ultra as fast fallbacks
+# Model priority chain -- Proven fast models only
+# Nemotron Super 49B as primary (fast, reliable)
+# GPT-OSS 120B as second (user preference, slightly slower)
+# Llama 3.1 8B as last-resort NIM (smallest, fastest)
 MODEL_CHAIN = [
+    {
+        "id": "nvidia/llama-3.3-nemotron-super-49b-v1.5",
+        "max_tokens_default": 4096,
+        "temperature_default": 0.7,
+        "top_p_default": 0.8,
+        "is_thinking_model": False,
+        "timeout": 12,
+    },
     {
         "id": "openai/gpt-oss-120b",
         "max_tokens_default": 4096,
@@ -69,36 +71,12 @@ MODEL_CHAIN = [
         "timeout": 15,
     },
     {
-        "id": "zhipu/glm-5.1",
-        "max_tokens_default": 8192,
+        "id": "meta/llama-3.1-8b-instruct",
+        "max_tokens_default": 2048,
         "temperature_default": 0.7,
         "top_p_default": 0.8,
         "is_thinking_model": False,
-        "timeout": 15,
-    },
-    {
-        "id": "nvidia/nemotron-3-ultra-550b-a55b",
-        "max_tokens_default": 4096,
-        "temperature_default": 0.7,
-        "top_p_default": 0.8,
-        "is_thinking_model": False,
-        "timeout": 12,
-    },
-    {
-        "id": "qwen/qwen3-coder-480b-a35b-instruct",
-        "max_tokens_default": 4096,
-        "temperature_default": 0.7,
-        "top_p_default": 0.8,
-        "is_thinking_model": False,
-        "timeout": 20,
-    },
-    {
-        "id": "minimaxai/minimax-m2.7",
-        "max_tokens_default": 8192,
-        "temperature_default": 1.0,
-        "top_p_default": 0.95,
-        "is_thinking_model": True,
-        "timeout": 20,
+        "timeout": 10,
     },
 ]
 
@@ -212,53 +190,21 @@ class OllamaLane:
 _ollama_lane = OllamaLane()
 
 # ---------------------------------------------------------------------------
-# Cloudflare Workers AI configuration -- free, fast
+# OpenRouter configuration -- free-tier fallback with key rotation
 # ---------------------------------------------------------------------------
-CF_API_TOKEN = os.environ.get("CF_API_TOKEN", "")
-CF_ACCOUNT_ID = os.environ.get("CF_ACCOUNT_ID", "")
-CF_MODEL = os.environ.get("CF_MODEL", "@cf/meta/llama-3.1-8b-instruct")
-CF_BASE_URL = (
-    f"https://api.cloudflare.com/client/v4/accounts/{CF_ACCOUNT_ID}/ai/run/{CF_MODEL}"
-)
-CF_TIMEOUT = int(os.environ.get("CF_TIMEOUT", "15"))
-_cf_available: Optional[bool] = None
-_cf_last_check: float = 0.0
-_CF_CHECK_INTERVAL = 120.0  # re-check every 2 min
+OPENROUTER_API_KEY = os.environ.get("OPENROUTER_API_KEY", "")
+OPENROUTER_API_KEY_1 = os.environ.get("OPENROUTER_API_KEY_1", "")
+OPENROUTER_KEYS = [k for k in [OPENROUTER_API_KEY, OPENROUTER_API_KEY_1] if k]
+OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1/chat/completions"
+OPENROUTER_TIMEOUT = int(os.environ.get("OPENROUTER_TIMEOUT", "25"))
+_openrouter_key_index: int = 0
 
-# ---------------------------------------------------------------------------
-# Together AI configuration -- free tier, OpenAI-compatible
-# ---------------------------------------------------------------------------
-TOGETHER_API_KEY = os.environ.get("TOGETHER_API_KEY", "")
-TOGETHER_BASE_URL = os.environ.get("TOGETHER_BASE_URL", "https://api.together.xyz/v1")
-TOGETHER_MODEL = os.environ.get("TOGETHER_MODEL", "meta-llama/Llama-3-8b-chat-hf")
-TOGETHER_TIMEOUT = int(os.environ.get("TOGETHER_TIMEOUT", "20"))
-_together_available: Optional[bool] = None
-_together_last_check: float = 0.0
-_TOGETHER_CHECK_INTERVAL = 300.0  # re-check every 5 min
-
-# ---------------------------------------------------------------------------
-# Google Gemini configuration -- free, fast, high quality
-# ---------------------------------------------------------------------------
-GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
-GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "gemini-2.0-flash")
-GEMINI_BASE_URL = os.environ.get(
-    "GEMINI_BASE_URL", "https://generativelanguage.googleapis.com/v1beta"
-)
-GEMINI_TIMEOUT = int(os.environ.get("GEMINI_TIMEOUT", "20"))
-_gemini_available: Optional[bool] = None
-_gemini_last_check: float = 0.0
-_GEMINI_CHECK_INTERVAL = 300.0  # re-check every 5 min
-
-# ---------------------------------------------------------------------------
-# Grok/xAI configuration -- high quality
-# ---------------------------------------------------------------------------
-GROK_API_KEY = os.environ.get("GROK_API_KEY", "")
-GROK_BASE_URL = os.environ.get("GROK_BASE_URL", "https://api.x.ai/v1")
-GROK_MODEL = os.environ.get("GROK_MODEL", "grok-3-mini")
-GROK_TIMEOUT = int(os.environ.get("GROK_TIMEOUT", "25"))
-_grok_available: Optional[bool] = None
-_grok_last_check: float = 0.0
-_GROK_CHECK_INTERVAL = 300.0  # re-check every 5 min
+# OpenRouter free models per priority class
+OPENROUTER_MODELS = {
+    "local": "meta-llama/llama-3.3-70b-instruct:free",
+    "cloud": "meta-llama/llama-3.3-70b-instruct:free",
+    "heavy": "meta-llama/llama-3.3-70b-instruct:free",
+}
 
 
 # ---------------------------------------------------------------------------
@@ -361,18 +307,9 @@ class NimClient:
         # Ollama stats
         self._ollama_calls: int = 0
         self._ollama_failures: int = 0
-        # Cloudflare stats
-        self._cf_calls: int = 0
-        self._cf_failures: int = 0
-        # Together stats
-        self._together_calls: int = 0
-        self._together_failures: int = 0
-        # Gemini stats
-        self._gemini_calls: int = 0
-        self._gemini_failures: int = 0
-        # Grok stats
-        self._grok_calls: int = 0
-        self._grok_failures: int = 0
+        # OpenRouter stats
+        self._openrouter_calls: int = 0
+        self._openrouter_failures: int = 0
 
         if not self.keys:
             logger.warning("NimClient: No NIM API keys configured")
@@ -640,159 +577,46 @@ class NimClient:
         return None
 
     # ------------------------------------------------------------------
-    # Tier 0.5: Cloudflare Workers AI -- free, fast, good for NPC thoughts
+    # Tier 3: OpenRouter free models -- last resort fallback
     # ------------------------------------------------------------------
 
     @staticmethod
-    def _check_cloudflare() -> bool:
-        """Check if Cloudflare Workers AI is available (cached)."""
-        global _cf_available, _cf_last_check
-        now = time.time()
-        if _cf_available is not None and (now - _cf_last_check) < _CF_CHECK_INTERVAL:
-            return _cf_available
-        if not CF_API_TOKEN or not CF_ACCOUNT_ID:
-            _cf_available = False
-            _cf_last_check = now
-            return False
-        # Cloudflare is always "available" if we have credentials -- no health check needed
-        _cf_available = True
-        _cf_last_check = now
-        return True
+    def _get_openrouter_key() -> Optional[str]:
+        """Get next OpenRouter API key (round-robin rotation)."""
+        global _openrouter_key_index
+        if not OPENROUTER_KEYS:
+            return None
+        key = OPENROUTER_KEYS[_openrouter_key_index % len(OPENROUTER_KEYS)]
+        _openrouter_key_index += 1
+        return key
 
-    async def _call_cloudflare(
+    async def _call_openrouter(
         self,
         system_prompt: str,
         user_prompt: str,
         max_tokens: int = 80,
         temperature: float = 0.8,
+        priority: str = "local",
     ) -> Optional[str]:
-        """Call Cloudflare Workers AI. Returns content string or None."""
-        if not self._check_cloudflare():
+        """Call OpenRouter free models. Returns content string or None."""
+        key = self._get_openrouter_key()
+        if not key:
             return None
 
-        payload = json.dumps(
-            {
-                "messages": [
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": user_prompt},
-                ],
-                "max_tokens": max_tokens,
-                "temperature": temperature,
-            }
-        ).encode("utf-8")
-
-        headers = {
-            "Content-Type": "application/json",
-            "Authorization": f"Bearer {CF_API_TOKEN}",
-        }
-
-        req = urllib.request.Request(
-            CF_BASE_URL, data=payload, headers=headers, method="POST"
-        )
-        start = time.time()
-
-        try:
-            loop = asyncio.get_event_loop()
-            resp_data = await loop.run_in_executor(
-                None,
-                lambda: urllib.request.urlopen(req, timeout=CF_TIMEOUT),
-            )
-            body = json.loads(resp_data.read().decode("utf-8"))
-            latency_ms = (time.time() - start) * 1000
-
-            # Cloudflare response format: {"result": {"response": "..."}} or
-            # OpenAI-compatible: {"choices": [{"message": {"content": "..."}}]}
-            content = None
-            if "result" in body and isinstance(body["result"], dict):
-                content = body["result"].get("response") or ""
-            elif "choices" in body:
-                choices = body.get("choices") or [{}]
-                message = choices[0].get("message") or {}
-                content = message.get("content") or ""
-
-            if content and isinstance(content, str):
-                content = content.strip().strip('"').strip("'")
-                if len(content) > 500:
-                    content = content[:500]
-                self._cf_calls += 1
-                logger.debug(
-                    "Cloudflare: %s -> %d chars (%dms)",
-                    CF_MODEL,
-                    len(content),
-                    int(latency_ms),
-                )
-                return content
-
-            logger.debug("Cloudflare: empty response")
-            self._cf_failures += 1
-            return None
-
-        except asyncio.TimeoutError:
-            self._cf_failures += 1
-            logger.warning("Cloudflare: timed out (%ds)", CF_TIMEOUT)
-        except urllib.error.HTTPError as e:
-            self._cf_failures += 1
-            err_body = ""
-            try:
-                err_body = e.read().decode("utf-8", errors="replace")[:200]
-            except Exception:
-                pass
-            logger.warning("Cloudflare: HTTP %d: %s", e.code, err_body)
-            if e.code == 429:
-                global _cf_available
-                _cf_available = False
-                _cf_last_check = time.time()
-        except Exception as exc:
-            self._cf_failures += 1
-            logger.warning("Cloudflare: error: %s", exc)
-
-        return None
-
-    # ------------------------------------------------------------------
-    # Tier 1.5: Together AI -- free tier, OpenAI-compatible
-    # ------------------------------------------------------------------
-
-    @staticmethod
-    def _check_together() -> bool:
-        """Check if Together AI is available (cached)."""
-        global _together_available, _together_last_check
-        now = time.time()
-        if (
-            _together_available is not None
-            and (now - _together_last_check) < _TOGETHER_CHECK_INTERVAL
-        ):
-            return _together_available
-        if not TOGETHER_API_KEY:
-            _together_available = False
-            _together_last_check = now
-            return False
-        _together_available = True
-        _together_last_check = now
-        return True
-
-    async def _call_together(
-        self,
-        system_prompt: str,
-        user_prompt: str,
-        max_tokens: int = 80,
-        temperature: float = 0.8,
-    ) -> Optional[str]:
-        """Call Together AI via OpenAI-compatible API. Returns content string or None."""
-        if not self._check_together():
-            return None
+        model = OPENROUTER_MODELS.get(priority, "meta-llama/llama-3.3-70b-instruct:free")
 
         try:
             from openai import AsyncOpenAI
 
-            together_client = AsyncOpenAI(
-                base_url=TOGETHER_BASE_URL,
-                api_key=TOGETHER_API_KEY,
-                timeout=httpx.Timeout(float(TOGETHER_TIMEOUT), connect=5.0),
+            or_client = AsyncOpenAI(
+                base_url="https://openrouter.ai/api/v1",
+                api_key=key,
+                timeout=httpx.Timeout(float(OPENROUTER_TIMEOUT), connect=5.0),
                 max_retries=1,
             )
             resp = await asyncio.wait_for(
-                together_client.chat.completions.create(
-                    model=TOGETHER_MODEL,
+                or_client.chat.completions.create(
+                    model=model,
                     messages=[
                         {"role": "system", "content": system_prompt},
                         {"role": "user", "content": user_prompt},
@@ -800,227 +624,33 @@ class NimClient:
                     max_tokens=min(max_tokens, 512),
                     temperature=temperature,
                     stream=False,
+                    extra_headers={
+                        "HTTP-Referer": "https://federation-game.deliberatefederation.cloud",
+                        "X-Title": "Federation Game LLM Router",
+                    },
                 ),
-                timeout=float(TOGETHER_TIMEOUT) + 5.0,
+                timeout=float(OPENROUTER_TIMEOUT) + 5.0,
             )
             content = resp.choices[0].message.content
             if content:
                 content = content.strip().strip('"').strip("'")
                 if len(content) > 500:
                     content = content[:500]
-                self._together_calls += 1
-                logger.debug("Together: %s -> %d chars", TOGETHER_MODEL, len(content))
-                return content
-        except asyncio.TimeoutError:
-            self._together_failures += 1
-            logger.warning("Together: timed out (%ds)", TOGETHER_TIMEOUT)
-        except Exception as exc:
-            self._together_failures += 1
-            exc_str = str(exc).lower()
-            global _together_available
-            if "429" in exc_str or "rate" in exc_str:
-                _together_available = False
-                _together_last_check = time.time()
-                logger.info("Together AI rate limited -- pausing 5 min")
-            elif "401" in exc_str or "auth" in exc_str:
-                _together_available = False
-                _together_last_check = time.time()
-                logger.warning("Together AI auth failed -- disabling")
-            else:
-                logger.warning("Together: error: %s", exc)
-        return None
-
-    # ------------------------------------------------------------------
-    # Tier 1.5: Google Gemini Flash -- free, fast, high quality
-    # ------------------------------------------------------------------
-
-    @staticmethod
-    def _check_gemini() -> bool:
-        """Check if Gemini API is available (cached)."""
-        global _gemini_available, _gemini_last_check
-        now = time.time()
-        if (
-            _gemini_available is not None
-            and (now - _gemini_last_check) < _GEMINI_CHECK_INTERVAL
-        ):
-            return _gemini_available
-        if not GEMINI_API_KEY:
-            _gemini_available = False
-            _gemini_last_check = now
-            return False
-        _gemini_available = True
-        _gemini_last_check = now
-        return True
-
-    async def _call_gemini(
-        self,
-        system_prompt: str,
-        user_prompt: str,
-        max_tokens: int = 200,
-        temperature: float = 0.8,
-    ) -> Optional[str]:
-        """Call Google Gemini via REST API. Returns content string or None."""
-        if not self._check_gemini():
-            return None
-
-        url = (
-            f"{GEMINI_BASE_URL}/models/{GEMINI_MODEL}:generateContent"
-            f"?key={GEMINI_API_KEY}"
-        )
-
-        payload = json.dumps(
-            {
-                "system_instruction": {"parts": [{"text": system_prompt}]},
-                "contents": [{"parts": [{"text": user_prompt}]}],
-                "generationConfig": {
-                    "maxOutputTokens": max_tokens,
-                    "temperature": temperature,
-                },
-            }
-        ).encode("utf-8")
-
-        headers = {"Content-Type": "application/json"}
-        req = urllib.request.Request(url, data=payload, headers=headers, method="POST")
-        start = time.time()
-
-        try:
-            loop = asyncio.get_event_loop()
-            resp_data = await loop.run_in_executor(
-                None,
-                lambda: urllib.request.urlopen(req, timeout=GEMINI_TIMEOUT),
-            )
-            body = json.loads(resp_data.read().decode("utf-8"))
-            latency_ms = (time.time() - start) * 1000
-
-            # Gemini response format:
-            # {"candidates": [{"content": {"parts": [{"text": "..."}]}}]}
-            candidates = body.get("candidates") or [{}]
-            parts = (candidates[0].get("content") or {}).get("parts") or [{}]
-            content = parts[0].get("text") or ""
-
-            if content and isinstance(content, str):
-                content = content.strip().strip('"').strip("'")
-                if len(content) > 500:
-                    content = content[:500]
-                self._gemini_calls += 1
-                logger.debug(
-                    "Gemini: %s -> %d chars (%dms)",
-                    GEMINI_MODEL,
+                self._openrouter_calls += 1
+                logger.info(
+                    "OpenRouter: model=%s chars=%d success=True",
+                    model,
                     len(content),
-                    int(latency_ms),
                 )
                 return content
-
-            logger.debug("Gemini: empty response")
-            self._gemini_failures += 1
+            self._openrouter_failures += 1
             return None
-
         except asyncio.TimeoutError:
-            self._gemini_failures += 1
-            logger.warning("Gemini: timed out (%ds)", GEMINI_TIMEOUT)
-        except urllib.error.HTTPError as e:
-            self._gemini_failures += 1
-            err_body = ""
-            try:
-                err_body = e.read().decode("utf-8", errors="replace")[:200]
-            except Exception:
-                pass
-            logger.warning("Gemini: HTTP %d: %s", e.code, err_body)
-            global _gemini_available
-            if e.code == 429:
-                _gemini_available = False
-                _gemini_last_check = time.time()
-                logger.info("Gemini rate limited -- pausing 5 min")
-            elif e.code == 403:
-                _gemini_available = False
-                _gemini_last_check = time.time()
-                logger.warning("Gemini auth failed -- disabling")
+            self._openrouter_failures += 1
+            logger.warning("OpenRouter: timed out (%ds)", OPENROUTER_TIMEOUT)
         except Exception as exc:
-            self._gemini_failures += 1
-            logger.warning("Gemini: error: %s", exc)
-
-        return None
-
-    # ------------------------------------------------------------------
-    # Tier 2.5: Grok/xAI -- high quality, for important calls
-    # ------------------------------------------------------------------
-
-    @staticmethod
-    def _check_grok() -> bool:
-        """Check if Grok API is available (cached)."""
-        global _grok_available, _grok_last_check
-        now = time.time()
-        if (
-            _grok_available is not None
-            and (now - _grok_last_check) < _GROK_CHECK_INTERVAL
-        ):
-            return _grok_available
-        if not GROK_API_KEY:
-            _grok_available = False
-            _grok_last_check = now
-            return False
-        _grok_available = True
-        _grok_last_check = now
-        return True
-
-    async def _call_grok(
-        self,
-        system_prompt: str,
-        user_prompt: str,
-        max_tokens: int = 200,
-        temperature: float = 0.8,
-    ) -> Optional[str]:
-        """Call Grok/xAI via OpenAI-compatible API. Returns content string or None."""
-        if not self._check_grok():
-            return None
-
-        try:
-            from openai import AsyncOpenAI
-
-            grok_client = AsyncOpenAI(
-                base_url=GROK_BASE_URL,
-                api_key=GROK_API_KEY,
-                timeout=httpx.Timeout(float(GROK_TIMEOUT), connect=5.0),
-                max_retries=1,
-            )
-            resp = await asyncio.wait_for(
-                grok_client.chat.completions.create(
-                    model=GROK_MODEL,
-                    messages=[
-                        {"role": "system", "content": system_prompt},
-                        {"role": "user", "content": user_prompt},
-                    ],
-                    max_tokens=max_tokens,
-                    temperature=temperature,
-                    stream=False,
-                ),
-                timeout=float(GROK_TIMEOUT) + 5.0,
-            )
-            content = resp.choices[0].message.content
-            if content:
-                content = content.strip().strip('"').strip("'")
-                if len(content) > 500:
-                    content = content[:500]
-                self._grok_calls += 1
-                logger.debug("Grok: %s -> %d chars", GROK_MODEL, len(content))
-                return content
-        except asyncio.TimeoutError:
-            self._grok_failures += 1
-            logger.warning("Grok: timed out (%ds)", GROK_TIMEOUT)
-        except Exception as exc:
-            self._grok_failures += 1
-            exc_str = str(exc).lower()
-            global _grok_available
-            if "429" in exc_str or "rate" in exc_str:
-                _grok_available = False
-                _grok_last_check = time.time()
-                logger.info("Grok rate limited -- pausing 5 min")
-            elif "401" in exc_str or "auth" in exc_str:
-                _grok_available = False
-                _grok_last_check = time.time()
-                logger.warning("Grok auth failed -- disabling")
-            else:
-                logger.warning("Grok: error: %s", exc)
+            self._openrouter_failures += 1
+            logger.warning("OpenRouter: error: %s", str(exc)[:100])
         return None
 
     # ------------------------------------------------------------------
@@ -1058,81 +688,81 @@ class NimClient:
                 if client is None:
                     continue
 
-        try:
-            resp = await asyncio.wait_for(
-                client.chat.completions.create(
-                    model=model_id,
-                    messages=messages,
-                    max_tokens=mt,
-                    temperature=temperature,
-                    top_p=tp,
-                    stream=False,
-                    timeout=timeout,
-                ),
-                timeout=float(NIM_PER_ATTEMPT_TIMEOUT),
-            )
-
-            ks.mark_used()
-            ks.mark_success()
-            self._cycle_calls += 1
-            self._total_calls += 1
-
-            msg = resp.choices[0].message
-            content = msg.content
-
-            if (
-                not content
-                and hasattr(msg, "reasoning_content")
-                and msg.reasoning_content
-            ):
-                reasoning = msg.reasoning_content
-                sentences = [
-                    s.strip()
-                    for s in reasoning.replace("\n", ".").split(".")
-                    if len(s.strip()) > 10
-                ]
-                if sentences:
-                    content = sentences[-1]
-                if content.startswith(("The user", "So we", "Let me", "We need")):
-                    content = (
-                        ". ".join(sentences[-2:])
-                        if len(sentences) >= 2
-                        else sentences[-1]
+                try:
+                    resp = await asyncio.wait_for(
+                        client.chat.completions.create(
+                            model=model_id,
+                            messages=messages,
+                            max_tokens=mt,
+                            temperature=temperature,
+                            top_p=tp,
+                            stream=False,
+                            timeout=timeout,
+                        ),
+                        timeout=float(NIM_PER_ATTEMPT_TIMEOUT),
                     )
 
-            if content:
-                content = content.strip().strip('"').strip("'")
-                if len(content) > 500:
-                    content = content[:500]
-                logger.debug(
-                    "NimClient: %s via %s... -> %d chars",
-                    model_id,
-                    ks.key[:12],
-                    len(content),
-                )
-                return content
+                    ks.mark_used()
+                    ks.mark_success()
+                    self._cycle_calls += 1
+                    self._total_calls += 1
 
-            logger.debug("NimClient: %s returned empty content", model_id)
+                    msg = resp.choices[0].message
+                    content = msg.content
 
-        except asyncio.TimeoutError:
-            ks.mark_error()
-            logger.warning(
-                "NimClient: %s call timed out (%ds limit)",
-                model_id,
-                NIM_PER_ATTEMPT_TIMEOUT,
-            )
-            self._total_failures += 1
+                    if (
+                        not content
+                        and hasattr(msg, "reasoning_content")
+                        and msg.reasoning_content
+                    ):
+                        reasoning = msg.reasoning_content
+                        sentences = [
+                            s.strip()
+                            for s in reasoning.replace("\n", ".").split(".")
+                            if len(s.strip()) > 10
+                        ]
+                        if sentences:
+                            content = sentences[-1]
+                        if content.startswith(("The user", "So we", "Let me", "We need")):
+                            content = (
+                                ". ".join(sentences[-2:])
+                                if len(sentences) >= 2
+                                else sentences[-1]
+                            )
 
-        except Exception as exc:
-            exc_str = str(exc).lower()
-            ks.mark_error()
-            if "429" in exc_str or "rate" in exc_str:
-                ks.mark_rate_limited()
-            elif "timeout" in exc_str:
-                logger.warning("NimClient: %s timed out", model_id)
-            else:
-                logger.warning("NimClient: %s error: %s", model_id, exc)
-            self._total_failures += 1
+                    if content:
+                        content = content.strip().strip('"').strip("'")
+                        if len(content) > 500:
+                            content = content[:500]
+                        logger.debug(
+                            "NimClient: %s via %s... -> %d chars",
+                            model_id,
+                            ks.key[:12],
+                            len(content),
+                        )
+                        return content
+
+                    logger.debug("NimClient: %s returned empty content", model_id)
+
+                except asyncio.TimeoutError:
+                    ks.mark_error()
+                    logger.warning(
+                        "NimClient: %s call timed out (%ds limit)",
+                        model_id,
+                        NIM_PER_ATTEMPT_TIMEOUT,
+                    )
+                    self._total_failures += 1
+
+                except Exception as exc:
+                    exc_str = str(exc).lower()
+                    ks.mark_error()
+                    if "429" in exc_str or "rate" in exc_str:
+                        ks.mark_rate_limited()
+                    elif "timeout" in exc_str:
+                        logger.warning("NimClient: %s timed out", model_id)
+                    else:
+                        logger.warning("NimClient: %s error: %s", model_id, exc)
+                    self._total_failures += 1
 
         return None
 
@@ -1148,109 +778,35 @@ class NimClient:
         temperature: float = 0.8,
         priority: str = "local",
     ) -> Optional[str]:
-        """Call LLM with tiered routing.
+        """Call LLM with NIM-first tiered routing.
 
-        priority="local" (default): Try Ollama(3B) → Cloudflare → Together → NIM.
-        Good for high-volume NPC thoughts where quality can be "good enough".
-
-        priority="cloud": Try Gemini → Grok → NIM. For high-value content
-        like faction justifications, narration, diplomacy.
-
-        priority="heavy": Try Ollama(7B, keep_alive=3m) → Gemini → Grok → NIM.
-        For high-significance events that need deeper reasoning.
-        The 7B model is loaded on-demand and auto-unloaded after keep_alive.
+        ALL priority modes use the same chain:
+          Tier 1: NVIDIA NIM (primary, user has 8B credits/month)
+          Tier 2: Ollama local (3B model via Tailscale)
+          Tier 3: OpenRouter free (last resort)
         """
-        result = None  # Will hold the final LLM response
+        result = None
 
-        if priority == "local":
-            # Tier 0: Local Ollama 3B (fastest, unlimited, free)
-            result = await self._call_ollama(
-                system_prompt, user_prompt, max_tokens, temperature
-            )
-            if result is not None:
-                return result
-
-            # Tier 0.5: Cloudflare Workers AI (free, fast, good for thoughts)
-            result = await self._call_cloudflare(
-                system_prompt, user_prompt, max_tokens, temperature
-            )
-            if result is not None:
-                return result
-
-            # Tier 1.5: Together AI (free tier, better quality)
-            result = await self._call_together(
-                system_prompt, user_prompt, max_tokens, temperature
-            )
-            if result is not None:
-                return result
-
-            # Tier 2: NIM cloud (quality, rate-limited)
-            result = await self._call_nim(
-                system_prompt, user_prompt, max_tokens, temperature
-            )
+        # Tier 1: NIM cloud -- primary for ALL call types
+        result = await self._call_nim(
+            system_prompt, user_prompt, max_tokens, temperature
+        )
+        if result is not None:
             return result
 
-        elif priority == "cloud":
-            # Tier 0: Gemini Flash (free, fast, high quality)
-            result = await self._call_gemini(
-                system_prompt, user_prompt, max_tokens, temperature
-            )
-            if result is not None:
-                return result
-
-            # Tier 1: Grok/xAI (high quality)
-            result = await self._call_grok(
-                system_prompt, user_prompt, max_tokens, temperature
-            )
-            if result is not None:
-                return result
-
-            # Tier 2: NIM cloud (fallback)
-            result = await self._call_nim(
-                system_prompt, user_prompt, max_tokens, temperature
-            )
+        # Tier 2: Ollama local -- fallback to local GPU
+        heavy = (priority == "heavy")
+        result = await self._call_ollama(
+            system_prompt, user_prompt, max_tokens, temperature, heavy=heavy
+        )
+        if result is not None:
             return result
 
-        elif priority == "heavy":
-            # Tier 0: Ollama 7B (deeper reasoning, keep_alive=3m, concurrency-gated)
-            result = await self._call_ollama(
-                system_prompt, user_prompt, max_tokens, temperature, heavy=True
-            )
-            if result is not None:
-                return result
-
-            # Tier 1: Gemini Flash (free, fast, high quality)
-            result = await self._call_gemini(
-                system_prompt, user_prompt, max_tokens, temperature
-            )
-            if result is not None:
-                return result
-
-            # Tier 2: Grok/xAI (high quality)
-            result = await self._call_grok(
-                system_prompt, user_prompt, max_tokens, temperature
-            )
-            if result is not None:
-                return result
-
-            # Tier 3: NIM cloud (fallback)
-            result = await self._call_nim(
-                system_prompt, user_prompt, max_tokens, temperature
-            )
-            return result
-
-        else:
-            # Unknown priority — fall through to local chain as safe default
-            logger.warning("Unknown priority '%s', defaulting to local chain", priority)
-            result = await self._call_ollama(
-                system_prompt, user_prompt, max_tokens, temperature
-            )
-            if result is not None:
-                return result
-            result = await self._call_nim(
-                system_prompt, user_prompt, max_tokens, temperature
-            )
-            return result
+        # Tier 3: OpenRouter free -- last resort
+        result = await self._call_openrouter(
+            system_prompt, user_prompt, max_tokens, temperature, priority=priority
+        )
+        return result
 
     def get_stats(self) -> Dict:
         """Return usage statistics."""
@@ -1274,18 +830,9 @@ class NimClient:
             "ollama_calls": self._ollama_calls,
             "ollama_failures": self._ollama_failures,
             "ollama_available": self._check_ollama(),
-            "cloudflare_calls": self._cf_calls,
-            "cloudflare_failures": self._cf_failures,
-            "cloudflare_available": self._check_cloudflare(),
-            "together_calls": self._together_calls,
-            "together_failures": self._together_failures,
-            "together_available": self._check_together(),
-            "gemini_calls": self._gemini_calls,
-            "gemini_failures": self._gemini_failures,
-            "gemini_available": self._check_gemini(),
-            "grok_calls": self._grok_calls,
-            "grok_failures": self._grok_failures,
-            "grok_available": self._check_grok(),
+            "openrouter_calls": self._openrouter_calls,
+            "openrouter_failures": self._openrouter_failures,
+            "openrouter_keys": len(OPENROUTER_KEYS),
         }
 
 
@@ -1310,17 +857,17 @@ def _run_async(coro):
     If an event loop is already running (e.g. inside FastAPI),
     runs the coroutine in a separate thread to avoid blocking.
     Otherwise, uses asyncio.run() directly.
-
-    Uses a module-level shared ThreadPoolExecutor (max_workers=4) instead of
-    creating a new executor per call, which eliminates the overhead of
-    thread-pool creation/destruction and reduces contention when many NPC
-    threads call _call_llm() simultaneously during a tick.
     """
     try:
         loop = asyncio.get_running_loop()
     except RuntimeError:
         loop = None
     if loop and loop.is_running():
-        return _ASYNC_EXECUTOR.submit(asyncio.run, coro).result()
+        import concurrent.futures
+        executor = concurrent.futures.ThreadPoolExecutor(max_workers=4)
+        try:
+            return executor.submit(asyncio.run, coro).result()
+        finally:
+            executor.shutdown(wait=False)
     else:
         return asyncio.run(coro)

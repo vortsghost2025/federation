@@ -175,15 +175,34 @@ async def autonomous_simulation_tick():
 
 @router.get("/simulation/autonomous/status")
 async def autonomous_tick_status():
-    from tick_engine import get_tick_redis, _AUTO_TICK_REDIS_KEY
+    from tick_engine import get_tick_redis, set_tick_redis, _AUTO_TICK_REDIS_KEY
+
+    STALE_THRESHOLD_SECONDS = 300  # 5 minutes
 
     status = get_tick_redis(_AUTO_TICK_REDIS_KEY)
     if status.get("running"):
-        result = {
-            "status": "running",
-            "started_at": status.get("last_start", 0.0),
-            "elapsed": time.time() - status.get("last_start", 0.0),
-        }
+        elapsed = time.time() - status.get("last_start", 0.0)
+        if elapsed > STALE_THRESHOLD_SECONDS:
+            # Ghost tick — previous process was killed before finally block ran.
+            # Clear the stale state so the worker can start a fresh tick.
+            logger.warning(
+                "Autonomous tick stuck for %.0fs — clearing stale state", elapsed
+            )
+            set_tick_redis(
+                _AUTO_TICK_REDIS_KEY,
+                {
+                    "running": False,
+                    "last_end": time.time(),
+                    "last_error": "stale_tick_cleared",
+                },
+            )
+            result = {"status": "failed", "error": "stale_tick_cleared", "elapsed": elapsed}
+        else:
+            result = {
+                "status": "running",
+                "started_at": status.get("last_start", 0.0),
+                "elapsed": elapsed,
+            }
     elif status.get("last_error"):
         ls = status.get("last_start", 0.0) or 0.0
         le = status.get("last_end", 0.0) or 0.0
@@ -325,7 +344,24 @@ async def simulation_status():
 
 
 # ---------------------------------------------------------------------------
-# GET /simulation/factions  —  detailed faction AI status
+# GET /simulation/state — alias for legacy frontend callers (earth.js, etc.)
+# ---------------------------------------------------------------------------
+
+
+@router.get("/simulation/state")
+async def simulation_state():
+    """Alias for /simulation/status — legacy frontends call this."""
+    return await simulation_status()
+
+
+@router.get("/simulation/world/state")
+async def simulation_world_state():
+    """Alias for /simulation/status — legacy frontends call /world/state."""
+    return await simulation_status()
+
+
+# ---------------------------------------------------------------------------
+# GET /simulation/factions — detailed faction AI status
 # ---------------------------------------------------------------------------
 
 
