@@ -1,7 +1,7 @@
 # FEDERATION PROJECT CONTEXT
 
 **Reference:** S:\GLOBAL_GOVERNANCE.md (universal laws)
-**Last updated:** 2026-04-16
+**Last updated:** 2026-06-08
 **Scope:** Federation project only
 
 ---
@@ -30,6 +30,10 @@ I treat AI as collaboration partners, not tools.
 ---
 
 ## DOMAIN-SPECIFIC RULES
+
+### The Index Rule
+**Before doing anything, read `S:/federation/FEDERATION_INDEX.md`.**
+It contains VPS details, SSH commands, project structure, LLM routing, spatial system, deploy steps, known issues, and agent roles. If you have a question, the index has the answer. No hunting, no guessing, no grepping for 20 minutes.
 
 ### The Visual Rule
 I cannot read console errors or small text.
@@ -90,9 +94,13 @@ Agent tests, fixes, reports in plain language
 
 | File | Purpose |
 |------|---------|
+| **FEDERATION_INDEX.md** | **READ THIS FIRST** — 2-second lookup for VPS, maps, LLM routing, deploy commands, known issues, agent roles |
 | BOOTSTRAP.md | Entry point for Federation |
 | COVENANT.md | Values specific to consciousness simulation |
 | GOVERNANCE.md | Rules specific to Federation architecture |
+| .horizon/HORIZON_STATUS.md | Current state — read after compaction before doing anything |
+| .horizon/AGENT_OWNERSHIP.md | Who owns which files — check before modifying code |
+| .horizon/DECISIONS.md | Key decisions log — check before changing architecture |
 
 ---
 

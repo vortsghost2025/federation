@@ -1,0 +1,91 @@
+Goal
+- Fix starmap NPC positioning so NPCs appear inside their faction's colored Voronoi territory polygons; fix LLM routing (NIM primary); fix autonomous tick with cognition; fix simulation page HTML-instead-of-JSON errors
+Constraints & Preferences
+- SSH access to VPS at 187.77.3.56 as root with ed25519 key
+- PowerShell on Windows mangles nested Python quotes in SSH commands — cannot use Python one-liners over SSH
+- cat << 'EOF' heredocs also fail in PowerShell — must use filesystem_write_file tool + scp to VPS
+- Backend port 8000 not exposed to host directly (connection refused on localhost:8000)
+- curl not available inside backend container
+- For multi-line Python inside container: write script via filesystem_write_file, scp to VPS /tmp/, docker cp to container, then docker exec
+- SSH connections frequently timeout at 120s
+- Backend volume-mounted read-only from /docker/federation-game/backend:/app:ro — code changes require editing on host then restarting container
+- VPS has no python3 installed on host; must run scripts inside Docker container
+- User wants NVIDIA NIM as primary LLM (8B credits/month on dev keys), Ollama as fallback only
+- redis-cli not available on VPS host — must use docker exec federation-game-redis-1 redis-cli
+- Frontend static files served from /docker/federation-game/public_html/ (Docker volume mount) — JS/HTML changes just need SCP, no rebuild
+- Traefik routes by Host() header — must use -H 'Host: federation-game.deliberatefederation.cloud' for testing
+- User has visual disability (missing half vision) — NEVER ask user to check console errors; always verify fixes yourself before deploying
+Progress
+Done
+- Ollama connectivity fixed — added OLLAMA_BASE_URL=http://100.95.92.117:11434 to .env
+- Autonomous tick unstuck — cleared stale running: True flag in Redis
+- Full autonomous tick verified working — 34+ thoughts, 39+ actions, 39+ moods, 45+ decisions per tick
+- Tiered LLM cognition verified — leader cognition (Oracle Vex), decisions stored in Redis
+- Full LLM call-site inventory completed — 7 sites across 6 files
+- npc_memory.py fixed and deployed — import changed to from llm_router import route_call as route_llm_call ✅
+- nvidia_nim_client.py fully rewritten and deployed — NIM→Ollama→OpenRouter chain ✅
+- llm_router.py route_call() restructured and deployed — NIM primary→fallback→Ollama→OpenRouter ✅
+- All 4 task classes verified hitting NIM as primary ✅
+- tick_engine.py public aliases added and deployed ✅
+- Autonomous tick 500 error fixed — function signature updated ✅
+- Cognition added to autonomous tick — run_cognition() called after simulation_tick() ✅
+- _read_world_state_for_cognition() helper added ✅
+- NIM cognition verified working in autonomous tick ✅
+- Flexible LLM response parser added to npc_cognition.py ✅
+- NPC location/relationships/thoughts/current_state bugs fixed in main.py ✅
+- NPC mood/traits endpoint fixes deployed and verified ✅
+- nginx proxy rules implemented and deployed — 12 location blocks + catch-all moved ✅
+- Content-type validation added to fed-fetch.js and earth.js ✅
+- Simulation page proxy verified working ✅
+- starmap.js duplicate npcLocations declaration fixed ✅
+- SPATIAL-04 fix deployed — NPC placement changed from sector position to territory centroid lookup via sectorOwner → voronoiCells ✅
+- NaN guard added — if (!isFinite(node.x) || !isFinite(node.y) || !isFinite(adjR)) continue; at line 2319 in NPC draw loop, prevents createRadialGradient crash ✅
+In Progress
+- Starmap NPC positioning STILL BROKEN — SPATIAL-04 fix was ineffective because sectorOwner is empty (backend faction_territories has sector_ids=[] for all factions), so sectorTerritoryCenter lookup returns nothing and ALL NPCs fall back to old secPos behavior. Sol Prime, Crucible, and other NPCs still outside territory polygons.
+Blocked
+- (none currently)
+Key Decisions
+- NIM primary, Ollama fallback — user has 8B credits/month on NVIDIA dev keys
+- Full fallback chain: NIM primary → NIM fallback → Ollama local(3B) → OpenRouter free → template fallback
+- Dead code stripped: CF/Together/Gemini/Grok removed from routing
+- Two routing systems kept aligned: nvidia_nim_client.py and llm_router.py
+- Flexible parser approach for NIM responses: keyword-based fallback extraction
+- Two-pronged frontend fix: nginx proxy rules + content-type validation in fedFetch
+- nginx proxy_pass http://backend:8000; (no trailing slash) preserves full original URI
+- NPC placement must use NPC's own affiliation field — not sectorOwner (which is empty) — to find correct Voronoi cell centroid
+Next Steps
+1. Fix NPC placement to use NPC affiliation — in buildNodesSpatial() NPC placement loop (~line 985-1021): instead of grouping NPCs by sector and using sectorOwner[secId] (empty), group by NPC's affiliation field and look up voronoiCells.find(c => c.factionId === npc.affiliation) for the centroid. For unaffiliated NPCs (~26 of them), fall back to sector position.
+2. SCP updated starmap.js to VPS /docker/federation-game/public_html/starmap.js
+3. Verify on VPS by curling /map/data and checking NPC positions — do NOT ask user to check console
+4. Consider making autonomous tick periodic — currently runs once at startup
+5. Investigate remaining 404 NPC sub-endpoints
+Critical Context
+- sectorOwner map is EMPTY — backend faction_territories returns sector_ids=[] for every faction, so sectorOwner[t.sector_id] = t.faction_id at line 857-858 produces nothing. SPATIAL-04 fix was a no-op.
+- Voronoi cells computed on FRONTEND only — voronoiCells array built at line 1070 from faction home positions (spatialSectors[factionHomeId]), NOT from backend territory data. Available as global voronoiCells[] with {factionId, polygon, centroid}.
+- ~26 NPCs have NO affiliation (affiliation=?/null): Paradox, The Void Oracle, The Trickster, Keeper of the Null, Shadowborn, The Wanderer, The Cartographer, Scout Aria, The Oracle, Solace Heartmend, Baroness Greed, Lyra Swiftwind, Lord Malaxis, General Devastation, The Hermit, Thorg Ironhammer, Kyren Frostblade, Tempus, The Spectre, Cipher, Brother Mercy, The Jester, Zephyr Silverspeak, Captain Valor, Elara Moonwhisper, Dr. Sylas Cunningham
+- ~10 affiliated NPCs are in sectors OUTSIDE their faction territory: Ambassador Silven (pinnacle/diplomatic_corps), Philosopher Zenith (beyond/consciousness_collective), etc.
+- Sol Prime NPCs still outside territory — Paradox (no affiliation), Dr. Prometheus (research_division), General Devastation (no affiliation), Merchant-Prince Aurelius (economic_council), Captain Valor (no affiliation), Marshal Ironbound (military_command)
+- Crucible NPCs: Chancellor Harmony (diplomatic_corps), The Oracle (no affiliation)
+- Correct fix approach: use npc.affiliation (not sectorOwner[secId]) to find voronoiCells.find(c => c.factionId === npc.affiliation).centroid for placement. Unaffiliated NPCs stay at sector position.
+- factionZones array (lines 1088-1129): each entry has fcx, fcy (centroid), voronoiCell, color, fid — alternative to voronoiCells for faction centroid lookup
+- voronoiCells global (line 53): [{factionId, polygon, centroid}] — populated at line 1070
+- NPC data structure from /map/data: NPCs have affiliation field (e.g., "research_division", "diplomatic_corps", or null/unset for unaffiliated); npc_locations has sector_id per NPC
+- npcsBySector grouping at line ~970: groups NPCs by npcSector[npc.id] (which comes from npc_locations). This grouping is fine for orbit-ring packing, but the CENTER point needs to come from the NPC's affiliation, not the sector's owner.
+- Two separate routing systems: nvidia_nim_client.py (NimClient.call) used by autonomy/diplomacy/choice_resolver; llm_router.py (route_call) used by cognition/narrator/map_endpoints
+- TASK_MODELS config in llm_router.py: leader primary=nim/meta/llama-3.3-70b-instruct (timeout 20s), fallback_nim=nim/nvidia/llama-3.3-nemotron-super-49b-v1.5 (timeout 30s)
+- Frontend nginx proxy: 12 new location blocks proxying to backend; try_files catch-all moved to last position
+- starmap.js NPC draw loop (line 2311+): iterates nodes[] array; NaN guard added at line 2319
+Relevant Files
+- /docker/federation-game/.env: Has OLLAMA_BASE_URL; 6 NIM API keys; OPENROUTER_API_KEY_1
+- /docker/federation-game/docker-compose.yml: Frontend volume mount public_html:/usr/share/nginx/html:ro
+- /docker/federation-game/public_html/starmap.js: NEEDS FIX — SPATIAL-04 deployed but ineffective; NPC placement loop (~line 985-1021) needs to use NPC affiliation field instead of empty sectorOwner
+- S:\federation\federation-game\frontend\starmap.js: Local copy; buildNodesSpatial() at ~line 780; sectorOwner built at line 857-858 (empty); voronoiCells computed at line 1070; NPC placement loop at ~line 985-1021; NaN guard at line 2319
+- S:\federation\federation-game\frontend\nginx-default.conf: DEPLOYED — 12 proxy location blocks
+- S:\federation\federation-game\frontend\fed-fetch.js: DEPLOYED — content-type validation
+- S:\federation\federation-game\frontend\earth.js: DEPLOYED — content-type validation
+- S:\federation\federation-game\backend\nvidia_nim_client.py: DEPLOYED — NIM→Ollama→OpenRouter
+- S:\federation\federation-game\backend\llm_router.py: DEPLOYED — route_call() chain
+- S:\federation\federation-game\backend\tick_engine.py: DEPLOYED — cognition in autonomous tick
+- S:\federation\federation-game\backend\npc_cognition.py: DEPLOYED — flexible parser
+- S:\federation\federation-game\backend\map_endpoints.py: /map/data endpoint; enriches NPCs with sector_id from npc_locations; faction_territories returns empty sector_ids=[]
+- S:\federation\federation-game\backend\main.py: Has NPC location/relationships/thoughts/current_state fixes

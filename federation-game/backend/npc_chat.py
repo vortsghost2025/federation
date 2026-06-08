@@ -20,6 +20,8 @@ from typing import Dict, List, Optional, Any
 import redis
 import logging
 
+from npc_activity_logger import log_npc_activity
+
 logger = logging.getLogger(__name__)
 
 OPENROUTER_API_KEY = os.environ.get("OPENROUTER_API_KEY", "")
@@ -699,6 +701,14 @@ def chat_with_npc(
             "sentiment": sentiment,
             "opinion_updated": False,
         }
+
+    log_npc_activity(character.char_id, "chat", {
+        "success": result_data["success"],
+        "response": result_data.get("response", "")[:200],
+        "sentiment": sentiment,
+        "model": result_data.get("model", "unknown"),
+        "opinion_updated": result_data.get("opinion_updated", False),
+    })
 
     return result_data
 

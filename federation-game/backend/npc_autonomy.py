@@ -39,6 +39,7 @@ from faction_dynamics import (
     compute_faction_stances,
     store_faction_dynamics,
 )
+from npc_activity_logger import log_npc_activity
 import logging
 
 logger = logging.getLogger(__name__)
@@ -1087,6 +1088,11 @@ def _process_single_npc(npc: Dict) -> Dict[str, Any]:
                 broadcast_decision_event(decision, affiliation)
             except Exception:
                 logger.debug("Decision broadcast failed for NPC decision event")
+            log_npc_activity(char_id, "interaction", {
+                "category": decision.get("category", ""),
+                "description": decision.get("description", ""),
+                "affiliation": affiliation,
+            })
             # Significance gate: prioritize LLM calls for meaningful moments
             category = decision.get("category", "")
             sig = SIGNIFICANCE_PRIORITY.get(category, "medium")
@@ -2504,6 +2510,16 @@ def make_decision(char_id, char_name, archetype, affiliation, mood=""):
     r.zadd(key, {json.dumps(decision): decision["ts"]})
     r.zremrangebyrank(key, 0, -(MAX_DECISIONS + 1))
     r.expire(key, DECISION_TTL)
+
+    log_npc_activity(char_id, "decision", {
+        "category": category,
+        "description": decision.get("description", ""),
+        "reasoning": decision.get("reasoning", ""),
+        "score": decision.get("score", 0),
+        "options_considered": decision.get("considered_options", 0),
+        "action_taken": decision.get("action_taken", "none"),
+        "action_desc": decision.get("action_desc", ""),
+    })
 
     return decision
 

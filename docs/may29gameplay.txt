@@ -1,0 +1,136 @@
+# Federation Game Status Tracker
+
+Original audit date: May 29, 2026
+Refreshed against the current repo and live VPS: June 1, 2026
+
+This file now reflects what is actually true today.
+
+---
+
+## Done
+
+### 1. `main.py` split is effectively done
+
+- The backend is no longer the old giant single-route file.
+- `federation-game/backend/main.py` is now a small composition entrypoint.
+- The API surface is split across the router modules in `federation-game/backend/routes/`.
+
+### 2. WebSocket extraction is done
+
+- `ConnectionManager` and `/ws` now live in `backend/routes/websocket.py`.
+- This should no longer be tracked as remaining cleanup work.
+
+### 3. Frontend page split work is effectively done
+
+- The active page set is:
+  `index.html`, `adult.html`, `bridge.html`, `starmap.html`, `simulation.html`,
+  `earth.html`, `constellation.html`, `spectator.html`, `worldguide.html`
+- `spectator.html` now loads `spectator.js`
+- `worldguide.html` currently has no inline `<script>` block
+- The earlier note saying those two pages still needed JS extraction was stale
+
+### 4. Route recovery and compatibility work is done
+
+The live backend now returns `200` for the previously watched routes:
+
+- `/event`
+- `/quests`
+- `/npcs/test/quest-chains`
+- `/npcs/test/goals`
+
+Additional compatibility endpoints were also added and verified:
+
+- `/cognition`
+- `/narrator`
+- `/world`
+- `/simulation`
+
+### 5. Smoke verification is green
+
+- Backend smoke sweep: `13/13` passing
+- This includes the compatibility endpoints above
+
+### 6. Live page audit is clean
+
+Checked against `https://federation-game.deliberatefederation.cloud` on June 1, 2026:
+
+- 9 of 9 page URLs returned `200`
+- Static page-to-page links returned `200`
+- Checked local CSS and JS asset links returned `200`
+- `worldguide.html` in-page anchor links resolved
+
+Note:
+- `starmap.html` had a dormant "View in Live Sim" link placeholder in its idle state
+- That is being normalized to a valid page target so the resting markup is clean too
+
+---
+
+## Partially Done
+
+### 7. Root repo cleanup
+
+There has already been meaningful archive/cleanup work, but the repo is still noisy outside `federation-game/`.
+
+Still needs another pass:
+
+- stale root-level scripts
+- old screenshots
+- old scratch and demo files
+- legacy deployment artifacts
+- older duplicated copies outside the active deployment surface
+
+### 8. Documentation cleanup
+
+The older docs drifted faster than the code.
+
+This refresh fixes:
+
+- `README.md`
+- `federation-game/README.md`
+- `docs/may29gameplay.txt`
+
+Other legacy notes may still need a future pass if they are meant to stay authoritative.
+
+---
+
+## Not Done Yet
+
+### 9. Headless box monitoring
+
+- Still not started
+- VPS observability exists
+- Headless box monitoring still needs its own lightweight health checks or alerting
+
+### 10. Real auth
+
+- Still not started
+- Simulation credentials are still not the same thing as real public-facing auth
+
+### 11. Final root hygiene and selective commits
+
+- The repo still contains a large amount of local churn
+- It needs a careful review before any "clean" milestone claim
+
+---
+
+## Current Bottom Line
+
+What is actually true now:
+
+- The backend split happened
+- WebSocket extraction happened
+- Spectator external JS extraction happened
+- World Guide is no longer carrying the old inline script issue
+- The watched API routes are healthy
+- The public Federation page set is serving correctly
+
+What is still honestly unfinished:
+
+- root repo cleanup pass 2
+- headless box monitoring
+- real auth
+- broader legacy-doc consistency
+
+If you want the shortest possible summary:
+
+The live Federation website is working, the main backend split work is done enough to stop calling it "near complete," and the remaining work is mostly cleanup, monitoring, and auth rather than broken core gameplay paths.

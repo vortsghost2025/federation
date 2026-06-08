@@ -806,7 +806,6 @@ function buildNodesSpatial() {
   }
   const factions = mapData.factions || {};
   const territories = mapData.faction_territories || [];
-  const npcLocations = mapData.npc_locations || [];
   const sectors = mapData.sectors || [];
   const now = Date.now() / 1000;
 
@@ -983,32 +982,52 @@ function buildNodesSpatial() {
     npcsBySector[secId].push(npc);
   }
 
-// Place NPCs at their sector positions with orbit-ring packing
-  // SPATIAL-03C: Wider orbit spacing to prevent dense central cluster
+// Place NPCs inside their faction's Voronoi territory with orbit-ring packing
+  // SPATIAL-04: Anchor NPCs to their AFFILIATION's Voronoi centroid, not sector position.
+  // This keeps affiliated NPCs inside their faction's colored polygon.
+  // Unaffiliated NPCs stay at their sector position (correct — they roam freely).
+  const factionCentroidCache = {}; // factionId → {cx, cy}
+  function getFactionCentroid(fid) {
+    if (factionCentroidCache[fid]) return factionCentroidCache[fid];
+    const cell = voronoiCells.find(c => c.factionId === fid);
+    if (cell && cell.centroid) {
+      factionCentroidCache[fid] = cell.centroid;
+      return cell.centroid;
+    }
+    factionCentroidCache[fid] = null;
+    return null;
+  }
+
   for (const secId in npcsBySector) {
     const sectorNpcs = npcsBySector[secId];
     const count = sectorNpcs.length;
     const secPos = spatialSectors[secId];
-    if (!secPos) continue;
-    const baseRadius = 25; // SPATIAL-03C: was 18, wider spread
-    const ringSpacing = 20; // SPATIAL-03C: was 16, wider rings
+    const baseRadius = 25;
+    const ringSpacing = 20;
     sectorNpcs.forEach((npc, j) => {
       const rng = seededRand(hashStr(npc.id || npc.name || (secId + j)));
+      // SPATIAL-04: Use affiliation's Voronoi centroid if available, else sector position
+      const aff = npc.affiliation;
+      const affCentroid = aff ? getFactionCentroid(aff) : null;
+      const center = affCentroid || secPos;
+      if (!center) return;
+      // Small jitter so NPCs from same sector don't stack perfectly
+      const jitterX = (rng() - 0.5) * 8;
+      const jitterY = (rng() - 0.5) * 8;
       // Determine ring and angle
       let ring, slotInRing, slotsInRing;
-      if (j < 4) { ring = 0; slotInRing = j; slotsInRing = Math.min(4, count); } // SPATIAL-03C: max 4 inner
+      if (j < 4) { ring = 0; slotInRing = j; slotsInRing = Math.min(4, count); }
       else if (j < 10) { ring = 1; slotInRing = j - 4; slotsInRing = Math.min(6, count - 4); }
       else { ring = 2; slotInRing = j - 10; slotsInRing = Math.min(8, count - 10); }
       const ringR = baseRadius + ring * ringSpacing;
       const angleStep = (Math.PI * 2) / Math.max(1, slotsInRing);
       const subAngle = slotInRing * angleStep + rng() * angleStep * 0.4;
-      const x = secPos.cx + Math.cos(subAngle) * (ringR + rng() * 6); // SPATIAL-03C: more spread
-      const y = secPos.cy + Math.sin(subAngle) * (ringR + rng() * 6);
+      const x = center.cx + jitterX + Math.cos(subAngle) * (ringR + rng() * 6);
+      const y = center.cy + jitterY + Math.sin(subAngle) * (ringR + rng() * 6);
       const age = npc.last_active ? (now - npc.last_active) : 9999;
       const activity = Math.max(0.2, 1 - age / 3600);
       // SPATIAL-03C: Smaller NPC dots — was 3+activity*5, now 2+activity*3
       const radius = 2 + activity * 3;
-      const aff = npc.affiliation;
       const fColor = aff && factions[aff] ? factions[aff].color : '#9e9e9e';
       nodes.push({
         id: npc.id, name: npc.name || npc.id, x, y, radius,
@@ -2299,6 +2318,8 @@ if (!spatialMode) {
 const spatialTerritoryMode = spatialMode && currentView === 'territory';
 const rScale = spatialTerritoryMode ? (readableSpatialMode ? 0.9 : 0.7) : 1.0;
 const adjR = r * rScale;
+        // Guard: skip NPCs with non-finite coordinates (prevents createRadialGradient crash)
+        if (!isFinite(node.x) || !isFinite(node.y) || !isFinite(adjR)) continue;
         // SPATIAL-03A: Fade NPCs not in selected faction
         const npcFade = selectedFaction ? (node.faction === selectedFaction ? 1.0 : 0.15) : 1.0;
         // Skip drawing very faded NPCs (optimization)

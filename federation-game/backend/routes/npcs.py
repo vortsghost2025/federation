@@ -186,6 +186,17 @@ async def npc_broadcast_events(char_id: str, limit: int = 10):
     return {"char_id": char_id, "events": events, "count": len(events)}
 
 
+@router.get("/npcs/{char_id}/log")
+async def npc_activity_log(char_id: str, limit: int = 50, type: str = None):
+    if char_id not in game_state.npc_system.characters:
+        raise HTTPException(status_code=404, detail="Character not found")
+    from npc_activity_logger import get_npc_activity_log
+
+    entry_types = [type] if type else None
+    entries = get_npc_activity_log(char_id, limit=limit, entry_types=entry_types)
+    return {"char_id": char_id, "entries": entries, "count": len(entries)}
+
+
 @router.get("/broadcast-events")
 async def all_broadcast_events(limit: int = 20):
     from npc_autonomy import get_broadcast_events

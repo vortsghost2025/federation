@@ -56,6 +56,10 @@
       const resp = await fetch(url, { ...fetchOpts, signal: controller.signal });
       clearTimeout(timer);
       if (!resp.ok) throw new Error(`${resp.status} ${resp.statusText}`);
+      const ct = resp.headers.get('content-type') || '';
+      if (ct.includes('text/html')) {
+        throw new Error('Server returned HTML instead of JSON (endpoint may be misconfigured)');
+      }
       const data = await resp.json();
       updateLinkHealth(key, true);
       return data;
@@ -64,6 +68,9 @@
       const msg = e.name === 'AbortError' ? 'Timeout' : e.message;
       showToast(key + ' failed: ' + msg, 'warn');
       updateLinkHealth(key, false);
+      // Dispatch event for error-reporter.js to pick up
+      const evt = new CustomEvent('fedFetch:error', { detail: { key: key, url: url, error: msg } });
+      document.dispatchEvent(evt);
       return null;
     }
   }

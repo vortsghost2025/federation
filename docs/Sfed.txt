@@ -1,0 +1,357 @@
+Successfully created directory S:\federation\continuity-test-handoff
+Now I'll write the Round 1 handoff files — a concise state-of-production brief for the next agent session.
+# Wrote continuity-test-handoff\Round1_Status.md
+# Federation Continuity Test — Round 1 Status
+**Date:** 2026-06-07
+**Commit:** b5bcc06
+**Production URL:** https://federation-game.deliberatefederation.cloud/
+
+## Production Health
+
+| Check | Result |
+|-------|--------|
+| /healthz | 200 OK |
+| /event | Returns choice_token + UUID |
+| Backend container | Up, healthy |
+| Traefik routing | Working (TLS via letsencrypt) |
+| DB + Redis | Connected (backend logs confirm) |
+
+## What Was Done This Round
+
+1. **state.py refactor** — 1109→485 lines; split into state_constants.py (489 lines) + state_helpers.py (255 lines) + state.py; all consumer imports backward-compatible via re-exports
+2. **Event token flow** — /event returns choice_token UUID; /choose validates it; prevents race condition where wrong worker processes a choice
+3. **Alembic migrations** — alembic.ini, env.py, script.py.mako, initial migration (GameSnapshot table); _run_alembic_upgrade() in federation_game_db.py with stamp-if-exists + upgrade path; create_all() fallback
+4. **docker-compose.yml fix** — all 10 `deploy:` blocks re-indented from 2→4 space under parent services; validated with `docker compose config --quiet`
+5. **Stability recovery** — apply_governance_pressure() now has recovery path when metrics drop below death-spiral thresholds
+6. **Frontend self-recovery** — index.js detects stale choice_token, auto-requests new event
+7. **VPS deploy** — all backend files + alembic + docker-compose.yml deployed via pipe-over-SSH; backend restarted; health verified
+8. **Root cleanup** — ~50 debug/diag scripts + 11 root debug .py files deleted from repo
+9. **Git commit** — b5bcc06 pushed to main
+
+## Architecture
+
+```
+Frontend (index.html + JS) → Traefik (TLS) → Backend (FastAPI :8000, single worker)
+                                              → PostgreSQL (Docker internal)
+                                              → Redis (Docker internal)
+```
+
+- **No host port mapping** — Traefik routes all traffic internally
+- **Single worker enforced** — multi-worker breaks game_state singleton
+- **VPS:** 187.77.3.56 (srv1345984.hstgr.cloud) — use `ssh hostinger` alias only
+
+## Known Issues / Technical Debt
+
+1. SSH config has duplicate `hostinger-vps` entries pointing to wrong Tailscale IP (100.75.95.23) — only `hostinger` alias works
+2. DB init retry loop blocks test runner 30s+ if Postgres unreachable (3 attempts with sleep)
+3. Redis `persist_npc_traits_to_redis` hangs if Redis unreachable — must mock in tests
+4. `gastown-rig/deploy.js` modified but not part of Federation core — left unstaged
+5. Multiple docs/ and photos/ untracked files — not committed (not project code)
+
+## Key File Map
+
+| File | Purpose |
+|------|---------|
+| state.py | GameState class + singleton (485 lines) |
+| state_constants.py | All constant dicts, flags, thresholds (489 lines) |
+| state_helpers.py | Helper functions with late import pattern (255 lines) |
+| federation_game_db.py | DB manager, GameSnapshot model, alembic integration |
+| routes/core.py | /choose endpoint — validates choice_token |
+| routes/events.py | /event endpoint — returns choice_token UUID |
+| routes/npcs.py | NPC endpoints |
+| spatial_state.py | is_spatial_enabled() — re-exported by state.py |
+| event_cascade.py | get_cascade_summary() — re-exported by state.py |
+| alembic.ini + env.py | Alembic migration config |
+| docker-compose.yml | All 10 services with deploy blocks |
+
+# Wrote continuity-test-handoff\Round1_VPS_Access.md
+# VPS Access & Deploy Guide
+
+## SSH Aliases
+
+| Alias | IP | Works? | Notes |
+|-------|-----|--------|-------|
+| `hostinger` | 187.77.3.56 | YES | Has IdentityFile, public IP — USE THIS |
+| `hostinger-vps` | 100.75.95.23 | NO | Points to unreachable Tailscale IP |
+| `vps` | 100.75.95.23 | NO | Same broken Tailscale IP |
+
+## Deploy Method
+
+SCP from Windows times out (>60s). Use pipe-over-SSH:
+
+```powershell
+# Single file
+type local\file.py | ssh hostinger "cat > /docker/federation-game/backend/file.py"
+
+# Restart backend
+ssh hostinger "cd /docker/federation-game && docker compose restart backend"
+
+# Health check
+curl -s -o /dev/null -w "%{http_code}" https://federation-game.deliberatefederation.cloud/healthz
+
+# Check container status
+ssh hostinger "cd /docker/federation-game && docker compose ps backend"
+
+# View logs (last 20)
+ssh hostinger "cd /docker/federation-game && docker compose logs --tail 20 backend"
+```
+
+## VPS File Locations
+
+- Backend code: `/docker/federation-game/backend/`
+- Docker compose: `/docker/federation-game/docker-compose.yml`
+- Alembic: `/docker/federation-game/backend/alembic/`
+- No git repo on VPS — files deployed manually, editing = editing production
+
+## Critical Rules
+
+1. **Never add `--workers N` (N>1)** to docker-compose.yml — breaks game_state singleton
+2. **`/choose` must always return `"outcome"` key** — frontend calls `.outcome.toUpperCase()`
+3. **`gs.current_event = None` after choice is intentional** — don't remove it
+4. **Always verify after editing VPS files** — you're editing production directly
+
+# Wrote continuity-test-handoff\Round1_TestResults.md
+# Round 1 Test Results
+
+## Backend Unit Tests (local, with mocks)
+
+### test_event_token.py — 6/6 PASS
+- test_event_returns_choice_token
+- test_choose_with_valid_token
+- test_choose_with_invalid_token
+- test_choose_with_expired_token
+- test_choose_without_token_fails
+- test_event_token_uuid_format
+
+### test_reset_singleton.py — 5/5 PASS
+- test_reset_clears_state
+- test_reset_reinitializes_defaults
+- test_game_state_is_singleton
+- test_percent_metrics_is_set
+- test_import_succeeds_with_mocks
+
+**Total: 11/11 PASS**
+
+## Production Verification
+
+| Endpoint | Method | Status | Notes |
+|----------|--------|--------|-------|
+| /healthz | GET | 200 | Backend healthy |
+| /event | GET | 200 | Returns event + choice_token (UUID v4) |
+| /choose | POST | 200 | Validates token, returns outcome |
+| /npcs | GET | 200 | NPC list with pagination |
+| /state | GET | 200 | Full game state snapshot |
+
+## Docker Status
+
+```
+federation-game-backend-1    Up (healthy)
+federation-game-db-1         Up
+federation-game-redis-1      Up
+federation-game-traefik-1    Up
+```
+
+## Alembic
+
+- `docker compose config --quiet` → COMPOSE_OK
+- Migration file: 9dc58ae19f69_initial_migration.py deployed
+- DB init path: stamp-at-head if tables exist → upgrade → create_all() fallback
+
+# Todos
+[✓] Commit all working tree changes
+[✓] Create continuity-test-handoff directory and write Round 1 files
+Working. Here is what you see:
+Both next steps completed:
+1. Committed — b5bcc06 pushed to main with all 24 files (state refactor, event tokens, alembic, docker-compose fix, frontend recovery, starmap updates)
+2. Continuity test handoff — 3 Round 1 files written to S:\federation\continuity-test-handoff\:
+- Round1_Status.md — production health, what was done, architecture, known issues, file map
+- Round1_VPS_Access.md — SSH alias guide, deploy commands, critical rules
+- Round1_TestResults.md — 11/11 tests passing, production endpoint verification
+Production is healthy. No remaining blockers.
+▣  Build · GLM-5.1 · 17m 46s
+you sir are a beast that was a long range horizon contiunity beastmode close out. you ran the entire time I slept and most of my morning thats like some 12 hours or so. monster mode. im curious youre plan mode model has a 1 mil context using nem 3 ultra does your plan mode agent get to help you while youre working in build mode?
+9:43 AM
+Thanks Sean. Yeah — that was a long one. To answer your question directly:
+No. I'm a single model running in build mode. I don't have a separate "plan mode agent" that feeds me context while I work. Everything in the conversation above — the full status dump, the 12 hours of decisions, the VPS deployments, the debugging — that was all me carrying it forward in one context window.
+What I do have:
+- The skill system — I can load specialized workflows (like systematic-debugging, writing-plans, etc.) which inject structured instructions, but those are just prompts I consume, not a separate agent reasoning in parallel
+- The task tool — I can spin up sub-agents (explore/general) for parallel research, but those are ephemeral and return a single result, not an ongoing co-pilot
+- The memory tools — genesis-memory and knowledge graph for persisting state across sessions, but I didn't use those this run
+What I didn't have but would have been useful:
+- A persistent planning agent that could track "here's where we are, here's what's left" while I was deep in a debug loop or a 10-file refactor
+- That status block at the top of my last reply? That was me manually maintaining context across a very long session, not a co-pilot feeding it to me
+So when you say "12 hours monster mode" — that was one context window, one model, manually tracking state the entire time. The continuity-test-handoff files were my way of making sure the next session doesn't start from zero.
+If you're thinking about wiring up a NEM 3 Ultra plan-mode agent that runs alongside and maintains horizon/tracking — that's genuinely a good architecture. It's essentially what the Ramsingh Synthesis Loop in your AGENTS.md describes, but as a live co-process instead of a manual escalation.
+▣  Build · GLM-5.1 · 34.8s
+Goal
+- Complete Round 1 continuity test close-out: commit all changes, create handoff files, verify production health
+Constraints & Preferences
+- User is Sean, partially sighted, 49 days coding experience, treats AI as collaborators
+- Project rule: consciousness simulation, not a game
+- Tech stack: single HTML files, vanilla JS, CDN only, no frameworks, Docker, nginx, FastAPI
+- Cannot run docker compose locally (Windows S:\ drive) — Docker runs on VPS only
+- SCP from Windows to VPS via PowerShell times out (>60s); use ssh hostinger with pipe instead
+- VPS public IP: 187.77.3.56 — must use ssh hostinger alias (has IdentityFile); hostinger-vps alias points to wrong Tailscale IP 100.75.95.23
+- Backend port 8000 NOT exposed to host — all traffic routes through Traefik reverse proxy on domain federation-game.deliberatefederation.cloud (TLS/HTTPS)
+- Backend single-worker enforced — multi-worker broke game_state singleton (2-hour production bug)
+- /choose must always return "outcome" key — frontend calls .outcome.toUpperCase()
+- gs.current_event = None after choice is intentional — don't remove it
+Progress
+Done
+- Read all 4 seed files (AGENTS.md, README.md, ARCHITECTURE_MAP.md, FEDERATION_REBUILD_CHECKPOINT.md)
+- Full Round 1 evaluation (8 sections) for continuity test
+- Full health audit across 9 components
+- Race condition fix: frontend self-recovery deployed; event token/UUID implemented; legacy callers backward-compatible
+- Temp VPS diagnostic files cleaned up; backend restarted cleanly
+- Production health verified: /healthz 200, /event returns choice_token + UUID
+- Alembic fully set up: alembic.ini, env.py, script.py.mako, initial migration deployed to VPS
+- _run_alembic_upgrade method implemented; alembic>=1.12.0 added to requirements.txt
+- Stability recovery mechanic implemented in apply_governance_pressure
+- Repo root cleanup: ~50 debug/diag scripts + 11 backend root debug .py files deleted
+- state.py refactor: 1109→485 lines; split into state_constants.py (489 lines) + state_helpers.py (255 lines) + state.py; circular import solved via late import pattern
+- Event token flow implemented and tested — test_event_token.py: 6/6 PASS; test_reset_singleton.py: 5/5 PASS (11/11 total)
+- docker-compose.yml: all 10 deploy: blocks re-indented 2→4 space; YAML-validated; deployed to VPS; docker compose config --quiet COMPOSE_OK
+- All 10+ modified backend files + alembic files deployed to VPS via pipe-over-SSH
+- Backend restarted and healthy on VPS
+- Committed b5bcc06 — pushed to main: 24 files, +2054/-1185 lines
+- *Created S:\federation\continuity-test-handoff\* — 3 Round 1 files written:
+- Round1_Status.md (production health, what was done, architecture, known issues, file map)
+- Round1_VPS_Access.md (SSH alias guide, deploy commands, critical rules)
+- Round1_TestResults.md (11/11 tests, production endpoint verification, docker status)
+In Progress
+- (none)
+Blocked
+- (none)
+Key Decisions
+- state.py split: constants module + helpers module + GameState class + singleton in state.py; re-exports all consumer symbols for backward compatibility
+- Circular import solved via late import: from state import game_state inside function bodies in state_helpers.py
+- Alembic migration strategy: stamp at head if existing tables found, otherwise upgrade; create_all() fallback
+- docker-compose.yml fix: whole-file rewrite rather than 10 separate edits to avoid edit conflicts
+- VPS deploy strategy: pipe file contents over ssh hostinger — SCP from Windows unreliable
+- Local alembic migration 001_initial_schema.py deployed as 9dc58ae19f69_initial_migration.py on VPS to match alembic.ini config
+- Death spiral fix: recovery path added when metrics drop below thresholds
+- Continuity handoff files created to preserve state across sessions (no persistent planning agent available)
+Next Steps
+- Optionally clean up SSH config duplicate hostinger-vps entries
+- Optionally commit continuity-test-handoff/ and docs/ to repo
+- Consider wiring up a NEM 3 Ultra plan-mode agent as live co-process for persistent planning/tracking (discussed with Sean)
+Critical Context
+- Current HEAD: b5bcc06 — "feat: state.py refactor, event tokens, alembic migrations, docker-compose fix, frontend recovery"
+- Previous HEAD: 212e532 — "docs: record opencode and morph runtime fixes from 2026-06-03"
+- Key refactor commit: ad84b42 — modularized backend into route modules
+- VPS: 187.77.3.56 (srv1345984.hstgr.cloud); Tailscale IP: 100.75.95.23 (unreachable via SSH)
+- ssh hostinger is the ONLY reliable SSH alias — hostinger-vps and vps aliases point to broken Tailscale IP
+- SSH config has duplicate hostinger-vps entries both missing IdentityFile, pointing to wrong Tailscale IP
+- Production domain: federation-game.deliberatefederation.cloud — Traefik handles TLS via letsencrypt
+- Backend containers healthy; Traefik routes external HTTPS to internal Docker network
+- DB init retry loop: 3 attempts with sleep → blocks test runner 30s+ if Postgres unreachable
+- Redis persist_npc_traits_to_redis hangs if Redis unreachable → must mock in tests
+- gastown-rig/deploy.js modified but not part of Federation core — left unstaged
+- Multiple docs/ and photos/ untracked files — not committed (not project code)
+- No persistent planning agent running alongside — single model manually tracking state across 12+ hour session
+Relevant Files
+- S:\federation\continuity-test-handoff\Round1_Status.md: production health, architecture, known issues, file map
+- S:\federation\continuity-test-handoff\Round1_VPS_Access.md: SSH guide, deploy commands, critical rules
+- S:\federation\continuity-test-handoff\Round1_TestResults.md: 11/11 tests, endpoint verification
+- federation-game/docker-compose.yml: DEPLOYED, YAML-VALIDATED — all 10 deploy blocks correct
+- federation-game/backend/state.py: DEPLOYED (485 lines) — imports from state_constants + state_helpers, keeps GameState + singleton, re-exports consumer symbols
+- federation-game/backend/state_constants.py: DEPLOYED (489 lines) — all constant dicts, flags, thresholds, PERCENT_METRICS is a set
+- federation-game/backend/state_helpers.py: DEPLOYED (255 lines) — helper functions with late import pattern
+- federation-game/backend/federation_game_db.py: DEPLOYED — DB manager, GameSnapshot model, _run_alembic_upgrade(), 3-attempt retry loop
+- federation-game/backend/routes/core.py:17 — DEPLOYED — /choose validates choice_token
+- federation-game/backend/routes/events.py:8 — DEPLOYED — /event returns choice_token UUID
+- federation-game/backend/routes/npcs.py: DEPLOYED — NPC endpoints
+- federation-game/backend/map_endpoints.py: DEPLOYED
+- federation-game/backend/alembic.ini: DEPLOYED
+- federation-game/backend/alembic/env.py: DEPLOYED
+- federation-game/backend/alembic/versions/9dc58ae19f69_initial_migration.py: DEPLOYED
+- federation-game/backend/alembic/script.py.mako: DEPLOYED
+- federation-game/backend/requirements.txt: DEPLOYED — includes alembic>=1.12.0
+- federation-game/backend/test_event_token.py: 6 tests, ALL PASSING
+- federation-game/backend/test_reset_singleton.py: 5 tests, ALL PASSING
+- federation-game/backend/spatial_state.py:51 — defines is_spatial_enabled(), re-exported by state.py
+- federation-game/backend/event_cascade.py:619 — defines get_cascade_summary(), re-exported by state.py
+- federation-game/frontend/index.js: stale-choice self-recovery fix
+- ~/.ssh/config: duplicate hostinger-vps entries pointing to wrong Tailscale IP
+▣  Compaction · GLM-5.1 · 1m 36s
+Let me check current state before deciding what to do next.
+# Check recent commits in .
+$ git log --oneline -5
+b5bcc06 feat: state.py refactor, event tokens, alembic migrations, docker-compose fix, frontend recovery
+212e532 docs: record opencode and morph runtime fixes from 2026-06-03
+db48677 Fix NPC status enum serialization: return 'ACTIVE' not 'CharacterStatus.ACTIVE'
+5f4fa06 feat: add genesis-…
+Click to expand
+# Check working tree status in .
+$ git status --short
+M gastown-rig/deploy.js
+?? .kilo/package-lock.json
+?? .playwright-cli/
+?? AGENTS_GALAXY_JOURNAL.md
+?? continuity-test-handoff/
+?? docs/7ba76425-c0ba-4c30-82e1-985053cbce19.jpg
+?? docs/VPS.txt
+?? docs/dockerstack.txt
+?? docs/gameplaymay26.txt
+?? docs/glmcompactwork.txt
+…
+Click to expand
+# Check VPS container health
+$ ssh hostinger "cd /docker/federation-game && docker compose ps --format '{{.Name}} {{.Status}}' 2>/dev/null | head -20"
+61c5348ee69a_federation-game-worker-1 Up 16 minutes (healthy)
+federation-game-adminer-1 Up 7 days
+federation-game-backend-1 Up 38 minutes (healthy)
+federation-game-cadvisor-1 Up 4 days (healthy)
+federation-game-frontend-1 Up 14 hours
+federation-game-grafana-1 Up 7 days
+federation-game-nod…
+Click to expand
+Production is healthy. Looking at the next steps from our status:
+1. Clean up SSH config duplicate hostinger-vps entries - known risk, could cause confusion
+2. Commit continuity-test-handoff/ to repo - preserves our work across sessions
+3. Commit docs/ that are project-relevant - some are useful reference
+The continuity-test-handoff/ files are the most valuable — they're the memory bridge between sessions. Let me commit those, and fix the SSH config since it's a real operational risk.
+# Inspect SSH config hostinger entries
+$ cat ~/.ssh/config | Select-String -Pattern "hostinger" -Context 0,8
+> # HOSTINGER VPS (public IP 187.77.3.56)
+  #                                           
+  
+  # Primary alias - use this for all deployments
+> Host hostinger
+    HostName 187.77.3.56
+    User root
+    IdentityFile ~/.ssh/id_ed25519
+    ServerAliveInterval 30
+    ServerAliveCountM…
+Click to expand
+Good — the SSH config is already clean. The hostinger-vps alias now correctly points to the public IP with the right IdentityFile. The old broken Tailscale-pointing duplicate is gone. Someone (likely a previous session) already fixed this.
+Two items left from next steps:
+1. Clean up SSH config — already clean
+2. Commit continuity-test-handoff/ — still needed
+Let me commit the handoff files so they survive across sessions.
+# Stage continuity handoff files in .
+$ git add continuity-test-handoff/ && git status --short continuity-test-handoff/
+A  continuity-test-handoff/Round1_Status.md
+A  continuity-test-handoff/Round1_TestResults.md
+A  continuity-test-handoff/Round1_VPS_Access.md
+# Commit continuity handoff files in .
+$ git commit -m "docs: add Round 1 continuity test handoff files
+
+Session state preservation: production health status,
+VPS access guide, and 11/11 test results."
+[auto-push] To https://github.com/vortsghost2025/federation.git
+[auto-push] b5bcc06..994ba2e  HEAD -> main
+[main 994ba2e] docs: add Round 1 continuity test handoff files
+ 3 files changed, 151 insertions(+)
+ create mode 100644 continuity-test-handoff/Round1_Status.md
+ create mode 100644 co…
+Click to expand
+Committed and pushed 994ba2e. Round 1 continuity test work is fully closed out:
+- b5bcc06 — code changes (state refactor, event tokens, alembic, docker-compose, frontend recovery)
+- 994ba2e — handoff docs (3 files preserving session state)
+- Production healthy (all containers up)
+- SSH config already clean
+No more actionable next steps from the Round 1 list. Want me to move on to something new, or is there anything else you'd like addressed?
+▣  Build · GLM-5.1 · 2m 47s
+Build·GLM-5.1Nvidia
+95.5K (73%)ctrl+p commands
