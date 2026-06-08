@@ -77,6 +77,7 @@ from routes.narrator import router as narrator_router
 from routes.simulation import router as simulation_router
 from routes.factions import router as factions_router
 from routes.websocket import router as websocket_router
+from routes.error_reports import router as error_reports_router
 from map_endpoints import router as map_router
 from data.events import EVENTS
 
@@ -232,12 +233,14 @@ def _run_tick_background():
 
 
 def _run_autonomous_tick_background():
+    _HARD_TIMEOUT = 300
+    tick_start = time.time()
     with _tick_lock:
         _set_tick_redis(
             _AUTO_TICK_REDIS_KEY,
             {
                 "running": True,
-                "last_start": time.time(),
+                "last_start": tick_start,
                 "last_error": "",
                 "last_result": "",
             },
@@ -263,6 +266,10 @@ def _run_autonomous_tick_background():
             )
 
         results = simulation_tick(npc_list)
+        if time.time() - tick_start > _HARD_TIMEOUT:
+            raise TimeoutError(
+                f"Autonomous tick exceeded {_HARD_TIMEOUT}s during simulation_tick"
+            )
         try:
             game_state.save_to_db(snapshot_type="auto")
         except Exception:
@@ -314,3 +321,27 @@ app.include_router(simulation_router)
 app.include_router(factions_router)
 app.include_router(websocket_router)
 app.include_router(map_router)
+app.include_router(error_reports_router)
+
+
+@app.on_event("startup")
+async def _clear_stale_tick_state():
+    """Clear stale Redis tick state from previous process.
+
+    When the backend restarts, daemon threads from the old process are killed
+    but Redis still shows running=True. New process must clear these ghosts
+    or the worker will get 409 on every tick.
+    """
+    try:
+        r = _get_observer_redis()
+        for key in (_TICK_REDIS_KEY, _AUTO_TICK_REDIS_KEY):
+            raw = r.hgetall(key) if r else {}
+            if raw.get("running") == "True":
+                logger.warning(
+                    "Clearing stale tick state: %s was stuck running since %s",
+                    key,
+                    raw.get("last_start", "?"),
+                )
+                r.hset(key, mapping={"running": "False", "last_end": str(time.time())})
+    except Exception as exc:
+        logger.warning("Failed to clear stale tick state: %s", exc)

@@ -104,14 +104,32 @@ def _run_tick_background():
             },
         )
 
-def _run_autonomous_tick_background():
-    """Execute autonomous tick: update all NPCs, save snapshot."""
+def _read_world_state_for_cognition():
+    """Read world state from Redis for cognition."""
+    try:
+        r = _get_observer_redis()
+        if r:
+            raw = r.hgetall("world_state")
+            return {k: float(v) for k, v in raw.items()} if raw else {}
+    except Exception:
+        pass
+    return {}
+
+def _run_autonomous_tick_background(game_state=None, faction_ideology=None):
+    """Execute autonomous tick: update all NPCs, run cognition, save snapshot.
+
+    Hard timeout: if the tick takes >300s, mark it as failed and release.
+    This prevents ghost ticks from blocking the worker forever.
+    """
+    _HARD_TIMEOUT = 300  # seconds
+    tick_start = time.time()
+
     with _tick_lock:
         _set_tick_redis(
             _AUTO_TICK_REDIS_KEY,
             {
                 "running": True,
-                "last_start": time.time(),
+                "last_start": tick_start,
                 "last_error": "",
                 "last_result": "",
             },
@@ -136,6 +154,36 @@ def _run_autonomous_tick_background():
                 }
             )
         results = simulation_tick(npc_list)
+
+        # Check timeout before expensive cognition step
+        if time.time() - tick_start > _HARD_TIMEOUT:
+            raise TimeoutError(
+                f"Autonomous tick exceeded {_HARD_TIMEOUT}s during simulation_tick"
+            )
+
+        # Run LLM cognition for leaders/specialists (same as simulation_engine Step 1.5)
+        try:
+            from npc_cognition import run_cognition
+            world_state = _read_world_state_for_cognition()
+            cog_result = run_cognition(npc_list, world_state)
+            results["cognition"] = cog_result
+            llm_decisions = cog_result.get("decisions", [])
+            if llm_decisions:
+                results["decisions"].extend(llm_decisions)
+                logger.info(
+                    "Autonomous tick cognition injected %d LLM decisions",
+                    len(llm_decisions),
+                )
+        except Exception as exc:
+            logger.warning("Autonomous tick cognition failed (non-fatal): %s", exc)
+            results["cognition"] = {"errors": [str(exc)]}
+
+        # Check timeout before DB save
+        if time.time() - tick_start > _HARD_TIMEOUT:
+            raise TimeoutError(
+                f"Autonomous tick exceeded {_HARD_TIMEOUT}s during cognition"
+            )
+
         try:
             game_state.save_to_db(snapshot_type="auto")
         except Exception:
@@ -153,3 +201,9 @@ def _run_autonomous_tick_background():
                 "last_end": time.time(),
             },
         )
+
+# Public aliases for routes/simulation.py imports
+get_tick_redis = _get_tick_redis
+set_tick_redis = _set_tick_redis
+run_tick_background = _run_tick_background
+run_autonomous_tick_background = _run_autonomous_tick_background
