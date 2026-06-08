@@ -13,7 +13,7 @@ from typing import Dict, List, Optional, Any
 import redis
 
 try:
-    from llm_router import route_llm_call
+    from llm_router import route_call as route_llm_call
 
     LLM_ROUTER_AVAILABLE = True
 except ImportError:
@@ -144,11 +144,13 @@ def generate_reflective_summary(char_id: str, npc_name: str = "") -> Dict:
     if LLM_ROUTER_AVAILABLE:
         try:
             resp = route_llm_call(
-                prompt=prompt,
-                system="You write concise, evocative NPC memory summaries for a space federation simulation.",
+                task_class="npc_memory",
+                user_prompt=prompt,
+                system_prompt="You write concise, evocative NPC memory summaries for a space federation simulation.",
                 max_tokens=400,
             )
-            new_summary = resp.strip()[:SUMMARY_MAX_CHARS]
+            if resp and resp.get("success"):
+                new_summary = resp.get("content", "").strip()[:SUMMARY_MAX_CHARS]
         except Exception as exc:
             logger.warning("LLM summary generation failed for %s: %s", char_id, exc)
     if not new_summary:
