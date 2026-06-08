@@ -1,0 +1,168 @@
+Kodee
+Scenario 3: both work.
+The backend responds correctly from inside the container, and the proxy also returns the /npcs data, so this is not a backend route problem or a Traefik mapping problem.
+
+That means the earlier issue was just the command/connection path, and we can now move to the NPC interaction logic itself.
+
+
+
+Kodee
+Here’s a tight path you can follow to test and debug the NPC interaction logic and data flow.
+
+1. Black‑box test: hit the NPC HTTP surface directly
+From your own machine (or via a script/agent), exercise the REST routes, not the UI:
+
+
+Copy
+# Replace CHAR_ID/PLAYER_ID with a known NPC + player
+BASE="http://172.26.0.13:8000"
+
+curl -s "$BASE/npcs/char_001/mood"
+curl -s -X POST "$BASE/npcs/char_001/mood/refresh"
+
+curl -s "$BASE/npcs/char_001/thoughts"
+curl -s "$BASE/npcs/char_001/actions"
+
+curl -s "$BASE/npcs/char_001/opinion?player_id=player_1"
+curl -s -X POST "$BASE/npcs/char_001/opinion/update?player_id=player_1&interaction=friendly"
+
+curl -s "$BASE/npcs/char_001/relationships"
+curl -s "$BASE/npcs/char_001/absence-report?player_id=player_1"
+Ask the agent to report:
+
+What HTTP status codes it got.
+Any "error" fields in the JSON.
+That confirms whether the NPC HTTP layer is wired and responding with coherent data.
+2. Check the NPC data flow edges
+Given the code we just saw, the main NPC data edges to sanity‑check next are:
+
+NPC system construction and trait registration
+
+build_npc_system in federation_game_npcs.py
+Where the system is actually created: NPCSystemAdapter in federation_game_npc_integration.py.
+Game state ↔ NPC system integration
+
+NPCSystemAdapter.process_tick(self.game_state, redis_client=redis)
+How it reads/writes:
+WORLD_STATE_KEY
+PREVIOUS_WORLD_STATE_KEY
+NPC_QUEST_STATS_PREFIX
+Whether those keys actually exist in Redis with the shape the adapter expects.
+Spatial / world queries involving NPCs
+
+spatial_queries.get_npcs_in_sector
+Any endpoint that calls it (e.g. from spatial_queries.py and map_endpoints.py).
+Downstream consumers of NPC stats
+
+crisis readouts and map overlays in map_endpoints._build_crisis_readout and related map_endpoints functions that touch npcs / involved_npcs.
+3. Concrete checks you can run now (non‑interactive)
+You can paste these one at a time into a terminal on the VPS (or via your non‑interactive SSH helper):
+
+Confirm the adapter and NPC system can be imported and built:
+
+Copy
+cd /docker/federation-game/backend
+python3 - << 'PY'
+from federation_game_npc_integration import NPCSystemAdapter
+from state import GameState
+from federation_game_npcs import build_npc_system
+
+print("NPCSystemAdapter OK:", NPCSystemAdapter is not None)
+npc_system = build_npc_system()
+print("NPC system built; sample keys:", list(npc_system.keys())[:5])
+
+gs = GameState(federation_id="debug_fed")
+adapter = NPCSystemAdapter(["unified_command", "council_of_worlds", "outer_alliance"])
+adapter.initialize()
+print("Adapter initialized; factions:", adapter.faction_ids)
+PY
+Check Redis keys that the adapter relies on:
+
+Copy
+cd /docker/federation-game/backend
+python3 - << 'PY'
+import redis, json
+r = redis.Redis(host="redis", port=6379, decode_responses=True)
+
+for key in ["world_state", "npc_adapter:prev_world_state"]:
+    data = r.get(key)
+    print("KEY", key, "exists:", data is not None)
+    if data:
+        try:
+            obj = json.loads(data)
+            print(key, "top-level keys:", list(obj.keys())[:10])
+        except Exception as e:
+            print(key, "is not valid JSON:", e)
+
+for prefix in ["npc_quests:stats:"]:
+    keys = r.keys(prefix + "*")
+    print("Prefix", prefix, "matches", len(keys), "keys; sample:", keys[:5])
+PY
+Sanity‑check sector NPC queries:
+
+Copy
+cd /docker/federation-game/backend
+python3 - << 'PY'
+from spatial_queries import get_npcs_in_sector
+
+for sid in ["sector_001", "sector_010", "core_hub"]:
+    try:
+        npcs = get_npcs_in_sector(sid)
+        print(sid, "NPC count:", len(npcs))
+    except Exception as e:
+        print("Error for", sid, ":", e)
+PY
+These three scripts tell you:
+
+The NPC system can be built and the adapter initializes.
+Redis contains the world state / previous world state in the expected JSON form.
+Spatial NPC resolution works for at least some sectors.
+4. Where to look in code for interaction bugs
+If you want to keep drilling down into logic (e.g., opinions not updating after interactions):
+
+federation_game_npcs.py
+
+Look for:
+build_unique_npcs
+Any register_character helpers
+Opinion/relationship update helpers (e.g., functions that mutate NPC mood, opinion, relationships).
+npc_autonomy.py
+
+Toward the bottom where rates like confront_rate, investigate_rate, help_rate, explore_rate, etc., are computed.
+Check:
+The counters they use are actually incremented in the autonomy loop.
+Those counters are reset or rolled over predictably between turns.
+Add logging around the autonomy step to dump a small sample of NPC actions per tick.
+Interaction surfaces (opinion/update, thoughts/actions)
+In test_npc_phase3.py you already have a ready‑made “spec” of intended behaviour:
+
+Read each test("... /npcs/...") block.
+Use it as the canonical contract for what each endpoint should do.
+If real responses diverge from what those tests assume, that’s your bug.
+5. NPC + event choice cross‑check
+Since you’ve already been debugging /choose/{choice_id} and gs.current_event, align the NPC layer with that same pattern:
+
+Log, inside any NPC interaction path, a compact snapshot of:
+Active event ID (if any)
+gs.federation morale/identity before and after the NPC step
+A couple of NPC IDs and their mood/opinion deltas
+A minimal pattern to drop into the per‑tick NPC integration (inside NPCSystemAdapter.process_tick) looks like:
+
+
+Copy
+logger.info(
+    "NPC_TICK",
+    extra={
+        "active_event_id": getattr(gs, "current_event", {}).get("id"),
+        "morale": gs.federation.morale,
+        "identity": gs.federation.identity_strength,
+        "sample_npcs": [n["id"] for n in list(self.npc_system.values())[:5]],
+    },
+)
+You can then tail logs in a non‑interactive way, e.g.:
+
+
+Copy
+cd /docker/federation-game/backend
+docker logs federation-game-backend-1 --tail 200
+If you paste back the outputs from the three Python snippets in step 3 (NPC build, Redis keys, sector NPCs), I can point to the next exact function/file to instrument and help you write focused assertions around the NPC interaction flow.

@@ -1,0 +1,178 @@
+- generic [active] [ref=e1]:
+  - generic [ref=e3]:
+    - generic [ref=e4]:
+      - img [ref=e5]:
+        - generic [ref=e8]: T
+      - generic [ref=e9]: "30"
+    - generic [ref=e10]:
+      - img [ref=e11]:
+        - generic [ref=e14]: S
+      - generic [ref=e15]: "49"
+    - generic [ref=e16]:
+      - img [ref=e17]:
+        - generic [ref=e20]: M
+      - generic [ref=e21]: "49"
+    - generic [ref=e22]:
+      - img [ref=e23]:
+        - generic [ref=e26]: T
+      - generic [ref=e27]: "30"
+    - generic [ref=e28]:
+      - img [ref=e29]:
+        - generic [ref=e32]: A
+      - generic [ref=e33]: "49"
+    - generic [ref=e36]: TICK 4 · UNKNOWN
+    - navigation [ref=e37]:
+      - link "Bridge" [ref=e38] [cursor=pointer]:
+        - /url: /bridge.html
+      - link "Star Map" [ref=e39] [cursor=pointer]:
+        - /url: /starmap.html
+      - link "Simulator" [ref=e40] [cursor=pointer]:
+        - /url: /
+      - link "Live Sim" [ref=e41] [cursor=pointer]:
+        - /url: /simulation.html
+      - link "Control" [ref=e42] [cursor=pointer]:
+        - /url: /adult.html
+      - link "World Guide" [ref=e43] [cursor=pointer]:
+        - /url: /worldguide.html
+      - link "Earth" [ref=e44] [cursor=pointer]:
+        - /url: /earth.html
+      - button "How to read this map" [ref=e45] [cursor=pointer]: "?"
+      - button "Audio on — click to mute" [ref=e46] [cursor=pointer]: ♫
+      - button "Toggle galaxy view" [ref=e47]: 🌌
+      - button "Toggle readable mode" [ref=e48] [cursor=pointer]: Aa
+  - generic [ref=e49]:
+    - heading "📜 Galactic Bulletin Board" [level=2] [ref=e50]
+    - generic [ref=e51]:
+      - article [ref=e52]:
+        - generic [ref=e53]:
+          - generic [ref=e54]: Federation Network
+          - generic [ref=e55]: npc_interaction
+        - paragraph [ref=e57]: Zephyr Silverspeak grew suspicious of comp_004's intentions
+      - article [ref=e58]:
+        - generic [ref=e59]:
+          - generic [ref=e60]: Federation Network
+          - generic [ref=e61]: npc_interaction
+        - paragraph [ref=e63]: Brother Mercy challenged comp_005 for influence in the Military Command
+      - article [ref=e64]:
+        - generic [ref=e65]:
+          - generic [ref=e66]: Shadowborn
+          - generic [ref=e67]: manipulation
+        - paragraph [ref=e69]: Shadowborn planted disinformation about temporal drift
+      - article [ref=e70]:
+        - generic [ref=e71]:
+          - generic [ref=e72]: Scout Aria
+          - generic [ref=e73]: Anomaly
+        - generic [ref=e74]:
+          - paragraph [ref=e75]: Scout Aria returned with tales of a void walker sighting
+          - generic [ref=e76]:
+            - generic [ref=e77]: ✦
+            - generic [ref=e78]: Unusual anomaly signature detected
+      - article [ref=e79]:
+        - generic [ref=e80]:
+          - generic [ref=e81]: Scout Aria
+          - generic [ref=e82]: discovery
+        - paragraph [ref=e84]: Scout Aria stumbled upon an uncharted nebula formation
+      - article [ref=e85]:
+        - generic [ref=e86]:
+          - generic [ref=e87]: Kyren Frostblade
+          - generic [ref=e88]: patrol
+        - paragraph [ref=e90]: Kyren Frostblade led a security sweep through sector 3-Omega
+      - article [ref=e91]:
+        - generic [ref=e92]:
+          - generic [ref=e93]: Kyren Frostblade
+          - generic [ref=e94]: alert
+        - paragraph [ref=e96]: Kyren Frostblade raised the threat level after detecting corruption spread
+      - article [ref=e97]:
+        - generic [ref=e98]:
+          - generic [ref=e99]: Dr. Sylas Cunningham
+          - generic [ref=e100]: discovery
+        - paragraph [ref=e102]: Dr. Sylas Cunningham made a breakthrough in quantum consciousness research
+    - generic [ref=e103]:
+      - generic [ref=e104]:
+        - text: 📊 Quick Status
+        - generic [ref=e105]: Tick 4
+      - generic [ref=e106]:
+        - generic [ref=e107]:
+          - generic [ref=e108]: ✓ The Good
+          - generic [ref=e109]: Threat (30) low. Tension (30) low.
+        - generic [ref=e110]:
+          - generic [ref=e111]: 🕵 Under the Surface
+          - generic [ref=e112]: "Covert Ops: The Trickster, Baroness Greed | Disinformation: Shadowborn"
+    - generic [ref=e113]:
+      - heading "Map Legend" [level=3] [ref=e114]
+      - generic [ref=e115]:
+        - generic [ref=e116]: Factions
+        - generic [ref=e119]: Research Division
+        - generic [ref=e122]: Military Command
+        - generic [ref=e125]: Diplomatic Corps
+        - generic [ref=e128]: Consciousness Collective
+        - generic [ref=e131]: Cultural Ministry
+        - generic [ref=e134]: Economic Council
+        - generic [ref=e137]: Exploration Initiative
+        - generic [ref=e140]: Preservation Society
+      - generic [ref=e141]:
+        - generic [ref=e142]: Zone Types
+        - generic [ref=e145]: Faction influence area
+        - generic [ref=e148]: Neutral / unclaimed
+        - generic [ref=e151]: Contested / overlap
+      - generic [ref=e152]:
+        - generic [ref=e153]: Relationship Lines
+        - generic [ref=e156]: Support / alliance
+        - generic [ref=e159]: Conflict / hostility
+      - generic [ref=e160]:
+        - generic [ref=e161]: NPC Dot Borders
+        - generic [ref=e164]: Faction member (border = faction color)
+        - generic [ref=e167]: Unaffiliated (grey border)
+      - generic [ref=e168]:
+        - generic [ref=e169]: Sector Regions
+        - generic [ref=e172]: Core sector
+        - generic [ref=e175]: Inner sector
+        - generic [ref=e178]: Outer sector
+        - generic [ref=e181]: Frontier sector
+      - generic [ref=e182]:
+        - generic [ref=e183]: Spatial Lines
+        - generic [ref=e186]: Sector adjacency
+  - generic [ref=e187]:
+    - generic [ref=e188]: Federation Intelligence
+    - generic [ref=e189]:
+      - textbox "Ask about this sector..." [ref=e190]
+      - button "Ask" [ref=e191] [cursor=pointer]
+    - generic [ref=e192]:
+      - generic [ref=e193] [cursor=pointer]: "Briefing requested: current situation in Andromeda Nexus"
+      - generic [ref=e194] [cursor=pointer]: "Galactic Intelligence: tensions escalating in contested sectors?"
+      - generic [ref=e195] [cursor=pointer]: "Sector scan query: correlations between plasma vortex and morale?"
+      - generic [ref=e196] [cursor=pointer]: What catalytic event triggered Cycle 7 anomalies?
+    - generic [ref=e197]:
+      - textbox "Search NPC..." [ref=e199]
+      - generic [ref=e200]:
+        - button "Territory" [ref=e201] [cursor=pointer]
+        - button "Network" [ref=e202] [cursor=pointer]
+        - button "Crisis" [ref=e203] [cursor=pointer]
+      - generic [ref=e204]:
+        - button "Factions Only" [ref=e205] [cursor=pointer]
+        - button "Important NPCs" [ref=e206] [cursor=pointer]
+        - button "All Labels" [ref=e207] [cursor=pointer]
+      - button "Toggle readable spatial mode" [ref=e209] [cursor=pointer]: Readable Spatial
+    - status "Crisis Readout" [ref=e210]:
+      - generic [ref=e211]: 📋 Territory Readout
+      - generic [ref=e212]:
+        - generic [ref=e213]: STABLE
+        - generic [ref=e214]: No active crisis. Federation is stable.
+        - generic [ref=e215]: All systems nominal.
+        - generic [ref=e216]:
+          - generic [ref=e217]: Involved
+          - generic "Click to highlight on map" [ref=e219] [cursor=pointer]: comp_006
+          - generic "Click to highlight on map" [ref=e221] [cursor=pointer]: char_204
+          - generic "Click to highlight on map" [ref=e223] [cursor=pointer]: char_406
+          - generic "Click to highlight on map" [ref=e225] [cursor=pointer]: char_303
+          - generic "Click to highlight on map" [ref=e227] [cursor=pointer]: char_305
+          - generic "Click to highlight on map" [ref=e229] [cursor=pointer]: comp_004
+          - generic "Click to highlight on map" [ref=e231] [cursor=pointer]: char_402
+          - generic "Click to highlight on map" [ref=e233] [cursor=pointer]: char_405
+        - generic [ref=e234]: The Federation is operating within normal parameters.
+        - generic [ref=e235] [cursor=pointer]: ▲ Collapse
+    - generic [ref=e236]:
+      - button "+" [ref=e237] [cursor=pointer]
+      - button "-" [ref=e238] [cursor=pointer]
+      - button "R" [ref=e239] [cursor=pointer]
+      - button "FIT" [ref=e240] [cursor=pointer]

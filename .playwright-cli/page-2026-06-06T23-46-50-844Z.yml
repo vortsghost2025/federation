@@ -1,0 +1,72 @@
+- generic [ref=e1]:
+  - generic [ref=e3]:
+    - generic [ref=e4]:
+      - img [ref=e5]:
+        - generic [ref=e8]: T
+      - generic [ref=e9]: "0"
+    - generic [ref=e10]:
+      - img [ref=e11]:
+        - generic [ref=e14]: S
+      - generic [ref=e15]: "0"
+    - generic [ref=e16]:
+      - img [ref=e17]:
+        - generic [ref=e20]: M
+      - generic [ref=e21]: "0"
+    - generic [ref=e22]:
+      - img [ref=e23]:
+        - generic [ref=e26]: T
+      - generic [ref=e27]: "0"
+    - generic [ref=e28]:
+      - img [ref=e29]:
+        - generic [ref=e32]: A
+      - generic [ref=e33]: "0"
+    - generic [ref=e36]: TICK 0
+    - navigation [ref=e37]:
+      - link "Bridge" [ref=e38] [cursor=pointer]:
+        - /url: /bridge.html
+      - link "Star Map" [ref=e39] [cursor=pointer]:
+        - /url: /starmap.html
+      - link "Simulator" [ref=e40] [cursor=pointer]:
+        - /url: /
+      - link "Live Sim" [ref=e41] [cursor=pointer]:
+        - /url: /simulation.html
+      - link "Control" [ref=e42] [cursor=pointer]:
+        - /url: /adult.html
+      - link "World Guide" [ref=e43] [cursor=pointer]:
+        - /url: /worldguide.html
+      - link "Earth" [ref=e44] [cursor=pointer]:
+        - /url: /earth.html
+      - button "How to read this map" [ref=e45] [cursor=pointer]: "?"
+      - button "Audio on — click to mute" [ref=e46] [cursor=pointer]: ♫
+      - button "Toggle galaxy view" [ref=e47]: 🌌
+      - button "Toggle readable mode" [ref=e48] [cursor=pointer]: Aa
+  - heading "📜 Galactic Bulletin Board" [level=2] [ref=e50]
+  - generic [ref=e53]:
+    - generic [ref=e54]: Federation Intelligence
+    - generic [ref=e55]:
+      - textbox "Ask about this sector..." [ref=e56]
+      - button "Ask" [ref=e57] [cursor=pointer]
+    - generic [ref=e58]:
+      - generic [ref=e59] [cursor=pointer]: "Briefing requested: current situation in Andromeda Nexus"
+      - generic [ref=e60] [cursor=pointer]: "Galactic Intelligence: tensions escalating in contested sectors?"
+      - generic [ref=e61] [cursor=pointer]: "Sector scan query: correlations between plasma vortex and morale?"
+      - generic [ref=e62] [cursor=pointer]: What catalytic event triggered Cycle 7 anomalies?
+    - generic [ref=e63]:
+      - textbox "Search NPC..." [ref=e65]
+      - generic [ref=e66]:
+        - button "Territory" [ref=e67] [cursor=pointer]
+        - button "Network" [active] [ref=e68] [cursor=pointer]
+        - button "Crisis" [ref=e69] [cursor=pointer]
+      - generic [ref=e70]:
+        - button "Factions Only" [ref=e71] [cursor=pointer]
+        - button "Important NPCs" [ref=e72] [cursor=pointer]
+        - button "All Labels" [ref=e73] [cursor=pointer]
+      - button "Toggle readable spatial mode" [ref=e75] [cursor=pointer]: Readable Spatial
+    - status "Crisis Readout" [ref=e76]:
+      - generic [ref=e77]: 📋 Crisis Readout
+      - generic [ref=e78]: Awaiting data…
+    - generic [ref=e79]:
+      - button "+" [ref=e80] [cursor=pointer]
+      - button "-" [ref=e81] [cursor=pointer]
+      - button "R" [ref=e82] [cursor=pointer]
+      - button "FIT" [ref=e83] [cursor=pointer]

@@ -1,0 +1,118 @@
+Going with P006 (backend-first) since I recommended it and you didn't object. Building now.
+# Todos
+[ ] Add NpcActionLog ORM model to federation_game_db.py
+[ ] Add DB methods: log_npc_action(), query_npc_actions(), export_npc_csv(), cleanup_old_logs()
+[ ] Create Alembic migration 002_npc_action_logs.py
+[ ] Hook logging into npc_autonomy.py _process_single_npc()
+[ ] Create routes/npc_logs.py with GET /api/npc-logs + CSV export
+[ ] Mount npc_logs router in main.py
+[ ] Pass tick_number into simulation_tick() from tick_engine.py
+[ ] Commit, push, deploy to VPS, verify
+Goal
+- Fix autonomous simulation tick stuck issue, fix NIM model chain indentation bug, fix /npcs/advance-turn 405 error, and design/build NPC logging system
+Constraints & Preferences
+- User is Sean, partially sighted, 49 days coding experience, treats AI as collaborators
+- Project rule: consciousness simulation, not a game
+- Tech stack: single HTML files, vanilla JS, CDN only, no frameworks, Docker, nginx, FastAPI
+- Cannot run docker compose locally (Windows S:\ drive) — Docker runs on VPS only
+- SCP from Windows to VPS via PowerShell times out (>60s); use ssh hostinger with pipe instead
+- VPS public IP: 187.77.3.56 — must use ssh hostinger alias (has IdentityFile)
+- Backend single-worker enforced — multi-worker broke game_state singleton
+- /choose must always return "outcome" key — frontend calls .outcome.toUpperCase()
+- Plan mode = GLM 5.1, Build mode = Nemotron 3 Ultra
+- .opencode/ and session/ are in .gitignore — must git add -f to track them
+- GitHub repo is PUBLIC — https://github.com/vortsghost2025/federation.git; plain git pull works on VPS
+- OpenRouter must ONLY use free models — paid models eat Sean's funds
+- VPS backend deploy = cp /opt/federation/federation-game/backend/* /docker/federation-game/backend/ then docker compose build backend && docker compose up -d backend
+- VPS frontend deploy = copy to /docker/federation-game/public_html/ (nginx bind mount) + docker compose restart frontend
+- Redis circuit breaker keys must be cleared before restart
+- VPS PowerShell quoting broken at ALL levels — must use pipe-stdin approach or chr-encoded URLs
+- Container lacks curl — use Python urllib/requests inside container
+- User has visual disability — NEVER ask user to check console errors; always verify fixes yourself
+- SSH access to VPS at 187.77.3.56 as root with ed25519 key
+- Backend port 8000 not exposed to host directly
+- Backend volume-mounted read-only from /docker/federation-game/backend:/app:ro
+- VPS has no python3 on host; must run scripts inside Docker container
+- redis-cli not available on VPS host — must use docker exec federation-game-redis-1 redis-cli
+- Frontend static files served from /docker/federation-game/public_html/
+- Traefik routes by Host() header
+- Sean hit 429 rate limit errors, had to switch AI providers mid-session
+Progress
+Done
+- P001-P004 all EXECUTED + DEPLOYED ✅
+- NIM model chain updated and DEPLOYED — commit 220c195
+- P005 DEPLOYED ✅ — commit 95445f9 (npc_memory crash fix)
+- Starmap NPC positioning VERIFIED ✅ — 47 NPCs, 8 factions, SPATIAL-04 correct
+- /npcs/advance-turn 405 FIX DEPLOYED ✅ — commit 2210bf3
+- /simulation/state 404 was TRANSIENT ✅ — route works fine now
+- Autonomous tick stuck fix — commit 8ffbce4 DEPLOYED ✅
+- Missing routes/error_reports.py committed + DEPLOYED ✅ — commit e6cf228
+- Autonomous status endpoint VERIFIED ✅ — returns 200 with status data
+- Backend + worker containers both healthy on VPS (confirmed this session)
+- NPC logging system: confirmed PostgreSQL already in stack
+- Read npc_autonomy.py tick flow — full pipeline documented in Critical Context
+- Autonomous tick VERIFIED completing successfully ✅ — 22 NPCs processed (20 live + 2 cached), zero errors, NIM model chain working
+- NIM model chain fallback VERIFIED working ✅ — tick completed with no errors
+- NPC logging plans P006 & P007 DRAFTED and presented to Sean — awaiting his choice
+In Progress
+- Sean choosing between P006 (backend-first) and P007 (full-stack) for NPC logging approach
+Blocked
+- (none)
+Key Decisions
+- Fix infra BEFORE building logging — Sean's choice
+- npc_memory task_class config: primary=nemotron-super-49b, fallback_nim=nemotron-ultra-251b, fallback_openrouter=llama.3.3-70b-instruct:free
+- NPC logging: Both web dashboard + CSV export, 7-day history — Sean's choice
+- Autonomous tick hard timeout = 300s — balances allowing cognition to complete vs preventing infinite hangs
+- Staleness threshold = 300s — same as hard timeout; if running >5min, it's a ghost
+- NIM indentation fix included — model chain fallback was completely non-functional; only first model ever tried
+- routes/error_reports.py was untracked in git — must always git add new files before push
+- NPC logging plan: Sean wants both backend-first AND full-stack plans drafted for review — he assumes backend-first is recommended
+- P006 recommended over P007 — smaller deploy, less risk, API+CSV day one, dashboard built on proven API later
+Next Steps
+1. Sean chooses P006 or P007 — then build NPC logging system accordingly
+2. P006 steps (if chosen): (1) NpcActionLog ORM + DB methods in federation_game_db.py, (2) Alembic migration 002_npc_action_logs.py, (3) Hook _process_single_npc() for action logging, (4) Hook simulation_tick() for tick metadata, (5) New routes/npc_logs.py with GET /api/npc-logs + /api/npc-logs/export, (6) Mount router in main.py, (7) Pass tick_number into simulation_tick() from tick_engine.py
+3. P007 adds: (8) public_html/npc-logs.html dashboard (auto-refresh, filters, CSV button, color-coded action types), (9) Serve route in main.py
+4. Ollama connectivity — Sean handling separately
+Critical Context
+- Current HEAD: e6cf228 (pushed + deployed to VPS ✅)
+- NPC action_logs table schema: id SERIAL PK, tick_number INTEGER, char_id VARCHAR(32), char_name VARCHAR(64), faction VARCHAR(32), action_type VARCHAR(16) (thought/action/decision/opinion/mood), action_data JSONB, llm_model VARCHAR(64), latency_ms INTEGER, created_at TIMESTAMP; index on (char_id, created_at); cleanup_old_logs() deletes rows older than 7 days
+- P006 new files: alembic/versions/002_npc_action_logs.py, routes/npc_logs.py; modified files: federation_game_db.py, npc_autonomy.py, main.py, tick_engine.py
+- P007 adds: public_html/npc-logs.html (single HTML, vanilla JS, CDN-only, auto-refresh 60s, filter by NPC/faction/action_type/tick, CSV download, color-coded action types)
+- Root cause of autonomous tick stuck: After backend restart, daemon thread killed but Redis fed:auto_tick_status still has running:True → new backend returns 409 → worker polls 240s → timeout → repeats every tick
+- NIM _call_nim indentation bug: try block was at same indent as for model_cfg (8 spaces) instead of inside for _attempt (16 spaces). Result: only first model in MODEL_CHAIN ever tried
+- MODEL_CHAIN: nemotron-super-49b (12s timeout) → gpt-oss-120b (15s) → llama-3.1-8b (10s); NIM_PER_ATTEMPT_TIMEOUT=10s
+- route_call signature: route_call(task_class, system_prompt, user_prompt, max_tokens=None, temperature=None) → returns Dict with keys success, content, provider, model, task_class, latency_ms, attempts, errors
+- Worker container name: federation-game-worker-1 — TICK_INTERVAL=60, ASYNC_POLL_TIMEOUT=240
+- /simulation/autonomous/tick flow: POST → 202 (thread started) or 409 (already running) → worker polls /simulation/autonomous/status
+- Redis keys flushed during deploy: fed:auto_tick_status, fed:auto_tick_running
+- VPS git repo at /opt/federation/ can be ahead of deployed code at /docker/federation-game/backend/
+- 3 cached NPCs with mixed quality: char_105 Oracle Vex (good), char404 Cipher (truncated/garbled), comp010 Shadowborn (good) — stale cache issue, not model chain bug
+- Existing PostgreSQL setup: federation_game_db.py has DatabaseManager class with SQLAlchemy ORM, GameSnapshot model, Alembic migrations, default URL postgresql://federation:federation_pwd@postgres:5432/federation_game
+- GameSnapshot model (existing): id, snapshot_type, game_state_json, federation_state_json, history_arc_json, turn_log_json, state_hash, created_at, is_current
+- DatabaseManager (existing): initialize() with retry (3 attempts), save_game_snapshot(), load_latest_snapshot(), cleanup_old_snapshots(), get_status()
+- _process_single_npc() pipeline: update_mood() → make_decision() → broadcast_decision_event() → 30% chance update_opinion() per player → writes npc_last_active:{char_id} to Redis (7-day TTL)
+- simulation_tick() parallelism: ThreadPoolExecutor with _NPC_PARALLEL_WORKERS=16, collects per-NPC results into unified dict with keys: thoughts, actions, moods, opinions, interactions, decisions, errors
+- _call_llm() at line 240 uses _tick_llm_budget (global counter + lock) to cap LLM calls per tick
+- Only one Alembic migration exists (001_initial_schema.py) — NPC logging table will need 002_npc_action_logs.py
+- tick_engine.py: Redis-backed tick infrastructure, 300s hard timeout + mid-step timeout checks, _set_tick_redis/_get_tick_redis, imports simulation_tick from npc_autonomy
+- PowerShell SSH quoting for Python commands broken — simplest working approach is ssh hostinger "docker exec ... python -c 'chr-encoded-URL'"
+- All containers healthy on VPS: backend, worker, postgres, redis, frontend, reverse-proxy, prometheus, grafana, adminer, cadvisor, node-exporter, redis-exporter
+- Tick status endpoint result structure: {"status": "...", "started_at": ..., "ended_at": ..., "duration": ..., "result": {"status": "completed", "details": {"thoughts": [...]}}} — thoughts array has char_id, char_name, thought, mood, ts, cached fields
+Relevant Files
+- S:\federation\federation-game\backend\main.py: FastAPI app — startup event clears stale Redis tick state; _run_autonomous_tick_background() with 300s hard timeout
+- S:\federation\federation-game\backend\tick_engine.py: Tick engine — _run_autonomous_tick_background() with 300s hard timeout + mid-step timeout checks, Redis tick status helpers
+- S:\federation\federation-game\backend\routes\simulation.py: Simulation routes — staleness guard (300s threshold); imports set_tick_redis
+- S:\federation\federation-game\backend\nvidia_nim_client.py: NIM client — _call_nim indentation FIXED; MODEL_CHAIN fallback functional ✅
+- S:\federation\federation-game\backend\routes\error_reports.py: Error report route — POST /api/error-reports stores JS errors in Redis; was untracked, now committed (e6cf228)
+- S:\federation\federation-game\backend\routes\npcs.py: NPC routes — POST /npcs/advance-turn (commit 2210bf3, deployed ✅)
+- S:\federation\federation-game\backend\worker.py: Tick worker — ASYNC_POLL_TIMEOUT=240, ASYNC_POLL_INTERVAL=5
+- S:\federation\federation-game\backend\npc_autonomy.py: NPC autonomy — simulation_tick() at line 1186 (ThreadPoolExecutor, 16 workers), _process_single_npc() at line 1054 (per-NPC pipeline: mood→decision→broadcast→opinion), _call_llm() at line 240 (LLM budget guard), _NPC_PARALLEL_WORKERS=16 — key integration point for NPC action logging
+- S:\federation\federation-game\backend\npc_cognition.py: NPC cognition — run_cognition() at line 690 — key integration point for NPC action logging
+- S:\federation\federation-game\backend\federation_game_db.py: Existing PostgreSQL persistence layer — DatabaseManager class with SQLAlchemy ORM, GameSnapshot model, db_manager singleton — will add NpcActionLog model + log_npc_action()/query_npc_actions()/export_npc_csv()/cleanup_old_logs() methods
+- S:\federation\federation-game\backend\state.py: Game state — uses db_manager for snapshots
+- S:\federation\federation-game\backend\alembic\versions\001_initial_schema.py: Only existing Alembic migration — creates game_snapshots table; new 002_npc_action_logs.py needed
+- S:\federation\federation-game\backend\routes\npc_logs.py: NEW — will have GET /api/npc-logs (filter by NPC, faction, action_type, tick, date range) + GET /api/npc-logs/export (CSV download)
+- S:\federation\federation-game\public_html\npc-logs.html: NEW (P007 only) — dashboard HTML with auto-refresh, filters, CSV button, color-coded action types
+- S:\federation\federation-game\docker-compose-vps.yml: VPS Docker Compose — backend depends_on postgres+redis, Postgres service with volume
+- /docker/federation-game/backend/: VPS backend build context
+- /docker/federation-game/.env: VPS env file

@@ -32,6 +32,7 @@ from typing import Any, Dict, List, Optional, Tuple
 
 import redis
 
+from npc_activity_logger import log_npc_activity
 from llm_router import route_call, get_router_stats
 
 logger = logging.getLogger(__name__)
@@ -630,6 +631,30 @@ def _parse_llm_response(
         elif line.upper().startswith("ACTION_DESC:"):
             action_desc = line.split(":", 1)[1].strip()
 
+    # Fallback: if no CATEGORY line found, try to extract from free-form text
+    if not category:
+        content_lower = content.lower()
+        # Map common phrases to categories
+        phrase_map = [
+            (["alliance", "negotiate", "treaty", "diplomacy", "socialize"], "socialize"),
+            (["investigate", "research", "scan", "analyze", "probe"], "investigate"),
+            (["attack", "confront", "rival", "enemy", "hostile"], "confront_rival"),
+            (["help", "assist", "ally", "support"], "help_ally"),
+            (["resource", "supply", "gather", "acquire"], "seek_resources"),
+            (["defend", "protect", "react", "respond", "event"], "react_to_events"),
+            (["improve", "strengthen", "upgrade", "train"], "self_improve"),
+            (["rest", "recover", "conserve", "wait"], "rest"),
+            (["goal", "strategic", "plan", "advance", "pursue"], "advance_goal"),
+        ]
+        for phrases, cat in phrase_map:
+            if any(p in content_lower for p in phrases):
+                category = cat
+                # Try to extract reasoning from first 1-2 sentences
+                if not reasoning:
+                    sentences = content.strip().split(".")
+                    reasoning = ". ".join(s.strip() for s in sentences[:2] if s.strip())[:200]
+                break
+
     # Validate category
     if not category or category not in VALID_CATEGORIES:
         logger.warning(
@@ -807,6 +832,13 @@ def run_cognition(npc_list: List[Dict], world_state: Dict) -> Dict:
 
                 # Set cooldown
                 _set_cooldown(cid)
+                log_npc_activity(cid, "cognition", {
+                    "role": "leader",
+                    "category": decision["category"],
+                    "trigger_type": str(npc_triggers[0]["trigger_type"]) if npc_triggers else "ambient",
+                    "model_used": model_used,
+                    "success": True,
+                })
             else:
                 result["stats"]["calls_failed"] += 1
                 result["errors"].append(f"{cid}: LLM response unparseable")
@@ -888,6 +920,13 @@ def run_cognition(npc_list: List[Dict], world_state: Dict) -> Dict:
                     pass
 
                 _set_cooldown(cid)
+                log_npc_activity(cid, "cognition", {
+                    "role": "specialist",
+                    "category": decision["category"],
+                    "trigger_type": top_trigger["trigger_type"],
+                    "model_used": model_used,
+                    "success": True,
+                })
             else:
                 result["stats"]["calls_failed"] += 1
                 result["errors"].append(f"{cid}: LLM response unparseable")

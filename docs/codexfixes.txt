@@ -1,0 +1,190 @@
+The repo-level IDX disabled guard is in place now. I’m
+  doing one final no-touch verification summary so you know
+  exactly which path is stable right now and which cleanup
+  item is still pending because the global kilo.db files
+  are locked by an active process.
+
+• Working. Here is what you see:
+
+  I added a repo-local Kilo config at S:/federation.kilo/
+  kilo.json with indexing explicitly disabled:
+
+  {
+    "indexing": {
+      "enabled": false
+    }
+  }
+
+  I also inspected your desktop launchers, and they are
+  exactly what we want for stability:
+
+  - C:\Users\seand\Desktop\Kilo A.lnk points to C:
+    \Users\seand\AppData\Local\waveterm-alt\data\bin\kilo-
+    a.cmd
+  - C:\Users\seand\Desktop\Kilo B.lnk points to C:
+    \Users\seand\AppData\Local\waveterm-alt\data\bin\kilo-
+    b.cmd
+
+  Those wrappers launch the same kilo.exe, but with
+  isolated homes under:
+
+  - C:\Users\seand\AppData\Local\AgentProfiles\kilo-a
+  - C:\Users\seand\AppData\Local\AgentProfiles\kilo-b
+
+  That means they already avoid shared Kilo profile/state
+  collisions.
+
+  What I verified:
+
+  - Kilo A renders a real TUI in S:\federation
+  - Kilo B renders a real TUI in S:\federation
+  - both show S:\federation:main
+  - both show IDX Disabled in the footer
+  - both were still alive at 20 seconds, which matches the
+    interactive startup but not dead
+
+  Important detail: the global DB quarantine did not
+  complete. The files at:
+
+  - C:\Users\seand\.local\share\kilo\kilo.db
+  - C:\Users\seand\.local\share\kilo\kilo.db-shm
+  - C:\Users\seand\.local\share\kilo\kilo.db-wal
+
+  were locked by another process when I tried to rename
+  them, so I did not force anything. They are still
+  present. I did not kill any broad Node/Wave/OpenCode
+  stack to get around that.
+
+  Best stable path now:
+  4. Because of the new repo config, Federation indexing
+     should stay disabled.
+
+  - use Kilo A as your main Federation session
+  - keep Kilo B as a spare clean profile
+  - ignore the shared/global kilo launcher for now
+
+  What is still pending, safely:
+
+  - if you want, I can do one more diagnostic pass to
+    identify which process is holding the global kilo.db
+    trio open, without killing it
+  - or, when you’ve closed any non-isolated Kilo windows, I
+    can retry the rename-only quarantine of those three
+    files
+
+  Right now you do have a stable usable setup: the isolated
+  launchers work, Ollama is proven healthy, and Federation
+  indexing is explicitly disabled.
+
+
+› ok so i tried just a normal kilo
+  launch in s federation it loads Code
+
+  tab agents
+  ctrl+p commands
+   Tip
+  Use @agent-name in prompts to invoke
+  specialized subagents
+  S:\federation:main
+  IDX Disabled
+  7.3.40
+
+
+• Working. Here is what you see:
+
+  That means the issue is functionally
+  cleared.
+
+  kilo is now reaching the live TUI in
+  S:\federation, the repo opens on
+  main, and the repo-level guard is
+  doing its job with IDX Disabled. That
+  tells us the failure was not Ollama,
+  not LanceDB, and not a broken repo
+  index. The stable outcome is simply:
+  Kilo can start, and Federation is
+  opening with indexing off.
+
+  You can leave it alone now. Practical
+  rule set:
+
+  - use normal kilo if it keeps
+    behaving like this
+  - use Kilo A or Kilo B when you want
+    isolated sessions, separate state,
+    or to avoid key/profile overlap
+  - only bother with the locked shared
+    kilo.db* cleanup if the slow-start
+    or hang comes back
+
+  The fact that the normal launcher now
+  works also means the PATH/Wave shim
+  path is not currently blocking
+  startup.
+
+
+› so does that mean its the indexing
+  causing the issues?
+
+
+• Working. Here is what you see:
+
+  Not as the sole root cause.
+
+  What the evidence says is:
+
+  - Ollama was never the problem.
+  - S:\federation was not uniquely
+    broken.
+  - A clean temp directory showed the
+    same slow interactive startup
+    pattern.
+  - Kilo’s startup was also spending
+    time on global provider/skill
+    initialization and duplicate-skill
+    scanning.
+  - In S:\federation, indexing was one
+    extra layer on top of that, and it
+    was the part we could safely
+    remove.
+
+  So the accurate answer is:
+
+  - Yes, indexing was part of the issue    for this repo and disabling it
+    fixed the practical problem.
+  - No, indexing was not the entire
+    underlying Kilo startup problem,
+    because Kilo was still slow/noisy
+    even outside this repo.
+
+  Practical takeaway:
+
+  - For S:\federation, treat repo
+    indexing as the thing that was
+    making this unstable enough to look
+    hung.
+  - For Kilo overall, there is still
+    some global startup debt in the
+    background, but it is no longer
+    blocking normal use here.
+
+  So the current stable state is the
+  right one:
+
+  - Federation opens
+  - IDX Disabled
+  - Kilo is usable
+
+  If you want, the next step can be
+  either:
+
+  1. leave it exactly as-is and use it,     or
+  2. do a separate cleanup pass on
+     Kilo’s global duplicate-skill/
+     provider state so startup is
+     faster everywhere, not just in
+     Federation.
+
+
+› Use /skills to list available skills
+                                         gpt-5.4 xhigh · S:\federation

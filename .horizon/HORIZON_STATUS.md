@@ -1,22 +1,24 @@
 # Horizon Status — Living Document
-**Last Updated:** 2026-06-07 14:50
+**Last Updated:** 2026-06-07 14:15
 **Updated By:** Wave AI
 
 ## Current State
 
 | Item | Value |
 |------|-------|
-| HEAD commit | 994ba2e |
-| VPS health | All containers up, backend healthy |
+| HEAD commit | b66d9e1 |
+| VPS health | All containers up, frontend restarted |
 | Production URL | https://federation-game.deliberatefederation.cloud/ |
-| SSH alias | `ssh hostinger` (public IP 187.77.3.56) |
-| Active agents | GLM-5.1 (plan mode), NEM 3 Ultra (build mode) |
-| Bridge system | Operational — P001 completed ✅ |
-| Bridge status | `session/bridge/bridge_state.json` → status="completed" |
+| SSH alias | `ssh hostinger` or `ssh federation-vps` (public IP 187.77.3.56) |
+| Active agents | GLM-5.1 (plan), Nemotron 3 Ultra (build), Codex (debug), Kilo IDE (MiniMax-M2.7) |
+| Bridge system | Operational — P001, P002, P003 all completed |
+| Bridge status | `session/bridge/bridge_state.json` → status="completed" (P003) |
+| Race condition | FIXED end-to-end — backend + frontend both use choice_token |
+| Spatial mode | DEPLOYED — sticky flag live on production |
 
 ## Completed This Session
 
-- [x] Race condition fix (event tokens) — deployed, verified
+- [x] Race condition fix (event tokens) — backend deployed, verified
 - [x] state.py refactor (3-file split) — deployed
 - [x] Alembic migrations — deployed
 - [x] docker-compose.yml indentation — validated, deployed
@@ -27,26 +29,24 @@
 - [x] Root cleanup (~50 debug scripts) — done
 - [x] Continuity handoff docs — committed (994ba2e)
 - [x] Race fix dead code cleanup (core.py line 679) — done locally (Wave AI)
-- [x] .horizon/ system created — HORIZON_STATUS, PROTOCOL, DECISIONS, AGENT_OWNERSHIP (Wave AI)
-- [x] Bridge system P001 — completed by Nemotron, all 8 verification checks passed
+- [x] .horizon/ system created — HORIZON_STATUS, PROTOCOL, DECISIONS, AGENT_OWNERSHIP
+- [x] P001 — Bridge system — completed, committed (1c04c40)
+- [x] P002 — Frontend choice_token integration — completed, committed (b66d9e1), deployed to VPS
+- [x] P003 — Spatial mode sticky flag — completed, committed (b66d9e1), deployed to VPS
+- [x] Kilo duplicate skill cleanup — quarantined .kilocode/skills, warnings dropped 648→326
 
-## Bridge System (P001 — Completed)
+## Deploy History
 
-| Deliverable | Size | Status |
-|-------------|------|--------|
-| `session/bridge/bridge_state.json` | — | ✅ version=1.0, status=completed |
-| `session/bridge/SCHEMA.md` | 4KB | ✅ Created |
-| `session/bridge/TEMPLATE/` (5 files) | — | ✅ All templates |
-| `.opencode/skills/bridge-write/SKILL.md` | 1543B | ✅ Plan mode writer |
-| `.opencode/skills/bridge-read/SKILL.md` | 1590B | ✅ Build mode executor |
-| `.opencode/skills/bridge-sync/SKILL.md` | 1024B | ✅ Milestone sync |
-| `session/bridge/P001/` (5 plan pack files) | — | ✅ All present, verified |
+| Commit | What | Deployed? |
+|--------|------|-----------|
+| b5bcc06 | state refactor, event tokens, alembic, docker-compose | ✅ Yes |
+| 994ba2e | Continuity handoff docs | N/A (docs only) |
+| 1c04c40 | Bridge system P001 + .horizon/ tracking | N/A (infra) |
+| b66d9e1 | P002 choice_token + P003 spatial mode | ✅ Yes |
 
 ## In Progress
 
-- [ ] Spatial mode auto-activation (NEM 3 Ultra owns — needs P002 plan pack from GLM)
-- [ ] Frontend needs to send choice_token on /choose requests
-- [ ] Commit bridge system + .horizon/ to repo
+- (none)
 
 ## Blocked
 
@@ -54,21 +54,21 @@
 
 ## Next Steps (Prioritized)
 
-1. **Commit bridge system + .horizon/ to repo** — everything on disk, nothing committed yet
-2. **GLM writes P002 plan pack** — spatial mode fix (using bridge-write skill)
-3. **Swap to build mode** — Nemotron executes P002 (using bridge-read skill)
-4. **Frontend choice_token integration** — index.js/starmap.js need to capture `choice_token` from `/event` response and send it as query param on `/choose`
-5. **DB init test blocking** — 3-attempt retry loop hangs tests 30s+ when Postgres unreachable
-6. **Redis test blocking** — persist_npc_traits_to_redis hangs when Redis unreachable
+1. **GLM writes P004 plan pack** — whatever the next feature target is
+2. **VPS git deploy script** — automate `git pull → cp → docker restart` pattern
+3. **DB init retry fix** — 3-attempt retry loop hangs tests 30s+ when Postgres unreachable
+4. **Redis mock for tests** — persist_npc_traits hangs when Redis unreachable
+5. **Frontend hardening** — error handling, loading states, offline resilience
 
 ## Agent File Ownership
 
 | Agent | Role | Owns | Context |
 |-------|------|------|---------|
-| GLM-5.1 | Plan mode | Backend (state, routes, db, alembic), docker-compose.yml | 100K/128K (76%) 🔴 |
-| NEM 3 Ultra | Build mode | Frontend (starmap.js, starmap.html, starmap.css) | 116K/1M (12%) 🟢 |
+| GLM-5.1 | Plan mode | Backend, docker-compose, plan packs | Varies (128K) |
+| Nemotron 3 Ultra | Build mode | Frontend, code execution | Varies (1M) |
 | Wave AI | Monitor/coordination | .horizon/, SSH config | — |
-| Codex (done) | Previous session | Race fix files (handed off to GLM) | — |
+| Codex | Debug mode | Kilo IDE tooling | Idle |
+| Kilo IDE | Debug mode | Kilo config | MiniMax-M2.7 (rate limited on Gemma) |
 
 ## Mode Discipline Rules (ENFORCED)
 
@@ -76,6 +76,8 @@
 - **Build mode (Nemotron)** = ONLY reads plan packs and writes code/config
 - **No agent executes its own plan** — GLM plans, Nemotron builds
 - **Swap timing** = agents tell Sean when to switch modes
+- **After compaction** = read `.horizon/HORIZON_STATUS.md` BEFORE doing anything else
+- **GLM must delegate ALL tool calls** to sub-agents to save context
 
 ## Key Decisions
 
@@ -83,19 +85,27 @@
 |------|----------|-----------|-----|
 | 2026-06-07 | Event token over asyncio lock | Stateless, scales, no race | Wave AI + Codex + GLM |
 | 2026-06-07 | state.py 3-file split | Monolith prevention | GLM-5.1 |
-| 2026-06-07 | Alembic stamp-at-head strategy | No data loss on existing tables | GLM-5.1 |
-| 2026-06-07 | Pipe-over-SSH deploy method | SCP from Windows unreliable | GLM-5.1 |
-| 2026-06-07 | Mode assignment: Plan=GLM, Build=Nemotron | GLM sub-agent fanout negates 128k; Nemotron 1M handles execution | GLM + Sean |
-| 2026-06-07 | Bridge purpose = plan delivery, not context survival | Same-session mode switches preserve context natively | GLM-5.1 |
-| 2026-06-07 | No agent executes its own plan | Prevents race conditions like P001 build collision | GLM + Sean |
+| 2026-06-07 | Alembic stamp-at-head | No data loss on existing tables | GLM-5.1 |
+| 2026-06-07 | Pipe-over-SSH deploy | SCP from Windows unreliable | GLM-5.1 |
+| 2026-06-07 | Mode assignment: Plan=GLM, Build=Nemotron | GLM sub-agent fanout; Nemotron 1M execution | GLM + Sean |
+| 2026-06-07 | Bridge = plan delivery, not context survival | Same-session mode switches preserve context | GLM-5.1 |
+| 2026-06-07 | No agent executes its own plan | Prevents race conditions | GLM + Sean |
+| 2026-06-07 | Bridge storage = local files in session/bridge/ | Zero infra, git-trackable | GLM-5.1 |
+| 2026-06-07 | 3-layer memory: L1 conversation, L2 handoff, L3 knowledge graph | Progressive persistence | GLM-5.1 |
+| 2026-06-07 | context_pack.md <2000 tokens | Fits in compacted context | GLM-5.1 |
+| 2026-06-07 | Plan IDs = sequential P001/P002 | Simple, easy to reference | GLM-5.1 |
+| 2026-06-07 | Git-based VPS deploy | Atomic, resumable, instant rollback | GLM-5.1 |
+| 2026-06-07 | Kilo .kilocode/skills quarantined | Reduced duplicate warnings 648→326 | Codex |
 
 ## Known Issues
 
 1. DB init retry loop blocks test runner 30s+ if Postgres unreachable
 2. Redis persist_npc_traits_to_redis hangs if Redis unreachable
 3. gastown-rig/deploy.js modified but not committed
-4. Frontend doesn't send choice_token yet — race fix only works server-side
-5. GLM at 76% context — high compaction risk, may need fresh session
+4. GLM at 76% context in 128K — high compaction risk
+5. Kilo IDE hit Gemma 4 rate limit — fell back to MiniMax-M2.7
+6. `.horizon/HORIZON_STATUS.md` was stale (said HEAD=994ba2e, should be b66d9e1) — now updated
+7. `.claude/skills` and `.agents/skills` still have duplicate warnings (326 remaining)
 
 ## Architecture
 
@@ -106,5 +116,6 @@ Frontend (index.html + JS) → Traefik (TLS) → Backend (FastAPI :8000, single 
 ```
 
 - Single worker enforced — multi-worker breaks game_state singleton
-- VPS: 187.77.3.56 — use `ssh hostinger` only
-- No git on VPS — files deployed manually, editing = editing production
+- VPS: 187.77.3.56 — use `ssh hostinger` or `ssh federation-vps`
+- VPS deploy: git pull from /opt/federation → cp to /docker/federation-game/ → docker restart
+- No git on VPS /docker/ — files deployed via /opt/federation git pull + cp

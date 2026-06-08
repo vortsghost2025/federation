@@ -12,6 +12,10 @@ async function apiFetch(path, opts = {}) {
   try {
     const r = await fetch(API + path, { ...opts, headers: { 'Accept': 'application/json', ...(opts.headers || {}) } });
     if (!r.ok) throw new Error(r.status);
+    const ct = r.headers.get('content-type') || '';
+    if (ct.includes('text/html')) {
+      throw new Error('Server returned HTML instead of JSON (endpoint may be misconfigured)');
+    }
     fetchHealth.ok++;
     fetchHealth.lastOk = Date.now();
     return await r.json();

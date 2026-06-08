@@ -1,0 +1,3784 @@
+VPS
+srv1345984.hstgr.cloud
+Catalog
+Catalog
+
+Terminal
+Search template
+2FAuth
+2FAuth
+Self-hosted two-factor authentication code manager for web and mobile
+
+
+Select
+9router
+9router
+AI API routing proxy with token optimization for 40+ LLM providers
+
+
+Select
+Ackee
+Ackee
+Ackee is a self-hosted Node.js analytics tool for privacy-focused website tracking
+
+
+Select
+Activepieces
+Activepieces
+Open-source no-code workflow automation with 200+ app integrations
+
+
+Select
+Actual Budget
+Actual Budget
+Privacy-focused personal finance app with envelope budgeting
+
+
+Select
+Adminer
+Adminer
+Full-featured database management interface supporting 11+ database systems
+
+
+Select
+AdventureLog
+AdventureLog
+Self-hosted travel tracker and trip planner with interactive maps
+
+
+Select
+AFFiNE
+AFFiNE
+All-in-one workspace combining docs, whiteboards, and databases with AI
+
+
+Select
+Agent Zero
+Agent Zero
+Open-source AI agent framework with multi-agent cooperation and persistent memory
+
+
+Select
+agentmemory
+agentmemory
+Persistent memory for AI coding agents with hybrid BM25 vector and graph search
+
+
+Select
+Airsonic Advanced
+Airsonic Advanced
+Stream personal music libraries through a Subsonic-compatible API server
+
+
+Select
+AirTrail
+AirTrail
+Personal flight journal with interactive map, stats, and multi-user support
+
+
+Select
+AiToEarn
+AiToEarn
+Open-source AI content marketing agent for multi-platform publishing and monetization
+
+
+Select
+Akaunting
+Akaunting
+Free open-source accounting software for small businesses and freelancers
+
+
+Select
+Alerta
+Alerta
+Open-source alert management platform for consolidating monitoring alerts
+
+
+Select
+Alexandrie
+Alexandrie
+Self-hosted knowledge base with extended Markdown and per-document permissions
+
+
+Select
+AList
+AList
+Self-hosted file list and WebDAV server with support for 30+ storage backends
+
+
+Select
+AllTube
+AllTube
+Web interface for downloading videos from YouTube and other sites
+
+
+Select
+Ampache
+Ampache
+Ampache is a web-based audio/video streaming application and media manager
+
+
+Select
+AnonUpload
+AnonUpload
+AnonUpload is a secure anonymous file sharing application without database requirements
+
+
+Select
+AnythingLLM
+AnythingLLM
+All-in-one AI application for RAG, agents, and chatbots with any LLM provider
+
+
+Select
+Apache Answer
+Apache Answer
+Open-source Q&A platform for team knowledge sharing and community building
+
+
+Select
+Apache DevLake
+Apache DevLake
+Open-source DORA metrics and engineering team analytics platform
+
+
+Select
+Apache Guacamole
+Apache Guacamole
+Clientless web-based remote desktop gateway for RDP, VNC, SSH, and Telnet
+
+
+Select
+Apache Superset
+Apache Superset
+Apache Superset is a modern data exploration and visualization platform for BI
+
+
+Select
+AppFlowy
+AppFlowy
+AppFlowy is an AI-powered open-source workspace and Notion alternative
+
+
+Select
+Apprise API
+Apprise API
+Lightweight REST API for sending push notifications to 120+ services
+
+
+Select
+Appsmith
+Appsmith
+Open-source low-code platform for building internal tools and applications
+
+
+Select
+Aptabase
+Aptabase
+Privacy-first SDK analytics for mobile, desktop, and web apps
+
+
+Select
+ArangoDB
+ArangoDB
+Native multi-model database for graphs, documents, and key-value data
+
+
+Select
+ArchiveBox
+ArchiveBox
+Self-hosted internet archiving solution for preserving web pages and media
+
+
+Select
+Argilla
+Argilla
+Collaborative platform for AI engineers to build high-quality datasets
+
+
+Select
+AstrBot
+AstrBot
+AstrBot is an open-source multi-platform AI chatbot framework
+
+
+Select
+Audiobookshelf
+Audiobookshelf
+Self-hosted audiobook and podcast server with multi-user support
+
+
+Select
+Authentik
+Authentik
+Open-source identity provider focused on flexibility and versatility
+
+
+Select
+Authorizer
+Authorizer
+Open-source self-hosted authentication server with social login, MFA, and RBAC
+
+
+Select
+Autobase
+Autobase
+Open-source self-hosted Database-as-a-Service platform for PostgreSQL automation
+
+
+Select
+autobrr
+autobrr
+Modern download automation tool for torrents and usenet with real-time IRC monitoring
+
+
+Select
+Automatisch
+Automatisch
+Open-source Zapier alternative for connecting apps and automating workflows
+
+
+Select
+Baby Buddy
+Baby Buddy
+Baby tracking app helping parents monitor daily activities and health
+
+
+Select
+Backrest
+Backrest
+Web UI for restic backups with scheduling, encryption, and file-level restore
+
+
+Select
+Baikal
+Baikal
+Self-hosted CalDAV and CardDAV server for calendars and contacts
+
+
+Select
+Bar Assistant
+Bar Assistant
+Self-hosted cocktail recipe manager and home bar inventory tracker
+
+
+Select
+Baserow
+Baserow
+Open-source no-code database and Airtable alternative for teams
+
+
+Select
+Bazarr
+Bazarr
+Automated subtitle management and download companion for Sonarr and Radarr
+
+
+Select
+BeaverHabits
+BeaverHabits
+Minimalist self-hosted habit tracker focused on daily check-ins and streaks
+
+
+Select
+BentoPDF
+BentoPDF
+Privacy-first browser-based PDF toolkit for merging, splitting, converting, and editing PDFs
+
+
+Select
+Beszel
+Beszel
+Lightweight server monitoring platform with Docker statistics and alerts
+
+
+Select
+Beszel Agent
+Beszel Agent
+Lightweight monitoring agent for Beszel server monitoring system
+
+
+Select
+bewCloud
+bewCloud
+Lightweight self-hosted cloud storage with file sync and CalDAV/CardDAV support
+
+
+Select
+Bigcapital
+Bigcapital
+Self-hosted financial accounting platform with intelligent reporting and multi-currency support
+
+
+Select
+Blender
+Blender
+Browser-accessible 3D modeling, animation, and rendering suite
+
+
+Select
+Blinko
+Blinko
+AI-powered note-taking and microblogging platform with Markdown support and task management
+
+
+Select
+Bluesky PDS
+Bluesky PDS
+Personal Data Server for the Bluesky decentralized social network
+
+
+Select
+Bookshelf
+Bookshelf
+Ebook and audiobook collection manager, a community revival of Readarr
+
+
+Select
+BookStack
+BookStack
+Structured self-hosted wiki for teams with books, chapters, pages, and search
+
+
+Select
+BroadcastChannel
+BroadcastChannel
+Turn any public Telegram channel into a SEO-friendly microblog with RSS
+
+
+Select
+Browserless
+Browserless
+Headless Chrome browser as a service for web scraping and automation
+
+
+Select
+Budge
+Budge
+Personal finance budgeting app for expense tracking and financial planning
+
+
+Select
+Budibase
+Budibase
+Low-code platform for building business apps and workflows in minutes
+
+
+Select
+BugSink
+BugSink
+Self-hosted error tracking platform for application monitoring
+
+
+Select
+Bytebase
+Bytebase
+Open-source database schema change management and DevOps platform
+
+
+Select
+ByteChef
+ByteChef
+Open-source low-code API integration and workflow automation platform
+
+
+Select
+ByteStash
+ByteStash
+Self-hosted code snippet manager with syntax highlighting and search
+
+
+Select
+Cal.com
+Cal.com
+Open-source scheduling platform for booking meetings and appointments
+
+
+Select
+Calibre-Web
+Calibre-Web
+Calibre-Web is a web application for browsing, reading, and managing your ebook library
+
+
+Select
+Cap
+Cap
+Privacy-first proof-of-work CAPTCHA alternative with zero tracking
+
+
+Select
+Casdoor
+Casdoor
+Open-source IAM platform with SSO, OAuth 2.0, OIDC, and SAML support
+
+
+Select
+Castopod
+Castopod
+Open-source podcast hosting platform with analytics and social features
+
+
+Select
+Centrifugo
+Centrifugo
+Centrifugo is a scalable real-time messaging server for building live applications
+
+
+Select
+changedetection.io
+changedetection.io
+Website change detection and monitoring tool with visual selection and notifications
+
+
+Select
+ChartDB
+ChartDB
+Open-source database diagram editor with AI DDL export and schema visualization
+
+
+Select
+Chatpad AI
+Chatpad AI
+Privacy-focused ChatGPT web interface with local data storage and conversation management
+
+
+Select
+Checkcle
+Checkcle
+Full-stack uptime and infrastructure monitoring with public status pages
+
+
+Select
+Checkmate
+Checkmate
+Open source server monitoring and uptime tracking application
+
+
+Select
+Checkmk
+Checkmk
+Infrastructure and application monitoring with auto-discovery and alerting
+
+
+Select
+Chibisafe
+Chibisafe
+Self-hosted file vault for uploading and sharing files with shareable links
+
+
+Select
+Chroma
+Chroma
+Open-source embedding database for AI applications and semantic search
+
+
+Select
+ClassicPress
+ClassicPress
+WordPress fork without Gutenberg block editor, focused on stability
+
+
+Select
+ClickHouse
+ClickHouse
+Columnar OLAP database for real-time analytics with millisecond query latency
+
+
+Select
+CloudBeaver
+CloudBeaver
+Web-based database management tool for comprehensive data administration
+
+
+Select
+Cloudflared
+Cloudflared
+Cloudflare Tunnel daemon for secure remote access without opening ports
+
+
+Select
+Cloudreve
+Cloudreve
+Self-hosted cloud storage platform with file management and sharing capabilities
+
+
+Select
+Cockpit CMS
+Cockpit CMS
+Lightweight headless CMS platform for content management and APIs
+
+
+Select
+Code-Server
+Code-Server
+VS Code running in the browser for remote development from any device
+
+
+Select
+Coder
+Coder
+Open-source platform for provisioning self-hosted cloud development environments
+
+
+Select
+CodiMD
+CodiMD
+Real-time collaborative markdown editor for documentation and note-taking
+
+
+Select
+Collabora Online
+Collabora Online
+Self-hosted browser-based office suite for collaborative document editing
+
+
+Select
+CommaFeed
+CommaFeed
+Self-hosted Google-Reader-inspired RSS reader with keyboard shortcuts and mobile apps
+
+
+Select
+ConvertX
+ConvertX
+Self-hosted online file converter supporting 1000+ formats
+
+
+Select
+Convex
+Convex
+Open-source reactive database platform for modern application development
+
+
+Select
+COPS
+COPS
+Lightweight PHP OPDS and HTML server that exposes a Calibre ebook library to mobile readers and browsers
+
+
+Select
+CoreControl
+CoreControl
+Self-hosted dashboard for managing servers, uptime, and network infrastructure
+
+
+Select
+Countly
+Countly
+Privacy-first product analytics for mobile, web, and desktop applications
+
+
+Select
+Crawl4AI
+Crawl4AI
+Open-source web crawler for AI applications with LLM-ready output
+
+
+Select
+Cronicle
+Cronicle
+Multi-server task scheduler and runner with web-based interface
+
+
+Select
+Crucix
+Crucix
+OSINT platform aggregating 27 real-time global data sources into a unified dashboard
+
+
+Select
+Cryptgeon
+Cryptgeon
+Secure, encrypted note and file sharing service inspired by PrivNote
+
+
+Select
+CryptPad
+CryptPad
+v2.vps.docker-application.cryptpad.description.short
+
+
+Select
+CyberChef
+CyberChef
+Web-based tool for encryption, encoding, compression, and data analysis operations
+
+
+Select
+Dagu
+Dagu
+DAG-based workflow scheduler with web UI for managing cron jobs and task pipelines
+
+
+Select
+Damselfly
+Damselfly
+Self-hosted photo manager with face recognition and object detection
+
+
+Select
+dashdot
+dashdot
+Minimalist server dashboard with real-time CPU, RAM, storage, and network stats
+
+
+Select
+Dashy
+Dashy
+A self-hostable personal dashboard with widgets, themes and status-checking
+
+
+Select
+Databag
+Databag
+Self-hosted federated messenger with end-to-end encryption and topic-based threads
+
+
+Select
+Databasus
+Databasus
+Databasus is a database backup tool for PostgreSQL, MySQL, and MongoDB
+
+
+Select
+Dawarich
+Dawarich
+Self-hosted location history tracker with heatmaps and travel statistics
+
+
+Select
+DB Browser for SQLite
+DB Browser for SQLite
+DB Browser for SQLite is a visual tool for creating, designing, and editing SQLite database files
+
+
+Select
+Deluge
+Deluge
+Lightweight BitTorrent client with web interface and plugin support
+
+
+Select
+DenoKV
+DenoKV
+The Denoland key-value database for Deno Deploy
+
+
+Select
+Dify
+Dify
+Open-source platform for building LLM applications with RAG, agents, and workflows
+
+
+Select
+Directus
+Directus
+Headless CMS that wraps databases with dynamic API and admin app
+
+
+Select
+Dittofeed
+Dittofeed
+Open-source customer engagement platform for automated multi-channel messaging
+
+
+Select
+Diun
+Diun
+Docker Image Update Notifier to receive notifications when images are updated
+
+
+Select
+Docker Registry
+Docker Registry
+Private Docker registry for storing and distributing container images
+
+
+Select
+Dockge
+Dockge
+Dockge is a fancy, easy-to-use, and reactive self-hosted Docker Compose stack manager
+
+
+Select
+Docmost
+Docmost
+Collaborative wiki and documentation platform with real-time editing
+
+
+Select
+Docspell
+Docspell
+Self-hosted document organizer with OCR, NLP extraction, and full-text search
+
+
+Select
+Documenso
+Documenso
+Open-source document signing platform for digital signatures
+
+
+Select
+DocuSeal
+DocuSeal
+Open-source document signing platform with e-signature capabilities
+
+
+Select
+Dograh
+Dograh
+Open-source no-code platform for building AI voice agents in minutes
+
+
+Select
+DokuWiki
+DokuWiki
+Lightweight file-based wiki platform for documentation and knowledge bases
+
+
+Select
+Dolibarr
+Dolibarr
+Open-source ERP/CRM platform for managing business operations
+
+
+Select
+Domain Locker
+Domain Locker
+Unified platform for managing and monitoring domain name portfolios
+
+
+Select
+Donetick
+Donetick
+Collaborative task management for organizing household chores and recurring responsibilities
+
+
+Select
+Downtify
+Downtify
+Download Spotify music from YouTube with album art, lyrics, and metadata
+
+
+Select
+Dozzle
+Dozzle
+Lightweight web UI for viewing Docker container logs in real-time
+
+
+Select
+Dragonfly
+Dragonfly
+High-performance Redis-compatible in-memory data store for modern hardware
+
+
+Select
+draw.io
+draw.io
+Free open-source diagramming tool for flowcharts, UML, and network diagrams
+
+
+Select
+drawDB
+drawDB
+Browser-based database diagram editor with SQL export and import
+
+
+Select
+Drizzle Gateway
+Drizzle Gateway
+Free self-hosted Drizzle Studio on steroids for database management
+
+
+Select
+Drupal
+Drupal
+Open-source CMS for building and managing dynamic websites
+
+
+Select
+DuckDNS
+DuckDNS
+Free dynamic DNS service for mapping IP addresses to domains
+
+
+Select
+DumbDo
+DumbDo
+DumbDo is a stupidly simple, self-hosted to-do list that just works
+
+
+Select
+Duplicati
+Duplicati
+Encrypted backup solution supporting cloud storage and remote servers
+
+
+Select
+Easy!Appointments
+Easy!Appointments
+Free appointment scheduling system for businesses and professionals
+
+
+Select
+Eclipse Mosquitto
+Eclipse Mosquitto
+Lightweight MQTT broker for IoT and messaging applications
+
+
+Select
+EdgeDB
+EdgeDB
+Next-generation graph-relational database built on PostgreSQL
+
+
+Select
+Elasticsearch
+Elasticsearch
+Distributed search and analytics engine built on Apache Lucene
+
+
+Select
+Element
+Element
+Secure Matrix client with end-to-end encryption and cross-platform messaging
+
+
+Select
+EmailEngine
+EmailEngine
+Self-hosted email API proxy connecting IMAP and SMTP to REST endpoints
+
+
+Select
+Emby
+Emby
+Personal media server with automatic streaming and device conversion
+
+
+Select
+EmbyStat
+EmbyStat
+Statistics and analytics tool for Emby and Jellyfin media servers
+
+
+Select
+Enclosed
+Enclosed
+Minimalistic web application for sending private and secure encrypted notes
+
+
+Select
+ErsatzTV
+ErsatzTV
+Self-hosted IPTV server that builds live channels from your media library
+
+
+Select
+Erugo
+Erugo
+Self-hosted file-sharing platform with password protection and expiry controls
+
+
+Select
+ESPHome
+ESPHome
+System for controlling ESP8266/ESP32 microcontrollers with YAML
+
+
+Select
+EspoCRM
+EspoCRM
+Free open-source CRM for managing contacts, deals, and customer relationships
+
+
+Select
+Etherpad
+Etherpad
+Real-time collaborative document editor with live editing and version history
+
+
+Select
+EverShop
+EverShop
+Modern open-source e-commerce platform on Node.js, React, GraphQL, and PostgreSQL
+
+
+Select
+Evolution API
+Evolution API
+Open-source WhatsApp API for chatbots, automation, and messaging integrations
+
+
+Select
+Evolution Go
+Evolution Go
+High-performance WhatsApp API gateway written in Go for messaging automation
+
+
+Select
+Excalidraw
+Excalidraw
+Virtual whiteboard for sketching hand-drawn diagrams and collaborative brainstorming
+
+
+Select
+Expensave
+Expensave
+Personal and family expense tracking application
+
+
+Select
+Explo
+Explo
+Turns ListenBrainz recommendations into playlists in your music library
+
+
+Select
+ezBookKeeping
+ezBookKeeping
+v2.vps.docker-application.ezbookkeeping.description.short
+
+
+Select
+Faraday
+Faraday
+Open-source vulnerability management platform for security teams
+
+
+Select
+Fasten Health
+Fasten Health
+Self-hosted personal and family electronic medical record manager
+
+
+Select
+Fider
+Fider
+Open-source feedback platform for collecting and managing user feedback
+
+
+Select
+File Browser
+File Browser
+Web-based file manager for browsing, uploading, and managing files on your server
+
+
+Select
+File Drop
+File Drop
+Decentralized peer-to-peer file sharing using IPFS technology
+
+
+Select
+FileFlows
+FileFlows
+Automated media file processor that reduces file sizes up to 90%
+
+
+Select
+FileGator
+FileGator
+Self-hosted multi-user file manager with role-based permissions and no database
+
+
+Select
+Filestash
+Filestash
+Self-hosted file manager for FTP, SFTP, S3, WebDAV, and 20+ storage backends
+
+
+Select
+Firefly
+Firefly
+Simple WireGuard VPN server with web management interface
+
+
+Select
+Firefly III
+Firefly III
+Professional self-hosted personal finance and budget manager
+
+
+Select
+Firefox
+Firefox
+Self-hosted Firefox browser accessible through web interface
+
+
+Select
+Flagsmith
+Flagsmith
+Open-source feature flag and remote config service with A/B testing
+
+
+Select
+Flame
+Flame
+Self-hosted startpage and application dashboard for your homelab
+
+
+Select
+FlareSolverr
+FlareSolverr
+Proxy server to bypass Cloudflare protection for web scraping
+
+
+Select
+Flarum
+Flarum
+Flarum is a modern, elegant forum software for building engaged communities
+
+
+Select
+flatnotes
+flatnotes
+Database-less Markdown note-taking app with wikilinks and full-text search
+
+
+Select
+Fleet
+Fleet
+Open-source device management and endpoint security platform powered by osquery
+
+
+Select
+FlexGet
+FlexGet
+YAML-driven automation tool for downloading media from RSS, torrents, and Usenet
+
+
+Select
+Flipt
+Flipt
+Self-hosted feature flag management platform with Git integration
+
+
+Select
+Flowise
+Flowise
+Open-source low-code tool for building LLM orchestration flows and AI agents
+
+
+Select
+Focalboard
+Focalboard
+Open-source project management tool with Kanban boards, tables, and calendar views
+
+
+Select
+Forgejo
+Forgejo
+Self-hosted lightweight Git service with web interface and collaboration features
+
+
+Select
+Form.io
+Form.io
+Open-source form builder and data management platform with REST API
+
+
+Select
+Formbricks
+Formbricks
+Open-source survey platform for in-app, link, website, and email feedback
+
+
+Select
+FossFLOW
+FossFLOW
+Browser-based isometric diagramming tool for infrastructure visualization
+
+
+Select
+Foundry VTT
+Foundry VTT
+Self-hosted virtual tabletop for online RPG campaigns with maps and dice
+
+
+Select
+FreeCAD
+FreeCAD
+Browser-accessible parametric 3D CAD modeler for engineering and design
+
+
+Select
+FreeScout
+FreeScout
+Lightweight open-source help desk and shared inbox system
+
+
+Select
+FreshRSS
+FreshRSS
+Self-hosted RSS feed aggregator for managing and reading your feeds
+
+
+Select
+Gatus
+Gatus
+Developer-oriented status page with multi-protocol uptime monitoring and alerting
+
+
+Select
+Ghost
+Ghost
+Ghost is a powerful platform for professional publishing
+
+
+Select
+Ghostfolio
+Ghostfolio
+Open-source wealth management software for tracking investment portfolios
+
+
+Select
+GIMP
+GIMP
+Browser-accessible professional image editor and graphic design tool
+
+
+Select
+Gitea
+Gitea
+Gitea is a lightweight, open-source Git hosting platform
+
+
+Select
+GitIngest
+GitIngest
+Git to LLM-friendly text converter for AI-powered code analysis
+
+
+Select
+GitLab
+GitLab
+GitLab is a complete DevOps platform for Git repository management and CI/CD
+
+
+Select
+Glance
+Glance
+Self-hosted dashboard that puts all your feeds in one place
+
+
+Select
+Glances
+Glances
+Glances is a cross-platform system monitoring tool with web interface
+
+
+Select
+GlitchTip
+GlitchTip
+Sentry-compatible error tracking and performance monitoring platform
+
+
+Select
+GLPI
+GLPI
+Open-source IT asset management and help desk software for IT operations
+
+
+Select
+Gogs
+Gogs
+Gogs is a self-hosted Git service for painless project management
+
+
+Select
+Gokapi
+Gokapi
+Self-hosted file-sharing server with expiring links and S3 support
+
+
+Select
+Gonic
+Gonic
+Lightweight self-hosted Subsonic music streaming server written in Go
+
+
+Select
+Gotenberg
+Gotenberg
+Docker-powered stateless API for seamless PDF conversion and generation
+
+
+Select
+Gotify
+Gotify
+Self-hosted push notification server with a simple REST API
+
+
+Select
+GoWA
+GoWA
+WhatsApp REST API and web interface for multi-device messaging automation
+
+
+Select
+Grafana
+Grafana
+Open-source observability platform for metrics visualization and monitoring
+
+
+Select
+Gramps Web
+Gramps Web
+Self-hosted genealogy platform for building and sharing family trees
+
+
+Select
+Grav
+Grav
+Modern flat-file CMS that requires no database, just files and folders
+
+
+Select
+Grimmory
+Grimmory
+Self-hosted book collection manager with built-in reader and device sync
+
+
+Select
+Grimoire
+Grimoire
+v2.vps.docker-application.grimoire.description.short
+
+
+Select
+Grist
+Grist
+Open-source spreadsheet-database hybrid for building data applications
+
+
+Select
+Grocy
+Grocy
+Self-hosted grocery and household management solution for tracking food inventory
+
+
+Select
+GrowthBook
+GrowthBook
+Open-source feature flagging and A/B testing platform
+
+
+Select
+Habitica
+Habitica
+Gamified task manager that turns productivity into an RPG adventure
+
+
+Select
+Halo
+Halo
+v2.vps.docker-application.halo.description.short
+
+
+Select
+Harness
+Harness
+End-to-end developer platform with SCM, CI/CD pipelines, and hosted dev environments
+
+
+Select
+Hasura GraphQL Engine
+Hasura GraphQL Engine
+Open-source GraphQL engine with instant APIs over any database
+
+
+Select
+Healthchecks
+Healthchecks
+Open-source cron job and background task monitoring with instant alerts
+
+
+Select
+HedgeDoc
+HedgeDoc
+Real-time collaborative markdown editor for team documentation
+
+
+Select
+Heimdall
+Heimdall
+Application dashboard for organizing and accessing your web services
+
+
+Select
+Hermes Agent
+Hermes Agent
+Self-improving AI agent with built-in learning loop and multi-platform messaging
+
+
+Select
+Hermes WebUI
+Hermes WebUI
+Self-hosted Hermes AI agent and web chat UI bundled in one Docker deployment
+
+
+Select
+Hermes Workspace
+Hermes Workspace
+Open-source web UI command center for the Hermes AI agent
+
+
+Select
+HeyForm
+HeyForm
+Open-source conversational form builder with conditional logic and analytics
+
+
+Select
+Hi.Events
+Hi.Events
+Open-source self-hosted event management and ticketing platform
+
+
+Select
+Homarr
+Homarr
+Modern self-hosted dashboard to organize and monitor all your services
+
+
+Select
+Home Assistant
+Home Assistant
+Open-source home automation platform for controlling smart devices
+
+
+Select
+Homebox
+Homebox
+Inventory and organization system built for home users
+
+
+Select
+Homebridge
+Homebridge
+HomeKit bridge for non-Apple smart home devices using plugins
+
+
+Select
+Homepage
+Homepage
+Modern, customizable application dashboard with Docker integration
+
+
+Select
+Homer
+Homer
+Simple self-hosted static dashboard for organizing all your server services
+
+
+Select
+Hoop
+Hoop
+Infrastructure access gateway with automatic data masking and audit trails
+
+
+Select
+Hoppscotch
+Hoppscotch
+Open-source API development and testing platform for developers and teams
+
+
+Select
+HortusFox
+HortusFox
+Self-hosted plant management system for tracking care routines and garden organization
+
+
+Select
+Huginn
+Huginn
+Self-hosted automation platform for building monitoring agents
+
+
+Select
+Hugo
+Hugo
+Lightning-fast static site generator built with Go
+
+
+Select
+HumHub
+HumHub
+Open-source enterprise social network and intranet platform for teams
+
+
+Select
+imgproxy
+imgproxy
+Fast on-the-fly image processing server for resize, crop, and format conversion
+
+
+Select
+Immich
+Immich
+Immich is a high-performance self-hosted photo and video management solution
+
+
+Select
+Infisical
+Infisical
+Open-source secrets manager for syncing env variables and API keys across teams and infrastructure
+
+
+Select
+InfluxDB 2
+InfluxDB 2
+Unified time series platform with Flux queries and integrated web UI
+
+
+Select
+Inkscape
+Inkscape
+Browser-accessible vector graphics editor for illustrations and SVG design
+
+
+Select
+InsForge
+InsForge
+Open-source backend platform with auth, database, and storage for AI agents
+
+
+Select
+Invidious
+Invidious
+Privacy-respecting alternative front-end for YouTube without ads or tracking
+
+
+Select
+Invio
+Invio
+Minimalist self-hosted invoicing system for freelancers and small teams
+
+
+Select
+Invoice Ninja
+Invoice Ninja
+Open-source invoicing and billing platform for freelancers and small businesses
+
+
+Select
+InvoiceShelf
+InvoiceShelf
+Open-source invoicing platform with estimates, expenses, and payment portal
+
+
+Select
+Isso
+Isso
+Lightweight, self-hosted Disqus alternative for blogs and static websites
+
+
+Select
+IT Tools
+IT Tools
+Collection of handy online tools for developers and IT professionals
+
+
+Select
+Jackett
+Jackett
+Torrent tracker proxy translating queries for Sonarr, Radarr, and other automation tools
+
+
+Select
+Jaeger
+Jaeger
+Jaeger is an open-source distributed tracing system for monitoring microservices
+
+
+Select
+Jellyfin
+Jellyfin
+Free and open-source media server for organizing and streaming your media library
+
+
+Select
+Jellyseerr
+Jellyseerr
+Media request management tool for Jellyfin, Emby, and Plex with approval workflow
+
+
+Select
+Jenkins
+Jenkins
+Jenkins is an open-source automation server for CI/CD pipelines
+
+
+Select
+Jitsi Meet
+Jitsi Meet
+Self-hosted video conferencing platform with screen sharing and recording
+
+
+Select
+Jitsu
+Jitsu
+Open-source customer data platform and event streaming pipeline for engineers
+
+
+Select
+JobOps
+JobOps
+Self-hosted job hunting pipeline that searches boards and tailors CVs
+
+
+Select
+Joomla
+Joomla
+Open-source CMS for building dynamic websites and web applications
+
+
+Select
+Joplin Server
+Joplin Server
+Self-hosted synchronization server for Joplin note-taking application
+
+
+Select
+Jotty
+Jotty
+Lightweight note-taking and checklist app with Markdown and Kanban boards
+
+
+Select
+jsreport
+jsreport
+Self-hosted report server for PDF, Excel, and DOCX from HTML templates
+
+
+Select
+JumpServer
+JumpServer
+Centralized privileged access gateway for SSH, RDP, and database sessions
+
+
+Select
+Jupyter Notebook
+Jupyter Notebook
+Interactive web environment for live code, data analysis, and visualizations
+
+
+Select
+JupyterLab
+JupyterLab
+JupyterLab is a web-based interactive development environment for notebooks and code
+
+
+Select
+Juxtapose
+Juxtapose
+Self-hosted notification router connecting webhooks to messaging platforms
+
+
+Select
+Kan
+Kan
+Open-source Kanban board and project management tool, a Trello alternative
+
+
+Select
+Kanboard
+Kanboard
+Kanboard is a free and open-source Kanban project management software
+
+
+Select
+Kaneo
+Kaneo
+Open-source project management with kanban boards and GitHub integration
+
+
+Select
+Karakeep
+Karakeep
+Karakeep is a self-hosted bookmark manager with AI-powered tagging and search
+
+
+Select
+Kavita
+Kavita
+Self-hosted digital library for comics, manga, and ebooks
+
+
+Select
+Keila
+Keila
+Self-hosted newsletter platform with drag-and-drop editor and SMTP delivery
+
+
+Select
+Kener
+Kener
+Open-source status page and uptime monitoring platform with incident management
+
+
+Select
+Kestra
+Kestra
+Open-source workflow orchestration platform for data pipelines and automation
+
+
+Select
+Keycloak
+Keycloak
+Open-source identity and access management with SSO, OAuth2, and SAML
+
+
+Select
+Khoj
+Khoj
+Open-source AI assistant for chatting with your documents and the web
+
+
+Select
+Kibana
+Kibana
+Open-source visualization UI for Elasticsearch with dashboards and search
+
+
+Select
+Kill Bill
+Kill Bill
+Open-source subscription billing and payment platform for SaaS and marketplaces
+
+
+Select
+Kimai
+Kimai
+Self-hosted time tracking for freelancers, agencies, and teams
+
+
+Select
+KitchenOwl
+KitchenOwl
+Self-hosted shared grocery list, recipe manager, and meal planner
+
+
+Select
+Komga
+Komga
+Self-hosted media server for comics, manga, magazines, and eBooks with OPDS and sync support
+
+
+Select
+Kong
+Kong
+Cloud-native API gateway built for hybrid and multi-cloud environments
+
+
+Select
+Kroki
+Kroki
+v2.vps.docker-application.kroki.description.short
+
+
+Select
+Kutt
+Kutt
+Modern self-hosted URL shortener with custom domains, analytics, and REST API
+
+
+Select
+Label Studio
+Label Studio
+Open-source data labeling and annotation platform for machine learning projects
+
+
+Select
+Lago
+Lago
+Open-source metering and usage-based billing platform
+
+
+Select
+Langflow
+Langflow
+Langflow is a visual AI workflow builder for creating LLM applications
+
+
+Select
+Langfuse
+Langfuse
+Open-source LLM engineering platform for observability and evaluation
+
+
+Select
+LanguageTool
+LanguageTool
+Open-source grammar, style, and spell checker for 25+ languages
+
+
+Select
+LazyLibrarian
+LazyLibrarian
+Self-hosted automation for ebook and audiobook downloads with author tracking
+
+
+Select
+Leantime
+Leantime
+Open-source project management system designed for non-project managers
+
+
+Select
+Lemmy
+Lemmy
+Federated link aggregator and discussion platform for self-hosted forums
+
+
+Select
+LibreChat
+LibreChat
+LibreChat is an AI chat interface with RAG support for multi-provider LLM use
+
+
+Select
+LibreDesk
+LibreDesk
+Open-source helpdesk with omnichannel ticketing, live chat, and SLA management
+
+
+Select
+LibrePhotos
+LibrePhotos
+Self-hosted photo management with face recognition and AI-powered search
+
+
+Select
+LibreSpeed
+LibreSpeed
+Self-hosted HTML5 internet speed test server with built-in results database
+
+
+Select
+LibreTranslate
+LibreTranslate
+Free and open-source machine translation API that is entirely self-hosted
+
+
+Select
+Lidarr
+Lidarr
+Automated music collection manager and organizer for Usenet and torrents
+
+
+Select
+Lightdash
+Lightdash
+Open-source BI platform built around dbt for data exploration and dashboards
+
+
+Select
+LimeSurvey
+LimeSurvey
+Professional online survey platform for creating and managing questionnaires
+
+
+Select
+Linkding
+Linkding
+Linkding is a minimal, fast, self-hosted bookmark manager
+
+
+Select
+LinkStack
+LinkStack
+Self-hosted Linktree alternative for branded link-in-bio pages
+
+
+Select
+Linkwarden
+Linkwarden
+Linkwarden is a self-hosted bookmark manager with full-page archiving
+
+
+Select
+Listmonk
+Listmonk
+High-performance self-hosted newsletter and mailing list manager
+
+
+Select
+LiteLLM
+LiteLLM
+LiteLLM is an AI gateway to call 100+ LLMs using OpenAI format
+
+
+Select
+Livebook
+Livebook
+Open-source Elixir notebooks for data science, ML, and real-time collaboration
+
+
+Select
+LLDAP
+LLDAP
+Lightweight authentication server providing a simplified LDAP backend for self-hosted apps
+
+
+Select
+LMS
+LMS
+Lightweight self-hosted music streaming server with Subsonic API
+
+
+Select
+LobeChat
+LobeChat
+Modern open-source AI chat framework supporting multiple LLM providers
+
+
+Select
+Local Deep Research
+Local Deep Research
+Self-hosted AI deep research assistant powered by cloud LLM providers
+
+
+Select
+LocalAI
+LocalAI
+Self-hosted OpenAI-compatible API server for local AI model inference
+
+
+Select
+Locust
+Locust
+Python-based distributed load testing tool with a real-time web UI
+
+
+Select
+Logseq
+Logseq
+Self-hosted privacy-first knowledge base and block-based outliner
+
+
+Select
+Logto
+Logto
+Logto is a comprehensive identity and authentication platform with OAuth and OIDC support
+
+
+Select
+LubeLogger
+LubeLogger
+Comprehensive vehicle maintenance and fuel management system
+
+
+Select
+Lychee
+Lychee
+Self-hosted photo management platform with album organization, EXIF browsing, and granular sharing controls
+
+
+Select
+Mage AI
+Mage AI
+Mage AI is a data pipeline tool for building and managing ETL workflows
+
+
+Select
+Mailpit
+Mailpit
+Open-source SMTP email testing tool with a browser-based inbox for developers
+
+
+Select
+Maloja
+Maloja
+Self-hosted music scrobble database with personal listening charts
+
+
+Select
+Manticore Search
+Manticore Search
+Open-source search engine with full-text and vector search via MySQL protocol
+
+
+Select
+MariaDB
+MariaDB
+Open-source relational database server and MySQL drop-in replacement
+
+
+Select
+Marimo
+Marimo
+Open-source reactive Python notebook with SQL support and reproducible execution
+
+
+Select
+Marreta
+Marreta
+Self-hosted article proxy for clean, ad-free reading with intelligent caching
+
+
+Select
+Mastodon
+Mastodon
+Self-hosted federated microblogging server based on the ActivityPub standard
+
+
+Select
+Mathesar
+Mathesar
+Spreadsheet-style web interface for exploring and editing PostgreSQL databases
+
+
+Select
+Matomo
+Matomo
+Leading open-source web analytics platform with complete data ownership and privacy
+
+
+Select
+Matrix Synapse
+Matrix Synapse
+Open-source Matrix homeserver for decentralized, encrypted communication
+
+
+Select
+Mattermost
+Mattermost
+Open-source team collaboration platform with messaging, file sharing, and integrations
+
+
+Select
+Mautic
+Mautic
+Open-source marketing automation for email campaigns, lead scoring, and journeys
+
+
+Select
+MaxKB
+MaxKB
+MaxKB is an open-source platform for building enterprise-grade AI knowledge base agents
+
+
+Select
+Mayan EDMS
+Mayan EDMS
+Open-source document management with OCR, full-text search, and workflows
+
+
+Select
+Maybe
+Maybe
+Open-source personal finance and wealth management application
+
+
+Select
+Mazanoke
+Mazanoke
+Browser-based image optimizer with format conversion and EXIF stripping
+
+
+Select
+Mealie
+Mealie
+Mealie is a self-hosted recipe manager with meal planning and shopping lists
+
+
+Select
+Medusa
+Medusa
+Automatic Video Library Manager for TV shows with Plex and Jellyfin support
+
+
+Select
+Meilisearch
+Meilisearch
+Lightning-fast search engine for modern applications
+
+
+Select
+Memgraph
+Memgraph
+In-memory graph database for real-time analytics on connected data
+
+
+Select
+Memos
+Memos
+Memos is a lightweight, privacy-first note-taking application
+
+
+Select
+MeshCentral
+MeshCentral
+Self-hosted remote monitoring and management platform for desktops, servers, and IoT devices
+
+
+Select
+Metabase
+Metabase
+Open-source business intelligence platform for data visualization and analytics
+
+
+Select
+MetaTrader 5
+MetaTrader 5
+Browser-accessible MetaTrader 5 trading terminal for 24/7 forex and CFD trading
+
+
+Select
+MeTube
+MeTube
+MeTube is a web-based video downloader for YouTube and other platforms
+
+
+Select
+MicroBin
+MicroBin
+Lightweight self-hosted pastebin, file sharer, and URL shortener in Rust
+
+
+Select
+Milvus
+Milvus
+Open-source vector database built for AI applications and similarity search
+
+
+Select
+MindsDB
+MindsDB
+MindsDB is an AI platform for building machine learning models from enterprise data
+
+
+Select
+Mini QR
+Mini QR
+Self-hosted QR code generator with custom styles and batch export
+
+
+Select
+Miniflux
+Miniflux
+Minimalist and opinionated RSS feed reader with a clean web interface
+
+
+Select
+MiroFish
+MiroFish
+AI prediction engine powered by multi-agent swarm intelligence simulation
+
+
+Select
+MiroTalk
+MiroTalk
+Self-hosted P2P video conferencing with unlimited rooms and screen sharing
+
+
+Select
+Mongo Express
+Mongo Express
+Web-based MongoDB admin UI for browsing, editing, and managing databases
+
+
+Select
+MongoDB 4
+MongoDB 4
+Document-oriented NoSQL database with JSON-like document storage
+
+
+Select
+Monica
+Monica
+Personal relationship management system for documenting your life
+
+
+Select
+Moodist
+Moodist
+Ambient soundscape mixer with productivity tools for deep focus and relaxation
+
+
+Select
+Moodle
+Moodle
+Open-source learning management system trusted by over 489 million users worldwide
+
+
+Select
+Morphic
+Morphic
+Open-source AI search engine with generative answers and source citations
+
+
+Select
+mStream
+mStream
+Lightweight self-hosted music streaming server with native iOS and Android apps
+
+
+Select
+Mylar3
+Mylar3
+Self-hosted automated comic book downloader and library manager
+
+
+Select
+n8n
+n8n
+Workflow automation platform with visual node-based interface
+
+
+Select
+Nango
+Nango
+Open-source OAuth and API integration platform for 300+ services
+
+
+Select
+NATS
+NATS
+Cloud-native messaging system with pub/sub, request-reply, and JetStream
+
+
+Select
+Navidrome
+Navidrome
+Navidrome is a self-hosted music server with web and mobile streaming
+
+
+Select
+Neko
+Neko
+Self-hosted virtual browser for collaborative web browsing and streaming
+
+
+Select
+Neo4j
+Neo4j
+The world's leading open-source graph database for connected data
+
+
+Select
+NetBird Client
+NetBird Client
+Secure WireGuard-based mesh VPN client with SSO and granular access controls
+
+
+Select
+NetBox
+NetBox
+Open-source network infrastructure modeling for IPAM, DCIM, and documentation
+
+
+Select
+Netdata
+Netdata
+Real-time infrastructure monitoring agent with 800+ integrations
+
+
+Select
+New API
+New API
+New API is an LLM gateway and AI asset management system for multiple providers
+
+
+Select
+Nextcloud
+Nextcloud
+Nextcloud is a powerful self-hosted productivity platform
+
+
+Select
+Nexterm
+Nexterm
+Browser-based server management for SSH, VNC, and RDP connections
+
+
+Select
+Nexus Repository Manager
+Nexus Repository Manager
+Universal artifact repository manager for Maven, npm, Docker, and PyPI
+
+
+Select
+NocoBase
+NocoBase
+NocoBase is an extensible no-code/low-code platform for building applications
+
+
+Select
+NocoDB
+NocoDB
+Open-source Airtable alternative that turns databases into smart spreadsheets
+
+
+Select
+Node-RED
+Node-RED
+Low-code visual tool for wiring IoT devices, APIs, and online services
+
+
+Select
+NodeBB
+NodeBB
+NodeBB is a modern, real-time discussion platform for building community forums
+
+
+Select
+Norish
+Norish
+Self-hosted recipe manager with social media import and household sync
+
+
+Select
+NoteDiscovery
+NoteDiscovery
+Self-hosted markdown knowledge base with graph view and AI integration
+
+
+Select
+Novu
+Novu
+Open-source notification infrastructure for email, SMS, and push delivery
+
+
+Select
+ntfy
+ntfy
+Self-hosted push notification server for sending alerts via simple HTTP requests
+
+
+Select
+NZBGet
+NZBGet
+Efficient C++ Usenet binary downloader with PAR2 repair and web UI
+
+
+Select
+NZBHydra2
+NZBHydra2
+Usenet meta-search aggregator that unifies indexers behind one Newznab API
+
+
+Select
+Odoo
+Odoo
+Open-source ERP and CRM platform for business management and e-commerce
+
+
+Select
+OliveTin
+OliveTin
+Self-hosted web UI for safely running predefined shell commands
+
+
+Select
+Ollama
+Ollama
+Run large language models locally with a simple API for AI applications
+
+
+Select
+Ombi
+Ombi
+Self-hosted request system for Plex, Emby, and Jellyfin with auto-fulfillment
+
+
+Select
+OmniTools
+OmniTools
+OmniTools is an all-in-one web toolkit with 80+ utilities for everyday tasks
+
+
+Select
+OneDev
+OneDev
+OneDev is a self-hosted Git server with built-in CI/CD and project management
+
+
+Select
+OneTimeSecret
+OneTimeSecret
+Share self-destructing secrets through one-time-view links
+
+
+Select
+ONLYOFFICE Docs
+ONLYOFFICE Docs
+Self-hosted online office suite with MS Office-compatible collaborative editing
+
+
+Select
+Open Notebook
+Open Notebook
+AI-native notebook app for writing, researching, and organizing knowledge in one workspace
+
+
+Select
+Open WebUI
+Open WebUI
+Self-hosted AI chat interface supporting multiple LLM providers with RAG capabilities
+
+
+Select
+OpenBao
+OpenBao
+Open-source secrets manager for storing and accessing sensitive credentials
+
+
+Select
+OpenClaw
+OpenClaw
+Personal AI assistant with multi-channel messaging support (formerly Moltbot/Clawdbot)
+
+
+Select
+OpenCloud
+OpenCloud
+Open-source file sync and collaboration with built-in identity management
+
+
+Select
+OpenEMR
+OpenEMR
+Open-source electronic health records and practice management for clinics
+
+
+Select
+Opengist
+Opengist
+Self-hosted pastebin powered by Git, open-source alternative to GitHub Gist
+
+
+Select
+OpenHuman
+OpenHuman
+Self-hosted personal AI core with memory, agents, and 118+ app integrations
+
+
+Select
+OpenProject
+OpenProject
+Open-source project management with Gantt charts, Agile boards, time tracking
+
+
+Select
+OpenSearch
+OpenSearch
+Open-source search and analytics engine, community fork of Elasticsearch
+
+
+Select
+OpenSign
+OpenSign
+Free and open-source DocuSign alternative for legally binding document signing
+
+
+Select
+OpenSpeedTest
+OpenSpeedTest
+Self-hosted HTML5 network speed test without Flash or Java
+
+
+Select
+OpenViking
+OpenViking
+OpenViking is an open-source context database built for AI agents
+
+
+Select
+OpenVPN Access Server
+OpenVPN Access Server
+Full-featured VPN server with web-based administration and client management
+
+
+Select
+OpnForm
+OpnForm
+Open-source form builder with conditional logic, embeds, and response management
+
+
+Select
+OrangeHRM
+OrangeHRM
+v2.vps.docker-application.orangehrm.description.short
+
+
+Select
+Outline
+Outline
+Outline is a modern team wiki and knowledge base with real-time collaboration
+
+
+Select
+Overleaf
+Overleaf
+Open-source collaborative LaTeX editor for scientific and academic writing
+
+
+Select
+Overseerr
+Overseerr
+Media request management and discovery tool for Plex with approval workflow
+
+
+Select
+Owncast
+Owncast
+Self-hosted live streaming and chat server with RTMP and Fediverse support
+
+
+Select
+ownCloud
+ownCloud
+Self-hosted file sync, sharing, and collaboration platform for teams
+
+
+Select
+OxiCloud
+OxiCloud
+Lightweight Rust-based self-hosted cloud storage with Nextcloud client support
+
+
+Select
+PairDrop
+PairDrop
+PairDrop is a web-based file sharing tool for instant transfers between devices
+
+
+Select
+Paisa
+Paisa
+Personal finance tracker with double-entry accounting and investment tracking
+
+
+Select
+Pangolin Newt
+Pangolin Newt
+Userspace WireGuard tunnel client for secure remote access via Pangolin
+
+
+Select
+Paperclip
+Paperclip
+Paperclip is an AI/ML orchestration platform for autonomous teams
+
+
+Select
+Paperless-ngx
+Paperless-ngx
+Document management system that transforms physical documents into searchable digital archives
+
+
+Select
+Papermerge
+Papermerge
+Open-source document management system for scanning, OCR, and organizing PDFs
+
+
+Select
+Papra
+Papra
+Minimalistic open-source document management and archiving platform
+
+
+Select
+Parseable
+Parseable
+Open-source observability data lake for logs, metrics, and traces
+
+
+Select
+Passbolt
+Passbolt
+Open-source team password manager with end-to-end OpenPGP encryption and sharing
+
+
+Select
+Password Pusher
+Password Pusher
+Self-hosted secret sharing with one-time, expiring links for passwords and files
+
+
+Select
+Pastefy
+Pastefy
+Pastefy is a self-hosted pastebin for secure code snippet sharing
+
+
+Select
+PatchMon
+PatchMon
+Self-hosted Linux patch management and fleet monitoring platform
+
+
+Select
+Paymenter
+Paymenter
+Open-source billing and subscription management platform for hosting companies
+
+
+Select
+PdfDing
+PdfDing
+Self-hosted PDF manager with cross-device sync and browser-based annotation
+
+
+Select
+PeerTube
+PeerTube
+Federated peer-to-peer video platform for self-hosted YouTube-style hosting
+
+
+Select
+Penpot
+Penpot
+Penpot is an open-source design platform for UI/UX collaboration
+
+
+Select
+Perplexica
+Perplexica
+Perplexica is a privacy-focused AI answering engine
+
+
+Select
+pgAdmin
+pgAdmin
+Open-source PostgreSQL administration and development platform for the web
+
+
+Select
+pgBackWeb
+pgBackWeb
+PostgreSQL backup manager with scheduling, S3 storage, and web UI
+
+
+Select
+PgHero
+PgHero
+Open-source PostgreSQL performance dashboard for query and index monitoring
+
+
+Select
+Pgweb
+Pgweb
+Cross-platform web-based PostgreSQL database browser with zero dependencies
+
+
+Select
+PhotoPrism
+PhotoPrism
+PhotoPrism is an AI-powered photo management application for the decentralized web
+
+
+Select
+Photoview
+Photoview
+Self-hosted photo gallery with RAW support, face recognition, and EXIF browsing
+
+
+Select
+phpMyAdmin
+phpMyAdmin
+Web-based MySQL and MariaDB database management interface
+
+
+Select
+PicoClaw
+PicoClaw
+Ultra-lightweight Go AI assistant with native MCP support and 30+ LLM providers
+
+
+Select
+PicoShare
+PicoShare
+Minimalist self-hosted file sharing with expiring links and no size limits
+
+
+Select
+Picsur
+Picsur
+Picsur is a self-hosted image hosting service with shareable links
+
+
+Select
+PiGallery2
+PiGallery2
+Self-hosted directory-first photo gallery for archives and shared albums
+
+
+Select
+PigeonPod
+PigeonPod
+Self-hosted podcast feed generator for YouTube and Bilibili channels
+
+
+Select
+Pinchflat
+Pinchflat
+Self-hosted YouTube media manager for automated channel and playlist downloads
+
+
+Select
+Pingvin Share
+Pingvin Share
+Self-hosted file sharing platform as an alternative to WeTransfer
+
+
+Select
+Piwigo
+Piwigo
+Mature open-source photo gallery with 200+ plugins and granular sharing
+
+
+Select
+Plane
+Plane
+Open-source project management tool for issue tracking and sprints
+
+
+Select
+Planka
+Planka
+Open-source real-time kanban board for project management and team collaboration
+
+
+Select
+Plausible Analytics
+Plausible Analytics
+Plausible is a lightweight, privacy-first Google Analytics alternative
+
+
+Select
+Plex
+Plex
+Popular media server for streaming movies, TV shows, music, and photos
+
+
+Select
+PocketBase
+PocketBase
+Open-source backend for your next SaaS and mobile app in a single file
+
+
+Select
+PostgreSQL
+PostgreSQL
+PostgreSQL is a powerful, open-source object-relational database system
+
+
+Select
+Postiz
+Postiz
+Open-source social media scheduling platform with AI-powered content creation
+
+
+Select
+Prefect
+Prefect
+Prefect is a workflow orchestration platform for building and scaling data pipelines
+
+
+Select
+PrestaShop
+PrestaShop
+Open-source e-commerce platform for creating and managing online stores
+
+
+Select
+PrivateBin
+PrivateBin
+PrivateBin is a zero-knowledge encrypted pastebin for secure text sharing
+
+
+Select
+Profilarr
+Profilarr
+Sync quality profiles and custom formats to Radarr and Sonarr automatically
+
+
+Select
+ProjectSend
+ProjectSend
+Client-focused file sharing platform for securely sending files to clients
+
+
+Select
+Prometheus
+Prometheus
+Open-source monitoring and alerting toolkit with time-series database
+
+
+Select
+Prowlarr
+Prowlarr
+Centralized indexer manager for Usenet and torrent trackers integration
+
+
+Select
+PsiTransfer
+PsiTransfer
+v2.vps.docker-application.psitransfer.description.short
+
+
+Select
+Pterodactyl
+Pterodactyl
+Open-source game server management panel with Docker isolation
+
+
+Select
+PufferPanel
+PufferPanel
+Open-source web panel for managing Minecraft, Factorio, Rust, and other game servers
+
+
+Select
+Pydio Cells
+Pydio Cells
+Self-hosted file sharing and document collaboration with team workspaces
+
+
+Select
+qBittorrent
+qBittorrent
+qBittorrent is a media BitTorrent client for automated downloads
+
+
+Select
+Qdrant
+Qdrant
+Vector similarity search engine for AI and machine learning applications
+
+
+Select
+QloApps
+QloApps
+Open-source hotel management and reservation system with booking engine and PMS
+
+
+Select
+RabbitMQ
+RabbitMQ
+Open-source message broker implementing AMQP for reliable asynchronous messaging
+
+
+Select
+Radarr
+Radarr
+Automated movie collection manager and organizer for Usenet and torrents
+
+
+Select
+Radicale
+Radicale
+Self-hosted CalDAV and CardDAV server for syncing calendars and contacts across devices
+
+
+Select
+Rallly
+Rallly
+Self-hosted scheduling and group-poll tool for picking the best date and time across teams
+
+
+Select
+Raneto
+Raneto
+Markdown-powered Node.js knowledge base wiki with file-based content storage
+
+
+Select
+Reactive Resume
+Reactive Resume
+Privacy-first open-source resume builder with 14+ templates and PDF export
+
+
+Select
+Readur
+Readur
+Modern document management system with advanced OCR for searchable archives
+
+
+Select
+Redis
+Redis
+High-performance in-memory data store for caching, sessions, and real-time workloads
+
+
+Select
+Redmine
+Redmine
+Flexible project management and issue tracking platform used by thousands of organizations
+
+
+Select
+Relaticle
+Relaticle
+Open-source CRM with native AI agent support and REST API automation
+
+
+Select
+Remark42
+Remark42
+Privacy-focused self-hosted commenting engine for blogs and static sites
+
+
+Select
+Remmina
+Remmina
+Remmina is a multi-protocol remote desktop client for RDP, VNC, and SSH
+
+
+Select
+Resilio Sync
+Resilio Sync
+Peer-to-peer file synchronization across devices using the BitTorrent protocol
+
+
+Select
+Restreamer
+Restreamer
+Easy-to-use live video streaming server supporting RTMP, HLS, SRT, and WebRTC
+
+
+Select
+RetroAssembly
+RetroAssembly
+Self-hosted browser-based retro game library supporting 25+ classic consoles
+
+
+Select
+Rocket.Chat
+Rocket.Chat
+Open-source team messaging with real-time chat, video calls, and integrations
+
+
+Select
+RomM
+RomM
+Beautiful self-hosted ROM manager for scanning, browsing, and playing retro games
+
+
+Select
+Rotki
+Rotki
+Rotki is a privacy-first crypto portfolio tracker with DeFi support
+
+
+Select
+Roundcube
+Roundcube
+Browser-based IMAP webmail client with a modern interface and plugin support
+
+
+Select
+RSS Bridge
+RSS Bridge
+Self-hosted bridge that creates RSS feeds for sites without them
+
+
+Select
+RSSHub
+RSSHub
+Open-source RSS feed generator for websites missing native RSS support
+
+
+Select
+RStudio Server
+RStudio Server
+Browser-based R IDE for statistical computing, data science, and visualization
+
+
+Select
+RustDesk
+RustDesk
+RustDesk is an open-source remote desktop software for secure remote access
+
+
+Select
+RustFS
+RustFS
+S3-compatible distributed object storage system built with Rust
+
+
+Select
+Rybbit
+Rybbit
+Open-source privacy-first web analytics alternative to Google Analytics
+
+
+Select
+Ryot
+Ryot
+Self-hosted tracker for media, fitness, books, and daily habits
+
+
+Select
+SABnzbd
+SABnzbd
+SABnzbd is an automated Usenet downloader for binary newsgroup content
+
+
+Select
+Saltcorn
+Saltcorn
+Open-source no-code application builder for database-driven apps
+
+
+Select
+Screego
+Screego
+v2.vps.docker-application.screego.description.short
+
+
+Select
+Seafile
+Seafile
+Self-hosted file sync and share platform with end-to-end encryption
+
+
+Select
+SearXNG
+SearXNG
+Privacy-respecting metasearch engine aggregating results from multiple sources
+
+
+Select
+SeaweedFS
+SeaweedFS
+Fast distributed file system with S3 compatibility for scalable object storage
+
+
+Select
+Seerr
+Seerr
+Media request and discovery manager for Jellyfin, Plex, and Emby servers
+
+
+Select
+Semaphore
+Semaphore
+Modern web UI for running Ansible playbooks, Terraform, and automation scripts
+
+
+Select
+SerpBear
+SerpBear
+Self-hosted SEO rank tracker for Google, Bing, and other search engines
+
+
+Select
+SFTPGo
+SFTPGo
+Full-featured SFTP, FTP, and WebDAV server with web-based administration
+
+
+Select
+Shaarli
+Shaarli
+Personal, minimalist, flat-file bookmarking service that runs without any database server
+
+
+Select
+Shadowbroker
+Shadowbroker
+Real-time OSINT dashboard aggregating 60+ live global intelligence feeds
+
+
+Select
+Shelfmark
+Shelfmark
+Self-hosted book and audiobook search platform with multi-source discovery
+
+
+Select
+Shiori
+Shiori
+Self-hosted bookmark manager for saving and organizing web content offline
+
+
+Select
+Shlink
+Shlink
+Definitive self-hosted URL shortener with analytics and API support
+
+
+Select
+Shopware
+Shopware
+Open-source eCommerce platform for building modern B2C and B2B online stores
+
+
+Select
+Shynet
+Shynet
+Privacy-first web analytics without cookies or fingerprinting
+
+
+Select
+SickGear
+SickGear
+Stable TV show automation server — the long-running Sick-Beard community fork
+
+
+Select
+Silex
+Silex
+Open-source no-code website builder with drag-and-drop editing and HTML output
+
+
+Select
+SillyTavern
+SillyTavern
+Power-user LLM frontend for AI characters across many text generation backends
+
+
+Select
+SilverBullet
+SilverBullet
+Self-hosted Markdown note-taking with live queries and plugin system
+
+
+Select
+Sim Studio
+Sim Studio
+Open-source visual platform for building and deploying AI agent workflows
+
+
+Select
+SiYuan
+SiYuan
+SiYuan is a privacy-first personal knowledge management system
+
+
+Select
+SkySend
+SkySend
+End-to-end encrypted, zero-knowledge file and note sharing service
+
+
+Select
+Skyvern
+Skyvern
+Skyvern is an AI-powered browser automation tool using LLMs and computer vision
+
+
+Select
+Slash
+Slash
+Self-hosted shortcut manager that turns URLs into memorable s/ links
+
+
+Select
+Slink
+Slink
+Privacy-first image sharing platform with complete control over your content
+
+
+Select
+SmokePing
+SmokePing
+Long-running network latency and packet-loss monitor with RRD graphs
+
+
+Select
+Snapdrop
+Snapdrop
+Local file sharing in your browser inspired by Apple AirDrop
+
+
+Select
+SnapOtter
+SnapOtter
+Self-hosted image processing suite with 55+ tools and local AI
+
+
+Select
+SnappyMail
+SnappyMail
+v2.vps.docker-application.snappymail.description.short
+
+
+Select
+Snipe-IT
+Snipe-IT
+Free open-source IT asset management for tracking hardware, licenses, and depreciation
+
+
+Select
+Soketi
+Soketi
+Self-hosted, Pusher-compatible WebSocket server for real-time apps and broadcasting
+
+
+Select
+Solidtime
+Solidtime
+Time tracking for freelancers and agencies with billing rates and PDF reports
+
+
+Select
+SonarQube
+SonarQube
+Open-source platform for continuous code quality inspection and security analysis
+
+
+Select
+Sonarr
+Sonarr
+Automated TV show collection manager and organizer for Usenet and torrents
+
+
+Select
+SoulSync
+SoulSync
+Music platform syncing Spotify and Tidal playlists to your self-hosted library
+
+
+Select
+Spacedrive
+Spacedrive
+Open-source file manager for organizing assets across devices and cloud storage
+
+
+Select
+SpacetimeDB
+SpacetimeDB
+Combined database and server for real-time multiplayer apps and games
+
+
+Select
+SparkyFitness
+SparkyFitness
+Self-hosted fitness and nutrition tracker with health platform sync
+
+
+Select
+Speaches
+Speaches
+OpenAI-compatible self-hosted speech-to-text and text-to-speech server
+
+
+Select
+Speedtest Tracker
+Speedtest Tracker
+Self-hosted internet performance tracking application with automated speed tests
+
+
+Select
+Spliit
+Spliit
+Open-source Splitwise alternative for tracking and splitting group expenses
+
+
+Select
+Spoolman
+Spoolman
+3D printing filament spool tracker with inventory management and QR code labels
+
+
+Select
+Squidex
+Squidex
+Open-source headless CMS with GraphQL, REST APIs, and content schemas
+
+
+Select
+Statistics for Strava
+Statistics for Strava
+Self-hosted Strava analytics dashboard with charts, heatmaps, and gear tracking
+
+
+Select
+Stirling PDF
+Stirling PDF
+Powerful locally hosted web-based PDF manipulation tool
+
+
+Select
+Strapi
+Strapi
+Open-source headless CMS for building customizable APIs and content management
+
+
+Select
+SuggestArr
+SuggestArr
+Automated media recommendation engine for Jellyfin, Plex, and Emby with Seer
+
+
+Select
+Super Productivity
+Super Productivity
+Super Productivity is a task manager with time tracking and Pomodoro
+
+
+Select
+SuperTokens
+SuperTokens
+SuperTokens is an open-source authentication solution with session management
+
+
+Select
+Sure
+Sure
+Self-hosted personal finance app for net worth and investment tracking
+
+
+Select
+SurrealDB
+SurrealDB
+Multi-model database for documents, graphs, time-series, and vector data
+
+
+Select
+Suwayomi
+Suwayomi
+Self-hosted manga and comics server with hundreds of Tachiyomi sources
+
+
+Select
+Swing Music
+Swing Music
+Swing Music is a self-hosted music streaming server with smart mixes
+
+
+Select
+SyncLounge
+SyncLounge
+Self-hosted Plex watch party server with synchronized playback and group chat
+
+
+Select
+Syncthing
+Syncthing
+Open-source continuous file synchronization tool for secure peer-to-peer syncing
+
+
+Select
+Tandoor Recipes
+Tandoor Recipes
+Self-hosted recipe manager with meal planning and shopping lists
+
+
+Select
+TaskTrove
+TaskTrove
+Self-hosted task manager with natural language input and multiple views
+
+
+Select
+Tautulli
+Tautulli
+Tautulli is a monitoring and tracking tool for Plex Media Server with statistics and notifications
+
+
+Select
+TaxHacker
+TaxHacker
+AI-powered accounting tool for processing receipts and invoices automatically
+
+
+Select
+Teable
+Teable
+Open-source Airtable alternative with a visual interface built on PostgreSQL
+
+
+Select
+Temporal
+Temporal
+Durable workflow execution platform with web-based monitoring and search
+
+
+Select
+TeslaMate
+TeslaMate
+Self-hosted Tesla data logger with trip history and Grafana dashboards
+
+
+Select
+The Lounge
+The Lounge
+The Lounge is a web-based IRC client for always-on chat connectivity
+
+
+Select
+ThingsBoard
+ThingsBoard
+Open-source IoT platform for device management and real-time dashboards
+
+
+Select
+Thumbor
+Thumbor
+Smart open-source image server with face-aware cropping and on-the-fly resize
+
+
+Select
+Tianji
+Tianji
+All-in-one hub for website analytics, uptime, and server status monitoring
+
+
+Select
+TiddlyWiki
+TiddlyWiki
+Self-hosted non-linear personal wiki and knowledge management notebook
+
+
+Select
+TimescaleDB
+TimescaleDB
+Time-series database built on PostgreSQL for fast ingest and analytics at scale
+
+
+Select
+TinyAuth
+TinyAuth
+v2.vps.docker-application.tinyauth.description.short
+
+
+Select
+Tolgee
+Tolgee
+Open-source localization platform for managing translations with in-context editing
+
+
+Select
+ToolJet
+ToolJet
+Open-source low-code platform for building internal tools and admin panels
+
+
+Select
+Traccar
+Traccar
+Open-source GPS tracking platform supporting 200+ protocols and devices
+
+
+Select
+Traduora
+Traduora
+Modern self-hosted translation management platform for teams and developers
+
+
+Select
+Traefik
+Traefik
+Modern reverse proxy and load balancer with automatic Docker service discovery
+
+
+Select
+Traggo
+Traggo
+Self-hosted tag-based time tracker for freelancers and small teams
+
+
+Select
+TrailBase
+TrailBase
+Open-source Firebase alternative with type-safe APIs, realtime, and auth
+
+
+Select
+Transmission
+Transmission
+Transmission is a lightweight BitTorrent client with a clean web interface for remote downloads
+
+
+Select
+Trek
+Trek
+Self-hosted collaborative travel planner with maps, budgets, and packing lists
+
+
+Select
+TriliumNext Notes
+TriliumNext Notes
+Self-hosted personal knowledge base with hierarchical note organization and scripting
+
+
+Select
+TubeArchivist
+TubeArchivist
+Self-hosted YouTube archiver with channel sync, full-text search, and web playback
+
+
+Select
+TubeSync
+TubeSync
+Automatically sync and download YouTube videos from channels and playlists
+
+
+Select
+Tududi
+Tududi
+Self-hosted task manager with CalDAV sync, recurring tasks, and OIDC support
+
+
+Select
+Twenty
+Twenty
+Twenty is a modern, customizable CRM designed to fit unique business needs
+
+
+Select
+Twingate Connector
+Twingate Connector
+Zero trust network access connector for secure remote resource access
+
+
+Select
+Tyk Gateway
+Tyk Gateway
+Open-source API gateway for auth, rate limiting, and traffic management
+
+
+Select
+Typebot
+Typebot
+No-code chatbot builder for conversational forms and interactive flows
+
+
+Select
+Typesense
+Typesense
+Fast in-memory search engine with instant results and typo-tolerance
+
+
+Select
+Ubooquity
+Ubooquity
+Self-hosted home server for ebooks and comics with web reader and OPDS feed
+
+
+Select
+Umami Analytics
+Umami Analytics
+Umami is a simple, fast, privacy-focused alternative to Google Analytics
+
+
+Select
+Unleash
+Unleash
+Open-source feature flag management with 15+ SDKs and gradual rollout strategies
+
+
+Select
+Unstructured
+Unstructured
+Unstructured is a document processing API for RAG and AI model fine-tuning
+
+
+Select
+Uptime Kuma
+Uptime Kuma
+Uptime Kuma is a beautiful, self-hosted monitoring tool
+
+
+Select
+Uptrace
+Uptrace
+Open-source APM for distributed traces, metrics, and logs via OpenTelemetry
+
+
+Select
+Usertour
+Usertour
+Self-hosted platform for in-app product tours, checklists, and user surveys
+
+
+Select
+useSend
+useSend
+Open-source transactional and marketing email sending platform
+
+
+Select
+Vaultwarden
+Vaultwarden
+Vaultwarden is a lightweight, self-hosted password manager compatible with Bitwarden
+
+
+Select
+Verdaccio
+Verdaccio
+Lightweight private npm proxy registry for JavaScript packages
+
+
+Select
+VERT
+VERT
+VERT is an open-source, fully local file converter that runs in the browser
+
+
+Select
+Vikunja
+Vikunja
+Vikunja is an open-source, self-hostable to-do app with multiple views and collaboration
+
+
+Select
+Visual Studio Code Server
+Visual Studio Code Server
+Run Visual Studio Code in your browser anywhere
+
+
+Select
+Vitess
+Vitess
+Database clustering system for horizontal scaling of MySQL databases
+
+
+Select
+Vvveb CMS
+Vvveb CMS
+Vvveb is a drag-and-drop CMS for building websites, blogs, and ecommerce stores
+
+
+Select
+WAHA
+WAHA
+Self-hosted WhatsApp HTTP API for messaging automation and bot integration
+
+
+Select
+Wakapi
+Wakapi
+Self-hosted coding time tracker with statistics and productivity insights
+
+
+Select
+Wallabag
+Wallabag
+Self-hosted read-it-later service for saving and organizing web articles
+
+
+Select
+Wallos
+Wallos
+Self-hosted subscription tracker for managing recurring payments and budgets
+
+
+Select
+Wanderer
+Wanderer
+Self-hosted trail database with GPX track management and interactive maps
+
+
+Select
+Warracker
+Warracker
+Self-hosted warranty tracker with expiration alerts and document storage
+
+
+Select
+Wavelog
+Wavelog
+Web-based amateur radio logging application for tracking contacts and awards
+
+
+Select
+WBO
+WBO
+Real-time collaborative whiteboard for team brainstorming and remote meetings
+
+
+Select
+Weaviate
+Weaviate
+Open-source vector database for AI applications and semantic search
+
+
+Select
+Web-Check
+Web-Check
+OSINT tool for comprehensive website analysis, security auditing, and infrastructure intelligence
+
+
+Select
+WebCord
+WebCord
+Privacy-focused Discord client with enhanced security and custom features
+
+
+Select
+Weblate
+Weblate
+Web-based translation management with version control integration
+
+
+Select
+WebTop
+WebTop
+Browser-based Linux desktop environment for remote access and productivity
+
+
+Select
+Wekan
+Wekan
+Open-source Kanban board for visual project management and task tracking
+
+
+Select
+wger
+wger
+Self-hosted fitness, workout, and nutrition tracker with native mobile apps
+
+
+Select
+Whoogle Search
+Whoogle Search
+Whoogle is a self-hosted, ad-free, privacy-respecting metasearch engine
+
+
+Select
+Wiki.js
+Wiki.js
+Wiki.js is a modern, powerful and extensible wiki platform for documentation
+
+
+Select
+Windmill
+Windmill
+Open-source developer platform for building internal tools and workflows
+
+
+Select
+Wingfit
+Wingfit
+Wingfit is an open-source minimalist fitness app for tracking workouts and progress
+
+
+Select
+WireGuard Easy
+WireGuard Easy
+WireGuard Easy is a web-based VPN management interface for WireGuard
+
+
+Select
+withoutbg
+withoutbg
+Self-hosted AI background removal with local models and no per-image fees
+
+
+Select
+Wizarr
+Wizarr
+Wizarr is an advanced invitation and user management system for media servers
+
+
+Select
+Woodpecker CI
+Woodpecker CI
+Open-source CI/CD automation platform with native GitHub integration
+
+
+Select
+WordPress
+WordPress
+WordPress is the world's most popular website builder and CMS
+
+
+Select
+Workout Cool
+Workout Cool
+Self-hosted fitness platform with workout plans and exercise tracking
+
+
+Select
+WPS Office
+WPS Office
+WPS Office is a comprehensive office suite with document editing capabilities
+
+
+Select
+WriteFreely
+WriteFreely
+Minimalist Markdown publishing platform with ActivityPub federation and a distraction-free editor
+
+
+Select
+XBackBone
+XBackBone
+Self-hosted lightweight file and screenshot sharing server with ShareX support
+
+
+Select
+YaCy
+YaCy
+Distributed peer-to-peer web search engine with privacy-first design
+
+
+Select
+Yamtrack
+Yamtrack
+Yamtrack is a self-hosted media tracker for movies, TV, anime, and games
+
+
+Select
+Yao
+Yao
+Open-source app runtime for building web apps and AI agents with JSON
+
+
+Select
+Your Spotify
+Your Spotify
+Self-hosted Spotify listening statistics dashboard with rich charts and history
+
+
+Select
+YOURLS
+YOURLS
+Self-hosted PHP URL shortener with click tracking, plugins, and REST API
+
+
+Select
+Yucca
+Yucca
+Simple NVR video surveillance solution for home and business
+
+
+Select
+Zammad
+Zammad
+Open-source helpdesk and customer support system with multi-channel ticketing
+
+
+Select
+Zen
+Zen
+Minimalist self-hosted note-taking app with markdown and full-text search
+
+
+Select
+Zensical
+Zensical
+Markdown-based documentation platform with live preview and full-text search
+
+
+Select
+ZeroNote
+ZeroNote
+Unified encrypted app for notes, passwords, bookmarks, and 2FA
+
+
+Select
+Zipline
+Zipline
+ShareX-compatible file and image upload server with a modern dashboard
+
+
+Select
+ZITADEL
+ZITADEL
+Open-source identity and access management with SSO, OIDC, passkeys, and multi-tenancy
+
+
+Select
+ZNC
+ZNC
+Always-on IRC bouncer that maintains persistent network connections with replay
