@@ -16,6 +16,16 @@ def _get_observer_redis():
 router = APIRouter(prefix="", tags=["npcs"])
 
 
+@router.post("/npcs/advance-turn")
+async def npc_advance_turn():
+    """Advance NPC turn — called every tick by the worker."""
+    try:
+        events = game_state.npc_system.advance_turn()
+        return {"status": "ok", "events": events, "count": len(events)}
+    except Exception as e:
+        return {"status": "error", "error": str(e)}
+
+
 @router.get("/npcs")
 async def list_npcs(
     affiliation: str | None = None,
