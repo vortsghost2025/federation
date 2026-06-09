@@ -88,7 +88,7 @@ function renderSummary(summary) {
 
 async function loadSummary() {
   try {
-    const response = await fetch('/api/spectator/summary?limit=120', { headers: { Accept: 'application/json' } });
+    const response = await fetch('/spectator/summary?limit=120', { headers: { Accept: 'application/json' } });
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
     renderSummary(await response.json());
   } catch (error) {
