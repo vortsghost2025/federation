@@ -927,17 +927,22 @@ def get_npc_relationships(char_id: str) -> Dict[str, float]:
 # --- SIMULATION TICK ---
 
 NPC_INTERACTION_TYPES = [
-    ("alliance", "{name_a} and {name_b} formed an alliance regarding {topic}"),
-    ("conflict", "{name_a} confronted {name_b} over {topic}"),
-    ("collaboration", "{name_a} and {name_b} collaborated on {field} research"),
-    ("gossip", "{name_a} shared rumors about {name_b} with others"),
-    ("rivalry", "{name_a} challenged {name_b} for influence in the {faction}"),
-    ("mentorship", "{name_a} offered guidance to {name_b} on {concept}"),
-    ("trade", "{name_a} exchanged resources with {name_b} at {location}"),
-    ("suspicion", "{name_a} grew suspicious of {name_b}'s intentions"),
-    ("friendship", "{name_a} and {name_b} shared a moment of camaraderie"),
-    ("betrayal", "{name_a} undermined {name_b} during a critical operation"),
+    ("alliance", "{name_a} and {name_b} formed an alliance regarding {topic}", 8),
+    ("conflict", "{name_a} confronted {name_b} over {topic}", 15),
+    ("collaboration", "{name_a} and {name_b} collaborated on {field} research", 8),
+    ("gossip", "{name_a} shared rumors about {name_b} with others", 6),
+    ("rivalry", "{name_a} challenged {name_b} for influence in the {faction}", 5),
+    ("mentorship", "{name_a} offered guidance to {name_b} on {concept}", 5),
+    ("trade", "{name_a} exchanged resources with {name_b} at {location}", 15),
+    ("suspicion", "{name_a} grew suspicious of {name_b}'s intentions", 5),
+    ("friendship", "{name_a} and {name_b} shared a moment of camaraderie", 8),
+    ("betrayal", "{name_a} undermined {name_b} during a critical operation", 5),
+    ("negotiation", "{name_a} negotiated terms with {name_b} for {topic}", 10),
 ]
+
+# Sum of weights = 90. Socialize-like (alliance, collaboration, gossip, friendship, betrayal) = 8+8+6+8+5=35 (39%)
+# Trade/conflict/negotiation = 15+15+10=40 (44%)
+# Others (rivalry, mentorship, suspicion) = 15 (17%)
 
 INTERACTION_DELTAS = {
     "alliance": 8.0,
@@ -950,11 +955,19 @@ INTERACTION_DELTAS = {
     "suspicion": -6.0,
     "friendship": 7.0,
     "betrayal": -15.0,
+    "negotiation": 2.0,
 }
 
 
 def generate_npc_interaction(npc_a: Dict, npc_b: Dict) -> Optional[Dict]:
-    interaction_type, template = random.choice(NPC_INTERACTION_TYPES)
+    # Weighted random choice for interaction type
+    total_weight = sum(w for _, _, w in NPC_INTERACTION_TYPES)
+    r = random.uniform(0, total_weight)
+    cumulative = 0
+    for interaction_type, template, weight in NPC_INTERACTION_TYPES:
+        cumulative += weight
+        if r <= cumulative:
+            break
 
     description = template.replace("{name_a}", npc_a.get("name", "Unknown")).replace(
         "{name_b}", npc_b.get("name", "Unknown")
@@ -976,14 +989,36 @@ def generate_npc_interaction(npc_a: Dict, npc_b: Dict) -> Optional[Dict]:
     update_npc_relationship(char_a, char_b, name_b, actual_delta)
     update_npc_relationship(char_b, char_a, name_a, actual_delta * 0.8)
 
+    ts = int(time.time())
     event = {
         "event_type": "npc_interaction",
         "interaction_type": interaction_type,
         "char_ids": [char_a, char_b],
         "description": description,
         "relationship_delta": round(actual_delta, 1),
-        "ts": int(time.time()),
+        "ts": ts,
     }
+
+    # Log interaction for BOTH NPCs (source + target)
+    try:
+        log_npc_activity(char_a, "interaction", {
+            "category": interaction_type,
+            "description": description,
+            "affiliation": npc_a.get("affiliation", "independent"),
+            "target_char_id": char_b,
+            "target_name": name_b,
+            "relationship_delta": round(actual_delta, 1),
+        }, timestamp=ts)
+        log_npc_activity(char_b, "interaction", {
+            "category": interaction_type,
+            "description": description,
+            "affiliation": npc_b.get("affiliation", "independent"),
+            "target_char_id": char_a,
+            "target_name": name_a,
+            "relationship_delta": round(actual_delta * 0.8, 1),
+        }, timestamp=ts)
+    except Exception:
+        pass  # Logging is best-effort
 
     r = _get_redis()
     r.zadd("npc_world_events", {json.dumps(event): event["ts"]})

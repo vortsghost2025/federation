@@ -173,6 +173,36 @@
 </section>
 
 <section id="center" class="panel">
+<div id="human-briefing" class="human-briefing">
+<div class="hb-label">10-Second Briefing</div>
+<div class="hb-headline" id="hb-headline">Loading the current story...</div>
+<div class="hb-grid">
+<div class="hb-card"><div class="hb-card-label">What is this?</div><div class="hb-card-text" id="hb-what">A living AI society is running without player control.</div></div>
+<div class="hb-card"><div class="hb-card-label">What changed?</div><div class="hb-card-text" id="hb-changed">Waiting for NPC decisions and events.</div></div>
+<div class="hb-card"><div class="hb-card-label">Why care?</div><div class="hb-card-text" id="hb-care">Watch who gains influence, who forms alliances, and who creates risk.</div></div>
+</div>
+<div class="hb-actions">
+<button onclick="aiChatAsk('What is this simulation?')">What is this simulation?</button>
+<button onclick="aiChatAsk('How does it work?')">How does it work?</button>
+<button onclick="aiChatAsk('Explain what is happening right now.')">Explain now</button>
+</div>
+</div>
+<div id="npc-reality-feed" class="npc-reality-feed">
+<div class="nrf-header">
+<div><div class="nrf-label">NPC Reality Feed</div><div class="nrf-subtitle">Who is talking, deciding, planning, and reacting right now</div></div>
+<a class="nrf-open-logs" href="npc-logs.html">Open full logs</a>
+</div>
+<div class="nrf-filters" id="nrf-filters">
+<button class="active" data-filter="all" onclick="setNpcRealityFilter('all')">All</button>
+<button data-filter="chat" onclick="setNpcRealityFilter('chat')">Conversations</button>
+<button data-filter="decision" onclick="setNpcRealityFilter('decision')">Decisions</button>
+<button data-filter="plan" onclick="setNpcRealityFilter('plan')">Plans</button>
+<button data-filter="cognition" onclick="setNpcRealityFilter('cognition')">Cognition</button>
+<button data-filter="alliance" onclick="setNpcRealityFilter('alliance')">Alliances</button>
+<button data-filter="conflict" onclick="setNpcRealityFilter('conflict')">Conflict</button>
+</div>
+<div class="nrf-list" id="npc-reality-list"><div class="nrf-empty">Loading NPC communications...</div></div>
+</div>
 <div id="quick-status" class="qs-panel" style="display:none">
 <div class="qs-header">&#x1F4CA; Quick Status <span class="qs-tick" id="qs-tick"></span></div>
 <div class="qs-body" id="qs-body"></div>
@@ -281,10 +311,12 @@
 <button class="ai-chat-send" id="ai-chat-send" onclick="aiChatSend()">Ask</button>
 </div>
 <div class="ai-chat-suggestions" id="ai-chat-suggestions">
-<span class="ai-chat-suggestion" onclick="aiChatAsk(this.textContent)">What happened this tick?</span>
-<span class="ai-chat-suggestion" onclick="aiChatAsk(this.textContent)">Which faction is winning?</span>
-<span class="ai-chat-suggestion" onclick="aiChatAsk(this.textContent)">Why are quests failing?</span>
-<span class="ai-chat-suggestion" onclick="aiChatAsk(this.textContent)">Who is the biggest threat?</span>
+<span class="ai-chat-suggestion" onclick="aiChatAsk(this.textContent)">What is this simulation?</span>
+<span class="ai-chat-suggestion" onclick="aiChatAsk(this.textContent)">How does it work?</span>
+<span class="ai-chat-suggestion" onclick="aiChatAsk(this.textContent)">Explain what is happening right now.</span>
+<span class="ai-chat-suggestion" onclick="aiChatAsk(this.textContent)">Who is talking to who?</span>
+<span class="ai-chat-suggestion" onclick="aiChatAsk(this.textContent)">What are the NPCs planning?</span>
+<span class="ai-chat-suggestion" onclick="aiChatAsk(this.textContent)">Which NPC should I watch?</span>
 </div>
 </div>
 </body>

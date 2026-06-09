@@ -16,9 +16,10 @@ from pydantic import BaseModel
 logger = logging.getLogger(__name__)
 
 try:
-    from llm_router import route_call
+    from llm_router import route_call, route_assistant_call
 except ImportError:
     route_call = None
+    route_assistant_call = None
 
 try:
     import redis
@@ -1414,6 +1415,8 @@ NPC behavior, faction dynamics, quest progress, and world state trends.
 
 You speak clearly and concisely. You explain complex simulation mechanics in
 plain language. You are part analyst, part strategist, part storyteller.
+Return only the final answer the player should see. Do not reveal analysis,
+scratch work, chain-of-thought, or comments about how you are answering.
 
 When answering questions:
 - Reference specific NPCs, factions, and events by name when relevant
@@ -1430,7 +1433,7 @@ async def ask_assistant(query: AssistantQuery):
     Reads live sim context from Redis, builds a prompt, routes through the
     LLM router, and returns the assistant's answer.
     """
-    if not route_call:
+    if not route_assistant_call and not route_call:
         return {
             "status": "error",
             "answer": "LLM router not available.",
@@ -1457,13 +1460,21 @@ async def ask_assistant(query: AssistantQuery):
     )
 
     try:
-        result = route_call(
-            task_class="narrator",
-            system_prompt=_ASSISTANT_SYSTEM_PROMPT,
-            user_prompt=user_prompt,
-            max_tokens=300,
-            temperature=0.7,
-        )
+        if route_assistant_call:
+            result = route_assistant_call(
+                system_prompt=_ASSISTANT_SYSTEM_PROMPT,
+                user_prompt=user_prompt,
+                max_tokens=300,
+                temperature=0.7,
+            )
+        else:
+            result = route_call(
+                task_class="narrator",
+                system_prompt=_ASSISTANT_SYSTEM_PROMPT,
+                user_prompt=user_prompt,
+                max_tokens=300,
+                temperature=0.7,
+            )
         if result.get("success"):
             return {
                 "status": "ok",

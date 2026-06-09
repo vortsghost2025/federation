@@ -900,6 +900,29 @@ TASK_MODELS = {
             "timeout": 30,
         },
     },
+    "assistant": {
+        "primary": {
+            "provider": "nim",
+            "model": "meta/llama-3.3-70b-instruct",
+            "max_tokens": 300,
+            "temperature": 0.6,
+            "timeout": 25,
+        },
+        "fallback_nim": {
+            "provider": "nim",
+            "model": "meta/llama-3.1-8b-instruct",
+            "max_tokens": 300,
+            "temperature": 0.6,
+            "timeout": 20,
+        },
+        "fallback_openrouter": {
+            "provider": "openrouter",
+            "model": "meta-llama/llama-3.3-70b-instruct:free",
+            "max_tokens": 300,
+            "temperature": 0.6,
+            "timeout": 30,
+        },
+    },
     "npc_memory": {
         "primary": {
             "provider": "nim",
@@ -1474,6 +1497,56 @@ def route_call(
         "; ".join(result["errors"][:3]),
     )
     return result
+
+
+def route_assistant_call(
+    system_prompt: str,
+    user_prompt: str,
+    max_tokens: Optional[int] = None,
+    temperature: Optional[float] = None,
+) -> Dict:
+    """Route the human-facing assistant through Ollama first, then assistant chain."""
+    narrator_config = TASK_MODELS.get("assistant", {}).get("primary", {})
+    mt = max_tokens if max_tokens is not None else narrator_config.get("max_tokens", 300)
+    temp = temperature if temperature is not None else narrator_config.get("temperature", 0.7)
+    messages = [
+        {"role": "system", "content": system_prompt},
+        {"role": "user", "content": user_prompt},
+    ]
+    errors = []
+    attempts = 0
+    latency_ms = 0
+
+    if _check_ollama_available() and not _is_circuit_open("ollama"):
+        attempts += 1
+        ok, content, latency = _call_ollama(messages, mt, temp)
+        latency_ms += latency
+        if ok and content:
+            return {
+                "success": True,
+                "content": content,
+                "provider": "ollama",
+                "model": OLLAMA_MODEL,
+                "task_class": "assistant",
+                "latency_ms": latency_ms,
+                "attempts": attempts,
+                "errors": errors,
+            }
+        errors.append(f"ollama failed: {content[:150]}")
+    else:
+        errors.append("ollama unavailable or circuit breaker open")
+
+    fallback = route_call(
+        task_class="assistant",
+        system_prompt=system_prompt,
+        user_prompt=user_prompt,
+        max_tokens=max_tokens,
+        temperature=temperature,
+    )
+    fallback["attempts"] = attempts + fallback.get("attempts", 0)
+    fallback["latency_ms"] = latency_ms + fallback.get("latency_ms", 0)
+    fallback["errors"] = errors + fallback.get("errors", [])
+    return fallback
 
 
 def route_call_batch(

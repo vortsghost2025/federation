@@ -1,77 +1,55 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Federation — Spectator</title>
-<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>👁</text></svg>">
-<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Share+Tech+Mono&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="spectator.css">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Federation Spectator</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&family=Libre+Baskerville:wght@700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="spectator.css">
 </head>
 <body>
+  <main class="watch-shell" aria-live="polite">
+    <section class="hero" aria-labelledby="headline">
+      <p class="eyebrow">Federation World TV</p>
+      <h1 id="headline">The world is waking up.</h1>
+      <p id="plain-summary" class="plain-summary">Listening for the next pulse of the simulation.</p>
+      <div class="controls" aria-label="spectator controls">
+        <button id="refresh-btn" type="button">Refresh</button>
+        <button id="read-btn" type="button">Read Aloud</button>
+        <button id="pause-btn" type="button">Pause Auto</button>
+      </div>
+    </section>
 
-<div class="starfield" id="starfield"></div>
+    <section class="story-grid" aria-label="current story">
+      <article class="story-panel primary-panel">
+        <h2>What You Are Watching</h2>
+        <div id="event-list" class="event-list">
+          <p class="empty">Waiting for NPC activity.</p>
+        </div>
+      </article>
 
-<div id="app">
-<header>
-<div class="logo">SPECTATOR<span class="logo-sub">analyst console</span></div>
-<div class="header-metrics" id="header-metrics"></div>
-<div class="header-era">
-<span class="era-name" id="era-name">&mdash;</span>
-<div class="era-bar-wrap">
-<div class="era-bar"><div class="era-fill" id="era-fill" style="width:0"></div></div>
-<span class="era-pct" id="era-pct">0%</span>
-</div>
-<a href="/worldguide.html" style="color:var(--dim);font-size:13px;text-decoration:none;padding:6px 10px;letter-spacing:1px;text-transform:uppercase;transition:color 0.2s;white-space:nowrap" onmouseover="this.style.color='var(--cyan)'" onmouseout="this.style.color='var(--dim)'">World Guide</a>
-</div>
-</header>
+      <aside class="story-panel pulse-panel">
+        <h2>World Pulse</h2>
+        <div id="pulse-list" class="pulse-list"></div>
+      </aside>
+    </section>
 
-<main>
-<!-- Narration Hero -->
-<div class="narration-hero" id="narration-hero">
-<div class="narration-badge"><span class="dot"></span>LATEST INTELLIGENCE</div>
-<div class="narration-headline" id="narration-headline">Awaiting signal from the Federation...</div>
-<div class="narration-meta" id="narration-meta">
-<span class="narration-source cached">initializing</span>
-</div>
-</div>
+    <section class="assistant-panel" aria-labelledby="assistant-title">
+      <h2 id="assistant-title">Ask The World</h2>
+      <p class="assistant-hint">Ask in plain language. Example: "who is causing trouble?" or "what just happened?"</p>
+      <form id="assistant-form">
+        <label class="sr-only" for="question-input">Question for the Federation assistant</label>
+        <input id="question-input" name="question" type="text" autocomplete="off" placeholder="Ask what is happening...">
+        <button type="submit">Ask</button>
+      </form>
+      <div id="suggestions" class="suggestions"></div>
+      <div id="assistant-answer" class="assistant-answer">The assistant is ready.</div>
+    </section>
+  </main>
 
-<!-- Narration Details Row -->
-<div class="narration-row" id="narration-row">
-<div class="narration-section">
-<div class="ns-title dev">Developments</div>
-<div id="narration-developments"><div class="ns-item" style="color:var(--dim)">Listening...</div></div>
-</div>
-<div class="narration-section">
-<div class="ns-title voice">Voices</div>
-<div id="narration-voices"><div class="ns-item voice-item" style="color:var(--dim)">Waiting for faction voices...</div></div>
-</div>
-</div>
-
-<!-- Tab Bar -->
-<div class="tab-bar">
-<div class="tab active" data-tab="thoughts">Thoughts</div>
-<div class="tab" data-tab="network">Network</div>
-<div class="tab" data-tab="stances">Stances</div>
-<div class="tab" data-tab="brain">Brain</div>
-</div>
-
-<!-- Tab Content -->
-<div class="tab-content">
-<div class="tab-panel active" id="panel-thoughts"></div>
-<div class="tab-panel" id="panel-network"></div>
-<div class="tab-panel" id="panel-stances"></div>
-<div class="tab-panel" id="panel-brain"></div>
-</div>
-</main>
-
-<aside>
-<div class="aside-title">Factions</div>
-<div class="faction-list" id="faction-list"></div>
-</aside>
-</div>
-
-<script src="error-reporter.js"></script>
-<script src="spectator.js"></script>
+  <script src="error-reporter.js"></script>
+  <script src="spectator.js"></script>
 </body>
 </html>
