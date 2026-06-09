@@ -605,7 +605,7 @@ function summarizeNpcLog(log) {
     why = firstLogText(data, ['outcome','result','sentiment','relationship_change']);
     if (data.relationship_delta != null && !isNaN(Number(data.relationship_delta))) {
       var rel = Number(data.relationship_delta);
-      var relText = 'Relationship ' + (rel > 0 ? '+' : '') + rel.toFixed(1).replace(/\.0$/,'');
+      var relText = 'Relationship ' + (rel > 0 ? '+' : '') + rel.toFixed(2).replace(/\.?0+$/,'');
       why = why ? why + ' · ' + relText : relText;
     }
   } else if (type === 'cognition') {

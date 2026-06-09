@@ -40,7 +40,7 @@
   </div>
 
   <div class="filters">
-    <label>NPC: <select id="npc-filter" onchange="loadLogs()"><option value="all">All NPCs</option><option value="char_101">char_101</option><option value="char_102">char_102</option></select></label>
+    <label>NPC: <select id="npc-filter" onchange="loadLogs()"><option value="all">All NPCs</option></select></label>
     <label>Category: <select id="category-filter" onchange="loadLogs()"><option value="all">All</option><option value="decision">Decision</option><option value="interaction">Interaction</option><option value="cognition">Cognition</option><option value="chat">Chat</option></select></label>
     <label>Search: <input type="text" id="search-filter" placeholder="Search..." oninput="debounceSearch()"></label>
   </div>
@@ -167,8 +167,9 @@ async function loadStats() {
 
 async function loadAllLogs() {
   if (!allKnownNpcIds.length) await loadNpcOptions();
-  const npcs = allKnownNpcIds.length ? allKnownNpcIds : ['char_101', 'char_102'];
-  const promises = npcs.map(id => apiFetch('/npcs/' + id + '/log?limit=200').then(d => d?.entries || []));
+  const npcs = allKnownNpcIds.length ? allKnownNpcIds : [];
+  if (!npcs.length) { renderLogs([]); return; }
+  const promises = npcs.map(id => apiFetch('/npc-logs?char_id=' + id + '&limit=200').then(d => d?.results || []));
   const results = await Promise.all(promises);
   allLogs = results.flat().sort((a, b) => entryTime(b) - entryTime(a));
   loadLogs();
