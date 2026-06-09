@@ -12,9 +12,11 @@
 <body>
   <main class="watch-shell" aria-live="polite">
     <section class="hero" aria-labelledby="headline">
-      <p class="eyebrow">Federation World TV</p>
-      <h1 id="headline">The world is waking up.</h1>
-      <p id="plain-summary" class="plain-summary">Listening for the next pulse of the simulation.</p>
+      <p class="eyebrow">Federation World TV - LIVE</p>
+      <h1 id="headline">Latest Events</h1>
+      <div id="event-list" class="event-list-large">
+        <p class="empty">Loading NPC activity...</p>
+      </div>
       <div class="controls" aria-label="spectator controls">
         <button id="refresh-btn" type="button">Refresh</button>
         <button id="read-btn" type="button">Read Aloud</button>
@@ -22,34 +24,26 @@
       </div>
     </section>
 
-    <section class="story-grid" aria-label="current story">
+    <section class="story-grid" aria-label="world information">
       <article class="story-panel primary-panel">
-        <h2>What You Are Watching</h2>
-        <div id="event-list" class="event-list">
-          <p class="empty">Waiting for NPC activity.</p>
-        </div>
-      </article>
-
-      <aside class="story-panel pulse-panel">
         <h2>World Pulse</h2>
         <div id="pulse-list" class="pulse-list"></div>
-      </aside>
-    </section>
+      </article>
 
-    <section class="assistant-panel" aria-labelledby="assistant-title">
-      <h2 id="assistant-title">Ask The World</h2>
-      <p class="assistant-hint">Ask in plain language. Example: "who is causing trouble?" or "what just happened?"</p>
-      <form id="assistant-form">
-        <label class="sr-only" for="question-input">Question for the Federation assistant</label>
-        <input id="question-input" name="question" type="text" autocomplete="off" placeholder="Ask what is happening...">
-        <button type="submit">Ask</button>
-      </form>
-      <div id="suggestions" class="suggestions"></div>
-      <div id="assistant-answer" class="assistant-answer">The assistant is ready.</div>
+      <aside class="story-panel assistant-panel">
+        <h2 id="assistant-title">Ask The World</h2>
+        <p class="assistant-hint">Ask in plain language. Example: "who is causing trouble?" or "what just happened?"</p>
+        <form id="assistant-form">
+          <label class="sr-only" for="question-input">Question for the Federation assistant</label>
+          <input id="question-input" name="question" type="text" autocomplete="off" placeholder="Ask what is happening...">
+          <button type="submit">Ask</button>
+        </form>
+        <div id="suggestions" class="suggestions"></div>
+        <div id="assistant-answer" class="assistant-answer">The assistant is ready.</div>
+      </aside>
     </section>
   </main>
 
-  <script src="error-reporter.js"></script>
   <script src="spectator.js"></script>
 </body>
 </html>

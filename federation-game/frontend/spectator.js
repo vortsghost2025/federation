@@ -79,21 +79,25 @@ function renderSuggestions(items) {
 
 function renderSummary(summary) {
   state.lastSummary = summary;
-  $('headline').textContent = summary.headline || 'The world is alive.';
-  $('plain-summary').textContent = summary.summary || 'The Federation is between visible moments.';
-  renderEvents(summary.events || []);
+  const events = summary.events || [];
+  if (events.length > 0) {
+    $('headline').textContent = summary.mood + ': ' + events[0].summary;
+  } else {
+    $('headline').textContent = summary.headline || 'The world is alive.';
+  }
+  renderEvents(events);
   renderPulse(summary);
   renderSuggestions(summary.ask_suggestions || []);
 }
 
 async function loadSummary() {
   try {
-    const response = await fetch('/spectator/summary?limit=120', { headers: { Accept: 'application/json' } });
+    const response = await fetch('/spectator/summary?limit=20', { headers: { Accept: 'application/json' } });
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
     renderSummary(await response.json());
   } catch (error) {
     $('headline').textContent = 'The signal is unclear.';
-    $('plain-summary').textContent = 'The spectator feed could not load. I will keep trying.';
+    $('event-list').innerHTML = '<p class="empty">The spectator feed could not load. I will keep trying.</p>';
   }
 }
 

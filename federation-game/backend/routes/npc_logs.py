@@ -12,16 +12,25 @@ def _plain_event(row):
     data = row.data_json or {}
     entry_type = row.entry_type or "unknown"
     category = data.get("category") or entry_type
-    description = data.get("description") or data.get("action_desc") or "Something changed."
+    desc = data.get("description") or data.get("action_desc") or "Something happened."
+    action = data.get("action") or ""
+    action_desc = data.get("action_desc") or ""
+    reasoning = data.get("reasoning") or ""
     target = data.get("target_name") or data.get("target_char_id")
     relationship_delta = data.get("relationship_delta")
-    summary = description
+    summary = desc
+    if action and action_desc:
+        summary = f"{desc} - {action_desc}"
+    elif action_desc:
+        summary = action_desc
     if target and target not in summary:
         summary = f"{summary} with {target}"
+    if reasoning:
+        summary = f"{summary} ({reasoning})"
     if relationship_delta is not None:
         sign = "+" if float(relationship_delta) >= 0 else ""
         summary = f"{summary}. Relationship {sign}{relationship_delta}."
-    return {"id": row.id, "char_id": row.char_id, "entry_type": entry_type, "category": category, "timestamp": row.timestamp, "summary": summary, "source_text": description, "target_name": target, "relationship_delta": relationship_delta}
+    return {"id": row.id, "char_id": row.char_id, "entry_type": entry_type, "category": category, "timestamp": row.timestamp, "summary": summary, "source_text": desc, "target_name": target, "relationship_delta": relationship_delta, "reasoning": reasoning, "action": action}
 
 def _world_mood(d):
     conflict = d.get("conflict", 0) + d.get("rivalry", 0) + d.get("betrayal", 0)
