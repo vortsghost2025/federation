@@ -20,14 +20,34 @@ services:
     networks:
       - fed-net
     restart: unless-stopped
+    labels:
+      - traefik.enable=true
+      - "traefik.http.routers.fed-api.rule=Host(`federation-game.deliberatefederation.cloud`) && (PathPrefix(`/npcs`) || PathPrefix(`/world`) || Path(`/simulation`) || PathPrefix(`/simulation/`) || PathPrefix(`/spatial`) || PathPrefix(`/sectors`) || Path(`/event`) || PathPrefix(`/political`) || PathPrefix(`/factions`) || PathPrefix(`/broadcast-events`) || PathPrefix(`/quests`) || PathPrefix(`/technology`) || PathPrefix(`/history-arc`) || PathPrefix(`/atlas`) || PathPrefix(`/consciousness`) || PathPrefix(`/engine-status`) || PathPrefix(`/map/`) || PathPrefix(`/state`) || PathPrefix(`/systems-overview`) || PathPrefix(`/timeline`) || PathPrefix(`/rivals`) || PathPrefix(`/reset`) || PathPrefix(`/log`) || PathPrefix(`/choose`) || PathPrefix(`/ws`) || PathPrefix(`/healthz`) || PathPrefix(`/docs`) || PathPrefix(`/openapi.json`) || PathPrefix(`/redoc`) || PathPrefix(`/cognition`) || PathPrefix(`/narrator`) || Path(`/spectator/summary`))"
+      - traefik.http.routers.fed-api.entrypoints=websecure
+      - traefik.http.routers.fed-api.tls.certresolver=letsencrypt
+      - "traefik.http.routers.fed-api.priority=100"
+      - traefik.http.routers.fed-api.service=fed-api-svc
+      - traefik.http.services.fed-api-svc.loadbalancer.server.port=8000
+      - "traefik.http.middlewares.strip-api.stripprefix.prefixes=/api"
+      - "traefik.http.routers.fed-api-prefix.rule=Host(`federation-game.deliberatefederation.cloud`) && PathPrefix(`/api/`)"
+      - traefik.http.routers.fed-api-prefix.entrypoints=websecure
+      - traefik.http.routers.fed-api-prefix.tls.certresolver=letsencrypt
+      - "traefik.http.routers.fed-api-prefix.priority=150"
+      - traefik.http.routers.fed-api-prefix.middlewares=strip-api
+      - traefik.http.routers.fed-api-prefix.service=fed-api-svc
+      - "traefik.http.routers.fed-api-prefix-http.rule=Host(`federation-game.deliberatefederation.cloud`) && PathPrefix(`/api/`)"
+      - traefik.http.routers.fed-api-prefix-http.entrypoints=web
+      - traefik.http.routers.fed-api-prefix-http.priority=150
+      - traefik.http.routers.fed-api-prefix-http.middlewares=strip-api
+      - traefik.http.routers.fed-api-prefix-http.service=fed-api-http-svc
+      - "traefik.http.routers.fed-api-http.rule=Host(`federation-game.deliberatefederation.cloud`) && (PathPrefix(`/npcs`) || PathPrefix(`/world`) || Path(`/simulation`) || PathPrefix(`/simulation/`) || PathPrefix(`/spatial`) || PathPrefix(`/sectors`) || Path(`/event`) || PathPrefix(`/political`) || PathPrefix(`/factions`) || PathPrefix(`/broadcast-events`) || PathPrefix(`/quests`) || PathPrefix(`/technology`) || PathPrefix(`/history-arc`) || PathPrefix(`/atlas`) || PathPrefix(`/consciousness`) || PathPrefix(`/engine-status`) || PathPrefix(`/map/`) || PathPrefix(`/state`) || PathPrefix(`/systems-overview`) || PathPrefix(`/timeline`) || PathPrefix(`/rivals`) || PathPrefix(`/reset`) || PathPrefix(`/log`) || PathPrefix(`/choose`) || PathPrefix(`/ws`) || PathPrefix(`/healthz`) || PathPrefix(`/docs`) || PathPrefix(`/openapi.json`) || PathPrefix(`/redoc`) || PathPrefix(`/cognition`) || PathPrefix(`/narrator`) || Path(`/spectator/summary`))"
+      - traefik.http.routers.fed-api-http.entrypoints=web
+      - "traefik.http.routers.fed-api-http.priority=100"
+      - traefik.http.routers.fed-api-http.service=fed-api-http-svc
+      - traefik.http.services.fed-api-http-svc.loadbalancer.server.port=8000
 
   backend:
     build: /docker/federation-game/backend
-    # ── DO NOT ADD --workers FLAG ──
-    # The backend uses a single in-memory game_state singleton.
-    # Multiple workers = multiple singletons = /event sets current_event
-    # on worker A but /choose reads None on worker B = 2-hour production bug.
-    # If you need scaling, use Redis or an external state store instead.
     command:
       - uvicorn
       - main:app
@@ -57,13 +77,12 @@ services:
       - fed-net
     labels:
       - traefik.enable=true
-      - "traefik.http.routers.fed-api.rule=Host(`federation-game.deliberatefederation.cloud`) && (PathPrefix(`/npcs`) || PathPrefix(`/world`) || Path(`/simulation`) || PathPrefix(`/simulation/`) || PathPrefix(`/spatial`) || PathPrefix(`/sectors`) || Path(`/event`) || PathPrefix(`/political`) || PathPrefix(`/factions`) || PathPrefix(`/broadcast-events`) || PathPrefix(`/quests`) || PathPrefix(`/technology`) || PathPrefix(`/history-arc`) || PathPrefix(`/atlas`) || PathPrefix(`/consciousness`) || PathPrefix(`/engine-status`) || PathPrefix(`/map/`) || PathPrefix(`/state`) || PathPrefix(`/systems-overview`) || PathPrefix(`/timeline`) || PathPrefix(`/rivals`) || PathPrefix(`/reset`) || PathPrefix(`/log`) || PathPrefix(`/choose`) || PathPrefix(`/ws`) || PathPrefix(`/healthz`) || PathPrefix(`/docs`) || PathPrefix(`/openapi.json`) || PathPrefix(`/redoc`) || PathPrefix(`/cognition`) || PathPrefix(`/narrator`))"
+      - "traefik.http.routers.fed-api.rule=Host(`federation-game.deliberatefederation.cloud`) && (PathPrefix(`/npcs`) || PathPrefix(`/world`) || Path(`/simulation`) || PathPrefix(`/simulation/`) || PathPrefix(`/spatial`) || PathPrefix(`/sectors`) || Path(`/event`) || PathPrefix(`/political`) || PathPrefix(`/factions`) || PathPrefix(`/broadcast-events`) || PathPrefix(`/quests`) || PathPrefix(`/technology`) || PathPrefix(`/history-arc`) || PathPrefix(`/atlas`) || PathPrefix(`/consciousness`) || PathPrefix(`/engine-status`) || PathPrefix(`/map/`) || PathPrefix(`/state`) || PathPrefix(`/systems-overview`) || PathPrefix(`/timeline`) || PathPrefix(`/rivals`) || PathPrefix(`/reset`) || PathPrefix(`/log`) || PathPrefix(`/choose`) || PathPrefix(`/ws`) || PathPrefix(`/healthz`) || PathPrefix(`/docs`) || PathPrefix(`/openapi.json`) || PathPrefix(`/redoc`) || PathPrefix(`/cognition`) || PathPrefix(`/narrator`) || Path(`/spectator/summary`))"
       - traefik.http.routers.fed-api.entrypoints=websecure
       - traefik.http.routers.fed-api.tls.certresolver=letsencrypt
       - "traefik.http.routers.fed-api.priority=100"
       - traefik.http.routers.fed-api.service=fed-api-svc
       - traefik.http.services.fed-api-svc.loadbalancer.server.port=8000
-      # ── /api/ prefix router: strip /api and forward to backend ──
       - "traefik.http.middlewares.strip-api.stripprefix.prefixes=/api"
       - "traefik.http.routers.fed-api-prefix.rule=Host(`federation-game.deliberatefederation.cloud`) && PathPrefix(`/api/`)"
       - traefik.http.routers.fed-api-prefix.entrypoints=websecure
@@ -73,10 +92,10 @@ services:
       - traefik.http.routers.fed-api-prefix.service=fed-api-svc
       - "traefik.http.routers.fed-api-prefix-http.rule=Host(`federation-game.deliberatefederation.cloud`) && PathPrefix(`/api/`)"
       - traefik.http.routers.fed-api-prefix-http.entrypoints=web
-      - "traefik.http.routers.fed-api-prefix-http.priority=150"
+      - traefik.http.routers.fed-api-prefix-http.priority=150
       - traefik.http.routers.fed-api-prefix-http.middlewares=strip-api
       - traefik.http.routers.fed-api-prefix-http.service=fed-api-http-svc
-      - "traefik.http.routers.fed-api-http.rule=Host(`federation-game.deliberatefederation.cloud`) && (PathPrefix(`/npcs`) || PathPrefix(`/world`) || Path(`/simulation`) || PathPrefix(`/simulation/`) || PathPrefix(`/spatial`) || PathPrefix(`/sectors`) || Path(`/event`) || PathPrefix(`/political`) || PathPrefix(`/factions`) || PathPrefix(`/broadcast-events`) || PathPrefix(`/quests`) || PathPrefix(`/technology`) || PathPrefix(`/history-arc`) || PathPrefix(`/atlas`) || PathPrefix(`/consciousness`) || PathPrefix(`/engine-status`) || PathPrefix(`/map/`) || PathPrefix(`/state`) || PathPrefix(`/systems-overview`) || PathPrefix(`/timeline`) || PathPrefix(`/rivals`) || PathPrefix(`/reset`) || PathPrefix(`/log`) || PathPrefix(`/choose`) || PathPrefix(`/ws`) || PathPrefix(`/healthz`) || PathPrefix(`/docs`) || PathPrefix(`/openapi.json`) || PathPrefix(`/redoc`) || PathPrefix(`/cognition`) || PathPrefix(`/narrator`))"
+      - "traefik.http.routers.fed-api-http.rule=Host(`federation-game.deliberatefederation.cloud`) && (PathPrefix(`/npcs`) || PathPrefix(`/world`) || Path(`/simulation`) || PathPrefix(`/simulation/`) || PathPrefix(`/spatial`) || PathPrefix(`/sectors`) || Path(`/event`) || PathPrefix(`/political`) || PathPrefix(`/factions`) || PathPrefix(`/broadcast-events`) || PathPrefix(`/quests`) || PathPrefix(`/technology`) || PathPrefix(`/history-arc`) || PathPrefix(`/atlas`) || PathPrefix(`/consciousness`) || PathPrefix(`/engine-status`) || PathPrefix(`/map/`) || PathPrefix(`/state`) || PathPrefix(`/systems-overview`) || PathPrefix(`/timeline`) || PathPrefix(`/rivals`) || PathPrefix(`/reset`) || PathPrefix(`/log`) || PathPrefix(`/choose`) || PathPrefix(`/ws`) || PathPrefix(`/healthz`) || PathPrefix(`/docs`) || PathPrefix(`/openapi.json`) || PathPrefix(`/redoc`) || PathPrefix(`/cognition`) || PathPrefix(`/narrator`) || Path(`/spectator/summary`))"
       - traefik.http.routers.fed-api-http.entrypoints=web
       - "traefik.http.routers.fed-api-http.priority=100"
       - traefik.http.routers.fed-api-http.service=fed-api-http-svc
@@ -90,29 +109,26 @@ services:
   frontend:
     build: /docker/federation-game/frontend
     restart: unless-stopped
-    volumes:
-      - /docker/federation-game/public_html:/usr/share/nginx/html:ro
     labels:
       - traefik.enable=true
       - "traefik.http.routers.federation-game.rule=Host(`federation-game.deliberatefederation.cloud`)"
       - traefik.http.routers.federation-game.entrypoints=websecure
       - traefik.http.routers.federation-game.tls.certresolver=letsencrypt
       - traefik.http.routers.federation-game.service=federation-game-svc
+      - traefik.http.routers.federation-game.priority=200
       - traefik.http.services.federation-game-svc.loadbalancer.server.port=80
       - "traefik.http.routers.federation-game-http.rule=Host(`federation-game.deliberatefederation.cloud`)"
       - traefik.http.routers.federation-game-http.entrypoints=web
       - traefik.http.routers.federation-game-http.service=federation-game-http-svc
       - traefik.http.services.federation-game-http-svc.loadbalancer.server.port=80
-      # Priority-200: force static HTML routes to frontend before backend PathPrefix rules can steal them
-      - "traefik.http.routers.fed-sim-html.rule=Host(`federation-game.deliberatefederation.cloud`) && (Path(`/simulation.html`) || Path(`/bridge.html`) || Path(`/starmap.html`) || Path(`/earth.html`) || Path(`/constellation.html`) || PathPrefix(`/worldguide`) || Path(`/adult.html`) || Path(`/spectator.html`) || Path(`/index.html`))"
+      - "traefik.http.routers.fed-sim-html.rule=Host(`federation-game.deliberatefederation.cloud`) && (Path(`/simulation.html`) || Path(`/bridge.html`) || Path(`/starmap.html`) || Path(`/earth.html`) || Path(`/constellation.html`) || PathPrefix(`/worldguide`) || Path(`/adult.html`) || Path(`/spectator.html`) || Path(`/index.html`) || Path(`/spectator.css`) || Path(`/spectator.js`) || PathPrefix(`/spectator`))"
       - traefik.http.routers.fed-sim-html.entrypoints=websecure
       - traefik.http.routers.fed-sim-html.tls.certresolver=letsencrypt
       - "traefik.http.routers.fed-sim-html.priority=200"
       - traefik.http.routers.fed-sim-html.service=fed-sim-html-svc
       - traefik.http.services.fed-sim-html-svc.loadbalancer.server.port=80
-      - "traefik.http.routers.fed-sim-html-http.rule=Host(`federation-game.deliberatefederation.cloud`) && (Path(`/simulation.html`) || Path(`/bridge.html`) || Path(`/starmap.html`) || Path(`/earth.html`) || Path(`/constellation.html`) || PathPrefix(`/worldguide`) || Path(`/adult.html`) || Path(`/spectator.html`) || Path(`/index.html`))"
+      - "traefik.http.routers.fed-sim-html-http.rule=Host(`federation-game.deliberatefederation.cloud`) && (Path(`/simulation.html`) || Path(`/bridge.html`) || Path(`/starmap.html`) || Path(`/earth.html`) || Path(`/constellation.html`) || PathPrefix(`/worldguide`) || Path(`/adult.html`) || Path(`/spectator.html`) || Path(`/index.html`) || Path(`/spectator.css`) || Path(`/spectator.js`) || PathPrefix(`/spectator`))"
       - traefik.http.routers.fed-sim-html-http.entrypoints=web
-      - "traefik.http.routers.fed-sim-html-http.priority=200"
       - traefik.http.routers.fed-sim-html-http.service=fed-sim-html-http-svc
       - traefik.http.services.fed-sim-html-http-svc.loadbalancer.server.port=80
     depends_on:
@@ -201,8 +217,6 @@ services:
       - traefik.http.routers.adminer.tls.certresolver=letsencrypt
       - traefik.http.services.adminer-svc.loadbalancer.server.port=8080
 
-  # === OBSERVABILITY STACK ===
-
   prometheus:
     image: prom/prometheus:latest
     restart: unless-stopped
@@ -253,7 +267,7 @@ services:
       - traefik.http.services.grafana-svc.loadbalancer.server.port=3000
       - "traefik.http.routers.grafana-http.rule=Host(`federation-game.deliberatefederation.cloud`) && PathPrefix(`/grafana`)"
       - traefik.http.routers.grafana-http.entrypoints=web
-      - "traefik.http.routers.grafana-http.priority=100"
+      - traefik.http.routers.grafana-http.priority=100
       - traefik.http.routers.grafana-http.service=grafana-http-svc
       - traefik.http.services.grafana-http-svc.loadbalancer.server.port=3000
     deploy:
@@ -310,11 +324,11 @@ services:
     image: gcr.io/cadvisor/cadvisor:latest
     restart: unless-stopped
     command:
-      - "--docker_only"
-      - "--store_container_labels=false"
-      - "--housekeeping_interval=30s"
-      - "--global_housekeeping_interval=60s"
-      - "--enable_metrics=cpu,memory"
+      - '--docker_only'
+      - '--store_container_labels=false'
+      - '--housekeeping_interval=30s'
+      - '--global_housekeeping_interval=60s'
+      - '--enable_metrics=cpu,memory'
     volumes:
       - /:/rootfs:ro
       - /var/run:/var/run:ro
