@@ -319,7 +319,7 @@ setTimeout(function(){el.classList.remove('panel-highlight-flash')}, 1600);
 }
 }
 
-var lastData={status:null,factions:null,npcs:null,events:null,quests:null,factionTech:null,choices:null};
+var lastData={status:null,factions:null,npcs:null,events:null,quests:null,factionTech:null,choices:null,npcDirectory:null,npcRealityLogs:null};
 var fetchErrorCount=0;
 var lastTickTime=null;
 var expandedFaction=null;
@@ -328,6 +328,8 @@ var activeLeftTab='factions';
 var activeRightTab='npcs';
 var expandedQuestNpc=null;
 var expandedChoiceFaction=null;
+var npcRealityFilter='all';
+var npcRealityBusy=false;
 
 function generateStarfield(){var sf=document.getElementById('starfield');for(var i=0;i<80;i++){var s=document.createElement('div');s.className='star';var size=Math.random()*2+1;s.style.cssText='width:'+size+'px;height:'+size+'px;left:'+(Math.random()*100)+'%;top:'+(Math.random()*100)+'%;--dur:'+(2+Math.random()*4)+'s;--delay:'+(Math.random()*3)+'s;opacity:'+(0.2+Math.random()*0.5);sf.appendChild(s)}}
 
@@ -446,6 +448,303 @@ async function apiFetch(endpoint, timeoutMs) {
   const data = await fedFetch(key, endpoint, {timeout: timeoutMs || 8000});
   return data;
 }
+
+async function quietJsonFetch(endpoint, timeoutMs) {
+  var controller = new AbortController();
+  var timer = setTimeout(function(){controller.abort()}, timeoutMs || 8000);
+  try {
+    var resp = await fetch(endpoint, {signal: controller.signal});
+    clearTimeout(timer);
+    if (!resp.ok) return {ok:false,status:resp.status,data:null};
+    var ct = resp.headers.get('content-type') || '';
+    if (ct.indexOf('text/html') !== -1) return {ok:false,status:0,data:null};
+    return {ok:true,status:resp.status,data:await resp.json()};
+  } catch(e) {
+    clearTimeout(timer);
+    return {ok:false,status:0,data:null,error:e};
+  }
+}
+
+function normalizeNpcList(data) {
+  var raw = [];
+  if (Array.isArray(data)) raw = data;
+  else if (data && Array.isArray(data.npcs)) raw = data.npcs;
+  else if (data && typeof data === 'object') raw = Object.values(data);
+  var list = [];
+  for (var i=0;i<raw.length;i++) {
+    var n = raw[i] || {};
+    var id = n.char_id || n.id || n.character_id || n.name;
+    if (!id) continue;
+    list.push({
+      char_id:String(id),
+      name:n.name || n.character_name || String(id),
+      title:n.title || '',
+      affiliation:n.affiliation || n.faction || n.faction_id || 'independent'
+    });
+  }
+  return list;
+}
+
+function mergeNpcLists(a,b) {
+  var seen = {}, out = [];
+  function add(list){
+    for (var i=0;i<list.length;i++) {
+      var n = list[i];
+      if (!n || !n.char_id || seen[n.char_id]) continue;
+      seen[n.char_id] = true;
+      out.push(n);
+    }
+  }
+  add(a || []); add(b || []);
+  return out;
+}
+
+async function loadNpcDirectory() {
+  if (lastData.npcDirectory && lastData.npcDirectory.length) return lastData.npcDirectory;
+  var res = await quietJsonFetch('/npcs?limit=200', 8000);
+  if (res.ok) lastData.npcDirectory = normalizeNpcList(res.data);
+  return lastData.npcDirectory || [];
+}
+
+function npcNameMap() {
+  var map = {};
+  var combined = mergeNpcLists(normalizeNpcList(lastData.npcs), lastData.npcDirectory || []);
+  for (var i=0;i<combined.length;i++) map[combined[i].char_id] = combined[i].name;
+  return map;
+}
+
+function parseLogData(raw) {
+  if (!raw) return {};
+  if (typeof raw === 'object') return raw;
+  if (typeof raw === 'string') {
+    try { return JSON.parse(raw); } catch(e) { return {text:raw}; }
+  }
+  return {value:raw};
+}
+
+function timestampScore(v) {
+  if (v == null) return 0;
+  if (typeof v === 'number') return v > 100000000000 ? v : v * 1000;
+  var n = Number(v);
+  if (!isNaN(n)) return n > 100000000000 ? n : n * 1000;
+  var d = Date.parse(v);
+  return isNaN(d) ? 0 : d;
+}
+
+function formatLogTime(v) {
+  var score = timestampScore(v);
+  if (!score) return 'recent';
+  if (score > 946684800000) return timeAgo(new Date(score).toISOString());
+  return 'tick ' + String(v);
+}
+
+function logTextValue(v) {
+  if (v == null || v === '') return '';
+  if (Array.isArray(v)) return v.map(logTextValue).filter(Boolean).join('; ');
+  if (typeof v === 'object') {
+    if (v.description) return String(v.description);
+    if (v.text) return String(v.text);
+    if (v.action) return String(v.action);
+    if (v.action_type) return String(v.action_type).replace(/_/g,' ');
+    try { return JSON.stringify(v); } catch(e) { return String(v); }
+  }
+  return String(v);
+}
+
+function firstLogText(data, keys) {
+  for (var i=0;i<keys.length;i++) {
+    var val = data ? data[keys[i]] : null;
+    var text = logTextValue(val);
+    if (text) return text;
+  }
+  return '';
+}
+
+function normalizeNpcLogEntry(entry, fallbackNpc, names) {
+  if (!entry || typeof entry !== 'object') entry = {data:entry};
+  var data = parseLogData(entry.data || entry.data_json || entry.payload || entry.details);
+  var charId = entry.char_id || entry.character_id || data.char_id || data.character_id || (fallbackNpc && fallbackNpc.char_id) || '';
+  var type = (entry.entry_type || entry.type || entry.category || data.type || data.category || 'activity').toString().toLowerCase();
+  var name = entry.character_name || entry.char_name || data.character_name || data.name || names[charId] || (fallbackNpc && fallbackNpc.name) || charId || 'Unknown NPC';
+  return {
+    id: entry.id || entry.log_id || (charId + ':' + (entry.timestamp || entry.created_at || Math.random())),
+    char_id: charId,
+    actor: name,
+    type: type,
+    timestamp: entry.timestamp || entry.created_at || entry.ts || data.timestamp || data.ts,
+    score: timestampScore(entry.timestamp || entry.created_at || entry.ts || data.timestamp || data.ts),
+    data: data,
+    raw: entry
+  };
+}
+
+function detectNpcSemanticType(log, summary) {
+  var text = (summary + ' ' + JSON.stringify(log.data || {})).toLowerCase();
+  if (/\b(plan|planning|strategy|objective|goal|quest|prepare|intent)\b/.test(text)) return 'plan';
+  if (/\b(alliance|ally|allied|coalition|support|cooperate|accord)\b/.test(text)) return 'alliance';
+  if (/\b(conflict|hostile|threat|attack|rival|war|sabotage|betray)\b/.test(text)) return 'conflict';
+  return log.type;
+}
+
+function summarizeNpcLog(log) {
+  var data = log.data || {};
+  var type = log.type;
+  var summary = '';
+  var why = '';
+  if (type === 'chat') {
+    summary = firstLogText(data, ['response','message','text','prompt']) || 'spoke in conversation';
+    why = data.sentiment ? 'Sentiment: ' + data.sentiment : '';
+  } else if (type === 'decision') {
+    summary = firstLogText(data, ['decision','description','action','action_type','choice','goal','plan']) || 'made a decision';
+    why = firstLogText(data, ['reason','motivation','rationale','context']);
+  } else if (type === 'interaction') {
+    var target = firstLogText(data, ['target','target_name','with','recipient']);
+    summary = firstLogText(data, ['description','message','action','action_type','interaction','category']);
+    if (!summary) summary = target ? 'interacted with ' + target : 'interacted with another NPC';
+    else if (target && summary.toLowerCase().indexOf(target.toLowerCase()) === -1) summary += ' with ' + target;
+    why = firstLogText(data, ['outcome','result','sentiment','relationship_change']);
+    if (data.relationship_delta != null && !isNaN(Number(data.relationship_delta))) {
+      var rel = Number(data.relationship_delta);
+      var relText = 'Relationship ' + (rel > 0 ? '+' : '') + rel.toFixed(1).replace(/\.0$/,'');
+      why = why ? why + ' · ' + relText : relText;
+    }
+  } else if (type === 'cognition') {
+    summary = firstLogText(data, ['thought','reflection','focus','intent','response','text']) || 'formed a private thought';
+    why = firstLogText(data, ['mood','emotion','pressure','trigger']);
+  } else {
+    summary = firstLogText(data, ['description','message','text','action','value']) || logTextValue(log.raw) || 'recorded activity';
+    why = firstLogText(data, ['reason','outcome','result']);
+  }
+  if (summary.length > 220) summary = summary.slice(0,217) + '...';
+  if (why.length > 140) why = why.slice(0,137) + '...';
+  return {summary:summary,why:why,semantic:detectNpcSemanticType(log, summary)};
+}
+
+function npcRealityEntryMatches(log, filter) {
+  if (!filter || filter === 'all') return true;
+  var summary = summarizeNpcLog(log);
+  return log.type === filter || summary.semantic === filter;
+}
+
+function renderNpcRealityFeed() {
+  var listEl = document.getElementById('npc-reality-list');
+  if (!listEl) return;
+  var logs = lastData.npcRealityLogs || [];
+  var filtered = [];
+  for (var i=0;i<logs.length;i++) if (npcRealityEntryMatches(logs[i], npcRealityFilter)) filtered.push(logs[i]);
+  filtered.sort(function(a,b){return (b.score||0)-(a.score||0)});
+  filtered = filtered.slice(0, 20);
+  if (!filtered.length) {
+    listEl.innerHTML = '<div class="nrf-empty">No matching NPC activity yet. Open full logs for the archive.</div>';
+    return;
+  }
+  var html = '';
+  for (var j=0;j<filtered.length;j++) {
+    var log = filtered[j];
+    var text = summarizeNpcLog(log);
+    var cls = ['decision','interaction','cognition','chat'].indexOf(log.type) !== -1 ? log.type : text.semantic;
+    html += '<div class="nrf-item ' + esc(cls) + '">';
+    html += '<div class="nrf-row"><span class="nrf-actor">' + esc(log.actor) + '</span><span class="nrf-type">' + esc(text.semantic || log.type) + '</span><span class="nrf-time">' + esc(formatLogTime(log.timestamp)) + '</span></div>';
+    html += '<div class="nrf-summary">' + esc(text.summary) + '</div>';
+    if (text.why) html += '<div class="nrf-why">' + esc(text.why) + '</div>';
+    html += '</div>';
+  }
+  listEl.innerHTML = html;
+}
+
+function renderHumanBriefing() {
+  var headline = document.getElementById('hb-headline');
+  var what = document.getElementById('hb-what');
+  var changed = document.getElementById('hb-changed');
+  var care = document.getElementById('hb-care');
+  if (!headline || !what || !changed || !care) return;
+  var status = lastData.status || {};
+  var ws = status.world_state || status.worldState || status;
+  var threat = Number(ws.threat_level != null ? ws.threat_level : 30);
+  var stability = Number(ws.stability != null ? ws.stability : 65);
+  var morale = Number(ws.morale != null ? ws.morale : 55);
+  var tension = Number(ws.tension_level != null ? ws.tension_level : 50);
+  var anomaly = Number(ws.anomaly_activity != null ? ws.anomaly_activity : 20);
+  var crisisScore = threat * 1.2 + (100 - stability) * 0.8 + (100 - morale) * 0.6 + anomaly * 0.9 + tension * 0.7;
+  if (!lastData.status) headline.textContent = 'Federation is loading its living society.';
+  else if (crisisScore > 180 || threat > 70 || stability < 25) headline.textContent = 'Federation is under active crisis pressure.';
+  else if (crisisScore > 100 || threat > 45 || stability < 45 || tension > 55) headline.textContent = 'Federation is unstable. Watch the NPC decisions.';
+  else headline.textContent = 'Federation is alive and currently holding together.';
+  var npcCount = normalizeNpcList(lastData.npcs).length || (lastData.npcDirectory ? lastData.npcDirectory.length : 47);
+  what.textContent = npcCount + ' AI citizens, factions, and systems are thinking, reacting, and changing without direct player control.';
+  var latestLog = lastData.npcRealityLogs && lastData.npcRealityLogs.length ? lastData.npcRealityLogs.slice().sort(function(a,b){return (b.score||0)-(a.score||0)})[0] : null;
+  if (latestLog) {
+    var s = summarizeNpcLog(latestLog);
+    changed.textContent = latestLog.actor + ': ' + s.summary;
+  } else {
+    changed.textContent = 'Waiting for the next NPC decision, conversation, or cognition trace.';
+  }
+  if (threat > 55) care.textContent = 'Threat is rising. Small NPC choices can now turn into larger faction cascades.';
+  else if (stability < 45) care.textContent = 'Stability is weakened. Alliances, conflicts, and morale shifts matter more now.';
+  else if (anomaly > 45) care.textContent = 'Anomaly activity is elevated. Unknown forces may reshape the simulation.';
+  else care.textContent = 'The important story is who gains trust, who loses patience, and who starts a cascade.';
+}
+
+async function fetchNpcRealityEntriesFor(npc, entryType) {
+  var logs = [];
+  var names = npcNameMap();
+  if (!window._npcLogsApiUnavailable) {
+    var qs = new URLSearchParams({char_id:npc.char_id,limit:String(entryType ? 8 : 4)});
+    if (entryType) qs.set('entry_type', entryType);
+    var apiRes = await quietJsonFetch('/api/npc-logs?' + qs.toString(), 7000);
+    if (apiRes.ok && apiRes.data) {
+      var results = apiRes.data.results || apiRes.data.entries || [];
+      for (var i=0;i<results.length;i++) logs.push(normalizeNpcLogEntry(results[i], npc, names));
+      return logs;
+    }
+    if (apiRes.status === 404) window._npcLogsApiUnavailable = true;
+  }
+  var fallback = '/npcs/' + encodeURIComponent(npc.char_id) + '/log?limit=' + encodeURIComponent(String(entryType ? 8 : 4));
+  if (entryType) fallback += '&type=' + encodeURIComponent(entryType);
+  var fallbackRes = await quietJsonFetch(fallback, 7000);
+  if (fallbackRes.ok && fallbackRes.data) {
+    var entries = fallbackRes.data.entries || fallbackRes.data.results || [];
+    for (var j=0;j<entries.length;j++) logs.push(normalizeNpcLogEntry(entries[j], npc, names));
+  }
+  return logs;
+}
+
+function setNpcRealityFilter(filter) {
+  npcRealityFilter = filter || 'all';
+  var btns = document.querySelectorAll('#nrf-filters button');
+  for (var i=0;i<btns.length;i++) btns[i].classList.toggle('active', btns[i].dataset.filter === npcRealityFilter);
+  renderNpcRealityFeed();
+  refreshNpcRealityFeed();
+}
+
+async function refreshNpcRealityFeed() {
+  if (npcRealityBusy) return;
+  npcRealityBusy = true;
+  var listEl = document.getElementById('npc-reality-list');
+  if (listEl && !lastData.npcRealityLogs) listEl.innerHTML = '<div class="nrf-empty">Loading NPC communications...</div>';
+  try {
+    var directory = await loadNpcDirectory();
+    var active = normalizeNpcList(lastData.npcs);
+    var sources = mergeNpcLists(active, directory).slice(0, 48);
+    if (!sources.length) {
+      lastData.npcRealityLogs = [];
+      renderNpcRealityFeed();
+      renderHumanBriefing();
+      return;
+    }
+    var coreType = ['chat','decision','interaction','cognition'].indexOf(npcRealityFilter) !== -1 ? npcRealityFilter : null;
+    var batches = await Promise.all(sources.map(function(npc){return fetchNpcRealityEntriesFor(npc, coreType)}));
+    var all = [];
+    for (var i=0;i<batches.length;i++) all = all.concat(batches[i]);
+    all.sort(function(a,b){return (b.score||0)-(a.score||0)});
+    lastData.npcRealityLogs = all.slice(0, 120);
+    renderNpcRealityFeed();
+    renderHumanBriefing();
+  } finally {
+    npcRealityBusy = false;
+  }
+}
+window.setNpcRealityFilter = setNpcRealityFilter;
 
 function switchLeftTab(tab){activeLeftTab=tab;var btns=document.querySelectorAll('#left-tabs .tab-btn');for(var i=0;i<btns.length;i++){btns[i].classList.remove('active-amber');if(btns[i].dataset.tab===tab)btns[i].classList.add('active-amber')}document.getElementById('left-factions').classList.toggle('visible',tab==='factions');document.getElementById('left-faction-tech').classList.toggle('visible',tab==='faction-tech');if(tab==='faction-tech'&&!lastData.factionTech)refreshFactionTech()}
 function switchRightTab(tab){activeRightTab=tab;var btns=document.querySelectorAll('#right-tabs .tab-btn');for(var i=0;i<btns.length;i++){btns[i].classList.remove('active-violet');if(btns[i].dataset.tab===tab)btns[i].classList.add('active-violet')}document.getElementById('right-npcs').classList.toggle('visible',tab==='npcs');document.getElementById('right-npc-quests').classList.toggle('visible',tab==='npc-quests');document.getElementById('right-choices').classList.toggle('visible',tab==='choices');if(tab==='npc-quests'&&!lastData.quests)refreshQuests();if(tab==='choices'&&!lastData.choices)refreshChoices()}
@@ -1896,7 +2195,7 @@ var results=await Promise.all([apiFetch('/simulation/status',8000),apiFetch('/si
 var status=results[0],factions=results[1],events=results[2];
 var anyOk=status||factions||events;
 if(!anyOk){fetchErrorCount++;if(fetchErrorCount>=3)showSignalLost(true)}else{fetchErrorCount=0;showSignalLost(false);if(status)lastData.status=status;if(factions)lastData.factions=factions;if(events)lastData.events=events}
-if(lastData.status){updateTopBanner(lastData.status);updateSituation(lastData.status)}renderQuickStatus();renderReadableSummary();renderSituationRoom();
+if(lastData.status){updateTopBanner(lastData.status);updateSituation(lastData.status)}renderQuickStatus();renderReadableSummary();renderSituationRoom();renderHumanBriefing();
 if(lastData.factions)renderFactions(lastData.factions);
 if(lastData.events)renderEvents(lastData.events);
 if(lastData.status)renderBottom(lastData.status);
@@ -1909,7 +2208,7 @@ async function refreshChoices(){var data=await apiFetch('/simulation/choice-reso
 
 async function refresh(){
 var loadingEls=document.querySelectorAll('.section-title');for(var l=0;l<loadingEls.length;l++)loadingEls[l].classList.add('loading-pulse');
-await refreshLight();await refreshNpcs();await refreshQuests();await refreshFactionTech();await refreshChoices();
+await refreshLight();await refreshNpcs();await refreshNpcRealityFeed();await refreshQuests();await refreshFactionTech();await refreshChoices();
 for(var l2=0;l2<loadingEls.length;l2++)loadingEls[l2].classList.remove('loading-pulse');
 }
 
@@ -2134,7 +2433,7 @@ function restoreToggleStates() {
 }
 document.addEventListener('keydown',function(e){if(e.key==='Escape'){var overlay=document.getElementById('help-overlay');if(overlay.classList.contains('open'))toggleHelp()}});
 
-function init(){generateStarfield();restoreToggleStates();initReadableMode();refresh();setInterval(refreshLight,10000);setInterval(refreshNpcs,30000);setInterval(refreshQuests,20000);setInterval(refreshFactionTech,25000);setInterval(refreshChoices,20000);setInterval(updateTimeSince,1000);setInterval(renderSituationRoom,15000)}
+function init(){generateStarfield();restoreToggleStates();initReadableMode();refresh();setInterval(refreshLight,10000);setInterval(refreshNpcs,30000);setInterval(refreshNpcRealityFeed,30000);setInterval(refreshQuests,20000);setInterval(refreshFactionTech,25000);setInterval(refreshChoices,20000);setInterval(updateTimeSince,1000);setInterval(renderSituationRoom,15000)}
 if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', init);
 } else {

@@ -1,0 +1,1 @@
+SELECT data_json->>'category' as category, COUNT(1) FROM npc_action_logs WHERE entry_type='interaction' AND timestamp > 1780958000 GROUP BY data_json->>'category' ORDER BY COUNT(1) DESC;

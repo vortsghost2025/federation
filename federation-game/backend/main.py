@@ -78,6 +78,7 @@ from routes.simulation import router as simulation_router
 from routes.factions import router as factions_router
 from routes.websocket import router as websocket_router
 from routes.error_reports import router as error_reports_router
+from routes.npc_logs import router as npc_logs_router
 from map_endpoints import router as map_router
 from data.events import EVENTS
 
@@ -322,6 +323,7 @@ app.include_router(factions_router)
 app.include_router(websocket_router)
 app.include_router(map_router)
 app.include_router(error_reports_router)
+app.include_router(npc_logs_router)
 
 
 @app.on_event("startup")

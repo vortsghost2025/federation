@@ -1,0 +1,83 @@
+<h2>Which direction should the simulation page take?</h2>
+<p class="subtitle">Goal: a normal human understands the basics in 10 seconds, then knows where to ask the AI and where to watch NPC communication.</p>
+
+<div class="cards">
+  <div class="card" data-choice="briefing" onclick="toggleSelect(this)">
+    <div class="card-image">
+      <div class="mockup">
+        <div class="mockup-header">A. Human Briefing Dashboard</div>
+        <div class="mockup-body">
+          <div style="display:grid;grid-template-columns:2fr 1fr;gap:12px">
+            <div>
+              <div class="placeholder" style="height:70px;background:#12243a;border:1px solid #4aa3ff">ONE SENTENCE: What is happening right now?</div>
+              <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:8px">
+                <div class="placeholder">Who is active?</div>
+                <div class="placeholder">What changed?</div>
+                <div class="placeholder">What matters next?</div>
+              </div>
+              <div class="placeholder" style="height:90px;margin-top:8px">Live NPC communication feed: who talked to who, plans, decisions</div>
+            </div>
+            <div>
+              <div class="placeholder" style="height:178px;background:#24172e;border:1px solid #ce93d8">Ask the AI: prefilled questions tied to current tick</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>A. Human Briefing Dashboard</h3>
+      <p>Recommended. The page opens with a plain-language intelligence brief, then points people to AI questions and NPC communications.</p>
+    </div>
+  </div>
+
+  <div class="card" data-choice="npc_tv" onclick="toggleSelect(this)">
+    <div class="card-image">
+      <div class="mockup">
+        <div class="mockup-header">B. NPC Reality Feed</div>
+        <div class="mockup-body">
+          <div style="display:grid;grid-template-columns:1fr 2fr 1fr;gap:10px">
+            <div class="placeholder" style="height:180px">Character list + active speakers</div>
+            <div>
+              <div class="placeholder" style="height:42px;background:#12243a">Scene title: The current social drama</div>
+              <div class="placeholder" style="height:130px;margin-top:8px">Conversation timeline: quotes, alliances, suspicions, plans</div>
+            </div>
+            <div class="placeholder" style="height:180px;background:#24172e">Ask AI about selected NPC</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>B. NPC Reality Feed</h3>
+      <p>Best if the simulation should feel like watching living people. Less direct for world/faction health, stronger for drama and relationships.</p>
+    </div>
+  </div>
+
+  <div class="card" data-choice="analyst" onclick="toggleSelect(this)">
+    <div class="card-image">
+      <div class="mockup">
+        <div class="mockup-header">C. Analyst Control Room</div>
+        <div class="mockup-body">
+          <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px">
+            <div class="placeholder">Morale</div>
+            <div class="placeholder">Threat</div>
+            <div class="placeholder">Faction Power</div>
+            <div class="placeholder">Cognition</div>
+          </div>
+          <div style="display:grid;grid-template-columns:2fr 1fr;gap:10px;margin-top:10px">
+            <div class="placeholder" style="height:140px">Events, NPC logs, decisions, filters</div>
+            <div class="placeholder" style="height:140px;background:#24172e">AI analyst panel</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>C. Analyst Control Room</h3>
+      <p>Best for power users and debugging. It preserves the most data, but may still be too much for a first-time visitor.</p>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <h3>My recommendation</h3>
+  <p>Use A as the default page, with B as the main content feed underneath. Keep C behind an Advanced tab so the old telemetry is still available.</p>
+</div>

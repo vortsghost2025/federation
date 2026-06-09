@@ -20,6 +20,8 @@ from sqlalchemy import (
     DateTime,
     Text,
     create_engine,
+    Index,
+    JSON,
 )
 from sqlalchemy.orm import Session, declarative_base, sessionmaker
 
@@ -40,6 +42,21 @@ class GameSnapshot(Base):
     state_hash = Column(String(64), nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     is_current = Column(Boolean, default=False, nullable=False)
+
+
+class NpcActionLog(Base):
+    __tablename__ = "npc_action_logs"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    char_id = Column(String(32), nullable=False, index=True)
+    entry_type = Column(String(32), nullable=False, index=True)
+    timestamp = Column(Integer, nullable=False, index=True)
+    data_json = Column(JSON, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    __table_args__ = (
+        Index("ix_npc_action_logs_composite", "char_id", "entry_type", "timestamp"),
+    )
 
 
 class DatabaseManager:
@@ -247,6 +264,146 @@ class DatabaseManager:
         except Exception as exc:
             logger.error("cleanup_old_snapshots failed: %s", exc)
             return 0
+
+    def log_npc_action(
+        self,
+        char_id: str,
+        entry_type: str,
+        data_json: Optional[Dict[str, Any]] = None,
+        timestamp: Optional[int] = None,
+    ) -> bool:
+        """
+        Log an NPC action to PostgreSQL.
+
+        Args:
+            char_id: NPC character ID
+            entry_type: One of 'cognition', 'interaction', 'decision', 'chat'
+            data_json: Entry-specific data (will be stored as JSON)
+            timestamp: Unix timestamp (defaults to now)
+
+        Returns:
+            True if logged, False if failed
+        """
+        if not self._initialized:
+            logger.warning("log_npc_action called but DB not initialized — skipping")
+            return False
+
+        try:
+            ts = timestamp or int(time.time())
+            with self._SessionLocal() as session:
+                log_entry = NpcActionLog(
+                    char_id=char_id,
+                    entry_type=entry_type,
+                    timestamp=ts,
+                    data_json=data_json,
+                )
+                session.add(log_entry)
+                session.commit()
+            logger.debug("Logged NPC action: char_id=%s type=%s ts=%d", char_id, entry_type, ts)
+            return True
+        except Exception as exc:
+            logger.error("log_npc_action failed: %s", exc)
+            return False
+
+    def get_npc_action_log(
+        self,
+        char_id: str,
+        entry_types: Optional[List[str]] = None,
+        limit: int = 50,
+        offset: int = 0,
+    ) -> List[Dict[str, Any]]:
+        """
+        Retrieve NPC action logs from PostgreSQL.
+
+        Args:
+            char_id: NPC character ID
+            entry_types: Optional filter by entry type(s)
+            limit: Maximum entries to return (most recent first)
+            offset: Number of entries to skip (for pagination)
+
+        Returns:
+            List of activity entries, most recent first
+        """
+        if not self._initialized:
+            logger.warning("get_npc_action_log called but DB not initialized — returning empty list")
+            return []
+
+        try:
+            with self._SessionLocal() as session:
+                query = session.query(NpcActionLog).filter(NpcActionLog.char_id == char_id)
+
+                if entry_types:
+                    query = query.filter(NpcActionLog.entry_type.in_(entry_types))
+
+                rows = (
+                    query.order_by(NpcActionLog.timestamp.desc())
+                    .limit(limit)
+                    .offset(offset)
+                    .all()
+                )
+
+                results = []
+                for row in rows:
+                    results.append({
+                        "id": row.id,
+                        "char_id": row.char_id,
+                        "entry_type": row.entry_type,
+                        "timestamp": row.timestamp,
+                        "data": row.data_json,
+                        "created_at": row.created_at.isoformat() if row.created_at else None,
+                    })
+                return results
+        except Exception as exc:
+            logger.error("get_npc_action_log failed: %s", exc)
+            return []
+
+    def export_npc_action_log_csv(
+        self,
+        char_id: str,
+        entry_types: Optional[List[str]] = None,
+        limit: int = 10000,
+    ) -> str:
+        """
+        Export NPC action logs as CSV string.
+
+        Args:
+            char_id: NPC character ID
+            entry_types: Optional filter by entry type(s)
+            limit: Maximum entries to include
+
+        Returns:
+            CSV string with headers: id,char_id,entry_type,timestamp,data_json,created_at
+        """
+        if not self._initialized:
+            return ""
+
+        try:
+            with self._SessionLocal() as session:
+                query = session.query(NpcActionLog).filter(NpcActionLog.char_id == char_id)
+
+                if entry_types:
+                    query = query.filter(NpcActionLog.entry_type.in_(entry_types))
+
+                rows = (
+                    query.order_by(NpcActionLog.timestamp.desc())
+                    .limit(limit)
+                    .all()
+                )
+
+                # Build CSV
+                import csv
+                import io
+                output = io.StringIO()
+                writer = csv.writer(output)
+                writer.writerow(["id", "char_id", "entry_type", "timestamp", "data_json", "created_at"])
+                for row in rows:
+                    data_str = json.dumps(row.data_json) if row.data_json is not None else ""
+                    created_str = row.created_at.isoformat() if row.created_at else ""
+                    writer.writerow([row.id, row.char_id, row.entry_type, row.timestamp, data_str, created_str])
+                return output.getvalue()
+        except Exception as exc:
+            logger.error("export_npc_action_log_csv failed: %s", exc)
+            return ""
 
 
 db_manager = DatabaseManager()

@@ -1,0 +1,64 @@
+<h2>Final Draft Blueprint: Newcomer Briefing + NPC Reality Feed</h2>
+<p class="subtitle">Chosen direction: A for newcomers, B underneath for Sean/deep watching, C saved for future advanced mode.</p>
+
+<div class="mockup">
+  <div class="mockup-header">Top of simulation.html: understand in 10 seconds</div>
+  <div class="mockup-body">
+    <div style="display:grid;grid-template-columns:minmax(0,2fr) minmax(290px,1fr);gap:14px">
+      <div>
+        <div style="background:#10233a;border:1px solid #4aa3ff;border-radius:10px;padding:14px;margin-bottom:10px">
+          <div class="label">Plain-English Briefing</div>
+          <h3 style="margin:4px 0;color:#fff">The Federation is stable, but NPC alliances are shifting.</h3>
+          <p style="margin:0;color:#c9d7e8">This panel answers: what is happening, why it matters, and what to watch next.</p>
+        </div>
+        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:10px">
+          <div class="placeholder"><strong>What is this?</strong><br>A living AI society, not a normal game.</div>
+          <div class="placeholder"><strong>What changed?</strong><br>Latest NPC actions, talks, decisions.</div>
+          <div class="placeholder"><strong>Why care?</strong><br>Main risk, opportunity, or drama.</div>
+        </div>
+        <div style="background:#151515;border:1px solid #333;border-radius:10px;padding:12px">
+          <div class="label">NPC Reality Feed</div>
+          <div class="placeholder" style="margin-top:6px">Chancellor Harmony talked with The Hermit about alliance pressure.</div>
+          <div class="placeholder" style="margin-top:6px">Marshal Ironbound chose patrol / defense / reaction path.</div>
+          <div class="placeholder" style="margin-top:6px">Oracle Vex cognition: pursuing goal, model used, confidence.</div>
+        </div>
+      </div>
+      <div style="background:#25192f;border:1px solid #ce93d8;border-radius:10px;padding:12px">
+        <div class="label">Federation Intelligence Chat</div>
+        <p style="color:#e8d3ef">Routing: Ollama first. If local Ollama is offline or times out, fallback to NIM.</p>
+        <button class="mock-button">What is this simulation?</button>
+        <button class="mock-button">How does it work?</button>
+        <button class="mock-button">Explain what is happening right now.</button>
+        <button class="mock-button">Who is talking to who?</button>
+        <button class="mock-button">What are the NPCs planning?</button>
+        <button class="mock-button">Which NPC should I watch?</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="split">
+  <div class="mockup">
+    <div class="mockup-header">B Underneath: NPC communication layer</div>
+    <div class="mockup-body">
+      <h3>NPC Reality Feed</h3>
+      <p>Show live NPC activity as human-readable social behavior, not raw telemetry.</p>
+      <div class="placeholder">Filters: All / Conversations / Decisions / Plans / Cognition / Alliances / Conflict</div>
+      <div class="placeholder">Each row says: who acted, who they interacted with, what they did, why it matters.</div>
+      <div class="placeholder">Click action: ask AI to explain this NPC, this faction, or this chain of events.</div>
+    </div>
+  </div>
+  <div class="mockup">
+    <div class="mockup-header">C Later: advanced analyst blueprint</div>
+    <div class="mockup-body">
+      <h3>Not today</h3>
+      <p>Future separate advanced tab/page for raw metrics, full log filters, CSV export, model/provider stats, faction graphs, tick diagnostics, and debugging.</p>
+      <div class="placeholder">Keep the data. Hide the confusion.</div>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <h3>Implementation shape</h3>
+  <p>Reuse existing simulation data, existing NPC activity logs, and existing chat window. Add one lightweight briefing renderer and one communication-feed renderer. Change assistant routing to Ollama-first for this page.</p>
+</div>

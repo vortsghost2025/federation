@@ -2,6 +2,7 @@
 
 from fastapi import APIRouter, HTTPException
 from state import game_state
+import json
 
 
 def _get_observer_redis():
@@ -60,6 +61,31 @@ async def list_npcs(
         "limit": limit,
         "offset": offset,
     }
+
+
+@router.get("/npcs/stats")
+async def npc_activity_stats():
+    """Aggregate stats across Redis-backed NPC activity logs."""
+    r = _get_observer_redis()
+    categories = {"decision": 0, "interaction": 0, "cognition": 0, "chat": 0, "quest": 0}
+
+    for key in r.scan_iter(match="npc_activity:*"):
+        key = key.decode() if isinstance(key, bytes) else key
+        try:
+            entries = r.zrange(key, 0, -1)
+            for entry in entries:
+                try:
+                    entry = entry.decode() if isinstance(entry, bytes) else entry
+                    data = json.loads(entry)
+                    category = data.get("type") or data.get("category")
+                    if category in categories:
+                        categories[category] += 1
+                except (json.JSONDecodeError, TypeError):
+                    pass
+        except Exception:
+            pass
+
+    return {"total_entries": sum(categories.values()), "categories": categories}
 
 
 @router.get("/npcs/{char_id}")
