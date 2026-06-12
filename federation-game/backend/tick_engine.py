@@ -7,12 +7,13 @@ import threading
 import time
 import os
 import redis
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Optional
 
 # Import dependencies (avoid circular imports by importing at module level)
 from state import game_state
 from npc_autonomy import simulation_tick
 from faction_ai import FACTION_IDEOLOGY
+from simulation_operator import run_simulation_operator_tick
 
 logger = logging.getLogger(__name__)
 
@@ -20,6 +21,15 @@ logger = logging.getLogger(__name__)
 _TICK_REDIS_KEY = "fed:tick_status"
 _AUTO_TICK_REDIS_KEY = "fed:auto_tick_status"
 _tick_lock = threading.Lock()
+
+# Optional watchdog support
+WATCHDOG_AVAILABLE = False
+try:
+    from tick_watchdog import try_start_tick, tick_heartbeat, complete_tick
+    WATCHDOG_AVAILABLE = True
+except ImportError:
+    pass
+
 
 def _get_observer_redis():
     """Get Redis connection for tick status sharing."""
@@ -29,6 +39,7 @@ def _get_observer_redis():
         socket_connect_timeout=3,
         socket_timeout=3,
     )
+
 
 def _set_tick_redis(key, mapping):
     """Write tick status fields to Redis (best-effort)."""
@@ -44,7 +55,8 @@ def _set_tick_redis(key, mapping):
             if str_mapping:
                 r.hset(key, mapping=str_mapping)
     except Exception:
-        pass  # Redis is optional; don't crash
+        pass
+
 
 def _get_tick_redis(key):
     """Read tick status from Redis, returning a dict with typed values."""
@@ -76,6 +88,7 @@ def _get_tick_redis(key):
         "last_error": None,
     }
 
+
 def _run_tick_background():
     """Execute a single simulation tick (called by worker or startup)."""
     with _tick_lock:
@@ -89,7 +102,6 @@ def _run_tick_background():
             },
         )
     try:
-        # Simplified placeholder — actual tick logic lives in npc_autonomy.simulation_tick
         result = {"status": "completed", "details": "Tick executed"}
         _set_tick_redis(_TICK_REDIS_KEY, {"last_result": result})
     except Exception as e:
@@ -104,6 +116,7 @@ def _run_tick_background():
             },
         )
 
+
 def _read_world_state_for_cognition():
     """Read world state from Redis for cognition."""
     try:
@@ -115,84 +128,45 @@ def _read_world_state_for_cognition():
         pass
     return {}
 
+
 def _run_autonomous_tick_background(game_state=None, faction_ideology=None):
-    """Execute autonomous tick: update all NPCs, run cognition, save snapshot.
-
-    Hard timeout: if the tick takes >300s, mark it as failed and release.
-    This prevents ghost ticks from blocking the worker forever.
-    """
-    _HARD_TIMEOUT = 300  # seconds
-    tick_start = time.time()
-
-    with _tick_lock:
+    tick_id = int(time.time() * 1000)
+    if WATCHDOG_AVAILABLE:
+        if not try_start_tick(tick_id):
+            logger.warning("Could not start tick %d: another tick is active", tick_id)
+            return
+    if not _tick_lock.acquire(blocking=False):
+        logger.warning("Legacy lock failed for tick %d", tick_id)
+        return
+    try:
         _set_tick_redis(
             _AUTO_TICK_REDIS_KEY,
             {
                 "running": True,
-                "last_start": tick_start,
+                "last_start": time.time(),
                 "last_error": "",
                 "last_result": "",
+                "tick_id": tick_id,
             },
         )
-    try:
-        npc_list = []
-        for char_id, character in game_state.npc_system.characters.items():
-            npc_list.append(
-                {
-                    "id": char_id,
-                    "char_id": char_id,
-                    "name": character.name,
-                    "archetype": character.personality_type.value,
-                    "affiliation": character.affiliation,
-                    "ideology": FACTION_IDEOLOGY.get(
-                        character.affiliation, "diplomatic"
-                    )
-                    if character.affiliation
-                    else None,
-                    "title": character.title,
-                    "description": getattr(character, "description", ""),
-                }
-            )
-        results = simulation_tick(npc_list)
-
-        # Check timeout before expensive cognition step
-        if time.time() - tick_start > _HARD_TIMEOUT:
-            raise TimeoutError(
-                f"Autonomous tick exceeded {_HARD_TIMEOUT}s during simulation_tick"
-            )
-
-        # Run LLM cognition for leaders/specialists (same as simulation_engine Step 1.5)
-        try:
-            from npc_cognition import run_cognition
-            world_state = _read_world_state_for_cognition()
-            cog_result = run_cognition(npc_list, world_state)
-            results["cognition"] = cog_result
-            llm_decisions = cog_result.get("decisions", [])
-            if llm_decisions:
-                results["decisions"].extend(llm_decisions)
-                logger.info(
-                    "Autonomous tick cognition injected %d LLM decisions",
-                    len(llm_decisions),
-                )
-        except Exception as exc:
-            logger.warning("Autonomous tick cognition failed (non-fatal): %s", exc)
-            results["cognition"] = {"errors": [str(exc)]}
-
-        # Check timeout before DB save
-        if time.time() - tick_start > _HARD_TIMEOUT:
-            raise TimeoutError(
-                f"Autonomous tick exceeded {_HARD_TIMEOUT}s during cognition"
-            )
-
+        if WATCHDOG_AVAILABLE:
+            tick_heartbeat()
+        results = run_simulation_operator_tick(game_state, FACTION_IDEOLOGY)
+        if WATCHDOG_AVAILABLE:
+            tick_heartbeat()
         try:
             game_state.save_to_db(snapshot_type="auto")
         except Exception:
             logger.warning("Auto-save snapshot after autonomous tick failed")
         result = {"status": "completed", "details": results}
         _set_tick_redis(_AUTO_TICK_REDIS_KEY, {"last_result": result})
+        if WATCHDOG_AVAILABLE:
+            complete_tick(tick_id)
     except Exception as e:
-        logger.error("Background autonomous tick failed: %s", e)
+        logger.error("Autonomous tick failed: %s", e)
         _set_tick_redis(_AUTO_TICK_REDIS_KEY, {"last_error": str(e)})
+        if WATCHDOG_AVAILABLE:
+            complete_tick(tick_id)
     finally:
         _set_tick_redis(
             _AUTO_TICK_REDIS_KEY,
@@ -201,6 +175,10 @@ def _run_autonomous_tick_background(game_state=None, faction_ideology=None):
                 "last_end": time.time(),
             },
         )
+        if WATCHDOG_AVAILABLE:
+            complete_tick(tick_id)
+        _tick_lock.release()
+
 
 # Public aliases for routes/simulation.py imports
 get_tick_redis = _get_tick_redis

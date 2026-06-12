@@ -16,7 +16,7 @@ import logging
 import os
 import random
 import time
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
 import redis
 
@@ -98,7 +98,7 @@ _redis_client = None
 def _get_redis():
     global _redis_client
     if _redis_client is None:
-        _redis_client = redis.Redis.from_url(REDIS_URL, decode_responses=True)
+        _redis_client = redis.Redis.from_url(REDIS_URL, decode_responses=True, socket_connect_timeout=5, socket_timeout=5)
     return _redis_client
 
 
@@ -1991,7 +1991,13 @@ def propagate_diplomacy_events_to_npcs(
     )
     return bridge_result
 
-def autonomous_tick(npc_list: List[Dict], tick_decisions: List[Dict]) -> Dict:
+def autonomous_tick(
+    npc_list: List[Dict],
+    tick_decisions: List[Dict],
+    progress_callback: Optional[Callable[[str, Dict[str, Any]], None]] = None,
+    cognition_overrides: Optional[Dict[str, Any]] = None,
+    narration_llm_enabled: bool = True,
+) -> Dict:
     """
     THE MASTER FUNCTION. Runs all simulation subsystems in the correct
     cross-pollination order:
@@ -2022,6 +2028,14 @@ def autonomous_tick(npc_list: List[Dict], tick_decisions: List[Dict]) -> Dict:
     tick_start = time.time()
     tick_ts = int(tick_start)
 
+    def _progress(phase: str, payload: Optional[Dict[str, Any]] = None) -> None:
+        if progress_callback is None:
+            return
+        try:
+            progress_callback(phase, payload or {})
+        except Exception:
+            logger.debug("Progress callback failed for phase %s", phase)
+
     # Ensure world_state hash exists — seed with defaults if empty
     try:
         existing = r.hgetall("world_state")
@@ -2050,11 +2064,13 @@ def autonomous_tick(npc_list: List[Dict], tick_decisions: List[Dict]) -> Dict:
     }
 
     try:
+        _progress("step1_faction_context_start")
         step_start = time.time()
         result["step1_faction_context"] = wire_faction_context_into_decisions(npc_list)
         result["step1_faction_context"]["duration_ms"] = round(
             (time.time() - step_start) * 1000, 1
         )
+        _progress("step1_faction_context_complete", result["step1_faction_context"])
     except Exception as exc:
         logger.error("Step 1 (faction context wiring) failed: %s", exc)
         result["step1_faction_context"] = {"errors": [str(exc)]}
@@ -2067,9 +2083,11 @@ def autonomous_tick(npc_list: List[Dict], tick_decisions: List[Dict]) -> Dict:
     world_state = None
     if COGNITION_AVAILABLE:
         try:
+            _progress("step1_5_cognition_start")
             step_start = time.time()
             world_state = _read_world_state(r)
-            cog_result = run_cognition(npc_list, world_state)
+            cog_kwargs = cognition_overrides or {}
+            cog_result = run_cognition(npc_list, world_state, **cog_kwargs)
             result["step1_5_cognition"] = cog_result
             result["step1_5_cognition"]["duration_ms"] = round(
                 (time.time() - step_start) * 1000, 1
@@ -2082,6 +2100,7 @@ def autonomous_tick(npc_list: List[Dict], tick_decisions: List[Dict]) -> Dict:
                     "Cognition injected %d LLM decisions into tick pipeline",
                     len(llm_decisions),
                 )
+            _progress("step1_5_cognition_complete", result["step1_5_cognition"])
         except Exception as exc:
             logger.error("Step 1.5 (LLM cognition) failed: %s", exc)
             result["step1_5_cognition"] = {"errors": [str(exc)]}
@@ -2090,33 +2109,39 @@ def autonomous_tick(npc_list: List[Dict], tick_decisions: List[Dict]) -> Dict:
         result["step1_5_cognition"] = {"status": "unavailable", "skipped": True}
 
     try:
+        _progress("step2_decision_effects_start", {"decision_count": len(tick_decisions)})
         step_start = time.time()
         result["step2_decision_effects"] = execute_npc_decisions(tick_decisions)
         result["step2_decision_effects"]["duration_ms"] = round(
             (time.time() - step_start) * 1000, 1
         )
+        _progress("step2_decision_effects_complete", result["step2_decision_effects"])
     except Exception as exc:
         logger.error("Step 2 (decision execution) failed: %s", exc)
         result["step2_decision_effects"] = {"errors": [str(exc)]}
         result["errors"].append(f"step2: {exc}")
 
     try:
+        _progress("step3_game_state_bridge_start")
         step_start = time.time()
         result["step3_game_state_bridge"] = bridge_world_state_to_game_state()
         result["step3_game_state_bridge"]["duration_ms"] = round(
             (time.time() - step_start) * 1000, 1
         )
+        _progress("step3_game_state_bridge_complete", result["step3_game_state_bridge"])
     except Exception as exc:
         logger.error("Step 3 (game state bridge) failed: %s", exc)
         result["step3_game_state_bridge"] = {"errors": [str(exc)]}
         result["errors"].append(f"step3: {exc}")
 
     try:
+        _progress("step4_political_bridge_start")
         step_start = time.time()
         result["step4_political_bridge"] = bridge_npc_events_to_political(npc_list)
         result["step4_political_bridge"]["duration_ms"] = round(
             (time.time() - step_start) * 1000, 1
         )
+        _progress("step4_political_bridge_complete", result["step4_political_bridge"])
     except Exception as exc:
         logger.error("Step 4 (political bridge) failed: %s", exc)
         result["step4_political_bridge"] = {"errors": [str(exc)]}
@@ -2124,22 +2149,26 @@ def autonomous_tick(npc_list: List[Dict], tick_decisions: List[Dict]) -> Dict:
 
     # Step 4b: Consume pending political items (apply effects)
     try:
+        _progress("step4b_consume_pending_start")
         step_start = time.time()
         result["step4b_consume_pending"] = consume_pending_political_items()
         result["step4b_consume_pending"]["duration_ms"] = round(
             (time.time() - step_start) * 1000, 1
         )
+        _progress("step4b_consume_pending_complete", result["step4b_consume_pending"])
     except Exception as exc:
         logger.error("Step 4b (consume pending political) failed: %s", exc)
         result["step4b_consume_pending"] = {"errors": [str(exc)]}
         result["errors"].append(f"step4b: {exc}")
 
     try:
+        _progress("step5_era_check_start")
         step_start = time.time()
         result["step5_era_check"] = check_era_advancement(npc_list)
         result["step5_era_check"]["duration_ms"] = round(
             (time.time() - step_start) * 1000, 1
         )
+        _progress("step5_era_check_complete", result["step5_era_check"])
     except Exception as exc:
         logger.error("Step 5 (era check) failed: %s", exc)
         result["step5_era_check"] = {"errors": [str(exc)]}
@@ -2147,7 +2176,9 @@ def autonomous_tick(npc_list: List[Dict], tick_decisions: List[Dict]) -> Dict:
 
     # Step 6: Generate and apply game events
     try:
+        _progress("step6_game_events_start")
         result["step6_game_events"] = generate_and_apply_events(max_events=3)
+        _progress("step6_game_events_complete", result["step6_game_events"])
     except Exception as exc:
         logger.error("Game events step failed: %s", exc)
         result["step6_game_events"] = {"error": str(exc)}
@@ -2155,12 +2186,14 @@ def autonomous_tick(npc_list: List[Dict], tick_decisions: List[Dict]) -> Dict:
 
     # Step 7: NPC autonomous quest progression
     try:
+        _progress("step7_npc_quests_start")
         step_start = time.time()
         quest_engine = _get_quest_engine(r)
         result["step7_npc_quests"] = quest_engine.tick_npc_quests(npc_list)
         result["step7_npc_quests"]["duration_ms"] = round(
             (time.time() - step_start) * 1000, 1
         )
+        _progress("step7_npc_quests_complete", result["step7_npc_quests"])
     except Exception as exc:
         logger.error("Step 7 (NPC quest tick) failed: %s", exc)
         result["step7_npc_quests"] = {"errors": [str(exc)]}
@@ -2168,6 +2201,7 @@ def autonomous_tick(npc_list: List[Dict], tick_decisions: List[Dict]) -> Dict:
 
     # Step 7.5: Evolve NPC relationships
     try:
+        _progress("step7_5_relationship_evolution_start")
         step_start = time.time()
         rel_count = evolve_npc_relationships(npc_list, r)
         result["step7_5_relationship_evolution"] = {
@@ -2177,6 +2211,7 @@ def autonomous_tick(npc_list: List[Dict], tick_decisions: List[Dict]) -> Dict:
         logger.info(
             "[Tick Step 7.5] Relationship evolution: %d pairs updated", rel_count
         )
+        _progress("step7_5_relationship_evolution_complete", result["step7_5_relationship_evolution"])
     except Exception as exc:
         logger.error("Step 7.5 (relationship evolution) failed: %s", exc)
         result["step7_5_relationship_evolution"] = {"errors": [str(exc)]}
@@ -2184,6 +2219,7 @@ def autonomous_tick(npc_list: List[Dict], tick_decisions: List[Dict]) -> Dict:
 
     # Step 8: Faction autonomous tech research
     try:
+        _progress("step8_faction_tech_start")
         step_start = time.time()
         tech_bridge = _get_tech_bridge(r)
         faction_data = {}
@@ -2207,6 +2243,7 @@ def autonomous_tick(npc_list: List[Dict], tick_decisions: List[Dict]) -> Dict:
         result["step8_faction_tech"]["duration_ms"] = round(
             (time.time() - step_start) * 1000, 1
         )
+        _progress("step8_faction_tech_complete", result["step8_faction_tech"])
     except Exception as exc:
         logger.error("Step 8 (faction tech research) failed: %s", exc)
         result["step8_faction_tech"] = {"errors": [str(exc)]}
@@ -2214,6 +2251,7 @@ def autonomous_tick(npc_list: List[Dict], tick_decisions: List[Dict]) -> Dict:
 
     # Step 8.5: Faction diplomacy cycle
     try:
+        _progress("step8_5_diplomacy_start")
         step_start = time.time()
         diplomacy_engine = _get_diplomacy_engine(r)
         if world_state is None:
@@ -2224,6 +2262,7 @@ def autonomous_tick(npc_list: List[Dict], tick_decisions: List[Dict]) -> Dict:
         result["step8_5_diplomacy"]["duration_ms"] = round(
             (time.time() - step_start) * 1000, 1
         )
+        _progress("step8_5_diplomacy_complete", result["step8_5_diplomacy"])
     except Exception as exc:
         logger.error("Step 8.5 (faction diplomacy) failed: %s", exc)
         result["step8_5_diplomacy"] = {"errors": [str(exc)]}
@@ -2233,6 +2272,7 @@ def autonomous_tick(npc_list: List[Dict], tick_decisions: List[Dict]) -> Dict:
     # Step 8.6: Cross-Layer Relationship Bridge (P24b)
     # Propagate diplomacy events to NPC relationships
     try:
+        _progress("step8_6_diplomacy_bridge_start")
         step_start = time.time()
         diplo_result = result.get('step8_5_diplomacy', {})
         bridge_result = propagate_diplomacy_events_to_npcs(
@@ -2242,6 +2282,7 @@ def autonomous_tick(npc_list: List[Dict], tick_decisions: List[Dict]) -> Dict:
         result["step8_6_diplomacy_bridge"]["duration_ms"] = round(
             (time.time() - step_start) * 1000, 1
         )
+        _progress("step8_6_diplomacy_bridge_complete", result["step8_6_diplomacy_bridge"])
     except Exception as exc:
         logger.error("Step 8.6 (diplomacy->NPC bridge) failed: %s", exc)
         result['step8_6_diplomacy_bridge'] = {'errors': [str(exc)]}
@@ -2253,6 +2294,7 @@ def autonomous_tick(npc_list: List[Dict], tick_decisions: List[Dict]) -> Dict:
     # Has built-in cooldown (120s) and deterministic fallback if LLM is down.
     if NARRATOR_AVAILABLE:
         try:
+            _progress("step9_narration_start", {"llm_enabled": narration_llm_enabled})
             step_start = time.time()
             world_state = _read_world_state(r)
             # Collect faction actions from Step 4 if available
@@ -2276,11 +2318,13 @@ def autonomous_tick(npc_list: List[Dict], tick_decisions: List[Dict]) -> Dict:
                 tick_decisions=tick_decisions,
                 faction_actions=faction_actions,
                 cascade_events=cascade_events,
+                llm_enabled=narration_llm_enabled,
             )
             result["step9_narration"] = narration
             result["step9_narration"]["duration_ms"] = round(
                 (time.time() - step_start) * 1000, 1
             )
+            _progress("step9_narration_complete", result["step9_narration"])
         except Exception as exc:
             logger.error("Step 9 (narration) failed: %s", exc)
             result["step9_narration"] = {"errors": [str(exc)]}
@@ -2291,6 +2335,7 @@ def autonomous_tick(npc_list: List[Dict], tick_decisions: List[Dict]) -> Dict:
     # ── Step 9.5: NPC Memory Harvest ──
     if NPC_MEMORY_AVAILABLE:
         try:
+            _progress("step9_5_memory_harvest_start")
             step_start = time.time()
             result["step9_5_memory_harvest"] = harvest_tick_memories(
                 npc_list, tick_decisions, tick_ts
@@ -2298,6 +2343,7 @@ def autonomous_tick(npc_list: List[Dict], tick_decisions: List[Dict]) -> Dict:
             result["step9_5_memory_harvest"]["duration_ms"] = round(
                 (time.time() - step_start) * 1000, 1
             )
+            _progress("step9_5_memory_harvest_complete", result["step9_5_memory_harvest"])
         except Exception as exc:
             logger.error("Step 9.5 (memory harvest) failed: %s", exc)
             result["step9_5_memory_harvest"] = {"errors": [str(exc)]}

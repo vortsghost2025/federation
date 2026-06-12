@@ -131,16 +131,14 @@ async def autonomous_simulation_tick():
     Poll /simulation/autonomous/status for results.
     """
     from tick_engine import (
-        _tick_lock,
         get_tick_redis,
-        set_tick_redis,
         _AUTO_TICK_REDIS_KEY,
         run_autonomous_tick_background,
     )
     from fastapi.responses import JSONResponse
 
-    if not _tick_lock.acquire(blocking=False):
-        status = get_tick_redis(_AUTO_TICK_REDIS_KEY)
+    status = get_tick_redis(_AUTO_TICK_REDIS_KEY)
+    if status.get("running"):
         return JSONResponse(
             status_code=409,
             content={
@@ -148,29 +146,18 @@ async def autonomous_simulation_tick():
                 "started_at": status.get("last_start", 0.0),
             },
         )
-    try:
-        status = get_tick_redis(_AUTO_TICK_REDIS_KEY)
-        if status.get("running"):
-            return JSONResponse(
-                status_code=409,
-                content={
-                    "status": "already_running",
-                    "started_at": status.get("last_start", 0.0),
-                },
-            )
-        tick_id = f"auto_tick_{int(time.time() * 1000)}"
-        thread = threading.Thread(
-            target=run_autonomous_tick_background,
-            args=(game_state, FACTION_IDEOLOGY),
-            daemon=True,
-        )
-        thread.start()
-        return JSONResponse(
-            status_code=202,
-            content={"status": "started", "tick_id": tick_id},
-        )
-    finally:
-        _tick_lock.release()
+
+    tick_id = f"auto_tick_{int(time.time() * 1000)}"
+    thread = threading.Thread(
+        target=run_autonomous_tick_background,
+        args=(game_state, FACTION_IDEOLOGY),
+        daemon=True,
+    )
+    thread.start()
+    return JSONResponse(
+        status_code=202,
+        content={"status": "started", "tick_id": tick_id},
+    )
 
 
 @router.get("/simulation/autonomous/status")
@@ -226,6 +213,43 @@ async def autonomous_tick_status():
     else:
         result = {"status": "idle"}
     return result
+
+
+@router.get("/simulation/operator/status")
+async def simulation_operator_status():
+    from simulation_operator import get_operator_status
+
+    return get_operator_status()
+
+
+@router.post("/simulation/operator/tick")
+async def simulation_operator_tick():
+    """Manual trigger for a supervised autonomous tick."""
+    from tick_engine import (
+        get_tick_redis,
+        _AUTO_TICK_REDIS_KEY,
+        run_autonomous_tick_background,
+    )
+    from fastapi.responses import JSONResponse
+
+    status = get_tick_redis(_AUTO_TICK_REDIS_KEY)
+    if status.get("running"):
+        return JSONResponse(
+            status_code=409,
+            content={
+                "status": "already_running",
+                "started_at": status.get("last_start", 0.0),
+            },
+        )
+
+    tick_id = f"operator_tick_{int(time.time() * 1000)}"
+    thread = threading.Thread(
+        target=run_autonomous_tick_background,
+        args=(game_state, FACTION_IDEOLOGY),
+        daemon=True,
+    )
+    thread.start()
+    return JSONResponse(status_code=202, content={"status": "started", "tick_id": tick_id})
 
 
 # ---------------------------------------------------------------------------
@@ -881,3 +905,21 @@ async def simulation_choice_resolution_faction(faction_id: str, limit: int = 20)
             }
         except Exception:
             return {"faction_id": faction_id, "choice_history": [], "error": str(e)}
+
+
+# ---------------------------------------------------------------------------
+# GET /simulation/nim-stats — NIM client statistics
+# ---------------------------------------------------------------------------
+
+
+@router.get("/simulation/nim-stats")
+async def simulation_nim_stats():
+    """NIM client statistics — keys available, call counts, fallbacks."""
+    try:
+        from nvidia_nim_client import get_nim_client
+
+        client = get_nim_client()
+        stats = client.get_stats()
+        return {"status": "ok", **stats}
+    except Exception as e:
+        return {"status": "error", "error": str(e)}

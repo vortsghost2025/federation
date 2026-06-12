@@ -351,6 +351,7 @@ def generate_narration(
     tick_decisions: List[Dict],
     faction_actions: Optional[List[Dict]] = None,
     cascade_events: Optional[List[Dict]] = None,
+    llm_enabled: bool = True,
 ) -> Dict:
     """Generate the tick narration.
 
@@ -418,28 +419,32 @@ def generate_narration(
         cascade_events or [],
     )
 
-    # Try LLM narration
-    system_prompt = _build_narrator_system_prompt()
-    user_prompt = _build_narrator_user_prompt(tick_summary, recent_narration)
+    if llm_enabled:
+        system_prompt = _build_narrator_system_prompt()
+        user_prompt = _build_narrator_user_prompt(tick_summary, recent_narration)
 
-    llm_result = route_call("narrator", system_prompt, user_prompt)
-    result["latency_ms"] = llm_result.get("latency_ms", 0)
+        llm_result = route_call("narrator", system_prompt, user_prompt)
+        result["latency_ms"] = llm_result.get("latency_ms", 0)
 
-    if llm_result["success"] and llm_result.get("content"):
-        narration = _parse_narration(llm_result["content"])
-        if narration:
-            result.update(narration)
-            result["source"] = "llm"
-            result["model"] = llm_result.get("model", "unknown")
+        if llm_result["success"] and llm_result.get("content"):
+            narration = _parse_narration(llm_result["content"])
+            if narration:
+                result.update(narration)
+                result["source"] = "llm"
+                result["model"] = llm_result.get("model", "unknown")
+            else:
+                logger.warning("LLM narration unparseable, using fallback")
+                fallback = _generate_fallback_narration(world_state, tick_decisions)
+                result.update(fallback)
         else:
-            logger.warning("LLM narration unparseable, using fallback")
+            logger.warning(
+                "LLM narration failed, using fallback: %s",
+                llm_result.get("errors", ["unknown"])[:1],
+            )
             fallback = _generate_fallback_narration(world_state, tick_decisions)
             result.update(fallback)
     else:
-        logger.warning(
-            "LLM narration failed, using fallback: %s",
-            llm_result.get("errors", ["unknown"])[:1],
-        )
+        logger.info("Narration LLM disabled for this tick, using fallback")
         fallback = _generate_fallback_narration(world_state, tick_decisions)
         result.update(fallback)
 

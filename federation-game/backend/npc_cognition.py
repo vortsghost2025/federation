@@ -28,16 +28,18 @@ import logging
 import os
 import random
 import time
+import uuid
 from typing import Any, Dict, List, Optional, Tuple
 
 import redis
 
-from npc_activity_logger import log_npc_activity
+from npc_activity_logger import log_npc_activity, log_npc_turn_trace
 from llm_router import route_call, get_router_stats
 
 logger = logging.getLogger(__name__)
 
 REDIS_URL = os.environ.get("REDIS_URL", "redis://redis:6379/0")
+SYSTEM_PROMPT_VERSION = "npc_cognition:v1"
 
 _redis_client = None
 
@@ -45,7 +47,7 @@ _redis_client = None
 def _get_redis():
     global _redis_client
     if _redis_client is None:
-        _redis_client = redis.Redis.from_url(REDIS_URL, decode_responses=True)
+        _redis_client = redis.Redis.from_url(REDIS_URL, decode_responses=True, socket_connect_timeout=5, socket_timeout=5)
     return _redis_client
 
 
@@ -470,6 +472,85 @@ def _get_npc_context(char_id: str) -> Dict:
     return context
 
 
+def _memory_context_ids(context: Dict) -> List[str]:
+    ids: List[str] = []
+    for key in ("recent_decisions", "recent_thoughts", "relationships", "broadcast_events"):
+        value = context.get(key)
+        if value:
+            ids.append(key)
+    if context.get("mood"):
+        ids.append("mood")
+    return ids
+
+
+def _memory_events_from_context(char_id: str, context: Dict) -> List[Dict[str, Any]]:
+    events: List[Dict[str, Any]] = []
+    for source in _memory_context_ids(context):
+        content = context.get(source)
+        try:
+            content_text = json.dumps(content, default=str) if not isinstance(content, str) else content
+        except TypeError:
+            content_text = str(content)
+        events.append(
+            {
+                "npc_id": char_id,
+                "event_type": "retrieve",
+                "content": content_text[:4000],
+                "source": f"redis:{source}",
+            }
+        )
+    return events
+
+
+def _log_cognition_turn(
+    char_id: str,
+    role: str,
+    system_prompt: str,
+    user_prompt: str,
+    context: Dict,
+    triggers: List[Dict],
+    llm_result: Dict,
+    error_code_override: Optional[str] = None,
+) -> None:
+    """Best-effort durable trace for debugging per-NPC LLM behavior."""
+    try:
+        provider = llm_result.get("provider") or "none"
+        errors = llm_result.get("errors") or []
+        error_code = error_code_override
+        if not error_code and not llm_result.get("success"):
+            error_code = (errors[0] if errors else "llm_failed")[:128]
+        attempts = int(llm_result.get("attempts") or 0)
+        fallback_used = attempts > 1 or provider in ("ollama", "openrouter")
+
+        log_npc_turn_trace(
+            {
+                "trace_id": f"trace_{uuid.uuid4().hex}",
+                "npc_id": char_id,
+                "session_id": "autonomous_cognition",
+                "timestamp": int(time.time()),
+                "task_class": role,
+                "model_provider": provider,
+                "model_name": llm_result.get("model") or "unknown",
+                "input_text": user_prompt,
+                "system_prompt_version": SYSTEM_PROMPT_VERSION,
+                "system_prompt_text": system_prompt,
+                "memory_context_ids": _memory_context_ids(context),
+                "retrieved_facts": {"context": context, "triggers": triggers},
+                "tool_calls": [],
+                "output_text": llm_result.get("content", ""),
+                "latency_ms": int(llm_result.get("latency_ms") or 0),
+                "token_in": llm_result.get("token_in"),
+                "token_out": llm_result.get("token_out"),
+                "error_code": error_code,
+                "fallback_used": fallback_used,
+            },
+            memory_events=_memory_events_from_context(char_id, context),
+            tool_events=[],
+        )
+    except Exception:
+        pass
+
+
 def _get_world_context(world_state: Dict) -> str:
     """Build a concise world state summary for LLM prompts."""
     lines = [
@@ -688,7 +769,12 @@ def _parse_llm_response(
 # ── Main Cognition Function ────────────────────────────────────────
 
 
-def run_cognition(npc_list: List[Dict], world_state: Dict) -> Dict:
+def run_cognition(
+    npc_list: List[Dict],
+    world_state: Dict,
+    max_llm_calls_per_tick: Optional[int] = None,
+    ambient_trigger_rate: Optional[float] = None,
+) -> Dict:
     """Run tiered LLM cognition for all eligible NPCs.
 
     This is the main entry point called from simulation_engine.
@@ -744,6 +830,17 @@ def run_cognition(npc_list: List[Dict], world_state: Dict) -> Dict:
             trigger_map[cid] = []
         trigger_map[cid].append(trigger)
 
+    max_calls = (
+        MAX_LLM_CALLS_PER_TICK
+        if max_llm_calls_per_tick is None
+        else max(0, int(max_llm_calls_per_tick))
+    )
+    ambient_rate = (
+        AMBIENT_TRIGGER_RATE
+        if ambient_trigger_rate is None
+        else max(0.0, min(1.0, float(ambient_trigger_rate)))
+    )
+
     # Step 2: Process leaders
     llm_calls_this_tick = 0
     for npc in npc_list:
@@ -752,7 +849,7 @@ def run_cognition(npc_list: List[Dict], world_state: Dict) -> Dict:
             continue
 
         # Check max LLM calls per tick
-        if llm_calls_this_tick >= MAX_LLM_CALLS_PER_TICK:
+        if llm_calls_this_tick >= max_calls:
             break
 
         # Check cooldown
@@ -762,7 +859,7 @@ def run_cognition(npc_list: List[Dict], world_state: Dict) -> Dict:
         # Leader always gets cognition if there are triggers for them,
         # or AMBIENT_TRIGGER_RATE chance per tick for ambient reasoning
         npc_triggers = trigger_map.get(cid, [])
-        should_cognize = bool(npc_triggers) or (random.random() < AMBIENT_TRIGGER_RATE)
+        should_cognize = bool(npc_triggers) or (random.random() < ambient_rate)
 
         if not should_cognize:
             continue
@@ -789,6 +886,7 @@ def run_cognition(npc_list: List[Dict], world_state: Dict) -> Dict:
 
         # Make LLM call
         llm_result = route_call("leader", system_prompt, user_prompt)
+        turn_error_code: Optional[str] = None
         llm_calls_this_tick += 1
         result["stats"]["calls_made"] += 1
         result["stats"]["total_latency_ms"] += llm_result.get("latency_ms", 0)
@@ -840,13 +938,26 @@ def run_cognition(npc_list: List[Dict], world_state: Dict) -> Dict:
                     "success": True,
                 })
             else:
+                turn_error_code = "parse_unparseable"
                 result["stats"]["calls_failed"] += 1
                 result["errors"].append(f"{cid}: LLM response unparseable")
         else:
+            turn_error_code = "llm_failed"
             result["stats"]["calls_failed"] += 1
             result["errors"].append(
                 f"{cid}: {llm_result.get('content', 'unknown error')[:100]}"
             )
+
+        _log_cognition_turn(
+            cid,
+            "leader",
+            system_prompt,
+            user_prompt,
+            context,
+            npc_triggers,
+            llm_result,
+            turn_error_code,
+        )
 
         # Rate limiting handled by llm_router / NimClient — no artificial delay needed
 
@@ -857,7 +968,7 @@ def run_cognition(npc_list: List[Dict], world_state: Dict) -> Dict:
             continue
 
         # Check max LLM calls per tick
-        if llm_calls_this_tick >= MAX_LLM_CALLS_PER_TICK:
+        if llm_calls_this_tick >= max_calls:
             break
 
         # Check cooldown
@@ -882,6 +993,7 @@ def run_cognition(npc_list: List[Dict], world_state: Dict) -> Dict:
 
         # Make LLM call
         llm_result = route_call("specialist", system_prompt, user_prompt)
+        turn_error_code = None
         llm_calls_this_tick += 1
         result["stats"]["calls_made"] += 1
         result["stats"]["total_latency_ms"] += llm_result.get("latency_ms", 0)
@@ -928,13 +1040,26 @@ def run_cognition(npc_list: List[Dict], world_state: Dict) -> Dict:
                     "success": True,
                 })
             else:
+                turn_error_code = "parse_unparseable"
                 result["stats"]["calls_failed"] += 1
                 result["errors"].append(f"{cid}: LLM response unparseable")
         else:
+            turn_error_code = "llm_failed"
             result["stats"]["calls_failed"] += 1
             result["errors"].append(
                 f"{cid}: {llm_result.get('content', 'unknown error')[:100]}"
             )
+
+        _log_cognition_turn(
+            cid,
+            "specialist",
+            system_prompt,
+            user_prompt,
+            context,
+            npc_triggers,
+            llm_result,
+            turn_error_code,
+        )
 
         # Rate limiting handled by llm_router / NimClient — no artificial delay needed
 
