@@ -1,1 +1,0 @@
-scp -i ~/.ssh/id_ed25519 S:\federation\federation-game\backend\routes\simulation.py root@187.77.3.56:/docker/federation-game/backend/routes/simulation.py
