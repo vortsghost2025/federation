@@ -39,6 +39,7 @@
 - [x] P006 — Full Redis Timeout Hardening — completed, deployed to VPS
 - [x] P007 — Leader cognition retry loop fix (timeout+cooldown) — implemented, deploy pending
 - [x] P008 — Tracked scratch-file cleanup — committed (538a6dc), 29 files removed, .gitignore hardened
+- [x] P009 — Session-startup probe (fed-state.sh + AGENTS hook) — committed (eef00e3), future agents auto-load fed-state on session start
 
 ## Deploy History
 
