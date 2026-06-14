@@ -1,6 +1,6 @@
 # Horizon Status — Living Document
-**Last Updated:** 2026-06-07 14:15
-**Updated By:** Wave AI
+**Last Updated:** 2026-06-10 18:30
+**Updated By:** GLM-5.1
 
 ## Current State
 
@@ -11,8 +11,8 @@
 | Production URL | https://federation-game.deliberatefederation.cloud/ |
 | SSH alias | `ssh hostinger` or `ssh federation-vps` (public IP 187.77.3.56) |
 | Active agents | GLM-5.1 (plan), Nemotron 3 Ultra (build), Codex (debug), Kilo IDE (MiniMax-M2.7) |
-| Bridge system | Operational — P001, P002, P003 all completed |
-| Bridge status | `session/bridge/bridge_state.json` → status="completed" (P003) |
+| Bridge system | Operational — P001–P006 all completed |
+| Bridge status | `session/bridge/bridge_state.json` → status="completed" (P006) |
 | Race condition | FIXED end-to-end — backend + frontend both use choice_token |
 | Spatial mode | DEPLOYED — sticky flag live on production |
 
@@ -34,6 +34,10 @@
 - [x] P002 — Frontend choice_token integration — completed, committed (b66d9e1), deployed to VPS
 - [x] P003 — Spatial mode sticky flag — completed, committed (b66d9e1), deployed to VPS
 - [x] Kilo duplicate skill cleanup — quarantined .kilocode/skills, warnings dropped 648→326
+- [x] P004 — Frontend Error Hardening via fed-fetch.js — completed, deployed to VPS
+- [x] P005 — Dead Code Cleanup + Redis/DB Timeout Fixes — completed, deployed to VPS
+- [x] P006 — Full Redis Timeout Hardening — completed, deployed to VPS
+- [x] P007 — Leader cognition retry loop fix (timeout+cooldown) — implemented, deploy pending
 
 ## Deploy History
 
@@ -43,6 +47,10 @@
 | 994ba2e | Continuity handoff docs | N/A (docs only) |
 | 1c04c40 | Bridge system P001 + .horizon/ tracking | N/A (infra) |
 | b66d9e1 | P002 choice_token + P003 spatial mode | ✅ Yes |
+| (scp) | P004 Frontend Error Hardening | ✅ Yes |
+| (scp) | P005 Dead code removal + Redis/DB timeouts | ✅ Yes |
+| (scp) | P006 Full Redis timeout hardening (5 files) | ✅ Yes |
+| (scp) | P007 Leader cognition retry loop fix (timeout+cooldown) | ⏳ pending deploy |
 
 ## In Progress
 
@@ -54,11 +62,9 @@
 
 ## Next Steps (Prioritized)
 
-1. **GLM writes P004 plan pack** — whatever the next feature target is
-2. **VPS git deploy script** — automate `git pull → cp → docker restart` pattern
-3. **DB init retry fix** — 3-attempt retry loop hangs tests 30s+ when Postgres unreachable
-4. **Redis mock for tests** — persist_npc_traits hangs when Redis unreachable
-5. **Frontend hardening** — error handling, loading states, offline resilience
+1. **VPS git deploy script** — automate `git pull → cp → docker restart` pattern
+2. **Frontend hardening** — error handling, loading states, offline resilience
+3. **P007** — TBD (will plan when needed)
 
 ## Agent File Ownership
 

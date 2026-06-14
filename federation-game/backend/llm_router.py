@@ -51,7 +51,7 @@ _redis_client = None
 def _get_redis():
     global _redis_client
     if _redis_client is None:
-        _redis_client = redis.Redis.from_url(REDIS_URL, decode_responses=True)
+            _redis_client = redis.Redis.from_url(REDIS_URL, decode_responses=True, socket_connect_timeout=5, socket_timeout=5)
     return _redis_client
 
 
@@ -66,6 +66,10 @@ for _i in range(1, 9):
     _k = os.environ.get(f"NIM_API_KEY_{_i}", "")
     if _k and _k not in NIM_KEYS:
         NIM_KEYS.append(_k)
+# Also check standard NVIDIA_API_KEY env var (common in NVIDIA tooling)
+_NVIDIA_KEY = os.environ.get("NVIDIA_API_KEY", "")
+if _NVIDIA_KEY and _NVIDIA_KEY not in NIM_KEYS:
+    NIM_KEYS.append(_NVIDIA_KEY)
 NIM_BASE_URL = "https://integrate.api.nvidia.com/v1/chat/completions"
 NIM_RATE_LIMIT_PER_KEY = 40  # requests per minute per key
 NIM_RATE_LIMIT_WINDOW = 60  # seconds
@@ -429,82 +433,6 @@ def _check_cloudflare_available() -> bool:
     return True
 
 
-def _call_cloudflare(
-    messages: List[Dict],
-    max_tokens: int = 200,
-    temperature: float = 0.8,
-) -> Tuple[bool, str, float]:
-    global _cf_calls, _cf_failures
-    if not _check_cloudflare_available():
-        return False, "Cloudflare not available", 0
-
-    payload = json.dumps(
-        {
-            "messages": messages,
-            "max_tokens": max_tokens,
-            "temperature": temperature,
-        }
-    ).encode("utf-8")
-
-    headers = {
-        "Content-Type": "application/json",
-        "Authorization": f"Bearer {CF_API_TOKEN}",
-    }
-    req = urllib.request.Request(
-        CF_BASE_URL, data=payload, headers=headers, method="POST"
-    )
-    start = time.time()
-
-    try:
-        with urllib.request.urlopen(req, timeout=CF_TIMEOUT) as resp:
-            body = json.loads(resp.read().decode("utf-8"))
-            latency_ms = (time.time() - start) * 1000
-            content = None
-            if "result" in body and isinstance(body["result"], dict):
-                content = body["result"].get("response") or ""
-            elif "choices" in body:
-                choices = body.get("choices") or [{}]
-                message = choices[0].get("message") or {}
-                content = message.get("content") or ""
-            if content and isinstance(content, str):
-                content = content.strip().strip('"').strip("'")
-                if len(content) > 500:
-                    content = content[:500]
-                _cf_calls += 1
-                _record_call("cloudflare", None, CF_MODEL, "", True, latency_ms)
-                _record_provider_result("cloudflare", True)
-                return True, content, latency_ms
-            _cf_failures += 1
-            _record_call(
-                "cloudflare", None, CF_MODEL, "", False, latency_ms, "empty response"
-            )
-            _record_provider_result("cloudflare", False)
-            return False, "Cloudflare: empty response", latency_ms
-    except urllib.error.HTTPError as e:
-        _cf_failures += 1
-        latency_ms = (time.time() - start) * 1000
-        err_body = ""
-        try:
-            err_body = e.read().decode("utf-8", errors="replace")[:200]
-        except Exception:
-            pass
-        err_msg = f"Cloudflare HTTP {e.code}: {err_body}"
-        _record_call("cloudflare", None, CF_MODEL, "", False, latency_ms, err_msg)
-        _record_provider_result("cloudflare", False)
-        if e.code == 429:
-            _cf_available = False
-            _cf_last_check = time.time()
-        return False, err_msg, latency_ms
-    except Exception as e:
-        _cf_failures += 1
-        latency_ms = (time.time() - start) * 1000
-        err_msg = f"Cloudflare error: {str(e)[:200]}"
-        logger.debug(err_msg)
-        _record_call("cloudflare", None, CF_MODEL, "", False, latency_ms, err_msg)
-        _record_provider_result("cloudflare", False)
-        return False, err_msg, latency_ms
-
-
 # ── Together AI ────────────────────────────────────────────────────
 
 
@@ -523,88 +451,6 @@ def _check_together_available() -> bool:
     _together_available = True
     _together_last_check = now
     return True
-
-
-def _call_together(
-    messages: List[Dict],
-    max_tokens: int = 200,
-    temperature: float = 0.8,
-) -> Tuple[bool, str, float]:
-    global _together_calls, _together_failures
-    if not _check_together_available():
-        return False, "Together not available", 0
-
-    payload = json.dumps(
-        {
-            "model": TOGETHER_MODEL,
-            "messages": messages,
-            "max_tokens": max_tokens,
-            "temperature": temperature,
-            "stream": False,
-        }
-    ).encode("utf-8")
-
-    headers = {
-        "Content-Type": "application/json",
-        "Authorization": f"Bearer {TOGETHER_API_KEY}",
-    }
-    req = urllib.request.Request(
-        TOGETHER_BASE_URL, data=payload, headers=headers, method="POST"
-    )
-    start = time.time()
-
-    try:
-        with urllib.request.urlopen(req, timeout=TOGETHER_TIMEOUT) as resp:
-            body = json.loads(resp.read().decode("utf-8"))
-            latency_ms = (time.time() - start) * 1000
-            choices = body.get("choices") or [{}]
-            message = choices[0].get("message") or {}
-            content = message.get("content") or ""
-            if not isinstance(content, str):
-                content = str(content)
-            content = content.strip().strip('"').strip("'")
-            if len(content) > 500:
-                content = content[:500]
-            if content:
-                _together_calls += 1
-                _record_call("together", None, TOGETHER_MODEL, "", True, latency_ms)
-                _record_provider_result("together", True)
-                return True, content, latency_ms
-            _together_failures += 1
-            _record_call(
-                "together",
-                None,
-                TOGETHER_MODEL,
-                "",
-                False,
-                latency_ms,
-                "empty response",
-            )
-            _record_provider_result("together", False)
-            return False, "Together: empty response", latency_ms
-    except urllib.error.HTTPError as e:
-        _together_failures += 1
-        latency_ms = (time.time() - start) * 1000
-        err_body = ""
-        try:
-            err_body = e.read().decode("utf-8", errors="replace")[:200]
-        except Exception:
-            pass
-        err_msg = f"Together HTTP {e.code}: {err_body}"
-        _record_call("together", None, TOGETHER_MODEL, "", False, latency_ms, err_msg)
-        _record_provider_result("together", False)
-        if e.code in (401, 403, 429):
-            _together_available = False
-            _together_last_check = time.time()
-        return False, err_msg, latency_ms
-    except Exception as e:
-        _together_failures += 1
-        latency_ms = (time.time() - start) * 1000
-        err_msg = f"Together error: {str(e)[:200]}"
-        logger.debug(err_msg)
-        _record_call("together", None, TOGETHER_MODEL, "", False, latency_ms, err_msg)
-        _record_provider_result("together", False)
-        return False, err_msg, latency_ms
 
 
 # ── Google Gemini ──────────────────────────────────────────────────
@@ -627,89 +473,6 @@ def _check_gemini_available() -> bool:
     return True
 
 
-def _call_gemini(
-    messages: List[Dict],
-    max_tokens: int = 200,
-    temperature: float = 0.8,
-) -> Tuple[bool, str, float]:
-    global _gemini_calls, _gemini_failures
-    if not _check_gemini_available():
-        return False, "Gemini not available", 0
-
-    system_text = ""
-    user_text = ""
-    for msg in messages:
-        if msg.get("role") == "system":
-            system_text = msg.get("content", "")
-        elif msg.get("role") == "user":
-            user_text = msg.get("content", "")
-
-    url = (
-        f"{GEMINI_BASE_URL}/models/{GEMINI_MODEL}:generateContent?key={GEMINI_API_KEY}"
-    )
-    gemini_payload = {
-        "contents": [{"parts": [{"text": user_text}]}],
-        "generationConfig": {
-            "maxOutputTokens": max_tokens,
-            "temperature": temperature,
-        },
-    }
-    if system_text:
-        gemini_payload["system_instruction"] = {"parts": [{"text": system_text}]}
-
-    payload_bytes = json.dumps(gemini_payload).encode("utf-8")
-    headers = {"Content-Type": "application/json"}
-    req = urllib.request.Request(
-        url, data=payload_bytes, headers=headers, method="POST"
-    )
-    start = time.time()
-
-    try:
-        with urllib.request.urlopen(req, timeout=GEMINI_TIMEOUT) as resp:
-            body = json.loads(resp.read().decode("utf-8"))
-            latency_ms = (time.time() - start) * 1000
-            candidates = body.get("candidates") or [{}]
-            parts = (candidates[0].get("content") or {}).get("parts") or [{}]
-            content = parts[0].get("text") or ""
-            if content and isinstance(content, str):
-                content = content.strip().strip('"').strip("'")
-                if len(content) > 500:
-                    content = content[:500]
-                _gemini_calls += 1
-                _record_call("gemini", None, GEMINI_MODEL, "", True, latency_ms)
-                _record_provider_result("gemini", True)
-                return True, content, latency_ms
-            _gemini_failures += 1
-            _record_call(
-                "gemini", None, GEMINI_MODEL, "", False, latency_ms, "empty response"
-            )
-            _record_provider_result("gemini", False)
-            return False, "Gemini: empty response", latency_ms
-    except urllib.error.HTTPError as e:
-        _gemini_failures += 1
-        latency_ms = (time.time() - start) * 1000
-        err_body = ""
-        try:
-            err_body = e.read().decode("utf-8", errors="replace")[:200]
-        except Exception:
-            pass
-        err_msg = f"Gemini HTTP {e.code}: {err_body}"
-        _record_call("gemini", None, GEMINI_MODEL, "", False, latency_ms, err_msg)
-        _record_provider_result("gemini", False)
-        if e.code in (403, 429):
-            _gemini_available = False
-            _gemini_last_check = time.time()
-        return False, err_msg, latency_ms
-    except Exception as e:
-        _gemini_failures += 1
-        latency_ms = (time.time() - start) * 1000
-        err_msg = f"Gemini error: {str(e)[:200]}"
-        logger.debug(err_msg)
-        _record_call("gemini", None, GEMINI_MODEL, "", False, latency_ms, err_msg)
-        _record_provider_result("gemini", False)
-        return False, err_msg, latency_ms
-
-
 # ── Grok/xAI ───────────────────────────────────────────────────────
 
 
@@ -727,82 +490,6 @@ def _check_grok_available() -> bool:
     return True
 
 
-def _call_grok(
-    messages: List[Dict],
-    max_tokens: int = 200,
-    temperature: float = 0.8,
-) -> Tuple[bool, str, float]:
-    global _grok_calls, _grok_failures
-    if not _check_grok_available():
-        return False, "Grok not available", 0
-
-    payload = json.dumps(
-        {
-            "model": GROK_MODEL,
-            "messages": messages,
-            "max_tokens": max_tokens,
-            "temperature": temperature,
-            "stream": False,
-        }
-    ).encode("utf-8")
-
-    headers = {
-        "Content-Type": "application/json",
-        "Authorization": f"Bearer {GROK_API_KEY}",
-    }
-    req = urllib.request.Request(
-        GROK_BASE_URL, data=payload, headers=headers, method="POST"
-    )
-    start = time.time()
-
-    try:
-        with urllib.request.urlopen(req, timeout=GROK_TIMEOUT) as resp:
-            body = json.loads(resp.read().decode("utf-8"))
-            latency_ms = (time.time() - start) * 1000
-            choices = body.get("choices") or [{}]
-            message = choices[0].get("message") or {}
-            content = message.get("content") or ""
-            if not isinstance(content, str):
-                content = str(content)
-            content = content.strip().strip('"').strip("'")
-            if len(content) > 500:
-                content = content[:500]
-            if content:
-                _grok_calls += 1
-                _record_call("grok", None, GROK_MODEL, "", True, latency_ms)
-                _record_provider_result("grok", True)
-                return True, content, latency_ms
-            _grok_failures += 1
-            _record_call(
-                "grok", None, GROK_MODEL, "", False, latency_ms, "empty response"
-            )
-            _record_provider_result("grok", False)
-            return False, "Grok: empty response", latency_ms
-    except urllib.error.HTTPError as e:
-        _grok_failures += 1
-        latency_ms = (time.time() - start) * 1000
-        err_body = ""
-        try:
-            err_body = e.read().decode("utf-8", errors="replace")[:200]
-        except Exception:
-            pass
-        err_msg = f"Grok HTTP {e.code}: {err_body}"
-        _record_call("grok", None, GROK_MODEL, "", False, latency_ms, err_msg)
-        _record_provider_result("grok", False)
-        if e.code in (401, 403, 429):
-            _grok_available = False
-            _grok_last_check = time.time()
-        return False, err_msg, latency_ms
-    except Exception as e:
-        _grok_failures += 1
-        latency_ms = (time.time() - start) * 1000
-        err_msg = f"Grok error: {str(e)[:200]}"
-        logger.debug(err_msg)
-        _record_call("grok", None, GROK_MODEL, "", False, latency_ms, err_msg)
-        _record_provider_result("grok", False)
-        return False, err_msg, latency_ms
-
-
 # ── Model Selection per Task Class ──────────────────────────────────
 # Each task class has a primary model on NIM, a fallback on NIM,
 # and a secondary fallback on OpenRouter.
@@ -812,9 +499,9 @@ TASK_MODELS = {
         "primary": {
             "provider": "nim",
             "model": "meta/llama-3.3-70b-instruct",
-            "max_tokens": 300,
+            "max_tokens": 400,
             "temperature": 0.85,
-            "timeout": 20,
+            "timeout": 30,
         },
         "fallback_nim": {
             "provider": "nim",
@@ -828,7 +515,7 @@ TASK_MODELS = {
             "model": "meta-llama/llama-3.3-70b-instruct:free",
             "max_tokens": 300,
             "temperature": 0.85,
-            "timeout": 25,
+            "timeout": 30,
         },
     },
     "specialist": {
@@ -837,21 +524,21 @@ TASK_MODELS = {
             "model": "meta/llama-3.3-70b-instruct",
             "max_tokens": 200,
             "temperature": 0.8,
-            "timeout": 18,
+            "timeout": 30,
         },
         "fallback_nim": {
             "provider": "nim",
             "model": "meta/llama-3.1-8b-instruct",
             "max_tokens": 200,
             "temperature": 0.8,
-            "timeout": 15,
+            "timeout": 30,
         },
         "fallback_openrouter": {
             "provider": "openrouter",
             "model": "meta-llama/llama-3.2-3b-instruct:free",
             "max_tokens": 200,
             "temperature": 0.8,
-            "timeout": 20,
+            "timeout": 30,
         },
     },
     "worker": {
