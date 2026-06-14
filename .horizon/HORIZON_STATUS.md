@@ -38,6 +38,7 @@
 - [x] P005 — Dead Code Cleanup + Redis/DB Timeout Fixes — completed, deployed to VPS
 - [x] P006 — Full Redis Timeout Hardening — completed, deployed to VPS
 - [x] P007 — Leader cognition retry loop fix (timeout+cooldown) — implemented, deploy pending
+- [x] P008 — Tracked scratch-file cleanup — committed (538a6dc), 29 files removed, .gitignore hardened
 
 ## Deploy History
 
@@ -51,6 +52,7 @@
 | (scp) | P005 Dead code removal + Redis/DB timeouts | ✅ Yes |
 | (scp) | P006 Full Redis timeout hardening (5 files) | ✅ Yes |
 | (scp) | P007 Leader cognition retry loop fix (timeout+cooldown) | ⏳ pending deploy |
+| (none) | P008 Tracked scratch cleanup (delete-only) | ✅ Yes |
 
 ## In Progress
 
