@@ -116,6 +116,36 @@ nul
 /.kilo/plans/
 node_modules/
 
+# Brainstorm mockup scratch dirs (server-side companion artifacts, never ship)
+.superpowers/brainstorm/
+
+# One-off driver scripts left in repo root by prior agents (local only)
+add_arc_*.py
+enhance_*.py
+check_*.py
+extract_*.ps1
+extract_*.py
+tmp_*.py
+tmp_*.ps1
+tmp_*.cmd
+tmp_*.js
+tmp_*.mjs
+tmp_*.cjs
+tmp_run.*
+scenes_*.json
+nvidia_extract.json
+nvidia_waveai_fragment.json
+starmap_fixed.png
+temp_check.txt
+
+# Backup and v2 experiment files inside federation-game (never deployed)
+federation-game/backend/*.bak
+federation-game/backend/*.bak2
+federation-game/backend/*.yaml
+federation-game/frontend/operator-dashboard.html
+federation-game/frontend/*v2.*
+spectator.*  # root-level duplicates of frontend/spectator.*
+
 # Accidental Windows temp-path filenames created in the repo root
 /C*Usersseand*
 

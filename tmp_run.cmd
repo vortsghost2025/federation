@@ -1,3 +1,0 @@
-@echo off
-node -e "const fs=require('fs');const d=JSON.parse(fs.readFileSync('C:/Users/seand/AppData/Local/AgentProfiles/kilo-a/cache/kilo/models.json','utf8'));const n=d.nvidia;let l=[];l.push('=== NVIDIA PROVIDER ===');l.push('ENV: '+(n.env?n.env.join(', '):''));l.push('API: '+(n.api||''));l.push('');l.push('=== NVIDIA MODELS WITH tool_call=true ===');for(const[k,m]of Object.entries(n.models)){if(m.tool_call===true){l.push(k+' | ctx='+m.limit.context+' | out='+m.limit.output+' | cost_in='+m.cost.input+' | cost_out='+m.cost.output+' | reasoning='+m.reasoning)}}fs.writeFileSync('S:/federation/tmp_nvidia.txt',l.join('\n')+'\n','utf8');"
-type "S:\federation\tmp_nvidia.txt"
