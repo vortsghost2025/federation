@@ -103,6 +103,8 @@ VALID_CATEGORIES = {
 # Cooldown: minimum seconds between LLM calls for the same NPC
 LEADER_COOLDOWN = 180  # 3 minutes
 SPECIALIST_COOLDOWN = 600  # 10 minutes
+LEADER_COOLDOWN_FAILURE = 600        # 10 min - back off a broken leader path
+SPECIALIST_COOLDOWN_FAILURE = 300    #  5 min - back off a broken specialist path
 MAX_LLM_CALLS_PER_TICK = 3  # limit concurrent LLM calls per cognition tick
 AMBIENT_TRIGGER_RATE = 0.15  # 15% chance for ambient leader cognition per tick
 
@@ -376,11 +378,18 @@ def _is_on_cooldown(char_id: str, tier: str) -> bool:
     return False
 
 
-def _set_cooldown(char_id: str):
-    """Mark an NPC as having just had an LLM cognition call."""
+def _set_cooldown(char_id: str, duration: int) -> None:
+    """Mark an NPC as on cooldown for `duration` seconds.
+
+    Caller passes the right value:
+        LEADER_COOLDOWN              (180s) - normal leader gap
+        LEADER_COOLDOWN_FAILURE      (600s) - back off a broken leader path
+        SPECIALIST_COOLDOWN          (600s) - normal specialist gap
+        SPECIALIST_COOLDOWN_FAILURE  (300s) - back off a broken specialist path
+    """
     r = _get_redis()
     try:
-        r.set(f"cognition_cooldown:{char_id}", str(time.time()), ex=600)
+        r.set(f"cognition_cooldown:{char_id}", str(time.time()), ex=duration)
     except Exception:
         pass
 
@@ -896,6 +905,7 @@ def run_cognition(
             result["stats"]["models_used"][model_used] = 0
         result["stats"]["models_used"][model_used] += 1
 
+        cooldown_set = False
         if llm_result["success"]:
             result["stats"]["calls_succeeded"] += 1
             # Parse and validate
@@ -929,7 +939,7 @@ def run_cognition(
                     pass
 
                 # Set cooldown
-                _set_cooldown(cid)
+                _set_cooldown(cid, LEADER_COOLDOWN)
                 log_npc_activity(cid, "cognition", {
                     "role": "leader",
                     "category": decision["category"],
@@ -937,6 +947,7 @@ def run_cognition(
                     "model_used": model_used,
                     "success": True,
                 })
+                cooldown_set = True
             else:
                 turn_error_code = "parse_unparseable"
                 result["stats"]["calls_failed"] += 1
@@ -947,6 +958,9 @@ def run_cognition(
             result["errors"].append(
                 f"{cid}: {llm_result.get('content', 'unknown error')[:100]}"
             )
+
+        if not cooldown_set:
+            _set_cooldown(cid, LEADER_COOLDOWN_FAILURE)
 
         _log_cognition_turn(
             cid,
@@ -1003,6 +1017,7 @@ def run_cognition(
             result["stats"]["models_used"][model_used] = 0
         result["stats"]["models_used"][model_used] += 1
 
+        cooldown_set = False
         if llm_result["success"]:
             result["stats"]["calls_succeeded"] += 1
             decision = _parse_llm_response(
@@ -1031,7 +1046,7 @@ def run_cognition(
                 except Exception:
                     pass
 
-                _set_cooldown(cid)
+                _set_cooldown(cid, SPECIALIST_COOLDOWN)
                 log_npc_activity(cid, "cognition", {
                     "role": "specialist",
                     "category": decision["category"],
@@ -1039,6 +1054,7 @@ def run_cognition(
                     "model_used": model_used,
                     "success": True,
                 })
+                cooldown_set = True
             else:
                 turn_error_code = "parse_unparseable"
                 result["stats"]["calls_failed"] += 1
@@ -1049,6 +1065,9 @@ def run_cognition(
             result["errors"].append(
                 f"{cid}: {llm_result.get('content', 'unknown error')[:100]}"
             )
+
+        if not cooldown_set:
+            _set_cooldown(cid, SPECIALIST_COOLDOWN_FAILURE)
 
         _log_cognition_turn(
             cid,
