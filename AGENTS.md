@@ -90,6 +90,39 @@ Agent tests, fixes, reports in plain language
 
 ---
 
+## SESSION-STARTUP PROBE — fed-state.sh
+
+Federation context is large (47+ NPCs, 8 factions, 5 critical constraints,
+active specs/plans). Before doing anything on federation, run:
+
+```
+bash S:/federation/scripts/fed-state.sh
+```
+
+Or for a full VPS probe (slower, ~5s extra):
+
+```
+bash S:/federation/scripts/fed-state.sh --vps
+```
+
+`fed-state.sh` returns:
+- HEAD commit + last 5 commits
+- Active specs in `docs/superpowers/specs/` and plans in `docs/superpowers/plans/`
+- Last 10 entries of `.horizon/HORIZON_STATUS.md` (what's been done)
+- Dirty tree summary (modified + untracked counts, first 10 paths)
+- With `--vps`: federation docker container status
+
+This is the context-recovery tool. Run it:
+- At the start of any federation-related session
+- After a compaction or new conversation
+- Before suggesting code changes (so you can verify a change hasn't
+  already been deployed)
+
+When the script reports `<N> modified, <M> untracked`, mention that to the
+user before making changes. Don't propose fixes to files you haven't read.
+
+---
+
 ## PROJECT-SPECIFIC FILES
 
 | File | Purpose |
