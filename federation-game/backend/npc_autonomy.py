@@ -40,6 +40,7 @@ from faction_dynamics import (
     store_faction_dynamics,
 )
 from npc_activity_logger import log_npc_activity
+from npc_event_log import log_decision_event, log_from_broadcast_event
 import logging
 
 logger = logging.getLogger(__name__)
@@ -177,7 +178,7 @@ def _get_redis():
     if _redis_client is None:
         with _redis_lock:
             if _redis_client is None:
-                _redis_client = redis.Redis.from_url(REDIS_URL, decode_responses=True)
+                _redis_client = redis.Redis.from_url(REDIS_URL, decode_responses=True, socket_connect_timeout=5, socket_timeout=5)
     return _redis_client
 
 
@@ -245,7 +246,45 @@ def _call_llm(
     temperature: float = 0.9,
     priority: str = "local",
 ) -> str:
-    # Priority 0: Local Ollama + NVIDIA NIM via tiered NimClient
+    """Call LLM with NIM-first routing via llm_router.
+
+    Routes through llm_router.route_call() which handles:
+      NIM primary -> NIM fallback -> Ollama -> OpenRouter free -> template fallback
+
+    All calls are logged to Redis audit (llm_audit).
+    Direct OpenRouter calls are eliminated to prevent bypass.
+    """
+    # Map priority to llm_router task class
+    task_class = {
+        "heavy": "leader",
+        "cloud": "specialist",
+        "local": "worker",
+    }.get(priority, "worker")
+
+    try:
+        from llm_router import route_call
+        result = route_call(
+            task_class=task_class,
+            system_prompt=system_prompt,
+            user_prompt=user_prompt,
+            max_tokens=max_tokens,
+            temperature=temperature,
+        )
+        if result.get("success") and result.get("content"):
+            content = _clean_llm_output(result["content"])
+            if content:
+                logger.debug(
+                    "_call_llm: routed via llm_router task_class=%s provider=%s model=%s",
+                    task_class, result.get("provider"), result.get("model"),
+                )
+                return content
+        else:
+            errors = result.get("errors", [])
+            logger.warning("_call_llm: llm_router failed for %s: %s", task_class, errors[:2])
+    except Exception as exc:
+        logger.warning("_call_llm: llm_router exception: %s", exc)
+
+    # Fallback: try NIM directly via nvidia_nim_client (legacy path)
     if LLM_USE_NIM:
         try:
             from nvidia_nim_client import get_nim_client, _run_async
@@ -264,48 +303,10 @@ def _call_llm(
                 if result:
                     return result
         except Exception as exc:
-            logger.warning("NIM call failed, falling back to OpenRouter: %s", exc)
+            logger.warning("_call_llm: NIM client failed: %s", exc)
 
-    # Priority 2: OpenRouter free tier (existing code, unchanged)
-    if not OPENROUTER_API_KEY:
-        return ""
-    messages = [
-        {"role": "system", "content": system_prompt},
-        {"role": "user", "content": user_prompt},
-    ]
-    payload = json.dumps(
-        {
-            "model": DEFAULT_MODEL,
-            "messages": messages,
-            "max_tokens": max_tokens,
-            "temperature": temperature,
-        }
-    ).encode("utf-8")
-    headers = {
-        "Content-Type": "application/json",
-        "Authorization": f"Bearer {OPENROUTER_API_KEY}",
-        "HTTP-Referer": "https://federation-game.deliberatefederation.cloud",
-        "X-Title": "Federation Game NPC Autonomy",
-    }
-    req = urllib.request.Request(
-        OPENROUTER_URL, data=payload, headers=headers, method="POST"
-    )
-    try:
-        with urllib.request.urlopen(req, timeout=12) as resp:
-            body = json.loads(resp.read().decode("utf-8"))
-            return (
-                body.get("choices", [{}])[0]
-                .get("message", {})
-                .get("content", "")
-                .strip()
-            )
-    except Exception:
-        return ""
-
-
-# --- THOUGHTS ---
-
-
+    # Last resort: template fallback (no OpenRouter bypass)
+    return ""
 def generate_thought(
     char_id: str,
     char_name: str,
@@ -959,6 +960,58 @@ INTERACTION_DELTAS = {
 }
 
 
+def _generate_dialogue(npc_a: Dict, npc_b: Dict, interaction_type: str) -> Optional[str]:
+    """Generate a brief 2-3 line dialogue exchange between two NPCs using LLM.
+    Returns None if LLM budget exhausted or call fails."""
+    if not _check_tick_llm_budget():
+        return None
+
+    name_a = npc_a.get("name", "Unknown")
+    name_b = npc_b.get("name", "Unknown")
+    arch_a = npc_a.get("archetype", "neutral")
+    arch_b = npc_b.get("archetype", "neutral")
+    aff_a = npc_a.get("affiliation", "independent")
+    aff_b = npc_b.get("affiliation", "independent")
+
+    system_prompt = (
+        f"You are a dialogue generator for a consciousness simulation. "
+        f"Generate a brief 2-3 line exchange between two NPCs. "
+        f"Each NPC speaks one line, attributed with their name. "
+        f"Keep it under 120 words total. "
+        f"Interaction type: {interaction_type}. "
+        f"NO narration, just dialogue."
+    )
+
+    user_prompt = (
+        f"Generate a short dialogue between {name_a} ({arch_a}, {aff_a}) "
+        f"and {name_b} ({arch_b}, {aff_b}) during a {interaction_type} interaction. "
+        f"Example format: {name_a}: \"Your line here.\" then {name_b}: \"Their response.\""
+    )
+
+    try:
+        result = _call_llm(
+            system_prompt=system_prompt,
+            user_prompt=user_prompt,
+            max_tokens=150,
+            temperature=0.9,
+            priority="local",
+        )
+        if result and len(result) > 20:
+            # Clean up any template artifacts or meta-text
+            cleaned = result.strip()
+            # Remove lines that don't look like dialogue
+            lines = []
+            for line in cleaned.split("\n"):
+                line = line.strip()
+                if line and (name_a in line or name_b in line or ":" in line):
+                    lines.append(line)
+            if len(lines) >= 2:
+                return "\n".join(lines[:3])
+    except Exception:
+        pass
+    return None
+
+
 def generate_npc_interaction(npc_a: Dict, npc_b: Dict) -> Optional[Dict]:
     # Weighted random choice for interaction type
     total_weight = sum(w for _, _, w in NPC_INTERACTION_TYPES)
@@ -969,22 +1022,26 @@ def generate_npc_interaction(npc_a: Dict, npc_b: Dict) -> Optional[Dict]:
         if r <= cumulative:
             break
 
-    description = template.replace("{name_a}", npc_a.get("name", "Unknown")).replace(
-        "{name_b}", npc_b.get("name", "Unknown")
-    )
-    for key, values in FILL_VALUES.items():
-        placeholder = "{" + key + "}"
-        if placeholder in description:
-            description = description.replace(placeholder, random.choice(values), 1)
-
-    delta = INTERACTION_DELTAS.get(interaction_type, 0.0)
-    jitter = random.uniform(-2, 2)
-    actual_delta = delta + jitter
-
     char_a = npc_a.get("char_id") or npc_a.get("id", "")
     char_b = npc_b.get("char_id") or npc_b.get("id", "")
     name_a = npc_a.get("name", "Unknown")
     name_b = npc_b.get("name", "Unknown")
+
+    # Try LLM dialogue first (adds depth), fall back to template
+    dialogue = _generate_dialogue(npc_a, npc_b, interaction_type)
+
+    if dialogue:
+        description = f"{name_a} and {name_b} engaged in {interaction_type}. {dialogue}"
+    else:
+        description = template.replace("{name_a}", name_a).replace("{name_b}", name_b)
+        for key, values in FILL_VALUES.items():
+            placeholder = "{" + key + "}"
+            if placeholder in description:
+                description = description.replace(placeholder, random.choice(values), 1)
+
+    delta = INTERACTION_DELTAS.get(interaction_type, 0.0)
+    jitter = random.uniform(-2, 2)
+    actual_delta = delta + jitter
 
     update_npc_relationship(char_a, char_b, name_b, actual_delta)
     update_npc_relationship(char_b, char_a, name_a, actual_delta * 0.8)
@@ -995,27 +1052,45 @@ def generate_npc_interaction(npc_a: Dict, npc_b: Dict) -> Optional[Dict]:
         "interaction_type": interaction_type,
         "char_ids": [char_a, char_b],
         "description": description,
+        "has_dialogue": dialogue is not None,
         "relationship_delta": round(actual_delta, 1),
         "ts": ts,
     }
+
+    # Store dialogue in Redis for frontend display
+    if dialogue:
+        try:
+            r = _get_redis()
+            dialogue_key = f"npc_dialogue:{char_a}:{char_b}"
+            r.setex(dialogue_key, 3600, json.dumps({
+                "name_a": name_a,
+                "name_b": name_b,
+                "dialogue": dialogue,
+                "interaction_type": interaction_type,
+                "ts": ts,
+            }))
+        except Exception:
+            pass
 
     # Log interaction for BOTH NPCs (source + target)
     try:
         log_npc_activity(char_a, "interaction", {
             "category": interaction_type,
-            "description": description,
+            "description": description[:200],
             "affiliation": npc_a.get("affiliation", "independent"),
             "target_char_id": char_b,
             "target_name": name_b,
             "relationship_delta": round(actual_delta, 1),
+            "has_dialogue": dialogue is not None,
         }, timestamp=ts)
         log_npc_activity(char_b, "interaction", {
             "category": interaction_type,
-            "description": description,
+            "description": description[:200],
             "affiliation": npc_b.get("affiliation", "independent"),
             "target_char_id": char_a,
             "target_name": name_a,
             "relationship_delta": round(actual_delta * 0.8, 1),
+            "has_dialogue": dialogue is not None,
         }, timestamp=ts)
     except Exception:
         pass  # Logging is best-effort
@@ -2623,6 +2698,7 @@ def broadcast_decision_event(decision, affiliation="independent"):
     r.zadd(key, {json.dumps(event): event["ts"]})
     r.zremrangebyrank(key, 0, -(MAX_BROADCAST_EVENTS + 1))
     r.expire(key, BROADCAST_TTL)
+    log_from_broadcast_event(event, tick_id=int(time.time()))
     return event
 
 
