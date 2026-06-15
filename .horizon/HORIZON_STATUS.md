@@ -37,7 +37,7 @@
 - [x] P004 — Frontend Error Hardening via fed-fetch.js — completed, deployed to VPS
 - [x] P005 — Dead Code Cleanup + Redis/DB Timeout Fixes — completed, deployed to VPS
 - [x] P006 — Full Redis Timeout Hardening — completed, deployed to VPS
-- [x] P007 — Leader cognition retry loop fix (timeout+cooldown) — implemented, deploy pending
+- [x] P007 — Leader cognition retry loop fix (timeout+cooldown) — committed (4b592da), deployed to VPS, verified live
 - [x] P008 — Tracked scratch-file cleanup — committed (538a6dc), 29 files removed, .gitignore hardened
 - [x] P009 — Session-startup probe (fed-state.sh + AGENTS hook) — committed (eef00e3), future agents auto-load fed-state on session start
 
@@ -52,8 +52,9 @@
 | (scp) | P004 Frontend Error Hardening | ✅ Yes |
 | (scp) | P005 Dead code removal + Redis/DB timeouts | ✅ Yes |
 | (scp) | P006 Full Redis timeout hardening (5 files) | ✅ Yes |
-| (scp) | P007 Leader cognition retry loop fix (timeout+cooldown) | ⏳ pending deploy |
+| (scp) | P007 Leader cognition retry loop fix (timeout+cooldown) | ✅ Yes |
 | (none) | P008 Tracked scratch cleanup (delete-only) | ✅ Yes |
+| (none) | P009 Session-startup probe (fed-state.sh + AGENTS hook) | ✅ Yes |
 
 ## In Progress
 
