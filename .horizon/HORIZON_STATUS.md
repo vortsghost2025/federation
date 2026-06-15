@@ -40,6 +40,7 @@
 - [x] P007 — Leader cognition retry loop fix (timeout+cooldown) — committed (4b592da), deployed to VPS, verified live
 - [x] P008 — Tracked scratch-file cleanup — committed (538a6dc), 29 files removed, .gitignore hardened
 - [x] P009 — Session-startup probe (fed-state.sh + AGENTS hook) — committed (eef00e3), future agents auto-load fed-state on session start
+- [x] P010 — Recover deployed chat-NPC improvements — committed (8265504); npc_autonomy.py rewrite + npc_event_log.py added back to git. The 26 remaining dirty-tree files are unchanged and still need individual review.
 
 ## Deploy History
 
