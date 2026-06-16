@@ -179,7 +179,137 @@ input {
   border: 0;
 }
 
-/* ===== Cinema spectator additions ===== */
+/* ===== Vitals tiles ===== */
+.vitals-panel {
+  background: linear-gradient(180deg, rgba(143, 216, 255, 0.05), rgba(143, 216, 255, 0.02)),
+              var(--panel);
+  border: 2px solid var(--line);
+  border-radius: 28px;
+  padding: clamp(22px, 3vw, 34px);
+  display: grid;
+  gap: 16px;
+}
+.vitals-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 14px;
+}
+.vital-tile {
+  border-radius: 18px;
+  padding: 18px 20px;
+  background: var(--panel-soft);
+  border: 2px solid var(--line);
+  border-left-width: 10px;
+  display: grid;
+  gap: 6px;
+  align-content: start;
+}
+.vital-tile.placeholder {
+  color: var(--muted);
+  font-size: 18px;
+  padding: 22px 24px;
+  border-left-color: var(--line);
+}
+.vital-label {
+  font-size: 16px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.vital-value {
+  font-size: clamp(36px, 4vw, 56px);
+  font-weight: 700;
+  line-height: 1;
+  font-family: "Libre Baskerville", Georgia, serif;
+}
+.vital-band {
+  font-size: 17px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.vital-tile.good { border-left-color: var(--green); }
+.vital-tile.good .vital-band { color: var(--green); }
+.vital-tile.watch { border-left-color: var(--blue); }
+.vital-tile.watch .vital-band { color: var(--blue); }
+.vital-tile.warning { border-left-color: var(--gold); }
+.vital-tile.warning .vital-band { color: var(--gold); }
+.vital-tile.critical { border-left-color: var(--red); }
+.vital-tile.critical .vital-band { color: var(--red); }
+.vital-tile.unknown .vital-band { color: var(--muted); }
+
+.operator-warnings {
+  padding: 14px 18px;
+  background: rgba(255, 124, 124, 0.08);
+  border: 2px solid rgba(255, 124, 124, 0.35);
+  border-radius: 18px;
+  color: var(--red);
+  font-size: 19px;
+}
+.operator-warnings strong { color: var(--text); }
+
+/* ===== Thread strips ===== */
+.threads-panel {
+  background: linear-gradient(180deg, rgba(255, 216, 77, 0.06), rgba(255, 216, 77, 0.02)),
+              var(--panel);
+  border: 2px solid var(--line);
+  border-radius: 28px;
+  padding: clamp(22px, 3vw, 34px);
+  display: grid;
+  gap: 16px;
+}
+.thread-list { display: grid; gap: 14px; }
+.thread-card {
+  background: var(--panel-soft);
+  border: 2px solid var(--line);
+  border-left-width: 12px;
+  border-radius: 20px;
+  padding: 20px 24px;
+  display: grid;
+  gap: 10px;
+}
+.thread-card.tone-negative { border-left-color: var(--red); }
+.thread-card.tone-positive { border-left-color: var(--green); }
+.thread-card.tone-neutral  { border-left-color: var(--gold); }
+.thread-card h3 {
+  margin: 0;
+  font-size: clamp(22px, 2.5vw, 32px);
+  color: var(--text);
+}
+.thread-meta {
+  font-size: 15px;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--muted);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 14px;
+}
+.thread-cast {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.thread-cast button {
+  background: transparent;
+  color: var(--gold);
+  border: 2px solid var(--line);
+  border-radius: 12px;
+  padding: 6px 12px;
+  font-size: 18px;
+  cursor: pointer;
+}
+.thread-cast button:hover,
+.thread-cast button:focus {
+  outline: 4px solid rgba(255, 216, 77, 0.35);
+  color: var(--text);
+}
+.thread-detail {
+  color: var(--text);
+  font-size: 19px;
+  line-height: 1.4;
+}
 .pulse-meta {
   margin: 18px 0 0;
   display: flex;

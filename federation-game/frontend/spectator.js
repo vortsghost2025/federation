@@ -3,10 +3,12 @@
 const state = {
   paused: false,
   timer: null,
+  sceneTimer: null,
   scenes: [],
   lastSignature: "",
   currentDossierCharId: null,
   refreshMs: 30000,
+  slowRefreshMs: 90000,
   speaking: false,
   spokenKeys: new Set(),
   speakQueue: [],
@@ -128,6 +130,121 @@ function setStatus(level, text) {
 function setLastUpdate(isoOrText) {
   const el = $("last-update");
   if (el) el.textContent = isoOrText ? `Updated ${isoOrText}` : "";
+}
+
+async function loadWorldVitals() {
+  const grid = $("vitals-grid");
+  try {
+    const response = await fetch("/spectator/world-vitals", { headers: { Accept: "application/json" } });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    const data = await response.json();
+    renderVitals(data);
+    renderOperatorWarnings(data.operator);
+  } catch (err) {
+    if (grid) {
+      grid.innerHTML = `<div class="vital-tile critical"><div class="vital-label">Vitals</div><div class="vital-band">signal lost</div><div class="vital-value">--</div></div>`;
+    }
+    const warningsEl = $("operator-warnings");
+    if (warningsEl) warningsEl.hidden = true;
+  }
+}
+
+function renderVitals(data) {
+  const grid = $("vitals-grid");
+  if (!grid) return;
+  const tiles = data.tiles || [];
+  if (!tiles.length) {
+    grid.innerHTML = `<div class="vital-tile placeholder">No vitals available.</div>`;
+    return;
+  }
+  grid.innerHTML = tiles.map((tile) => {
+    const value = tile.value === null || tile.value === undefined ? "--" : Number(tile.value);
+    return `
+      <div class="vital-tile ${escapeHtml(tile.band || "unknown")}">
+        <div class="vital-label">${escapeHtml(tile.label || tile.key)}</div>
+        <div class="vital-value">${escapeHtml(String(value))}</div>
+        <div class="vital-band">${escapeHtml(tile.band || "unknown")}</div>
+      </div>
+    `;
+  }).join("");
+}
+
+function renderOperatorWarnings(op) {
+  const el = $("operator-warnings");
+  if (!el) return;
+  if (!op || !op.warnings || !op.warnings.length) {
+    el.hidden = true;
+    el.innerHTML = "";
+    return;
+  }
+  const pieces = op.warnings.map((w) => {
+    const who = w.char_id ? `<strong>${escapeHtml(w.char_id)}</strong>: ` : "";
+    return `<div>${who}${escapeHtml(w.message || "(no detail)")}</div>`;
+  }).join("");
+  const delta = op.stability_delta !== undefined && op.stability_delta !== null
+    ? `<div>Last tick stability drift: <strong>${escapeHtml(op.stability_delta >= 0 ? "+" : "")}${escapeHtml(String(op.stability_delta))}</strong></div>`
+    : "";
+  el.innerHTML = `${delta}<div>${pieces}</div>`;
+  el.hidden = false;
+}
+
+async function loadThreads() {
+  const list = $("thread-list");
+  if (!list) return;
+  try {
+    const response = await fetch("/spectator/threads", { headers: { Accept: "application/json" } });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    const data = await response.json();
+    renderThreads(data.threads || []);
+  } catch (err) {
+    list.innerHTML = `<p class="empty">Active storylines could not load. I will keep trying.</p>`;
+  }
+}
+
+function renderThreads(threads) {
+  const list = $("thread-list");
+  if (!list) return;
+  if (!threads.length) {
+    list.innerHTML = `<p class="empty">No active drama threads yet. Refresh in a moment.</p>`;
+    return;
+  }
+
+  list.innerHTML = threads.map((thread) => {
+    const cats = (thread.categories || []).map(([name, n]) => `${name} (${n})`).join(", ");
+    const cast = (thread.characters || []).slice(0, 6).map((p) =>
+      `<button type="button" data-char="${escapeHtml(p.char_id)}" data-name="${escapeHtml(p.name)}">${escapeHtml(p.name)}</button>`
+    ).join("");
+    const latest = thread.scenes && thread.scenes[0];
+    const snippet = latest && latest.summary ? escFirstSentence(latest.summary) : "";
+    return `
+      <article class="thread-card tone-${escapeHtml(thread.tone || "neutral")}">
+        <h3>${escapeHtml(thread.label || "Thread")}</h3>
+        <div class="thread-meta">
+          <span>Drama: ${escapeHtml(String(thread.drama || 0))}</span>
+          <span>Scenes: ${escapeHtml(String(thread.scene_count || 0))}</span>
+          <span>Categories: ${escapeHtml(cats || "—")}</span>
+        </div>
+        <div class="thread-cast">${cast}</div>
+        ${snippet ? `<div class="thread-detail">${escapeHtml(snippet)}</div>` : ""}
+      </article>
+    `;
+  }).join("");
+}
+
+function escFirstSentence(text) {
+  const idx = text.search(/[.!?](?:\s|$)/);
+  if (idx === -1 || idx > 220) return text.slice(0, 220) + (text.length > 220 ? "..." : "");
+  return text.slice(0, idx + 1);
+}
+
+function bindThreadClicks() {
+  const list = $("thread-list");
+  if (!list) return;
+  list.addEventListener("click", (event) => {
+    const button = event.target.closest("button[data-char]");
+    if (!button) return;
+    showDossier(button.dataset.char, button.dataset.name);
+  });
 }
 
 async function loadScenes() {
@@ -391,13 +508,24 @@ async function askAssistant(question) {
 
 function startAutoRefresh() {
   if (state.timer) clearInterval(state.timer);
-  state.timer = setInterval(() => {
+  if (state.sceneTimer) clearInterval(state.sceneTimer);
+  state.sceneTimer = setInterval(() => {
     if (!state.paused) loadScenes();
   }, state.refreshMs);
+  state.timer = setInterval(() => {
+    if (!state.paused) {
+      loadWorldVitals();
+      loadThreads();
+    }
+  }, state.slowRefreshMs);
 }
 
 function bindUi() {
-  $("refresh-btn").addEventListener("click", () => loadScenes());
+  $("refresh-btn").addEventListener("click", () => {
+    loadScenes();
+    loadThreads();
+    loadWorldVitals();
+  });
   $("read-btn").addEventListener("click", readAloud);
   $("pause-btn").addEventListener("click", (e) => {
     state.paused = !state.paused;
@@ -438,5 +566,8 @@ function bindUi() {
 }
 
 bindUi();
+bindThreadClicks();
+loadWorldVitals();
+loadThreads();
 loadScenes();
 startAutoRefresh();

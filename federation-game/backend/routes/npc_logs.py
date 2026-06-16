@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+import json
 from fastapi import APIRouter, Query
 from fastapi.responses import PlainTextResponse
 from typing import Optional
@@ -316,4 +317,317 @@ def spectator_scenes(limit: int = Query(60, ge=10, le=200), page: int = Query(0,
         "page_size": page_size,
         "has_more": end < total,
     }
+
+
+# --- Threshold bands for world vitals ---
+# Lower numbers are worse for "stability", "morale", "resources";
+# higher numbers are worse for "tension", "threat", "anomaly".
+_VITAL_BANDS_LOW = {"stability", "morale", "resource_abundance"}
+_VITAL_BANDS_HIGH = {"tension_level", "threat_level", "anomaly_activity"}
+
+
+def _vital_band(value, key):
+    if value is None:
+        return "unknown"
+    if key in _VITAL_BANDS_LOW:
+        if value < 30:
+            return "critical"
+        if value < 50:
+            return "warning"
+        if value < 70:
+            return "watch"
+        return "good"
+    if key in _VITAL_BANDS_HIGH:
+        if value > 70:
+            return "critical"
+        if value > 55:
+            return "warning"
+        if value > 40:
+            return "watch"
+        return "good"
+    return "watch"
+
+
+def _vital_label(key):
+    return {
+        "tension_level": "Tension",
+        "resource_abundance": "Resources",
+        "threat_level": "Threat",
+        "stability": "Stability",
+        "morale": "Morale",
+        "anomaly_activity": "Anomalies",
+    }.get(key, key.replace("_", " ").title())
+
+
+@router.get("/spectator/world-vitals")
+def spectator_world_vitals():
+    """Aggregate world state, faction cohesion, and operator warnings
+    into a single at-a-glance snapshot. Frontend renders this as 4-6
+    colored tiles at the top of the spectator."""
+    import time as _time
+    out = {"status": "ok", "tiles": [], "factions": [], "operator": {}, "ts": int(_time.time())}
+
+    # The single source of truth used by /world/state and /simulation/state.
+    # Imports the same helper the world routes use so the spectator reads
+    # exactly what /world and /simulation already return.
+    try:
+        from npc_autonomy import get_world_state as _gws
+        world_state = _gws() or {}
+        if not isinstance(world_state, dict):
+            world_state = world_state.data if hasattr(world_state, "data") else {}
+    except Exception:
+        world_state = {}
+
+    keys = ["stability", "tension_level", "resource_abundance", "morale", "threat_level", "anomaly_activity"]
+    for k in keys:
+        val = world_state.get(k)
+        out["tiles"].append({
+            "key": k,
+            "label": _vital_label(k),
+            "value": val,
+            "band": _vital_band(val, k),
+        })
+
+    # Faction cohesion — pulled from the live game state object.
+    try:
+        from state import game_state as _gs
+        factions = (getattr(getattr(_gs, "game_state_v2", None), "factions", {}) or {})
+    except Exception:
+        factions = {}
+
+    for fid, fdata in list(factions.items())[:8]:
+        cohesion = (fdata or {}).get("cohesion")
+        out["factions"].append({
+            "id": fid,
+            "name": (fdata or {}).get("display_name") or fid.replace("_", " ").title(),
+            "cohesion": cohesion,
+            "band": _vital_band(cohesion, "stability"),
+            "members": (fdata or {}).get("member_count"),
+        })
+
+    # Operator warnings — captive signal of who is in a runaway loop or
+    # whose validation failed.
+    try:
+        from simulation_operator import get_operator_status
+        op = get_operator_status() or {}
+        last_result = op.get("last_result") or {}
+        last_validation = op.get("last_validation") or {}
+        war = last_result.get("warnings") or []
+        val_war = last_validation.get("warnings") or []
+        loop_chars = sorted({w.get("char_id") for w in (war + val_war) if w.get("check") == "runaway_loop"} and {None})
+        out["operator"] = {
+            "status": op.get("status"),
+            "last_tick_id": op.get("last_tick_id"),
+            "stability_delta": (last_result.get("world_state_changes") or {}).get("stability"),
+            "npc_count": last_result.get("npc_count"),
+            "turn_count": last_result.get("turn_count"),
+            "warnings": [
+                {"char_id": w.get("char_id"), "message": w.get("message"), "severity": w.get("severity")}
+                for w in (war + val_war)[:3]
+            ],
+        }
+    except Exception as e:
+        out["operator"] = {"error": str(e), "status": "unknown"}
+
+    out["updated_at"] = datetime.utcnow().isoformat() + "Z"
+    return out
+
+
+def _cluster_scenes_into_threads(scenes, max_threads=6):
+    """Group scenes that share participants into one thread.
+    Two scenes become part of the same thread if they share at least
+    one char_id. Threads are then ranked by combined drama score:
+      abs(relationship_delta) summed + active-participant weight +
+      recency. We cap to max_threads and return the densest arcs."""
+    if not scenes:
+        return []
+
+    # First, give each scene a drama score.
+    scored = []
+    for s in scenes:
+        delta = s.get("relationship_delta") or 0
+        mood_delta = s.get("mood_delta") or 0
+        participants = s.get("participants") or []
+        dialogue = s.get("dialogue") or []
+        drama = abs(delta) + abs(mood_delta) * 0.5 + len(participants) * 0.5 + len(dialogue) * 0.5
+        if s.get("category") in ("betrayal", "conflict", "suspicion"):
+            drama *= 1.5
+        if (s.get("category") or "") in ("friendship", "alliance", "collaboration"):
+            drama *= 1.2
+        scored.append((drama, s))
+
+    # Cluster: union-find on char_id overlap.
+    parent = list(range(len(scored)))
+
+    def find(i):
+        while parent[i] != i:
+            parent[i] = parent[parent[i]]
+            i = parent[i]
+        return i
+
+    def union(a, b):
+        ra, rb = find(a), find(b)
+        if ra != rb:
+            parent[ra] = rb
+
+    for i, (_, sa) in enumerate(scored):
+        chars_i = {p.get("char_id") for p in (sa.get("participants") or [])}
+        for j, (_, sb) in enumerate(scored):
+            if j <= i:
+                continue
+            chars_j = {p.get("char_id") for p in (sb.get("participants") or [])}
+            if chars_i & chars_j:
+                union(i, j)
+
+    buckets = {}
+    for i, (drama, s) in enumerate(scored):
+        buckets.setdefault(find(i), []).append((drama, s))
+
+    threads = []
+    for cluster in buckets.values():
+        cluster.sort(key=lambda t: t[1].get("timestamp") or 0, reverse=True)
+        head = cluster[0][1]
+        all_chars = {}
+        drama_total = 0
+        for drama, s in cluster:
+            for p in s.get("participants") or []:
+                cid = p.get("char_id")
+                if cid and cid not in all_chars:
+                    all_chars[cid] = p.get("name") or cid
+            drama_total += drama
+        # If a thread only has one scene and that scene only has one
+        # participant, skip — the scene list already covers that.
+        if len(cluster) == 1 and len(all_chars) <= 1:
+            continue
+        threads.append({
+            "head": head,
+            "scene_count": len(cluster),
+            "characters": [{"char_id": cid, "name": name} for cid, name in all_chars.items()],
+            "drama": round(drama_total, 2),
+            "categories": Counter(s.get("category") for _, s in cluster).most_common(3),
+            "latest_ts": cluster[0][1].get("timestamp"),
+            "earliest_ts": cluster[-1][1].get("timestamp"),
+            "scenes": [s for _, s in cluster[-3:]],
+        })
+
+    threads.sort(key=lambda t: t["drama"], reverse=True)
+    return threads[:max_threads]
+
+
+@router.get("/spectator/threads")
+def spectator_threads(limit: int = Query(60, ge=10, le=240), max_threads: int = Query(6, ge=1, le=12)):
+    """Cluster recent scenes into active cross-participant threads.
+    Each thread is a single named storyline that touches multiple
+    characters; the spectator renders the highest-drama threads at
+    the top so you can see 'The Overthrow' and 'The Theta Protocol'
+    instead of 60 flat scenes."""
+    if not db_manager._initialized:
+        return {"status": "error", "threads": [], "error": "Database not ready."}
+    try:
+        with db_manager._SessionLocal() as session:
+            rows = session.query(NpcActionLog).order_by(
+                NpcActionLog.timestamp.desc(), NpcActionLog.id.desc()
+            ).limit(limit).all()
+    except Exception as e:
+        return {"status": "error", "threads": [], "error": str(e)}
+
+    npc_names = _collect_npc_name_map(rows)
+    events = [_plain_event(r) for r in rows]
+    raw_scenes = _cluster_into_scenes(events, npc_names, time_window=4, limit=limit)
+
+    threads = _cluster_scenes_into_threads(raw_scenes, max_threads=max_threads)
+
+    # Snake-case label heuristic — short, evocative, mentions top 2 actors.
+    for thread in threads:
+        char_names = [c["name"] for c in thread["characters"][:3]]
+        cats = [c[0] for c in thread["categories"]]
+        if "betrayal" in cats or "conflict" in cats:
+            label = f"{char_names[0]} vs {char_names[1] if len(char_names) > 1 else 'others'}"
+        elif "alliance" in cats or "collaboration" in cats:
+            label = f"{char_names[0]} & {char_names[1] if len(char_names) > 1 else 'allies'}"
+        elif "suspicion" in cats:
+            label = f"{char_names[0]}'s hunt for {char_names[1] if len(char_names) > 1 else 'an answer'}"
+        elif "trade" in cats:
+            label = f"{char_names[0]}'s trade with {char_names[1] if len(char_names) > 1 else 'others'}"
+        else:
+            label = f"{char_names[0]}'s {cats[0] if cats else 'scene'}"
+        thread["label"] = label
+        thread["tone"] = (
+            "negative" if any(c in cats for c in ("betrayal", "conflict", "suspicion"))
+            else "positive" if any(c in cats for c in ("friendship", "alliance", "collaboration"))
+            else "neutral"
+        )
+
+    return {
+        "status": "ok",
+        "thread_count": len(threads),
+        "threads": threads,
+        "scene_pool_size": len(raw_scenes),
+        "updated_at": datetime.utcnow().isoformat() + "Z",
+    }
+
+
+def _collect_npc_name_map(rows):
+    npc_names = {}
+    try:
+        from state import game_state
+        chars = getattr(getattr(game_state, "npc_system", None), "characters", {})
+        for cid, char_obj in chars.items():
+            nm = getattr(char_obj, "name", "") or cid
+            npc_names[cid] = nm
+        comps = getattr(getattr(game_state, "npc_system", None), "companions", {})
+        for cid, comp_obj in comps.items():
+            nm = getattr(comp_obj, "name", "") or cid
+            npc_names[cid] = nm
+    except Exception:
+        pass
+    if not npc_names:
+        try:
+            import redis as _redis, os as _os
+            r = _redis.from_url(_os.environ.get("REDIS_URL", "redis://redis:6379/0"), decode_responses=True)
+            for key in r.scan_iter("npc:*"):
+                if ":name" in key:
+                    char_id = key.split(":")[1] if ":" in key else ""
+                    if char_id:
+                        npc_names[char_id] = r.get(key)
+        except Exception:
+            pass
+    return npc_names
+
+
+def _cluster_into_scenes(events, npc_names, time_window=3, limit=60):
+    """Build scenes from a raw event list, matching the spectator/scenes
+    logic, but without all the dialogue extraction. Used by /spectator/threads
+    so it can cluster by participant overlap cheaply."""
+    scenes = []
+    used = set()
+    for i, ev in enumerate(events):
+        if i in used:
+            continue
+        scene = {
+            "timestamp": ev["timestamp"],
+            "category": ev["category"],
+            "entry_type": ev["entry_type"],
+            "summary": ev["summary"],
+            "relationship_delta": ev.get("relationship_delta"),
+            "mood_delta": 0,
+            "participants": [{"char_id": ev["char_id"], "name": npc_names.get(ev["char_id"], ev["char_id"])}],
+            "dialogue": [],
+        }
+        for j, other in enumerate(events):
+            if j <= i or j in used:
+                continue
+            same_cat = other["category"] == ev["category"]
+            time_diff = abs((other.get("timestamp") or 0) - (ev.get("timestamp") or 0))
+            if time_diff <= time_window and (same_cat or ev["char_id"] == other["char_id"]):
+                used.add(j)
+                pname = npc_names.get(other["char_id"], other["char_id"])
+                if not any(p["char_id"] == other["char_id"] for p in scene["participants"]):
+                    scene["participants"].append({"char_id": other["char_id"], "name": pname})
+        used.add(i)
+        scenes.append(scene)
+        if len(scenes) >= limit:
+            break
+    scenes.sort(key=lambda s: s["timestamp"] or 0, reverse=True)
+    return scenes
 
