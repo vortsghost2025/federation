@@ -179,9 +179,164 @@ input {
   border: 0;
 }
 
+/* ===== Cinema spectator additions ===== */
+.pulse-meta {
+  margin: 18px 0 0;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  font-size: 18px;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+}
+.pulse-meta .sep { opacity: 0.7; }
+.dot {
+  display: inline-block;
+  width: 14px; height: 14px;
+  border-radius: 50%;
+  background: var(--green);
+  box-shadow: 0 0 12px var(--green);
+}
+.dot.idle { background: #555; box-shadow: none; }
+.dot.error { background: var(--red); box-shadow: 0 0 12px var(--red); }
+
+.scene-list { display: grid; gap: 22px; }
+
+.scene-card {
+  padding: 26px 28px;
+  border-radius: 22px;
+  background: var(--panel-soft);
+  border: 2px solid var(--line);
+  border-left-width: 12px;
+  line-height: 1.45;
+  display: grid;
+  gap: 12px;
+}
+.scene-card.friendship   { border-left-color: var(--green); }
+.scene-card.alliance     { border-left-color: var(--green); }
+.scene-card.collaboration{ border-left-color: var(--blue); }
+.scene-card.socialize    { border-left-color: var(--blue); }
+.scene-card.trade        { border-left-color: var(--gold); }
+.scene-card.help_ally    { border-left-color: var(--gold); }
+.scene-card.investigate  { border-left-color: var(--blue); }
+.scene-card.explore      { border-left-color: var(--blue); }
+.scene-card.self_improve { border-left-color: var(--gold); }
+.scene-card.rest         { border-left-color: #777; }
+.scene-card.conflict     { border-left-color: var(--red); }
+.scene-card.betrayal     { border-left-color: var(--red); }
+.scene-card.seek_resources { border-left-color: var(--gold); }
+.scene-card.react_to_events { border-left-color: var(--gold); }
+.scene-card.gossip       { border-left-color: var(--red); }
+.scene-card.mentorship   { border-left-color: var(--gold); }
+
+.scene-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 16px;
+  color: var(--muted);
+  font-size: 16px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+.scene-meta strong { color: var(--text); }
+
+.scene-participants {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.scene-participants button {
+  background: transparent;
+  color: var(--gold);
+  border: 2px solid var(--line);
+  border-radius: 14px;
+  padding: 8px 14px;
+  font-size: clamp(20px, 2vw, 26px);
+  font-weight: 700;
+  cursor: pointer;
+}
+.scene-participants button:hover,
+.scene-participants button:focus {
+  outline: 4px solid rgba(255, 216, 77, 0.35);
+  color: var(--text);
+}
+
+.scene-dialogue {
+  display: grid;
+  gap: 12px;
+  margin: 4px 0 0;
+  padding: 0;
+  list-style: none;
+}
+.scene-dialogue li {
+  background: rgba(255, 247, 207, 0.04);
+  border-radius: 14px;
+  padding: 14px 18px;
+  font-size: clamp(22px, 2vw, 28px);
+  line-height: 1.4;
+}
+.scene-dialogue li strong {
+  display: block;
+  color: var(--gold);
+  font-size: 18px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  margin-bottom: 6px;
+}
+
+.scene-summary {
+  font-size: clamp(20px, 1.8vw, 26px);
+  color: var(--text);
+}
+
+.scene-delta { font-size: 22px; font-weight: 700; }
+.scene-delta.positive { color: var(--green); }
+.scene-delta.negative { color: var(--red); }
+
+/* ===== Dossier panel ===== */
+.dossier-panel {
+  background: linear-gradient(180deg, rgba(143, 216, 255, 0.08), rgba(143, 216, 255, 0.02)),
+              var(--panel);
+  border: 2px solid var(--line);
+  border-radius: 28px;
+  padding: clamp(22px, 3vw, 34px);
+  display: grid;
+  gap: 18px;
+  align-self: start;
+  position: sticky;
+  top: 24px;
+}
+.dossier-subtitle {
+  margin: -10px 0 0;
+  color: var(--blue);
+  font-size: 18px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+.dossier-meta {
+  margin: -8px 0 0;
+  color: var(--muted);
+  font-size: 17px;
+}
+.dossier-block h3 {
+  margin: 0 0 6px;
+  color: var(--gold);
+  font-size: 18px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+.dossier-block p, .dossier-block ul {
+  margin: 0;
+  font-size: 19px;
+  line-height: 1.4;
+}
+.dossier-list { padding-left: 18px; display: grid; gap: 8px; }
+.dossier-list .empty { list-style: none; padding-left: 0; }
+
 @media (max-width: 900px) {
   html, body { font-size: 19px; }
   .story-grid { grid-template-columns: 1fr; }
+  .dossier-panel { position: static; }
   button, input { width: 100%; }
 }
 
