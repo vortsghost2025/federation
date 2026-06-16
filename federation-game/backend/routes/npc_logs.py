@@ -450,13 +450,25 @@ def _cluster_scenes_into_threads(scenes, max_threads=6):
         participants = s.get("participants") or []
         dialogue = s.get("dialogue") or []
         drama = abs(delta) + abs(mood_delta) * 0.5 + len(participants) * 0.5 + len(dialogue) * 0.5
+        # Severe relationship shifts dominate the feed. A -39.2 clash
+        # is more interesting than fifteen small socializes, even
+        # when they share participants.
+        if abs(delta) >= 20:
+            drama += 25
+        elif abs(delta) >= 10:
+            drama += 10
         if s.get("category") in ("betrayal", "conflict", "suspicion"):
             drama *= 1.5
         if (s.get("category") or "") in ("friendship", "alliance", "collaboration"):
             drama *= 1.2
         scored.append((drama, s))
 
-    # Cluster: union-find on char_id overlap.
+    # Cluster: union-find on char_id overlap. Two scenes only fuse if
+    # either they're compatible categories (socialize + trade merge OK)
+    # OR they share 2+ participants whose shared arc tells a consistent
+    # story. A high-drama betrayal stays as its own thread instead of
+    # merging into a parallel socialize cluster that happens to share
+    # one character.
     parent = list(range(len(scored)))
 
     def find(i):
@@ -470,13 +482,35 @@ def _cluster_scenes_into_threads(scenes, max_threads=6):
         if ra != rb:
             parent[ra] = rb
 
-    for i, (_, sa) in enumerate(scored):
+    COMPATIBLE_CATS = {
+        frozenset({"socialize", "trade"}),
+        frozenset({"socialize", "alliance"}),
+        frozenset({"socialize", "collaboration"}),
+        frozenset({"trade", "negotiation"}),
+        frozenset({"alliance", "collaboration"}),
+        frozenset({"help_ally", "alliance"}),
+        frozenset({"alliance", "friendship"}),
+    }
+
+    for i, (drama_i, sa) in enumerate(scored):
         chars_i = {p.get("char_id") for p in (sa.get("participants") or [])}
-        for j, (_, sb) in enumerate(scored):
+        cat_i = sa.get("category")
+        for j, (drama_j, sb) in enumerate(scored):
             if j <= i:
                 continue
             chars_j = {p.get("char_id") for p in (sb.get("participants") or [])}
-            if chars_i & chars_j:
+            shared = chars_i & chars_j
+            cat_j = sb.get("category")
+            # Single sharing + conflicting categories -> stay separate
+            # so a trade and a betrayal don't merge into one thread.
+            if len(shared) < 1:
+                continue
+            if cat_i and cat_j and frozenset({cat_i, cat_j}) not in COMPATIBLE_CATS \
+                    and cat_i != cat_j:
+                # Both conflict-class on the lower side of drama may
+                # still merge (they're related); trailing edge case.
+                continue
+            if shared or (cat_i == cat_j):
                 union(i, j)
 
     buckets = {}
