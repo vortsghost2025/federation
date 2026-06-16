@@ -5,13 +5,15 @@ const state = {
   timer: null,
   sceneTimer: null,
   scenes: [],
+  episodes: [],
+  activeEpisodeKey: null,
   lastSignature: "",
   currentDossierCharId: null,
   refreshMs: 30000,
   slowRefreshMs: 90000,
   speaking: false,
-  spokenKeys: new Set(),
   speakQueue: [],
+  spokenKeys: new Set(),
   activeUtterance: null,
 };
 
@@ -195,9 +197,28 @@ async function loadThreads() {
     const response = await fetch("/spectator/threads", { headers: { Accept: "application/json" } });
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
     const data = await response.json();
-    renderThreads(data.threads || []);
+    const threads = data.threads || [];
+    renderThreads(threads);
+    state.episodes = threads.map((t, idx) => ({
+      key: `ep_${idx}`,
+      title: forSpeech(t.label) || `Episode ${idx + 1}`,
+      drama: t.drama || 0,
+      tone: t.tone || "neutral",
+      chars: (t.characters || []).slice(0, 8),
+      topCategories: (t.categories || []).slice(0, 3),
+      scenes: (t.scenes || []).slice(),
+      raw: t,
+    }));
+    renderEpisodeRail(state.episodes);
+    if (state.activeEpisodeKey && !state.episodes.find((e) => e.key === state.activeEpisodeKey)) {
+      state.activeEpisodeKey = null;
+      renderEpisodePanel(null);
+    } else if (state.activeEpisodeKey) {
+      renderEpisodePanel(state.episodes.find((e) => e.key === state.activeEpisodeKey));
+    }
   } catch (err) {
     list.innerHTML = `<p class="empty">Active storylines could not load. I will keep trying.</p>`;
+    renderEpisodeRail([]);
   }
 }
 
@@ -246,6 +267,195 @@ function bindThreadClicks() {
     showDossier(button.dataset.char, button.dataset.name);
   });
 }
+
+function renderEpisodeRail(episodes) {
+  const rail = $("episode-rail");
+  const count = $("episode-rail-count");
+  if (!rail) return;
+  if (!episodes.length) {
+    rail.innerHTML = `<p class="empty">No active episodes. Drama is calm right now.</p>`;
+    if (count) count.textContent = "";
+    return;
+  }
+  rail.innerHTML = episodes.map((ep) => {
+    const cats = (ep.topCategories || []).map(([n]) => n).join(", ");
+    const isActive = ep.key === state.activeEpisodeKey;
+    return `
+      <button type="button" class="episode-thumb tone-${escapeHtml(ep.tone)}${isActive ? " active" : ""}" data-episode="${escapeHtml(ep.key)}" role="tab" aria-selected="${isActive}">
+        <p class="episode-thumb-meta">Drama ${escapeHtml(String(ep.drama))}${cats ? " · " + escapeHtml(cats) : ""}</p>
+        <p class="episode-thumb-title">${escapeHtml(ep.title)}</p>
+      </button>
+    `;
+  }).join("");
+  if (count) count.textContent = `${episodes.length} episode${episodes.length === 1 ? "" : "s"}`;
+}
+
+function renderEpisodePanel(ep) {
+  const title = $("episode-title");
+  const meta = $("episode-meta");
+  const body = $("episode-body");
+  const playBtn = $("play-episode-btn");
+  const nextBtn = $("next-episode-btn");
+  const clearBtn = $("clear-episode-btn");
+  if (!body) return;
+
+  if (!ep) {
+    if (title) title.textContent = "Pick an episode to start watching";
+    if (meta) meta.textContent = "";
+    body.innerHTML = `<p class="empty">No episode loaded yet. Click any thumbnail below.</p>`;
+    body.className = "episode-body";
+    if (playBtn) playBtn.disabled = true;
+    if (nextBtn) nextBtn.disabled = !episodes.some((e) => e.key !== state.activeEpisodeKey);
+    if (clearBtn) clearBtn.hidden = true;
+    return;
+  }
+
+  if (title) title.textContent = ep.title;
+  const castLine = ep.chars.slice(0, 6).map((c) => c.name).join(", ");
+  const cats = (ep.topCategories || []).map(([n]) => n).join(", ");
+  if (meta) {
+    meta.textContent = [
+      `Drama ${ep.drama}`,
+      `${ep.scenes.length} scene${ep.scenes.length === 1 ? "" : "s"}`,
+      cats || "moment",
+      castLine ? `cast: ${castLine}` : "",
+    ].filter(Boolean).join(" \u00B7 ");
+  }
+
+  const dialogueParts = [];
+  for (const scene of ep.scenes) {
+    for (const d of scene.dialogue || []) {
+      if (!d.speaker || !d.text) continue;
+      const sig = `${scene.timestamp}|${d.speaker}|${d.text}`;
+      dialogueParts.push({ sig, scene, line: d });
+    }
+  }
+  const dialogueHtml = dialogueParts.length
+    ? `<ul class="episode-dialogue">${dialogueParts.map((p) =>
+      `<li><strong>${escapeHtml(forSpeech(p.line.speaker))}</strong>${escapeHtml(forSpeech(p.line.text))}</li>`
+    ).join("")}</ul>`
+    : "";
+
+  const castButtons = ep.chars.length
+    ? `<div class="episode-castline">Cast: ${ep.chars.map((c) =>
+      `<button type="button" class="episode-summary-link" data-char="${escapeHtml(c.char_id)}" data-name="${escapeHtml(c.name)}">${escapeHtml(c.name)}</button>`
+    ).join(", ")}</div>`
+    : "";
+
+  body.className = `episode-body tone-${escapeHtml(ep.tone)}`;
+  body.innerHTML = `${dialogueHtml}${castButtons}`;
+
+  if (playBtn) playBtn.disabled = false;
+  if (nextBtn) nextBtn.disabled = false;
+  if (clearBtn) clearBtn.hidden = false;
+}
+
+function bindEpisodeClicks() {
+  const rail = $("episode-rail");
+  if (!rail) return;
+  rail.addEventListener("click", (event) => {
+    const charBtn = event.target.closest("button[data-char]");
+    if (charBtn) {
+      showDossier(charBtn.dataset.char, charBtn.dataset.name);
+      return;
+    }
+    const thumb = event.target.closest("button[data-episode]");
+    if (!thumb) return;
+    selectEpisode(thumb.dataset.episode);
+  });
+
+  const body = $("episode-body");
+  if (body) {
+    body.addEventListener("click", (event) => {
+      const charBtn = event.target.closest("button[data-char]");
+      if (charBtn) showDossier(charBtn.dataset.char, charBtn.dataset.name);
+    });
+  }
+}
+
+function selectEpisode(key) {
+  stopSpeaking();
+  state.activeEpisodeKey = key;
+  const ep = state.episodes.find((e) => e.key === key) || null;
+  renderEpisodePanel(ep);
+  renderEpisodeRail(state.episodes);
+  if (ep) {
+    $("episode-panel")?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+}
+
+function selectNextEpisode() {
+  if (!state.episodes.length) return;
+  const currentIdx = state.episodes.findIndex((e) => e.key === state.activeEpisodeKey);
+  let nextIdx;
+  if (currentIdx === -1) {
+    nextIdx = 0;
+  } else {
+    // Default to drama-sorted order (already sorted by API); rotate
+    // next idx from current. If user clicks last episode, loop
+    // back to top.
+    nextIdx = (currentIdx + 1) % state.episodes.length;
+  }
+  selectEpisode(state.episodes[nextIdx].key);
+  playActiveEpisode({ autoPlay: true });
+}
+
+function buildActiveEpisodeScript() {
+  const ep = state.episodes.find((e) => e.key === state.activeEpisodeKey);
+  if (!ep) return [];
+  const lines = [];
+  lines.push(stripSpookSpeechProps(ep.title) + ".");
+  if (ep.chars.length) {
+    const castNames = ep.chars.slice(0, 6).map((c) => stripSpookSpeechProps(c.name)).filter(Boolean).join(", ");
+    if (castNames) lines.push("Cast: " + castNames + ".");
+  }
+  const cats = (ep.topCategories || []).map(([n]) => stripSpookSpeechProps(n)).filter(Boolean).join(", ");
+  if (cats) lines.push(cats + ".");
+  const seen = new Set();
+  for (const scene of ep.scenes) {
+    for (const d of scene.dialogue || []) {
+      if (!d.speaker || !d.text) continue;
+      const text = `${stripSpookSpeechProps(d.speaker)}: ${stripSpookSpeechProps(d.text)}`;
+      if (seen.has(text)) continue;
+      seen.add(text);
+      lines.push(text);
+    }
+  }
+  return lines.filter(Boolean);
+}
+
+function playActiveEpisode(opts = {}) {
+  if (!("speechSynthesis" in window)) return;
+  if (state.speaking && !opts.autoPlay) {
+    stopSpeaking();
+    return;
+  }
+  const lines = buildActiveEpisodeScript();
+  if (!lines.length) return;
+
+  state.spokenKeys.clear();
+  for (const line of lines) state.spokenKeys.add(line.toLowerCase().replace(/\s+/g, " ").trim());
+
+  state.speakQueue = lines.flatMap(splitIntoUtterances);
+  state.speaking = true;
+  setReadButton(true);
+
+  // Right after this queue empties, advance to next episode.
+  state.speakAdvance = true;
+  speakQueueStep();
+}
+
+function stopSpeaking() {
+  if (!state.speaking) return;
+  window.speechSynthesis.cancel();
+  state.speakQueue.length = 0;
+  state.speaking = false;
+  state.speakAdvance = false;
+  state.activeUtterance = null;
+  setReadButton(false);
+}
+
+function episodes() { return state.episodes || []; }
 
 async function loadScenes() {
   try {
@@ -382,6 +592,40 @@ function dedupe(text) {
   return text;
 }
 
+// For spoken output: strip internal ids, replace underscores and
+// "comp" identifiers with natural language. "char_003" -> ""; TTS
+// would otherwise read each id character-by-character.
+function forSpeech(text) {
+  if (!text) return "";
+  return String(text)
+    // Drop raw ids like char_004, comp_010, char_201 before they get
+    // handed to the speech engine.
+    .replace(/\b(chr|char|comp|npc)[_-]?\d{2,4}\b/gi, "")
+    // Underscores and stray dashes to spaces; multiple spaces collapse.
+    .replace(/[_]+/g, " ")
+    .replace(/\s+/g, " ")
+    // Drop quotation marks - TTS otherwise says "quote" or voices them
+    // literally. Dialogue quotes do not need to survive the reading.
+    .replace(/["'\u2018\u2019\u201C\u201D]+/g, "")
+    .trim();
+}
+
+// Final sweep passes through forSpeech and then trims single quotes
+// still attached to words ('Cipher' -> Cipher).
+// Final sweep passes through forSpeech and strips stray punctuation
+// that TTS would voice mildly. Single quotes attached to words
+// ('Cipher') become (Cipher); surrounding ellipses and stray chars
+// go too.
+function stripSpookSpeechProps(text) {
+  if (!text) return "";
+  const out = forSpeech(text);
+  return out
+    .replace(/["\u201C\u201D]+/g, "")
+    .replace(/'+/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 function splitIntoUtterances(longText) {
   const parts = stringSplit(longText, 220);
   return parts.filter(Boolean);
@@ -421,6 +665,16 @@ function speakQueueStep() {
     state.speaking = false;
     state.activeUtterance = null;
     setReadButton(false);
+    if (state.speakAdvance && state.activeEpisodeKey && state.episodes.length > 1) {
+      state.speakAdvance = false;
+      const currentIdx = state.episodes.findIndex((e) => e.key === state.activeEpisodeKey);
+      const nextIdx = (currentIdx + 1) % state.episodes.length;
+      const nextKey = state.episodes[nextIdx].key;
+      selectEpisode(nextKey);
+      // playActiveEpisode will be invoked by next-episode intent; here we
+      // just need to know we're done with the auto-advance wrap. The
+      // dedicated "Next episode" button below handles explicit advance.
+    }
     return;
   }
   const utterance = new SpeechSynthesisUtterance(next);
@@ -435,14 +689,14 @@ function speakQueueStep() {
 function buildReadAloudScript() {
   const lines = [];
   const moodLine = $("summary")?.textContent?.trim();
-  if (moodLine) lines.push(moodLine);
+  if (moodLine) lines.push(forSpeech(moodLine));
 
   state.spokenKeys.clear();
 
   const seenScene = new Set();
   for (const scene of state.scenes.slice(0, 6)) {
     const intro = `${scene.category || "moment"} scene.`;
-    const introText = dedupe(intro);
+    const introText = dedupe(forSpeech(intro));
     if (introText) lines.push(introText);
 
     const participants = (scene.participants || [])
@@ -450,14 +704,14 @@ function buildReadAloudScript() {
       .filter(Boolean)
       .join(", ");
     if (participants) {
-      const castLine = dedupe(`Cast: ${participants}.`);
+      const castLine = dedupe(`Cast: ${forSpeech(participants)}.`);
       if (castLine) lines.push(castLine);
     }
 
     const seenDialogue = new Set();
     for (const d of scene.dialogue || []) {
       if (!d.speaker || !d.text) continue;
-      const utteranceText = dedupe(`${d.speaker}: ${d.text}`);
+      const utteranceText = dedupe(`${forSpeech(d.speaker)}: ${forSpeech(d.text)}`);
       if (!utteranceText) continue;
       const sig = `${scene.timestamp}|${utteranceText}`;
       if (seenDialogue.has(sig)) continue;
@@ -467,7 +721,7 @@ function buildReadAloudScript() {
     seenScene.add(scene.timestamp);
   }
 
-  return lines;
+  return lines.filter(Boolean);
 }
 
 function readAloud() {
@@ -540,6 +794,39 @@ function bindUi() {
     showDossier(button.dataset.char, button.dataset.name);
   });
 
+  const playEp = $("play-episode-btn");
+  if (playEp) {
+    playEp.addEventListener("click", () => {
+      if (!state.activeEpisodeKey) {
+        // Default: pick the highest-drama thread to start.
+        if (state.episodes.length) selectEpisode(state.episodes[0].key);
+      }
+      state.speakAdvance = true;
+      playActiveEpisode();
+    });
+  }
+  const nextEp = $("next-episode-btn");
+  if (nextEp) {
+    nextEp.addEventListener("click", () => {
+      if (!state.episodes.length) return;
+      stopSpeaking();
+      const currentIdx = state.episodes.findIndex((e) => e.key === state.activeEpisodeKey);
+      const nextIdx = (currentIdx === -1 ? 0 : (currentIdx + 1) % state.episodes.length);
+      selectEpisode(state.episodes[nextIdx].key);
+      state.speakAdvance = true;
+      playActiveEpisode();
+    });
+  }
+  const clearEp = $("clear-episode-btn");
+  if (clearEp) {
+    clearEp.addEventListener("click", () => {
+      stopSpeaking();
+      state.activeEpisodeKey = null;
+      renderEpisodePanel(null);
+      renderEpisodeRail(state.episodes);
+    });
+  }
+
   const form = $("assistant-form");
   if (form) {
     form.addEventListener("submit", (event) => {
@@ -561,12 +848,18 @@ function bindUi() {
       if (state.speaking) readAloud();
     } else if (event.key.toLowerCase() === "s") {
       if (state.speaking) readAloud();
+    } else if (event.key === "ArrowRight" && state.episodes.length) {
+      const idx = state.episodes.findIndex((e) => e.key === state.activeEpisodeKey);
+      const nextIdx = (idx === -1 ? 0 : (idx + 1) % state.episodes.length);
+      selectEpisode(state.episodes[nextIdx].key);
+      playActiveEpisode();
     }
   });
 }
 
 bindUi();
 bindThreadClicks();
+bindEpisodeClicks();
 loadWorldVitals();
 loadThreads();
 loadScenes();

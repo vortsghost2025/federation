@@ -43,6 +43,32 @@
     </div>
   </section>
 
+  <section class="episode-panel" aria-label="Currently on air">
+    <div class="episode-header">
+      <div>
+        <p class="episode-eyebrow">Now on air</p>
+        <h2 id="episode-title">Pick an episode to start watching</h2>
+        <p class="episode-meta" id="episode-meta"></p>
+      </div>
+      <div class="episode-controls">
+        <button id="play-episode-btn" type="button" disabled>Play this episode</button>
+        <button id="next-episode-btn" type="button" disabled>Next episode</button>
+        <button id="clear-episode-btn" type="button" hidden>Back to all episodes</button>
+      </div>
+    </div>
+    <article id="episode-body" class="episode-body">
+      <p class="empty">No episode loaded yet. Click any thumbnail below.</p>
+    </article>
+
+    <div class="episode-rail-label">
+      <span>Next episodes</span>
+      <span id="episode-rail-count" class="episode-rail-count"></span>
+    </div>
+    <div id="episode-rail" class="episode-rail" role="tablist">
+      <p class="empty">Loading episodes...</p>
+    </div>
+  </section>
+
   <div class="story-grid">
 
     <section class="story-panel" aria-label="Scene feed">
