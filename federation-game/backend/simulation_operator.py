@@ -15,12 +15,22 @@ import json
 import logging
 import os
 import time
+from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
 import redis
+import yaml
 
 from npc_autonomy import simulation_tick
 from simulation_engine import autonomous_tick
+
+# Try to import apprise for notifications (same as worker.py)
+try:
+    import apprise
+    APPRISE_AVAILABLE = True
+except ImportError:
+    apprise = None
+    APPRISE_AVAILABLE = False
 
 logger = logging.getLogger(__name__)
 
@@ -34,9 +44,72 @@ SIM_OPERATOR_ALERTS_KEY = "simulation_operator_alerts"
 SIM_OPERATOR_RECOVERY_KEY = "simulation_operator_recovery"
 SIM_OPERATOR_HISTORY_KEY = "simulation_operator_history"
 
-_RUNAWAY_HISTORY_TTL = 86400
-_RECENT_LOG_TTL = 7 * 86400
-_STALLED_SIM_SECONDS = 300
+
+def _load_config() -> Dict[str, Any]:
+    """Load configuration from YAML with environment variable overrides."""
+    config_path = Path(__file__).parent / "simulation_operator.yaml"
+    config = {}
+    if config_path.exists():
+        try:
+            with open(config_path, "r") as f:
+                config = yaml.safe_load(f) or {}
+        except Exception as e:
+            logger.warning(f"Failed to load config from {config_path}: {e}")
+    # Environment variable overrides (flat keys with SIM_OPERATOR_ prefix)
+    for key, value in os.environ.items():
+        if key.startswith("SIM_OPERATOR_"):
+            # Convert SIM_OPERATOR_REDIS_TTL_SECONDS -> redis.ttl_seconds
+            parts = key[len("SIM_OPERATOR_"):].lower().split("_")
+            if len(parts) >= 2:
+                section = parts[0]
+                key_name = "_".join(parts[1:])
+                if section not in config:
+                    config[section] = {}
+                # Try to convert value
+                try:
+                    config[section][key_name] = yaml.safe_load(value)
+                except Exception:
+                    config[section][key_name] = value
+    return config
+
+
+CONFIG = _load_config()
+
+# Configuration with defaults
+REDIS_CONFIG = CONFIG.get("redis", {})
+VALIDATION_CONFIG = CONFIG.get("validation", {})
+RECOVERY_CONFIG = CONFIG.get("recovery", {})
+ALERTS_CONFIG = CONFIG.get("alerts", {})
+OPERATOR_CONFIG = CONFIG.get("operator", {})
+
+REDIS_URL = os.environ.get("REDIS_URL", "redis://redis:6379/0")
+
+NPC_TURNS_KEY = "npc_turns"
+NPC_MEMORY_EVENTS_KEY = "npc_memory_events"
+NPC_TOOL_EVENTS_KEY = "npc_tool_events"
+SIM_OPERATOR_STATUS_KEY = "simulation_operator_status"
+SIM_OPERATOR_ALERTS_KEY = "simulation_operator_alerts"
+SIM_OPERATOR_RECOVERY_KEY = "simulation_operator_recovery"
+SIM_OPERATOR_HISTORY_KEY = "simulation_operator_history"
+
+_RUNAWAY_HISTORY_TTL = REDIS_CONFIG.get("runaway_history_ttl", 86400)
+_RECENT_LOG_TTL = REDIS_CONFIG.get("ttl_seconds", 7 * 86400)
+_STALLED_SIM_SECONDS = REDIS_CONFIG.get("stalled_sim_seconds", 300)
+
+RUNWAY_THRESHOLD = VALIDATION_CONFIG.get("runaway_threshold", 6)
+IDLE_NPC_FALLBACK = VALIDATION_CONFIG.get("idle_npc_fallback", "rest")
+MAX_LLM_CALLS_PER_TICK = VALIDATION_CONFIG.get("max_llm_calls_per_tick", 1)
+AMBIENT_TRIGGER_RATE = VALIDATION_CONFIG.get("ambient_trigger_rate", 0.0)
+
+MAX_RETRIES = RECOVERY_CONFIG.get("max_retries", 1)
+FALLBACK_LLM_CALLS = RECOVERY_CONFIG.get("fallback_llm_calls", 0)
+FALLBACK_AMBIENT_RATE = RECOVERY_CONFIG.get("fallback_ambient_rate", 0.0)
+
+TELEGRAM_ENABLED = ALERTS_CONFIG.get("telegram_enabled", True)
+ALERT_LOG_LEVEL = ALERTS_CONFIG.get("log_level", "warning")
+
+MAX_HISTORY_ENTRIES = OPERATOR_CONFIG.get("max_history_entries", 100)
+_STALLED_THRESHOLD_SECONDS = OPERATOR_CONFIG.get("stalled_threshold_seconds", 300)
 
 
 def _get_redis() -> redis.Redis:
@@ -288,6 +361,33 @@ def _alert_for_review(tick_id: str, reason: str, details: Dict[str, Any], tick_t
         },
         score=tick_ts,
     )
+    # Send Telegram alert if enabled and apprise is available
+    if TELEGRAM_ENABLED and APPRISE_AVAILABLE:
+        _send_telegram_alert(reason, details, tick_id, tick_ts)
+
+
+def _send_telegram_alert(reason: str, details: Dict[str, Any], tick_id: str, tick_ts: float) -> None:
+    """Send alert via Apprise (Telegram) using same infrastructure as worker."""
+    try:
+        import apprise
+        notify_urls = os.environ.get("NOTIFICATION_URLS", "")
+        if not notify_urls:
+            logger.debug("No NOTIFICATION_URLS configured, skipping Telegram alert")
+            return
+        
+        apobj = apprise.Apprise()
+        for url in notify_urls.split(","):
+            url = url.strip()
+            if url:
+                apobj.add(url)
+        
+        title = f"🚨 Simulation Operator Alert: {reason}"
+        body = f"Tick: {tick_id}\nTime: {time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(tick_ts))}\nReason: {reason}\nDetails: {json.dumps(details, default=str)[:1000]}"
+        
+        apobj.notify(title=title, body=body)
+        logger.info(f"Telegram alert sent for tick {tick_id}: {reason}")
+    except Exception as e:
+        logger.warning(f"Failed to send Telegram alert: {e}")
 
 
 def get_operator_status() -> Dict[str, Any]:
@@ -314,23 +414,44 @@ def get_operator_status() -> Dict[str, Any]:
     last_start = result.get("last_start")
     auto_raw = r.hgetall("fed:auto_tick_status")
     auto_running = auto_raw.get("running") == "True"
+    # Capture transitions BEFORE mutating Redis - reading back after the
+    # _set_status call below would always see the newly-written value.
+    prev_status = result.get("status")
     if (
-        result.get("status") == "running"
+        prev_status == "running"
         and last_start
         and not auto_running
         and (time.time() - float(last_start)) > 30
     ):
         result["status"] = "stale"
-        result["last_error"] = "operator_status_cleared_after_restart"
+        stale_msg = "operator_status_cleared_after_restart"
+        result["last_error"] = stale_msg
         _set_status(
             {
                 "status": "stale",
                 "last_tick_id": result.get("last_tick_id"),
                 "last_start": last_start,
                 "last_end": time.time(),
-                "last_error": "operator_status_cleared_after_restart",
+                "last_error": stale_msg,
             }
         )
+        # Alert on running -> stale transition (captured before mutation).
+        try:
+            tick_id = result.get("last_tick_id") or "unknown"
+            _alert_for_review(
+                tick_id=tick_id,
+                reason="operator_stale_status",
+                details={
+                    "message": stale_msg,
+                    "prev_status": prev_status,
+                    "last_start": float(last_start),
+                    "now": time.time(),
+                    "elapsed_sec": time.time() - float(last_start),
+                },
+                tick_ts=time.time(),
+            )
+        except Exception as e:
+            logger.warning(f"Failed to emit stale alert: {e}")
 
     sim_last_tick = r.get("sim_last_tick")
     if sim_last_tick:
