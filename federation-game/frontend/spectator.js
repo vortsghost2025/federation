@@ -7,6 +7,10 @@ const state = {
   lastSignature: "",
   currentDossierCharId: null,
   refreshMs: 30000,
+  speaking: false,
+  spokenKeys: new Set(),
+  speakQueue: [],
+  activeUtterance: null,
 };
 
 const $ = (id) => document.getElementById(id);
@@ -253,23 +257,120 @@ async function loadDossier(charId) {
   }
 }
 
+function dedupe(text) {
+  if (!text) return null;
+  const key = text.toLowerCase().replace(/\s+/g, " ").trim();
+  if (!key || state.spokenKeys.has(key)) return null;
+  state.spokenKeys.add(key);
+  return text;
+}
+
+function splitIntoUtterances(longText) {
+  const parts = stringSplit(longText, 220);
+  return parts.filter(Boolean);
+}
+
+function stringSplit(text, maxLen) {
+  const out = [];
+  if (!text) return out;
+  let i = 0;
+  while (i < text.length) {
+    let end = Math.min(i + maxLen, text.length);
+    const lastSentenceBreak = Math.max(
+      text.lastIndexOf(". ", end),
+      text.lastIndexOf("! ", end),
+      text.lastIndexOf("? ", end),
+    );
+    if (lastSentenceBreak > i + 60) {
+      end = lastSentenceBreak + 1;
+    }
+    out.push(text.slice(i, end).trim());
+    i = end;
+  }
+  return out.filter(Boolean);
+}
+
+function setReadButton(isSpeaking) {
+  const btn = $("read-btn");
+  if (!btn) return;
+  btn.textContent = isSpeaking ? "Stop" : "Read aloud";
+  btn.dataset.speaking = String(isSpeaking);
+}
+
+function speakQueueStep() {
+  if (!state.speaking) return;
+  const next = state.speakQueue.shift();
+  if (!next) {
+    state.speaking = false;
+    state.activeUtterance = null;
+    setReadButton(false);
+    return;
+  }
+  const utterance = new SpeechSynthesisUtterance(next);
+  utterance.rate = 0.94;
+  utterance.pitch = 0.97;
+  utterance.onend = () => speakQueueStep();
+  utterance.onerror = () => speakQueueStep();
+  state.activeUtterance = utterance;
+  window.speechSynthesis.speak(utterance);
+}
+
+function buildReadAloudScript() {
+  const lines = [];
+  const moodLine = $("summary")?.textContent?.trim();
+  if (moodLine) lines.push(moodLine);
+
+  state.spokenKeys.clear();
+
+  const seenScene = new Set();
+  for (const scene of state.scenes.slice(0, 6)) {
+    const intro = `${scene.category || "moment"} scene.`;
+    const introText = dedupe(intro);
+    if (introText) lines.push(introText);
+
+    const participants = (scene.participants || [])
+      .map((p) => p.name)
+      .filter(Boolean)
+      .join(", ");
+    if (participants) {
+      const castLine = dedupe(`Cast: ${participants}.`);
+      if (castLine) lines.push(castLine);
+    }
+
+    const seenDialogue = new Set();
+    for (const d of scene.dialogue || []) {
+      if (!d.speaker || !d.text) continue;
+      const utteranceText = dedupe(`${d.speaker}: ${d.text}`);
+      if (!utteranceText) continue;
+      const sig = `${scene.timestamp}|${utteranceText}`;
+      if (seenDialogue.has(sig)) continue;
+      seenDialogue.add(sig);
+      lines.push(utteranceText);
+    }
+    seenScene.add(scene.timestamp);
+  }
+
+  return lines;
+}
+
 function readAloud() {
   if (!("speechSynthesis" in window)) return;
-  window.speechSynthesis.cancel();
-  const parts = [];
-  const headline = $("headline")?.textContent;
-  if (headline) parts.push(headline);
-  for (const scene of state.scenes.slice(0, 4)) {
-    if (scene.summary) parts.push(scene.summary);
-    for (const d of scene.dialogue || []) {
-      if (d.speaker && d.text) parts.push(`${d.speaker}: ${d.text}`);
-    }
+  if (state.speaking) {
+    window.speechSynthesis.cancel();
+    state.speakQueue.length = 0;
+    state.speaking = false;
+    state.activeUtterance = null;
+    setReadButton(false);
+    return;
   }
-  if (!parts.length) parts.push("The world is waking up.");
-  const utterance = new SpeechSynthesisUtterance(parts.join(". "));
-  utterance.rate = 0.92;
-  utterance.pitch = 0.96;
-  window.speechSynthesis.speak(utterance);
+  const lines = buildReadAloudScript();
+  if (!lines.length) {
+    lines.push("The world is waking up.");
+  }
+  state.speakQueue = lines.flatMap(splitIntoUtterances);
+  state.speaking = true;
+  setReadButton(true);
+  speakQueueStep();
 }
 
 async function askAssistant(question) {
@@ -329,6 +430,9 @@ function bindUi() {
       loadScenes();
     } else if (event.key === "Escape") {
       hideDossier();
+      if (state.speaking) readAloud();
+    } else if (event.key.toLowerCase() === "s") {
+      if (state.speaking) readAloud();
     }
   });
 }
