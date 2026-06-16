@@ -310,6 +310,178 @@ input {
   font-size: 19px;
   line-height: 1.4;
 }
+
+/* ===== Episode panel + Next rail ===== */
+.episode-panel {
+  background: linear-gradient(180deg, rgba(255, 124, 124, 0.05), rgba(143, 216, 255, 0.04)),
+              var(--panel);
+  border: 2px solid var(--line);
+  border-radius: 28px;
+  padding: clamp(22px, 3vw, 34px);
+  display: grid;
+  gap: 22px;
+}
+.episode-header {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 18px;
+  align-items: end;
+}
+.episode-eyebrow {
+  margin: 0 0 4px;
+  color: var(--gold);
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  font-size: 16px;
+}
+#episode-title {
+  margin: 0;
+  font-family: "Libre Baskerville", Georgia, serif;
+  font-size: clamp(34px, 4.5vw, 56px);
+  line-height: 1.05;
+  color: var(--text);
+}
+.episode-meta {
+  margin: 6px 0 0;
+  color: var(--muted);
+  font-size: 18px;
+  letter-spacing: 0.06em;
+}
+.episode-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+}
+.episode-controls button {
+  background: var(--gold);
+  color: #070704;
+  border: none;
+  border-radius: 14px;
+  padding: 12px 18px;
+  font-size: 18px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.episode-controls button:hover,
+.episode-controls button:focus {
+  outline: 4px solid rgba(255, 216, 77, 0.4);
+}
+.episode-controls button[disabled] {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+#clear-episode-btn {
+  background: transparent;
+  color: var(--gold);
+  border: 2px solid var(--line);
+}
+
+.episode-body {
+  display: grid;
+  gap: 14px;
+  padding: 22px;
+  border-radius: 18px;
+  background: var(--panel-soft);
+  border: 2px solid var(--line);
+  border-left-width: 12px;
+}
+.episode-body.tone-negative { border-left-color: var(--red); }
+.episode-body.tone-positive { border-left-color: var(--green); }
+.episode-body.tone-neutral  { border-left-color: var(--gold); }
+.episode-castline {
+  font-size: 18px;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+  text-transform: uppercase;
+}
+.episode-dialogue {
+  display: grid;
+  gap: 14px;
+  margin: 4px 0;
+  padding: 0;
+  list-style: none;
+}
+.episode-dialogue li {
+  background: rgba(255, 247, 207, 0.05);
+  border-radius: 14px;
+  padding: 16px 20px;
+  font-size: clamp(22px, 2.4vw, 32px);
+  line-height: 1.4;
+}
+.episode-dialogue li strong {
+  display: block;
+  color: var(--gold);
+  font-size: 18px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  margin-bottom: 6px;
+}
+.episode-summary-link {
+  color: var(--blue);
+  font-size: 17px;
+  text-decoration: underline;
+  cursor: pointer;
+  background: transparent;
+  border: none;
+  padding: 0;
+}
+
+.episode-rail-label {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  color: var(--gold);
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  font-size: 14px;
+}
+.episode-rail-count {
+  font-size: 14px;
+  color: var(--muted);
+}
+.episode-rail {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 14px;
+}
+.episode-thumb {
+  display: grid;
+  gap: 6px;
+  padding: 16px 18px;
+  border-radius: 18px;
+  background: var(--panel-soft);
+  border: 2px solid var(--line);
+  border-left-width: 10px;
+  text-align: left;
+  cursor: pointer;
+  color: var(--text);
+  font: inherit;
+}
+.episode-thumb.tone-negative { border-left-color: var(--red); }
+.episode-thumb.tone-positive { border-left-color: var(--green); }
+.episode-thumb.tone-neutral { border-left-color: var(--gold); }
+.episode-thumb:hover,
+.episode-thumb:focus,
+.episode-thumb.active {
+  outline: 4px solid rgba(255, 216, 77, 0.35);
+}
+.episode-thumb.active {
+  background: rgba(255, 216, 77, 0.08);
+}
+.episode-thumb-title {
+  font-size: 20px;
+  font-weight: 700;
+  margin: 0;
+}
+.episode-thumb-meta {
+  font-size: 14px;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+  text-transform: uppercase;
+}
 .pulse-meta {
   margin: 18px 0 0;
   display: flex;
