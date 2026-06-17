@@ -35,6 +35,17 @@ import redis
 
 from npc_activity_logger import log_npc_activity, log_npc_turn_trace
 from llm_router import route_call, get_router_stats
+# ── NPC Agency: artifacts, messaging, sandbox ─────────────────────
+from npc_artifacts import (
+    get_npc_artifact_context,
+    create_artifact as create_npc_artifact,
+    list_discoverable_artifacts,
+)
+from npc_messaging import (
+    get_message_context,
+    send_message as send_npc_message,
+)
+from npc_sandbox import execute_and_register_artifact
 
 logger = logging.getLogger(__name__)
 
@@ -98,6 +109,11 @@ VALID_CATEGORIES = {
     "confront_rival",
     "help_ally",
     "explore",
+    # ── New: NPC Agency ──────────────────────────────────────
+    "create_artifact",   # NPC creates something (poem, story, document)
+    "write_code",        # NPC writes and runs Python code
+    "send_message",      # NPC sends a message to another character
+    "read_artifacts",    # NPC reads recent public creations
 }
 
 # Cooldown: minimum seconds between LLM calls for the same NPC
@@ -623,6 +639,11 @@ def _build_leader_system_prompt(
 
     recent_thoughts = context.get("recent_thoughts", [])[:2]
 
+    # ── NPC Agency context: artifacts and messages ──────────────
+    char_id = npc.get("char_id", "")
+    artifact_ctx = get_npc_artifact_context(char_id)
+    message_ctx = get_message_context(char_id)
+
     return f"""You are {name}, {title} of the {faction} faction in the Federation.
 Your archetype is {archetype}. You are a LEADER — your decisions shape the future.
 
@@ -637,6 +658,12 @@ YOUR RECENT ACTIONS:
 YOUR RECENT THOUGHTS:
 {chr(10).join(f"- {t}" for t in recent_thoughts) if recent_thoughts else "No recent thoughts."}
 
+ARTIFACTS & CREATIONS:
+{artifact_ctx}
+
+MESSAGES:
+{message_ctx}
+
 CURRENT TRIGGERS REQUIRING YOUR ATTENTION:
 {chr(10).join(trigger_descriptions) if trigger_descriptions else "No urgent triggers."}
 
@@ -650,6 +677,10 @@ You must choose ONE action from these categories:
 - react_to_events: Respond to a critical world event
 - self_improve: Strengthen your faction's capabilities
 - rest: Recover and conserve strength for future challenges
+- create_artifact: Create something — a poem, story, manifesto, or document
+- write_code: Write and run Python code to build something useful
+- send_message: Send a direct message to another character
+- read_artifacts: Read recent creations from other characters
 
 RESPOND IN EXACTLY THIS FORMAT:
 CATEGORY: [one category from above]
@@ -671,6 +702,10 @@ def _build_specialist_system_prompt(npc: Dict, context: Dict, world_state: Dict)
             f"- {d.get('category', '?')}: {d.get('description', '?')}"
         )
 
+    char_id = npc.get("char_id", "")
+    artifact_ctx = get_npc_artifact_context(char_id)
+    message_ctx = get_message_context(char_id)
+
     return f"""You are {name}, {title} of the {faction}.
 Archetype: {archetype}. You are a SPECIALIST — your expertise matters.
 
@@ -680,9 +715,16 @@ WORLD STATE:
 MOOD: {context.get("mood", "neutral")}
 RECENT: {chr(10).join(recent_actions) if recent_actions else "Nothing recent."}
 
+ARTIFACTS & CREATIONS:
+{artifact_ctx}
+
+MESSAGES:
+{message_ctx}
+
 Choose ONE action:
 - advance_goal, investigate, socialize, help_ally, seek_resources,
-  self_improve, explore, react_to_events
+  self_improve, explore, react_to_events,
+  create_artifact, write_code, send_message, read_artifacts
 
 FORMAT:
 CATEGORY: [category]
@@ -735,6 +777,11 @@ def _parse_llm_response(
             (["improve", "strengthen", "upgrade", "train"], "self_improve"),
             (["rest", "recover", "conserve", "wait"], "rest"),
             (["goal", "strategic", "plan", "advance", "pursue"], "advance_goal"),
+            # ── NPC Agency ─────────────────────────────────────
+            (["create", "write", "poem", "story", "manifesto", "document", "compose", "paint", "draw"], "create_artifact"),
+            (["code", "program", "script", "python", "build tool", "automate"], "write_code"),
+            (["message", "tell", "ask", "contact", "reach out", "send"], "send_message"),
+            (["read", "browse", "discover", "see what", "check creations", "view"], "read_artifacts"),
         ]
         for phrases, cat in phrase_map:
             if any(p in content_lower for p in phrases):
@@ -919,6 +966,72 @@ def run_cognition(
                 result["decisions"].append(decision)
                 result["leaders_cognized"] += 1
 
+                # ── NPC Agency: Execute the decision ─────────────────────
+                cat = decision.get("category", "")
+                desc = decision.get("action_desc", decision.get("description", ""))
+                npc_name = npc.get("name", "Unknown")
+
+                if cat == "create_artifact":
+                    artifact_title = desc[:80] if desc else f"Creation by {npc_name}"
+                    content_prompt = (
+                        f"Write the full content of this artifact. "
+                        f"\"{desc}\"\n\n"
+                        f"Output only the content, no explanations."
+                    )
+                    content_result = route_call(
+                        "general", "You are a creative writer.", content_prompt
+                    )
+                    artifact_content = content_result.get("content", desc)
+                    create_npc_artifact(
+                        char_id=cid,
+                        char_name=npc_name,
+                        title=artifact_title,
+                        artifact_type="text",
+                        content=artifact_content,
+                    )
+                    decision["agency_action"] = "artifact_created"
+
+                elif cat == "write_code":
+                    code_prompt = (
+                        f"Generate Python code for this task. "
+                        f"\"{desc}\"\n\n"
+                        f"Output ONLY valid Python code. No explanations. "
+                        f"Use save_result(data, filename) to save outputs."
+                    )
+                    code_result = route_call(
+                        "general",
+                        "You are a Python developer. Output only code, no markdown.",
+                        code_prompt,
+                    )
+                    gen_code = code_result.get("content", "")
+                    if gen_code:
+                        sandbox_result = execute_and_register_artifact(
+                            char_id=cid,
+                            char_name=npc_name,
+                            code=gen_code,
+                            title=f"Code: {desc[:60]}",
+                            artifact_type="code",
+                        )
+                        decision["agency_action"] = "code_executed"
+                        decision["sandbox_output"] = sandbox_result.get(
+                            "execution", {}
+                        ).get("output", "")
+
+                elif cat == "send_message":
+                    target = decision.get("target_faction") or decision.get("target", "")
+                    if target and target != "none" and desc:
+                        send_npc_message(
+                            from_char_id=cid,
+                            from_char_name=npc_name,
+                            to_char_id=target,
+                            subject=desc[:60],
+                            body=desc,
+                        )
+                        decision["agency_action"] = "message_sent"
+
+                elif cat == "read_artifacts":
+                    decision["agency_action"] = "artifacts_read"
+
                 # Store to Redis
                 try:
                     r.zadd(
@@ -1029,6 +1142,67 @@ def run_cognition(
             if decision:
                 result["decisions"].append(decision)
                 result["specialists_cognized"] += 1
+
+                # ── NPC Agency: Execute the decision (specialist) ────────
+                cat = decision.get("category", "")
+                desc = decision.get("action_desc", decision.get("description", ""))
+                npc_name = npc.get("name", "Unknown")
+                cid_spec = cid
+
+                if cat == "create_artifact":
+                    artifact_title = desc[:80] if desc else f"Creation by {npc_name}"
+                    content_prompt = (
+                        f"Write the full content of this artifact. "
+                        f"\"{desc}\"\n\n"
+                        f"Output only the content, no explanations."
+                    )
+                    content_result = route_call(
+                        "general", "You are a creative writer.", content_prompt
+                    )
+                    artifact_content = content_result.get("content", desc)
+                    create_npc_artifact(
+                        char_id=cid_spec,
+                        char_name=npc_name,
+                        title=artifact_title,
+                        artifact_type="text",
+                        content=artifact_content,
+                    )
+                    decision["agency_action"] = "artifact_created"
+
+                elif cat == "write_code":
+                    code_prompt = (
+                        f"Generate Python code for this task. "
+                        f"\"{desc}\"\n\n"
+                        f"Output ONLY valid Python code. No explanations. "
+                        f"Use save_result(data, filename) to save outputs."
+                    )
+                    code_result = route_call(
+                        "general",
+                        "You are a Python developer. Output only code, no markdown.",
+                        code_prompt,
+                    )
+                    gen_code = code_result.get("content", "")
+                    if gen_code:
+                        sandbox_result = execute_and_register_artifact(
+                            char_id=cid_spec,
+                            char_name=npc_name,
+                            code=gen_code,
+                            title=f"Code: {desc[:60]}",
+                            artifact_type="code",
+                        )
+                        decision["agency_action"] = "code_executed"
+
+                elif cat == "send_message":
+                    target = decision.get("target_faction") or decision.get("target", "")
+                    if target and target != "none" and desc:
+                        send_npc_message(
+                            from_char_id=cid_spec,
+                            from_char_name=npc_name,
+                            to_char_id=target,
+                            subject=desc[:60],
+                            body=desc,
+                        )
+                        decision["agency_action"] = "message_sent"
 
                 try:
                     r.zadd(
