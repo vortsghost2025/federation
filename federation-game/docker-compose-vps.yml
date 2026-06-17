@@ -35,6 +35,7 @@ services:
       - .env
     environment:
       - NVIDIA_API_KEY=${NVIDIA_API_KEY}
+      - SANDBOX_URL=http://npc-sandbox:9002
     volumes:
       - /docker/federation-game/backend:/app:ro
     healthcheck:
@@ -124,6 +125,7 @@ services:
       - .env
     environment:
       - NVIDIA_API_KEY=${NVIDIA_API_KEY}
+      - SANDBOX_URL=http://npc-sandbox:9002
     healthcheck:
       test:
         - CMD
@@ -318,6 +320,24 @@ services:
           memory: 256M
           cpus: "0.50"
 
+  # ── NPC SANDBOX ────────────────────────────────────────────────
+  npc-sandbox:
+    build: /docker/federation-game/npc-sandbox
+    restart: unless-stopped
+    volumes:
+      - artifacts_data:/artifacts
+    networks:
+      - fed-net
+    deploy:
+      resources:
+        limits:
+          cpus: "0.50"
+          memory: 256M
+    environment:
+      - ARTIFACTS_DIR=/artifacts
+      - MAX_EXECUTION_SECONDS=30
+      - MAX_MEMORY_MB=256
+
 networks:
   fed-net:
     name: fed-net
@@ -327,3 +347,4 @@ volumes:
   postgres_data:
   prometheus_data:
   grafana_data:
+  artifacts_data:
