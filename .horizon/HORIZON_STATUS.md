@@ -59,7 +59,10 @@
 
 ## In Progress
 
-- (none)
+- **P011 — NPC Agency system** — code complete, needs VPS deploy
+  - Artifact registry + inter-NPC messaging + sandbox executor + cognition upgrade
+  - Commit: `27a2921` (tag: `p011-npc-agency`)
+  - See `docs/NPC_AGENCY_LOG.md` for full build log
 
 ## Blocked
 
@@ -67,9 +70,9 @@
 
 ## Next Steps (Prioritized)
 
-1. **VPS git deploy script** — automate `git pull → cp → docker restart` pattern
-2. **Frontend hardening** — error handling, loading states, offline resilience
-3. **P007** — TBD (will plan when needed)
+1. **Deploy P011 to VPS** — build sandbox image, `docker compose up -d`, restart backend+worker
+2. **VPS git deploy script** — automate `git pull → cp → docker restart` pattern
+3. **Frontend hardening** — error handling, loading states, offline resilience
 
 ## Agent File Ownership
 
