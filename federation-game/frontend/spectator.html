@@ -68,13 +68,35 @@
     </article>
   </section>
 
-  <section class="voice-controls-panel" aria-label="Voice settings">
-    <h2>Voice</h2>
-    <p class="empty" id="voice-status">Detecting installed voices...</p>
+  <section class="voice-controls-panel" aria-label="Voice calibration">
+    <h2>Voice calibration</h2>
+    <p id="voice-status" class="voice-status">Detecting installed voices...</p>
+    <div class="voice-mode-row">
+      <label class="voice-mode-label" for="voice-mode">Voice mode</label>
+      <select id="voice-mode" class="voice-mode-select">
+        <option value="best-pick">Best available (default)</option>
+        <option value="local-only">Local voices only (skip cloud-downloaded)</option>
+        <option value="custom">Custom — only voices I allow</option>
+      </select>
+      <button id="ban-all-cloud" type="button" class="voice-mode-action">Ban all cloud voices</button>
+    </div>
     <div id="voice-grid" class="voice-grid"></div>
+    <p class="voice-legend">
+      <span class="legend-chip ok">Allowed</span>
+      <span class="legend-chip bad">Banned</span>
+      Click any voice card to hear a sample. Open a card's menu to ban it.
+      Voices you ban never play, even in auto-hash mode.
+      <br>
+      Reproduction also slows on "Gravitas" and "Villain" characters and lightens on
+      "Comp" companions so the same voice reads differently per role.
+    </p>
     <details class="voice-defaults">
       <summary>How voices are assigned</summary>
-      <p>The browser voices are matched to NPC archetypes. Each character keeps the same voice across plays so you can recognise them by ear. Assign voices by clicking any voice card above — it becomes the voice for that NPC family.</p>
+      <p>The browser voices are matched to NPCs by hashing the character name
+      and picking a deterministic slot. Each character plays in the same voice
+      reliably so you can recognise them by ear. Archetype (Gravitas / Wanderer /
+      Companion) tweaks rate and pitch subtly so even the same voice feels
+      distinctly spoken for each role.</p>
     </details>
   </section>
 
