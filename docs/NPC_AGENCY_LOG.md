@@ -21,12 +21,22 @@
 
 | Step | File(s) | Status | Commit |
 |------|---------|--------|--------|
-| 1. Artifact registry | `backend/npc_artifacts.py` | Completed | Part of P011 |
-| 2. Inter-NPC message bus | `backend/npc_messaging.py` | Completed | Part of P011 |
-| 3. Sandbox executor | `backend/npc_sandbox.py` + `npc-sandbox/` | Completed | Part of P011 |
-| 4. Cognition upgrade | `backend/npc_cognition.py` | Completed | Part of P011 |
-| 5. Docker wiring | `docker-compose-vps.yml` | Completed | Part of P011 |
+| 1. Artifact registry | `backend/npc_artifacts.py` | Completed | `27a2921` (P011) |
+| 2. Inter-NPC message bus | `backend/npc_messaging.py` | Completed | `27a2921` (P011) |
+| 3. Sandbox executor | `backend/npc_sandbox.py` + `npc-sandbox/` | Completed | `27a2921` (P011) |
+| 4. Cognition upgrade | `backend/npc_cognition.py` | Completed | `27a2921` (P011) |
+| 5. Docker wiring | `docker-compose-vps.yml` | Completed | `27a2921` (P011) |
 | 6. Deploy & verify | VPS | Pending | — |
+
+### Commits
+- `27a2921` — feat(agency): NPC agency system — artifacts, messaging, sandbox execution
+- `1082b42` — checkpoint(pre-npc-agency): save point (tag: `pre-npc-agency`)
+- Tag `p011-npc-agency` — P011 milestone
+
+### Rollback
+```bash
+git checkout pre-npc-agency
+```
 
 ### Files Created
 - `backend/npc_artifacts.py` — Artifact registry (Redis index + disk + content in Redis)
