@@ -225,26 +225,24 @@ async def simulation_operator_status():
 @router.post("/simulation/operator/tick")
 async def simulation_operator_tick():
     """Manual trigger for a supervised autonomous tick."""
-    from tick_engine import (
-        get_tick_redis,
-        _AUTO_TICK_REDIS_KEY,
-        run_autonomous_tick_background,
-    )
+    from simulation_operator import run_simulation_operator_tick
     from fastapi.responses import JSONResponse
 
-    status = get_tick_redis(_AUTO_TICK_REDIS_KEY)
-    if status.get("running"):
+    # Check operator status for existing running tick
+    from simulation_operator import get_operator_status
+    op_status = get_operator_status()
+    if op_status.get("status") == "running":
         return JSONResponse(
             status_code=409,
             content={
                 "status": "already_running",
-                "started_at": status.get("last_start", 0.0),
+                "started_at": op_status.get("last_start", 0.0),
             },
         )
 
     tick_id = f"operator_tick_{int(time.time() * 1000)}"
     thread = threading.Thread(
-        target=run_autonomous_tick_background,
+        target=run_simulation_operator_tick,
         args=(game_state, FACTION_IDEOLOGY),
         daemon=True,
     )

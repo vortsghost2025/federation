@@ -105,7 +105,7 @@ class NPCSystemAdapter:
         try:
             import redis as _redis
 
-            _r = _redis.Redis(host="redis", port=6379, decode_responses=True)
+            _r = _redis.Redis(host="redis", port=6379, decode_responses=True, socket_connect_timeout=5, socket_timeout=5)
             persist_npc_traits_to_redis(_r, self.npc_system)
         except Exception as exc:
             logger.debug("Could not persist NPC traits to Redis on init: %s", exc)

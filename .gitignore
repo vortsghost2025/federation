@@ -1,3 +1,4 @@
+backups/
 *.log
 !AGENT_COORDINATION/agent_handoff.log
 *.jsonl
@@ -191,3 +192,11 @@ Untitled.txt
 **/*credentials*
 **/*secret*key*
 **/*_token*
+
+# ===== KILO LOCAL CONFIG - NEVER COMMIT =====
+# .kilo/kilo.json is editor-local LLM provider config that historically
+# contained live NVIDIA API keys. Live keys must never reach the repo.
+# The exact file path is pinned (more specific than a bare `.kilo/`) so
+# partner subdirectories under `.kilo/` (e.g. plans/, settings.json) can
+# still be tracked if needed.
+.kilo/kilo.json

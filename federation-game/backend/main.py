@@ -321,9 +321,9 @@ app.include_router(narrator_router)
 app.include_router(simulation_router)
 app.include_router(factions_router)
 app.include_router(websocket_router)
-app.include_router(map_router)
 app.include_router(error_reports_router)
 app.include_router(npc_logs_router)
+app.include_router(map_router)
 
 
 @app.on_event("startup")

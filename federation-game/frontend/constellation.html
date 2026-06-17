@@ -1,12 +1,14 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+    <link rel="icon" href="data:," />
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Orbitron:wght@400;700;900&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="constellation.css">
-
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Federation — Living Constellation</title>
-
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Federation &mdash; Living Constellation</title>
 </head>
 <body>
 
@@ -28,13 +30,16 @@
 
 <div id="legend"></div>
 
-<div id="nav">
+<nav id="nav">
 <a href="/bridge.html">Bridge</a>
-<a href="/simulation.html">Simulation</a>
+<a href="/simulation.html">Live Sim</a>
 <a href="/starmap.html">Star Map</a>
 <a href="/spectator.html">Spectator</a>
+<a href="/npc-logs.html">NPC Logs</a>
 <a href="/worldguide.html">World Guide</a>
-</div>
+<a href="/earth.html">Earth</a>
+<a href="/constellation.html" class="active">Constellation</a>
+</nav>
 
 <div id="tooltip">
 <div id="tt-name"></div>
@@ -45,7 +50,6 @@
 </div>
 
     <script src="fed-fetch.js"></script>
-    <script src="error-reporter.js"></script>
     <script src="constellation.js"></script>
 </body>
 </html>
