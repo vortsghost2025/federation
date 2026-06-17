@@ -52,5 +52,50 @@ git checkout pre-npc-agency
 
 ---
 
+## Agent Handoff — Next Agent Instructions
+
+If the build agent runs out of credits, the next agent should:
+
+1. Read this file (`docs/NPC_AGENCY_LOG.md`) for full context
+2. Read `.horizon/HORIZON_STATUS.md` for current state
+3. Deploy P011 to VPS (see deploy steps below)
+
+### Deploy Steps (for next agent)
+
+```bash
+# 1. SSH into VPS
+ssh hostinger
+
+# 2. Pull latest code
+cd /opt/federation
+git pull
+
+# 3. Copy new files to Docker locations
+cp /opt/federation/federation-game/backend/npc_artifacts.py /docker/federation-game/backend/
+cp /opt/federation/federation-game/backend/npc_messaging.py /docker/federation-game/backend/
+cp /opt/federation/federation-game/backend/npc_sandbox.py /docker/federation-game/backend/
+cp /opt/federation/federation-game/backend/npc_cognition.py /docker/federation-game/backend/
+
+cp -r /opt/federation/federation-game/npc-sandbox /docker/federation-game/
+cp /opt/federation/federation-game/docker-compose-vps.yml /docker/federation-game/docker-compose.yml
+
+# 4. Rebuild and start sandbox
+cd /docker/federation-game
+docker compose build npc-sandbox
+docker compose up -d npc-sandbox
+docker compose restart backend worker
+
+# 5. Verify
+curl -s http://localhost:9002/health
+docker compose ps
+docker logs federation-game-worker-1 --tail 20
+```
+
+### Rollback
+```bash
+git checkout pre-npc-agency
+```
+Then revert docker-compose.yml and restart everything on VPS.
+
 ---
 
