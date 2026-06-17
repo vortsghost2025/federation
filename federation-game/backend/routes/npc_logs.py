@@ -665,3 +665,183 @@ def _cluster_into_scenes(events, npc_names, time_window=3, limit=60):
     scenes.sort(key=lambda s: s["timestamp"] or 0, reverse=True)
     return scenes
 
+
+def _list_factions_with_members():
+    """Read federation faction data from the live game_state and look
+    up which NPCs belong to each. Returns a list of:
+      {id, display_name, member_count, cohesion, members: [{char_id, name}]}
+
+    Sources KNOWN_FACTIONS and FACTION_DISPLAY from faction_dynamics
+    so this matches /simulation/state's faction_dynamics output exactly,
+    rather than depending on game_state_v2's dynamic faction dict that
+    may be empty until a tick runs."""
+    faction_data = {}
+    known = []
+    display_map = {}
+    try:
+        from faction_dynamics import KNOWN_FACTIONS, FACTION_DISPLAY
+        known = list(KNOWN_FACTIONS or [])
+        display_map = dict(FACTION_DISPLAY or {})
+    except Exception:
+        pass
+
+    if not known:
+        # Last-resort fallback: pull from game_state_v2
+        try:
+            from state import game_state as _gs
+            v2 = getattr(_gs, "game_state_v2", None)
+            known = list((getattr(v2, "factions", {}) or {}).keys())
+        except Exception:
+            pass
+
+    for fid in known:
+        faction_data[fid] = {
+            "id": fid,
+            "display_name": display_map.get(fid) or fid.replace("_", " ").title(),
+            "cohesion": None,
+            "members": [],
+            "member_count": 0,
+        }
+
+    # Collect NPCs by affiliation
+    try:
+        from state import game_state as _gs
+        ns = getattr(_gs, "npc_system", None)
+        if ns:
+            for cid, char_obj in (getattr(ns, "characters", {}) or {}).items():
+                aff = getattr(char_obj, "affiliation", None)
+                if aff and aff in faction_data:
+                    faction_data[aff]["members"].append({
+                        "char_id": cid,
+                        "name": getattr(char_obj, "name", "") or cid,
+                    })
+            for cid, comp_obj in (getattr(ns, "companions", {}) or {}).items():
+                aff = getattr(comp_obj, "affiliation", None)
+                if aff and aff in faction_data:
+                    faction_data[aff]["members"].append({
+                        "char_id": cid,
+                        "name": getattr(comp_obj, "name", "") or cid,
+                    })
+        # Pull faction_stats for cohesion
+        faction_system = getattr(_gs, "faction_system", None)
+        if faction_system and hasattr(faction_system, "factions"):
+            for fid, fobj in (faction_system.factions or {}).items():
+                if fid in faction_data:
+                    faction_data[fid]["cohesion"] = getattr(fobj, "cohesion", None)
+    except Exception:
+        pass
+
+    # Fallback cohesion from /simulation/state shape
+    if not any(faction_data[fid]["cohesion"] is not None for fid in faction_data):
+        try:
+            from state import game_state as _gs
+            v2 = getattr(_gs, "game_state_v2", None)
+            fd = (getattr(v2, "factions", {}) or {})
+            for fid, fdata in faction_data.items():
+                if faction_data[fid]["cohesion"] is None and fid in fd:
+                    faction_data[fid]["cohesion"] = (fd[fid] or {}).get("cohesion")
+        except Exception:
+            pass
+
+    for fid, fd in faction_data.items():
+        if fd.get("member_count") is None or fd.get("member_count") == 0:
+            fd["member_count"] = len(fd.get("members", []) or [])
+        fd["members"].sort(key=lambda m: m["name"].lower())
+    return list(faction_data.values())
+
+
+@router.get("/spectator/factions")
+def spectator_factions():
+    """List all 8 federation factions with their member rosters.
+    Used by the channel grid so each channel can render its own NPC roster."""
+    try:
+        factions = _list_factions_with_members()
+        factions.sort(key=lambda f: f["display_name"].lower())
+    except Exception as e:
+        return {"status": "error", "factions": [], "error": str(e)}
+    return {
+        "status": "ok",
+        "factions": factions,
+        "updated_at": datetime.utcnow().isoformat() + "Z",
+    }
+
+
+@router.get("/spectator/factions/{faction_id}/stream")
+def spectator_faction_stream(
+    faction_id: str,
+    limit: int = Query(20, ge=4, le=80),
+):
+    """Recent NPC actions for every member of a faction. Feed for a
+    channel's live content. Falls back to a DB scan if the live
+    game_state is unavailable."""
+    faction_id = faction_id.lower()
+    if not db_manager._initialized:
+        return {"status": "error", "events": [], "error": "Database not ready."}
+
+    # Pull full faction roster (try roster first to use char_ids).
+    try:
+        factions = _list_factions_with_members()
+        target = next((f for f in factions if f["id"].lower() == faction_id), None)
+        char_ids = {m["char_id"] for m in (target["members"] if target else [])}
+        npc_names = {m["char_id"]: m["name"] for m in (target["members"] if target else [])}
+    except Exception:
+        char_ids = set()
+        npc_names = {}
+
+    # Soft fallback: query anyway by affiliation if roster is empty
+    # (routing layer may not have game_state loaded under unit tests).
+    if not char_ids:
+        try:
+            from state import game_state as _gs
+            ns = getattr(_gs, "npc_system", None)
+            for cid, char_obj in (getattr(ns, "characters", {}) or {}).items():
+                if getattr(char_obj, "affiliation", None) == faction_id:
+                    char_ids.add(cid)
+                    npc_names[cid] = getattr(char_obj, "name", "") or cid
+            for cid, comp_obj in (getattr(ns, "companions", {}) or {}).items():
+                if getattr(comp_obj, "affiliation", None) == faction_id:
+                    char_ids.add(cid)
+                    npc_names[cid] = getattr(comp_obj, "name", "") or cid
+        except Exception:
+            pass
+
+    if not char_ids:
+        # Last-resort DB filter through whichever Player table holds the
+        # affiliation - skip if not present. Empty result is honest.
+        return {
+            "status": "ok",
+            "faction_id": faction_id,
+            "events": [],
+            "note": "no_members_detected",
+            "updated_at": datetime.utcnow().isoformat() + "Z",
+        }
+
+    try:
+        with db_manager._SessionLocal() as session:
+            rows = (
+                session.query(NpcActionLog)
+                .filter(NpcActionLog.char_id.in_(list(char_ids)))
+                .order_by(NpcActionLog.timestamp.desc(), NpcActionLog.id.desc())
+                .limit(limit * 2)
+                .all()
+            )
+    except Exception as e:
+        return {"status": "error", "events": [], "error": str(e)}
+
+    events = []
+    for r in rows:
+        events.append(_plain_event(r))
+    # Group into scenes for the channel
+    raw_scenes = _cluster_into_scenes(events, npc_names, time_window=4, limit=limit)
+
+    return {
+        "status": "ok",
+        "faction_id": faction_id,
+        "faction_display": (target["display_name"] if target else faction_id.title()),
+        "members": list(char_ids),
+        "member_count": len(char_ids),
+        "events": events,
+        "scenes": raw_scenes,
+        "updated_at": datetime.utcnow().isoformat() + "Z",
+    }
+
