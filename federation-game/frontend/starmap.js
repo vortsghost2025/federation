@@ -52,6 +52,7 @@ let spatialSectorNodes = []; // sector center markers for click/hover
 let spatialBounds = null; // {minPx, maxPx, minPy, maxPy, sectorScale, midX, midY} — computed world-to-screen transform for FIT button
 let voronoiCells = []; // SPATIAL-03B: Voronoi territory cells [{factionId, polygon, centroid}]
 const SPATIAL_FILL_RATIO = 0.65; // fraction of viewport that spatial map should fill
+const NETWORK_HIGH_CONTRAST = 1.8; // multiplier for network-view relationship line visibility
 // SPATIAL-03A: Selected faction for isolation/fade behavior
 let selectedFaction = null; // faction_id or null — when set, fade all other factions
 // Kill switch: URL params or env can force legacy layout
@@ -182,17 +183,13 @@ document.addEventListener('keydown', (e) => {
 const urlParams = new URLSearchParams(window.location.search);
 if (urlParams.has('spatial') && urlParams.get('spatial') === 'true') {
   spatialMode = true;
-  // Force immediate spatial mode activation
   spatialSectors = {};
   spatialAdjacencies = [];
   spatialSectorNodes = [];
-  // Rebuild nodes with spatial positions
   buildNodesSpatial();
-  // Update UI to reflect spatial mode
-  document.getElementById('readable-spatial-btn').classList.add('active');
   draw();
-  return;
-  }
+  document.getElementById('readable-spatial-btn').classList.add('active');
+}
   document.getElementById('search-input').addEventListener('input', onSearch);
 
   for (let i = 0; i < 400; i++) {
@@ -240,6 +237,7 @@ function setLabelMode(mode) {
   document.querySelectorAll('.lt-btn').forEach(b => {
     b.classList.toggle('active', b.dataset.labels === mode);
   });
+  draw();
 }
 function toggleReadableSpatialMode() {
   readableSpatialMode = !readableSpatialMode;
@@ -1748,28 +1746,28 @@ function getViewParams() {
          sectorLabelAlpha: 0.9
        };
      }
-   } else if (currentView === 'network') {
-return {
-zoneFillAlpha: 0.03,
-zoneBorderAlpha: 0.15,
-zoneBorderWidth: 1.5,
-lineAlphaScale: 1.0,
-npcFactionBorder: 2.5,
-labelSize: 16,
-labelAlpha: 0.5
-};
-} else { // crisis
-return {
-zoneFillAlpha: 0.06,
-zoneBorderAlpha: 0.3,
-zoneBorderWidth: 2.5,
-lineAlphaScale: 0.6,
-npcFactionBorder: 3,
-labelSize: 16,
-labelAlpha: 0.6
-};
-}
-}
+    } else if (currentView === 'network') {
+      return {
+        zoneFillAlpha: 0.01,
+        zoneBorderAlpha: 0.08,
+        zoneBorderWidth: 1,
+        lineAlphaScale: 1.0,
+        npcFactionBorder: 2.5,
+        labelSize: 16,
+        labelAlpha: 0.5
+      };
+    } else { // crisis
+      return {
+        zoneFillAlpha: 0.06,
+        zoneBorderAlpha: 0.3,
+        zoneBorderWidth: 2.5,
+        lineAlphaScale: 0.6,
+        npcFactionBorder: 3,
+        labelSize: 16,
+        labelAlpha: 0.6
+      };
+    }
+  }
 
 // --- Label priority system ---
 // Priority levels: 0=hidden, 1=low(ordinary), 2=medium(crisis/event), 3=high(selected/important), 4=critical(hovered)
@@ -2287,22 +2285,38 @@ if (!spatialMode) {
 
             const baseAlpha = strength * 0.4 * distFade * vp.lineAlphaScale * factionLineFade;
 
+            // Network view: raise visibility floor and boost contrast for low-vision readability
+            let effectiveAlpha = baseAlpha;
+            let effectiveWidth = Math.max(1, strength * 3 * distFade);
+            if (currentView === 'network') {
+              effectiveAlpha = Math.max(0.18, effectiveAlpha * NETWORK_HIGH_CONTRAST);
+              effectiveWidth = Math.max(1.8, effectiveWidth * 1.4);
+            }
+            // Clamp to valid range
+            effectiveAlpha = Math.min(1, Math.max(0, effectiveAlpha));
+
         let lineColor;
         if (isPositive) {
-          lineColor = `rgba(102,187,106,${baseAlpha})`;
+          lineColor = currentView === 'network'
+            ? `rgba(180,255,180,${effectiveAlpha})`
+            : `rgba(102,187,106,${baseAlpha})`;
         } else if (isConflict) {
           // Crisis view makes conflict lines pulse
           const crisisPulse = currentView === 'crisis' ? (0.7 + 0.3 * Math.sin(t * 0.005)) : 1.0;
-          lineColor = `rgba(239,83,80,${baseAlpha * crisisPulse})`;
+          lineColor = currentView === 'network'
+            ? `rgba(255,120,120,${effectiveAlpha})`
+            : `rgba(239,83,80,${baseAlpha * crisisPulse})`;
         } else {
-          lineColor = `rgba(255,152,0,${baseAlpha * 0.6})`;
+          lineColor = currentView === 'network'
+            ? `rgba(200,230,255,${effectiveAlpha})`
+            : `rgba(255,152,0,${baseAlpha * 0.6})`;
         }
 
         ctx.beginPath();
         ctx.moveTo(node.x, node.y);
         ctx.lineTo(other.x, other.y);
         ctx.strokeStyle = lineColor;
-        ctx.lineWidth = Math.max(1, strength * 3 * distFade);
+        ctx.lineWidth = currentView === 'network' ? effectiveWidth : Math.max(1, strength * 3 * distFade);
         ctx.stroke();
       }
     }

@@ -117,6 +117,7 @@
 5. Kilo IDE hit Gemma 4 rate limit — fell back to MiniMax-M2.7
 6. `.horizon/HORIZON_STATUS.md` was stale (said HEAD=994ba2e, should be b66d9e1) — now updated
 7. `.claude/skills` and `.agents/skills` still have duplicate warnings (326 remaining)
+8. **NVIDIA API key leaked in commit `e587a11` (`.kilo/kilo.json`).** Working copy + index clean (`.kilo/kilo.json` gitignored, key blanked) but the old key is still in GitHub history at `vortsghost2025/federation`. **Action: rotate the key at `integrate.api.nvidia.com`. Sean needs sighted help from his brother to do the rotation — flagged 2026-06-15.** Until rotated, treat the leaked prefix `nvapi-s7xc…` as compromised.
 
 ## Architecture
 

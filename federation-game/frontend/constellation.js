@@ -1164,13 +1164,19 @@ return Math.round(Math.max(0, Math.min(1, a)) * 255).toString(16).padStart(2, '0
 function lighten(hex, amt) {
 const c = hexToRgb(hex);
 if (!c) return hex;
-return `rgb(${Math.min(255,c.r+amt)},${Math.min(255,c.g+amt)},${Math.min(255,c.b+amt)})`;
+const r = Math.min(255,c.r+amt);
+const g = Math.min(255,c.g+amt);
+const b = Math.min(255,c.b+amt);
+return '#' + [r,g,b].map(v => Math.round(v).toString(16).padStart(2,'0')).join('');
 }
 
 function darken(hex, amt) {
 const c = hexToRgb(hex);
 if (!c) return hex;
-return `rgb(${Math.max(0,c.r-amt)},${Math.max(0,c.g-amt)},${Math.max(0,c.b-amt)})`;
+const r = Math.max(0,c.r-amt);
+const g = Math.max(0,c.g-amt);
+const b = Math.max(0,c.b-amt);
+return '#' + [r,g,b].map(v => Math.round(v).toString(16).padStart(2,'0')).join('');
 }
 
 function hexToRgb(hex) {
@@ -1186,11 +1192,10 @@ return { r:(n>>16)&0xff, g:(n>>8)&0xff, b:n&0xff };
 function modulateColor(baseHex, tensionTint, anomalyTint) {
 const c = hexToRgb(baseHex);
 if (!c) return baseHex;
-// Shift toward red with tension, toward purple with anomaly
 const r = Math.min(255, c.r + tensionTint * 40 + anomalyTint * 20);
 const g = Math.max(0, c.g - tensionTint * 30);
 const b = Math.min(255, c.b + anomalyTint * 40);
-return `rgb(${Math.round(r)},${Math.round(g)},${Math.round(b)})`;
+return '#' + [r,g,b].map(v => Math.round(v).toString(16).padStart(2,'0')).join('');
 }
 
 // ============================================================

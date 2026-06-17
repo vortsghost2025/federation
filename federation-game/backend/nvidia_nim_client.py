@@ -48,6 +48,10 @@ for _i in range(1, 9):
     _k = os.environ.get(f"NIM_API_KEY_{_i}", "")
     if _k and _k not in NIM_API_KEYS:
         NIM_API_KEYS.append(_k)
+# Also check standard NVIDIA_API_KEY env var (common in NVIDIA tooling)
+_NVIDIA_KEY = os.environ.get("NVIDIA_API_KEY", "")
+if _NVIDIA_KEY and _NVIDIA_KEY not in NIM_API_KEYS:
+    NIM_API_KEYS.append(_NVIDIA_KEY)
 
 # Model priority chain -- Proven fast models only
 # Nemotron Super 49B as primary (fast, reliable)

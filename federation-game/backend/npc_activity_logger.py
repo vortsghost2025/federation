@@ -25,7 +25,7 @@ def _get_redis():
     if redis is None:
         return None
     url = os.environ.get("REDIS_URL", "redis://redis:6379/0")
-    return redis.from_url(url, decode_responses=True, socket_timeout=5)
+    return redis.from_url(url, decode_responses=True, socket_connect_timeout=5, socket_timeout=5)
 
 
 def log_npc_activity(
@@ -86,6 +86,65 @@ def log_npc_activity(
             pass
 
     return redis_ok or postgres_ok
+
+
+def log_npc_turn_trace(
+    turn: Dict[str, Any],
+    memory_events: Optional[List[Dict[str, Any]]] = None,
+    tool_events: Optional[List[Dict[str, Any]]] = None,
+) -> Optional[str]:
+    """Log a full NPC LLM turn trace to Postgres and a compact Redis feed."""
+    turn_id = None
+    if db_manager is not None and db_manager._initialized:
+        try:
+            turn_id = db_manager.log_npc_turn(
+                turn=turn,
+                memory_events=memory_events,
+                tool_events=tool_events,
+            )
+        except Exception:
+            turn_id = None
+
+    compact = dict(turn)
+    if turn_id:
+        compact["turn_id"] = turn_id
+    compact["input_text"] = (compact.get("input_text") or "")[:300]
+    compact["system_prompt_text"] = (compact.get("system_prompt_text") or "")[:300]
+    compact["output_text"] = (compact.get("output_text") or "")[:500]
+
+    r = _get_redis()
+    if r is not None:
+        try:
+            npc_id = compact.get("npc_id") or compact.get("char_id") or "unknown"
+            ts = int(compact.get("timestamp") or time.time())
+            key = f"npc_turns:{npc_id}"
+            r.zadd(key, {json.dumps(compact): ts})
+            r.zremrangebyrank(key, 0, -(MAX_ENTRIES + 1))
+            r.expire(key, TTL_SECONDS)
+        except Exception:
+            pass
+
+    return turn_id
+
+
+def get_npc_turn_traces(
+    npc_id: Optional[str] = None,
+    limit: int = 50,
+    offset: int = 0,
+    include_events: bool = False,
+) -> List[Dict[str, Any]]:
+    """Retrieve full NPC turn traces from Postgres."""
+    if db_manager is not None and db_manager._initialized:
+        try:
+            return db_manager.get_npc_turns(
+                npc_id=npc_id,
+                limit=limit,
+                offset=offset,
+                include_events=include_events,
+            )
+        except Exception:
+            pass
+    return []
 
 
 def get_npc_activity_log(
