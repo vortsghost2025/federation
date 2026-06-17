@@ -7,14 +7,23 @@ const state = {
   scenes: [],
   episodes: [],
   activeEpisodeKey: null,
-  lastSignature: "",
-  currentDossierCharId: null,
+  factions: [],
+  activeFactionId: null,
+  channelStreamCache: new Map(),
+  channelTimers: new Map(),
+  voices: [],
+  voiceByIndex: new Map(),
+  voiceByName: new Map(),
+  voiceByURI: new Map(),
+  voiceAssignments: {},
+  voicePretendLoad: false,
   refreshMs: 30000,
   slowRefreshMs: 90000,
   speaking: false,
   speakQueue: [],
   spokenKeys: new Set(),
   activeUtterance: null,
+  onSpeakEndCallbacks: [],
 };
 
 const $ = (id) => document.getElementById(id);
@@ -403,25 +412,28 @@ function selectNextEpisode() {
 function buildActiveEpisodeScript() {
   const ep = state.episodes.find((e) => e.key === state.activeEpisodeKey);
   if (!ep) return [];
-  const lines = [];
-  lines.push(stripSpookSpeechProps(ep.title) + ".");
+  const script = []; // [{text, speaker}]
+  const title = stripSpookSpeechProps(ep.title);
+  if (title) script.push({ text: title + ".", speaker: null });
   if (ep.chars.length) {
     const castNames = ep.chars.slice(0, 6).map((c) => stripSpookSpeechProps(c.name)).filter(Boolean).join(", ");
-    if (castNames) lines.push("Cast: " + castNames + ".");
+    if (castNames) script.push({ text: "Cast: " + castNames + ".", speaker: null });
   }
   const cats = (ep.topCategories || []).map(([n]) => stripSpookSpeechProps(n)).filter(Boolean).join(", ");
-  if (cats) lines.push(cats + ".");
+  if (cats) script.push({ text: cats + ".", speaker: null });
   const seen = new Set();
   for (const scene of ep.scenes) {
     for (const d of scene.dialogue || []) {
       if (!d.speaker || !d.text) continue;
-      const text = `${stripSpookSpeechProps(d.speaker)}: ${stripSpookSpeechProps(d.text)}`;
-      if (seen.has(text)) continue;
-      seen.add(text);
-      lines.push(text);
+      const speakerClean = stripSpookSpeechProps(d.speaker);
+      const textClean = stripSpookSpeechProps(d.text);
+      const text = `${speakerClean}: ${textClean}`;
+      if (seen.has(`${speakerClean}|${textClean}`)) continue;
+      seen.add(`${speakerClean}|${textClean}`);
+      script.push({ text, speaker: speakerClean });
     }
   }
-  return lines.filter(Boolean);
+  return script;
 }
 
 function playActiveEpisode(opts = {}) {
@@ -430,17 +442,22 @@ function playActiveEpisode(opts = {}) {
     stopSpeaking();
     return;
   }
-  const lines = buildActiveEpisodeScript();
-  if (!lines.length) return;
+  const script = buildActiveEpisodeScript();
+  if (!script.length) return;
 
   state.spokenKeys.clear();
-  for (const line of lines) state.spokenKeys.add(line.toLowerCase().replace(/\s+/g, " ").trim());
+  for (const item of script) state.spokenKeys.add(item.text.toLowerCase().replace(/\s+/g, " ").trim());
 
-  state.speakQueue = lines.flatMap(splitIntoUtterances);
+  state.speakQueue = script
+    .flatMap((item) => splitIntoUtterances(item.text).map((piece) => ({
+      text: piece,
+      voiceURI: pickVoiceForSpeaker(item.speaker)?.voiceURI || null,
+    })))
+    .filter((x) => x && x.text);
+
   state.speaking = true;
-  setReadButton(true);
+  setPlayEpisodeButton(true);
 
-  // Right after this queue empties, advance to next episode.
   state.speakAdvance = true;
   speakQueueStep();
 }
@@ -453,6 +470,19 @@ function stopSpeaking() {
   state.speakAdvance = false;
   state.activeUtterance = null;
   setReadButton(false);
+  setPlayChannelButton(false);
+  setPlayEpisodeButton(false);
+}
+
+function setPlayChannelButton(isSpeaking) {
+  const btn = $("play-channel-btn");
+  if (!btn) return;
+  btn.textContent = isSpeaking ? "Stop" : "Play this channel";
+}
+function setPlayEpisodeButton(isSpeaking) {
+  const btn = $("play-episode-btn");
+  if (!btn) return;
+  btn.textContent = isSpeaking ? "Stop" : "Play this episode";
 }
 
 function episodes() { return state.episodes || []; }
@@ -658,6 +688,34 @@ function setReadButton(isSpeaking) {
   btn.dataset.speaking = String(isSpeaking);
 }
 
+function pickVoiceForSpeaker(speakerName) {
+  // 1) Explicit per-character user override (set via UI).
+  // 2) Stable hash assignment so the *same character* always has
+  //    the same voice, letting you recognise NPC by ear.
+  const voices = state.voices;
+  if (!voices.length) return null;
+  if (!speakerName) return voices[0];
+  const cleaned = String(speakerName).trim();
+  const assignedName = state.voiceAssignments[cleaned];
+  if (assignedName) {
+    const assigned = state.voiceByName.get(assignedName);
+    if (assigned) return assigned;
+  }
+  let h = 0;
+  for (let i = 0; i < cleaned.length; i++) {
+    h = (h * 31 + cleaned.charCodeAt(i)) >>> 0;
+  }
+  return voices[h % voices.length];
+}
+
+function enqueueSpeech(line, speakerForVoice) {
+  if (!line) return;
+  const text = forSpeech(line);
+  if (!text) return;
+  const voice = speakerForVoice ? pickVoiceForSpeaker(speakerForVoice) : null;
+  state.speakQueue.push({ text, voiceURI: voice?.voiceURI || null });
+}
+
 function speakQueueStep() {
   if (!state.speaking) return;
   const next = state.speakQueue.shift();
@@ -677,9 +735,18 @@ function speakQueueStep() {
     }
     return;
   }
-  const utterance = new SpeechSynthesisUtterance(next);
+  const item = (typeof next === "string") ? { text: next } : next;
+  if (!item || !item.text) {
+    speakQueueStep();
+    return;
+  }
+  const utterance = new SpeechSynthesisUtterance(item.text);
   utterance.rate = 0.94;
   utterance.pitch = 0.97;
+  if (item.voiceURI) {
+    const voice = state.voiceByURI && state.voiceByURI.get(item.voiceURI);
+    if (voice) utterance.voice = voice;
+  }
   utterance.onend = () => speakQueueStep();
   utterance.onerror = () => speakQueueStep();
   state.activeUtterance = utterance;
@@ -687,17 +754,16 @@ function speakQueueStep() {
 }
 
 function buildReadAloudScript() {
-  const lines = [];
+  const script = []; // [{text, speaker}]
   const moodLine = $("summary")?.textContent?.trim();
-  if (moodLine) lines.push(forSpeech(moodLine));
+  if (moodLine) script.push({ text: forSpeech(moodLine), speaker: null });
 
   state.spokenKeys.clear();
 
-  const seenScene = new Set();
   for (const scene of state.scenes.slice(0, 6)) {
     const intro = `${scene.category || "moment"} scene.`;
     const introText = dedupe(forSpeech(intro));
-    if (introText) lines.push(introText);
+    if (introText) script.push({ text: introText, speaker: null });
 
     const participants = (scene.participants || [])
       .map((p) => p.name)
@@ -705,23 +771,23 @@ function buildReadAloudScript() {
       .join(", ");
     if (participants) {
       const castLine = dedupe(`Cast: ${forSpeech(participants)}.`);
-      if (castLine) lines.push(castLine);
+      if (castLine) script.push({ text: castLine, speaker: null });
     }
 
     const seenDialogue = new Set();
     for (const d of scene.dialogue || []) {
       if (!d.speaker || !d.text) continue;
-      const utteranceText = dedupe(`${forSpeech(d.speaker)}: ${forSpeech(d.text)}`);
+      const sp = forSpeech(d.speaker);
+      const utteranceText = dedupe(`${sp}: ${forSpeech(d.text)}`);
       if (!utteranceText) continue;
-      const sig = `${scene.timestamp}|${utteranceText}`;
+      const sig = `${scene.timestamp}|${sp}|${utteranceText}`;
       if (seenDialogue.has(sig)) continue;
       seenDialogue.add(sig);
-      lines.push(utteranceText);
+      script.push({ text: utteranceText, speaker: sp });
     }
-    seenScene.add(scene.timestamp);
   }
 
-  return lines.filter(Boolean);
+  return script.filter((x) => x && x.text);
 }
 
 function readAloud() {
@@ -734,11 +800,16 @@ function readAloud() {
     setReadButton(false);
     return;
   }
-  const lines = buildReadAloudScript();
-  if (!lines.length) {
-    lines.push("The world is waking up.");
+  const script = buildReadAloudScript();
+  if (!script.length) {
+    script.push({ text: "The world is waking up.", speaker: null });
   }
-  state.speakQueue = lines.flatMap(splitIntoUtterances);
+  state.speakQueue = script
+    .flatMap((item) => splitIntoUtterances(item.text).map((piece) => ({
+      text: piece,
+      voiceURI: pickVoiceForSpeaker(item.speaker)?.voiceURI || null,
+    })))
+    .filter((x) => x && x.text);
   state.speaking = true;
   setReadButton(true);
   speakQueueStep();
@@ -857,9 +928,277 @@ function bindUi() {
   });
 }
 
+// ===== Channel / faction + per-species voice =============================
+
+async function loadFactions() {
+  try {
+    const response = await fetch("/spectator/factions", { headers: { Accept: "application/json" } });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    const data = await response.json();
+    state.factions = data.factions || [];
+    renderChannelGrid(state.factions);
+  } catch (err) {
+    const grid = $("channel-grid");
+    if (grid) grid.innerHTML = `<p class="empty">Channels could not load: ${escapeHtml(err.message || "unknown")}</p>`;
+  }
+}
+
+function renderChannelGrid(factions) {
+  const grid = $("channel-grid");
+  if (!grid) return;
+  if (!factions.length) {
+    grid.innerHTML = `<p class="empty">No factions registered.</p>`;
+    return;
+  }
+  grid.innerHTML = factions.map((f) => {
+    const isActive = f.id === state.activeFactionId;
+    const rosterPreview = (f.members || []).slice(0, 4).map((m) => m.name).join(", ");
+    const meta = [
+      `${f.member_count || (f.members || []).length} member${f.member_count === 1 ? "" : "s"}`,
+      f.cohesion != null ? `cohesion ${Math.round(f.cohesion)}` : "",
+    ].filter(Boolean).join(" \u00B7 ");
+    return `
+      <button type="button" class="channel-card${isActive ? " active" : ""}" data-faction="${escapeHtml(f.id)}" aria-pressed="${isActive}">
+        <p class="channel-card-meta">${escapeHtml(meta || "channel")}</p>
+        <p class="channel-card-title">${escapeHtml(f.display_name)}</p>
+        <p class="channel-card-meta">${escapeHtml(rosterPreview || "no roster yet")}</p>
+        <p class="channel-card-roster">${rosterPreview ? formatFullRoster(f.members) : ""}</p>
+      </button>
+    `;
+  }).join("");
+}
+
+function formatFullRoster(members) {
+  if (!members || !members.length) return "";
+  if (members.length <= 4) {
+    return members.map((m) => escapeHtml(m.name)).join(", ");
+  }
+  const extra = members.length - 4;
+  return members.slice(0, 4).map((m) => escapeHtml(m.name)).join(", ") + ` and ${extra} more`;
+}
+
+async function selectFaction(factionId) {
+  stopSpeaking();
+  state.activeFactionId = factionId;
+  renderChannelGrid(state.factions);
+
+  const faction = state.factions.find((f) => f.id === factionId);
+  $("channel-name").textContent = faction?.display_name || factionId;
+  const meta = $("channel-meta");
+  if (meta) {
+    meta.textContent = (faction?.members || [])
+      .map((m) => m.name)
+      .join(", ") || "no roster";
+  }
+  $("channel-feed").innerHTML = `<p class="empty">Loading ${faction?.display_name || factionId}...</p>`;
+  $("play-channel-btn").disabled = true;
+  $("refresh-channel-btn").disabled = false;
+
+  await loadChannelStream(factionId);
+  $("channel-active-panel")?.scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+async function loadChannelStream(factionId) {
+  try {
+    const url = `/spectator/factions/${encodeURIComponent(factionId)}/stream?limit=20`;
+    const response = await fetch(url, { headers: { Accept: "application/json" } });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    const data = await response.json();
+    state.channelStreamCache.set(factionId, data);
+    renderChannelFeed(data);
+    $("play-channel-btn").disabled = !(data.scenes && data.scenes.length);
+  } catch (err) {
+    const feed = $("channel-feed");
+    if (feed) feed.innerHTML = `<p class="empty">Channel unavailable: ${escapeHtml(err.message || "unknown")}</p>`;
+  }
+}
+
+function renderChannelFeed(data) {
+  const feed = $("channel-feed");
+  if (!feed) return;
+  const scenes = data.scenes || [];
+  if (!scenes.length) {
+    feed.innerHTML = `<p class="empty">No recent activity in ${escapeHtml(data.faction_display || data.faction_id || "channel").toString()}.</p>`;
+    return;
+  }
+  feed.innerHTML = scenes.map((scene) => {
+    const parts = (scene.participants || []).map((p) =>
+      `<button type="button" data-char="${escapeHtml(p.char_id)}" data-name="${escapeHtml(p.name)}">${escapeHtml(p.name)}</button>`
+    ).join("");
+    const delta = scene.relationship_delta;
+    const deltaBit = (delta !== null && delta !== undefined)
+      ? `<span>Relationship ${delta >= 0 ? "+" : ""}${Number(delta).toFixed(1)}</span>`
+      : "";
+    return `
+      <article class="channel-scene ${categoryClass(scene.category)}">
+        <div class="channel-scene-meta">
+          <span>${escapeHtml(String(scene.category || "moment"))}</span>
+          <span>${escapeHtml(new Date((scene.timestamp || 0) * 1000).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }))}</span>
+          ${deltaBit}
+        </div>
+        <div class="channel-scene-parts">${parts}</div>
+        <div class="channel-scene-summary">${escapeHtml(scene.summary || "")}</div>
+      </article>
+    `;
+  }).join("");
+}
+
+function playActiveChannel() {
+  if (!("speechSynthesis" in window)) return;
+  if (state.speaking) {
+    stopSpeaking();
+    return;
+  }
+  const factionId = state.activeFactionId;
+  if (!factionId) return;
+  const data = state.channelStreamCache.get(factionId);
+  if (!data || !data.scenes || !data.scenes.length) return;
+  const script = [];
+  const faction = state.factions.find((f) => f.id === factionId);
+  if (faction) script.push({ text: stripSpookSpeechProps(faction.display_name) + ".", speaker: null });
+  const seen = new Set();
+  for (const scene of data.scenes) {
+    if (scene.summary) script.push({ text: stripSpookSpeechProps(scene.summary), speaker: null });
+    for (const part of scene.participants || []) {
+      script.push({ text: stripSpookSpeechProps(part.name), speaker: stripSpookSpeechProps(part.name) });
+    }
+    for (const d of scene.dialogue || []) {
+      if (!d.speaker || !d.text) continue;
+      const sp = stripSpookSpeechProps(d.speaker);
+      const text = `${sp}: ${stripSpookSpeechProps(d.text)}`;
+      if (seen.has(text)) continue;
+      seen.add(text);
+      script.push({ text, speaker: sp });
+    }
+  }
+  state.spokenKeys.clear();
+  for (const item of script) state.spokenKeys.add(item.text.toLowerCase().replace(/\s+/g, " ").trim());
+  state.speakQueue = script
+    .flatMap((item) => splitIntoUtterances(item.text).map((piece) => ({
+      text: piece,
+      voiceURI: pickVoiceForSpeaker(item.speaker)?.voiceURI || null,
+    })))
+    .filter((x) => x && x.text);
+  state.speaking = true;
+  setPlayChannelButton(true);
+  speakQueueStep();
+}
+
+// ===== Voice registry / picker UI =======================================
+
+function loadVoices() {
+  if (!("speechSynthesis" in window)) {
+    renderVoiceStatus("Browser does not expose speechSynthesis.", []);
+    return;
+  }
+  const sync = () => {
+    state.voices = (window.speechSynthesis.getVoices && window.speechSynthesis.getVoices().slice()) || [];
+    state.voices.sort((a, b) => a.name.localeCompare(b.name));
+    state.voiceByName.clear();
+    state.voiceByURI.clear();
+    for (const v of state.voices) {
+      state.voiceByName.set(v.name, v);
+      state.voiceByURI.set(v.voiceURI, v);
+    }
+    renderVoiceStatus(
+      state.voices.length
+        ? `${state.voices.length} voice${state.voices.length === 1 ? "" : "s"} ready. Click any card to set the matching archetype voice.`
+        : "No voices detected yet - waiting for the browser to populate them.",
+      state.voices,
+    );
+  };
+
+  sync();
+  if (window.speechSynthesis.onvoiceschanged !== undefined) {
+    window.speechSynthesis.onvoiceschanged = sync;
+  }
+  if (state.voices.length === 0) {
+    // Some browsers (Windows) populate on a tick. Safety retry.
+    setTimeout(sync, 250);
+    setTimeout(sync, 1200);
+  }
+}
+
+function renderVoiceStatus(message, voices) {
+  const status = $("voice-status");
+  if (status) status.textContent = message;
+
+  const grid = $("voice-grid");
+  if (!grid) return;
+  if (!voices || !voices.length) return;
+
+  // Limit the user-visible pool to a focused list: prefer English-localized
+  // and reject very internal VoiceURI entries the engine emits.
+  const preferred = voices.filter((v) => v.localService || /en[-_]/i.test(v.lang || "") || /english/i.test(v.name));
+  const pool = preferred.length >= 4 ? preferred : voices;
+  const top = pool.slice(0, 18);
+
+  grid.innerHTML = top.map((v) => `
+    <button type="button" class="voice-pick" data-voice="${escapeHtml(v.name)}" aria-pressed="${state.voiceAssignments[Object.keys(state.voiceAssignments).find((k) => state.voiceAssignments[k] === v.name)] ? "true" : "false"}">
+      <span class="voice-pick-name">${escapeHtml(v.name)}</span>
+      <span class="voice-pick-lang">${escapeHtml(v.lang || "default")}${v.localService ? " ✓" : ""}</span>
+    </button>
+  `).join("");
+}
+
+function bindVoiceClicks() {
+  const grid = $("voice-grid");
+  if (!grid) return;
+  grid.addEventListener("click", (event) => {
+    const button = event.target.closest("button[data-voice]");
+    if (!button) return;
+    const voiceName = button.dataset.voice;
+    const voice = state.voiceByName.get(voiceName);
+    if (!voice) return;
+    // Quick test utterance so the user hears the voice at the press.
+    try {
+      const probe = new SpeechSynthesisUtterance("Hello, this is how I will read for everyone.");
+      probe.voice = voice;
+      probe.rate = 0.94;
+      window.speechSynthesis.speak(probe);
+    } catch (e) { /* ignore */ }
+
+    // Cycle: assign to first NPC with no voice assigned, or bucket-
+    // rotate between speech roles. Simpler approach: prompt-free
+    // cycling. For now, do nothing destructive. The user manually
+    // picks; the system-wide voice registry still handles per-NPC
+    // hash assignment by default.
+    // TODO: persist per-name assignment when the user confirms.
+  });
+}
+
+function bindFactionClicks() {
+  const grid = $("channel-grid");
+  if (!grid) return;
+  grid.addEventListener("click", (event) => {
+    const button = event.target.closest("button[data-faction]");
+    if (!button) return;
+    selectFaction(button.dataset.faction);
+  });
+  const feed = $("channel-feed");
+  if (feed) {
+    feed.addEventListener("click", (event) => {
+      const button = event.target.closest("button[data-char]");
+      if (button) showDossier(button.dataset.char, button.dataset.name);
+    });
+  }
+  const playBtn = $("play-channel-btn");
+  if (playBtn) playBtn.addEventListener("click", playActiveChannel);
+  const refreshBtn = $("refresh-channel-btn");
+  if (refreshBtn) {
+    refreshBtn.addEventListener("click", () => {
+      if (state.activeFactionId) loadChannelStream(state.activeFactionId);
+    });
+  }
+}
+
 bindUi();
 bindThreadClicks();
 bindEpisodeClicks();
+bindFactionClicks();
+bindVoiceClicks();
+loadFactions();
+loadVoices();
 loadWorldVitals();
 loadThreads();
 loadScenes();

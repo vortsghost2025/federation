@@ -311,6 +311,260 @@ input {
   line-height: 1.4;
 }
 
+/* ===== Channels grid ===== */
+.channels-panel {
+  background: linear-gradient(180deg, rgba(143, 216, 255, 0.06), rgba(143, 216, 255, 0.02)),
+              var(--panel);
+  border: 2px solid var(--line);
+  border-radius: 28px;
+  padding: clamp(22px, 3vw, 34px);
+  display: grid;
+  gap: 16px;
+}
+.channels-header {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 18px;
+  align-items: end;
+}
+.channels-eyebrow {
+  margin: 0 0 4px;
+  color: var(--gold);
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  font-size: 16px;
+}
+.channels-title {
+  margin: 0;
+  font-family: "Libre Baskerville", Georgia, serif;
+  font-size: clamp(28px, 3.5vw, 44px);
+}
+.channels-controls button {
+  background: var(--gold);
+  color: #070704;
+  border: none;
+  border-radius: 14px;
+  padding: 12px 18px;
+  font-size: 18px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.channels-controls button:hover,
+.channels-controls button:focus { outline: 4px solid rgba(255, 216, 77, 0.35); }
+.channels-controls button[data-auto="on"] { background: var(--green); color: #070704; }
+
+.channel-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 14px;
+}
+.channel-card {
+  display: grid;
+  gap: 6px;
+  padding: 18px 20px;
+  border-radius: 18px;
+  background: var(--panel-soft);
+  border: 2px solid var(--line);
+  border-left-width: 10px;
+  border-left-color: var(--gold);
+  text-align: left;
+  cursor: pointer;
+  color: var(--text);
+  font: inherit;
+}
+.channel-card:hover,
+.channel-card:focus { outline: 4px solid rgba(255, 216, 77, 0.35); }
+.channel-card.active {
+  background: rgba(255, 216, 77, 0.08);
+  outline: 4px solid rgba(255, 216, 77, 0.45);
+}
+.channel-card-title {
+  margin: 0;
+  font-size: 22px;
+  font-weight: 700;
+}
+.channel-card-meta {
+  font-size: 14px;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+  text-transform: uppercase;
+}
+.channel-card-roster {
+  font-size: 16px;
+  color: var(--text);
+  line-height: 1.4;
+  margin: 4px 0 0;
+}
+
+/* ===== Active channel panel ===== */
+.channel-active-panel {
+  background: var(--panel);
+  border: 2px solid var(--line);
+  border-radius: 28px;
+  padding: clamp(22px, 3vw, 34px);
+  display: grid;
+  gap: 18px;
+}
+.channel-active-header {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 18px;
+  align-items: end;
+}
+.channel-eyebrow {
+  margin: 0 0 4px;
+  color: var(--blue);
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  font-size: 16px;
+}
+#channel-name {
+  margin: 0;
+  font-family: "Libre Baskerville", Georgia, serif;
+  font-size: clamp(32px, 4vw, 48px);
+}
+.channel-meta {
+  margin: 6px 0 0;
+  color: var(--muted);
+  font-size: 18px;
+}
+.channel-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.channel-controls button {
+  background: var(--gold);
+  color: #070704;
+  border: none;
+  border-radius: 14px;
+  padding: 12px 18px;
+  font-size: 18px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.channel-controls button[disabled] { opacity: 0.45; cursor: not-allowed; }
+.channel-controls button:hover,
+.channel-controls button:focus { outline: 4px solid rgba(255, 216, 77, 0.35); }
+#refresh-channel-btn {
+  background: transparent;
+  color: var(--gold);
+  border: 2px solid var(--line);
+}
+.channel-feed {
+  display: grid;
+  gap: 12px;
+}
+.channel-scene {
+  background: var(--panel-soft);
+  border: 2px solid var(--line);
+  border-left-width: 10px;
+  border-radius: 16px;
+  padding: 16px 18px;
+  display: grid;
+  gap: 6px;
+}
+.channel-scene.friendship    { border-left-color: var(--green); }
+.channel-scene.alliance      { border-left-color: var(--green); }
+.channel-scene.collaboration { border-left-color: var(--blue); }
+.channel-scene.socialize     { border-left-color: var(--blue); }
+.channel-scene.trade         { border-left-color: var(--gold); }
+.channel-scene.conflict      { border-left-color: var(--red); }
+.channel-scene.betrayal      { border-left-color: var(--red); }
+.channel-scene.suspicion     { border-left-color: var(--red); }
+.channel-scene.negotiation   { border-left-color: var(--gold); }
+.channel-scene.explore       { border-left-color: var(--blue); }
+.channel-scene.investigate   { border-left-color: var(--blue); }
+.channel-scene.mentorship    { border-left-color: var(--gold); }
+.channel-scene.help_ally     { border-left-color: var(--gold); }
+.channel-scene.self_improve  { border-left-color: var(--green); }
+.channel-scene.rest          { border-left-color: #777; }
+.channel-scene.react_to_events { border-left-color: var(--gold); }
+.channel-scene.seek_resources { border-left-color: var(--gold); }
+.channel-scene.gossip        { border-left-color: var(--red); }
+.channel-scene-meta {
+  font-size: 14px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 14px;
+}
+.channel-scene-parts {
+  font-size: 18px;
+}
+.channel-scene-parts button {
+  background: transparent;
+  color: var(--gold);
+  border: 2px solid var(--line);
+  border-radius: 14px;
+  padding: 6px 12px;
+  font-size: 17px;
+  cursor: pointer;
+}
+.channel-scene-parts button:hover,
+.channel-scene-parts button:focus {
+  outline: 4px solid rgba(255, 216, 77, 0.35);
+  color: var(--text);
+}
+.channel-scene-summary {
+  font-size: 18px;
+  line-height: 1.4;
+}
+
+/* ===== Voice controls ===== */
+.voice-controls-panel {
+  background: var(--panel);
+  border: 2px solid var(--line);
+  border-radius: 28px;
+  padding: clamp(22px, 3vw, 34px);
+  display: grid;
+  gap: 14px;
+}
+.voice-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 10px;
+}
+.voice-pick {
+  display: grid;
+  gap: 4px;
+  padding: 14px;
+  border-radius: 14px;
+  background: var(--panel-soft);
+  border: 2px solid var(--line);
+  border-left-width: 6px;
+  border-left-color: var(--muted);
+  font-family: "Atkinson Hyperlegible", Verdana, sans-serif;
+  text-align: left;
+  cursor: pointer;
+  color: var(--text);
+}
+.voice-pick.selected { border-left-color: var(--gold); outline: 2px solid rgba(255,216,77,0.5); }
+.voice-pick-name {
+  font-size: 17px;
+  font-weight: 700;
+}
+.voice-pick-lang {
+  font-size: 13px;
+  color: var(--muted);
+  letter-spacing: 0.06em;
+}
+.voice-defaults summary {
+  font-size: 17px;
+  cursor: pointer;
+  color: var(--muted);
+}
+.voice-defaults p {
+  margin: 10px 0 0;
+  font-size: 16px;
+  line-height: 1.4;
+  color: var(--text);
+}
+
 /* ===== Episode panel + Next rail ===== */
 .episode-panel {
   background: linear-gradient(180deg, rgba(255, 124, 124, 0.05), rgba(143, 216, 255, 0.04)),
