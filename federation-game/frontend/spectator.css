@@ -524,9 +524,46 @@ input {
   display: grid;
   gap: 14px;
 }
+.voice-status {
+  margin: 0;
+  color: var(--muted);
+  font-size: 17px;
+}
+.voice-mode-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px 18px;
+}
+.voice-mode-label {
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--gold);
+  font-size: 15px;
+}
+.voice-mode-select {
+  font: inherit;
+  padding: 8px 12px;
+  border-radius: 12px;
+  background: var(--panel-soft);
+  color: var(--text);
+  border: 2px solid var(--line);
+}
+.voice-mode-action {
+  background: transparent;
+  color: var(--gold);
+  border: 2px solid var(--line);
+  border-radius: 12px;
+  padding: 8px 14px;
+  font-size: 16px;
+  cursor: pointer;
+}
+.voice-mode-action:hover,
+.voice-mode-action:focus { outline: 4px solid rgba(255, 216, 77, 0.35); }
 .voice-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
   gap: 10px;
 }
 .voice-pick {
@@ -543,27 +580,62 @@ input {
   cursor: pointer;
   color: var(--text);
 }
-.voice-pick.selected { border-left-color: var(--gold); outline: 2px solid rgba(255,216,77,0.5); }
+.voice-pick.allowed { border-left-color: var(--green); }
+.voice-pick.banned {
+  border-left-color: var(--red);
+  opacity: 0.55;
+  text-decoration: line-through;
+}
+.voice-pick.selected {
+  background: rgba(255, 216, 77, 0.08);
+  outline: 2px solid rgba(255,216,77,0.5);
+}
 .voice-pick-name {
   font-size: 17px;
   font-weight: 700;
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+}
+.voice-pick-actions {
+  display: flex;
+  gap: 6px;
+}
+.voice-pick-actions button {
+  background: transparent;
+  color: var(--gold);
+  border: 2px solid var(--line);
+  border-radius: 10px;
+  padding: 4px 8px;
+  font-size: 14px;
+  cursor: pointer;
+}
+.voice-pick-actions button:hover,
+.voice-pick-actions button:focus { outline: 4px solid rgba(255, 216, 77, 0.35); }
+.voice-pick-actions button.ban-active {
+  background: var(--red);
+  color: #070704;
+  border-color: var(--red);
 }
 .voice-pick-lang {
   font-size: 13px;
   color: var(--muted);
   letter-spacing: 0.06em;
 }
-.voice-defaults summary {
-  font-size: 17px;
-  cursor: pointer;
+.voice-legend {
+  font-size: 15px;
   color: var(--muted);
+  margin: 0;
 }
-.voice-defaults p {
-  margin: 10px 0 0;
-  font-size: 16px;
-  line-height: 1.4;
-  color: var(--text);
+.legend-chip {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 999px;
+  margin-right: 6px;
+  font-size: 13px;
 }
+.legend-chip.ok { background: rgba(139, 255, 154, 0.15); color: var(--green); }
+.legend-chip.bad { background: rgba(255, 124, 124, 0.15); color: var(--red); }
 
 /* ===== Episode panel + Next rail ===== */
 .episode-panel {

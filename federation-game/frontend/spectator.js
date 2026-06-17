@@ -16,6 +16,8 @@ const state = {
   voiceByName: new Map(),
   voiceByURI: new Map(),
   voiceAssignments: {},
+  voiceBans: new Set(),          // voice.name -> banned
+  voiceMode: "best-pick",        // "best-pick" | "local-only" | "custom"
   voicePretendLoad: false,
   refreshMs: 30000,
   slowRefreshMs: 90000,
@@ -449,10 +451,16 @@ function playActiveEpisode(opts = {}) {
   for (const item of script) state.spokenKeys.add(item.text.toLowerCase().replace(/\s+/g, " ").trim());
 
   state.speakQueue = script
-    .flatMap((item) => splitIntoUtterances(item.text).map((piece) => ({
-      text: piece,
-      voiceURI: pickVoiceForSpeaker(item.speaker)?.voiceURI || null,
-    })))
+    .flatMap((item) => {
+      const arch = archetypeOf(item.speaker);
+      const { rate, pitch } = voiceModulation(arch);
+      return splitIntoUtterances(item.text).map((piece) => ({
+        text: piece,
+        voiceURI: pickVoiceForSpeaker(item.speaker)?.voiceURI || null,
+        rate,
+        pitch,
+      }));
+    })
     .filter((x) => x && x.text);
 
   state.speaking = true;
@@ -688,13 +696,29 @@ function setReadButton(isSpeaking) {
   btn.dataset.speaking = String(isSpeaking);
 }
 
+function isVoiceAllowed(voice) {
+  if (!voice) return false;
+  if (state.voiceBans.has(voice.name)) return false;
+  if (!voice.localService && state.voiceMode === "local-only") return false;
+  if (state.voiceMode === "custom") {
+    const assignedAnywhere = Object.values(state.voiceAssignments).includes(voice.name);
+    if (!assignedAnywhere && !state.voiceBans.has(voice.name)) {
+      // In custom mode, only voices the user explicitly chose show up.
+      return false;
+    }
+  }
+  return true;
+}
+
 function pickVoiceForSpeaker(speakerName) {
   // 1) Explicit per-character user override (set via UI).
-  // 2) Stable hash assignment so the *same character* always has
-  //    the same voice, letting you recognise NPC by ear.
-  const voices = state.voices;
-  if (!voices.length) return null;
-  if (!speakerName) return voices[0];
+  // 2) Stable hash assignment so the *same character* always has the
+  //    same voice, letting you recognise NPC by ear.
+  // 3) Banned voices are skipped; empty filter falls back to all.
+  const allowed = state.voices.filter((v) => isVoiceAllowed(v));
+  const pool = allowed.length ? allowed : state.voices;
+  if (!pool.length) return null;
+  if (!speakerName) return pool[0];
   const cleaned = String(speakerName).trim();
   const assignedName = state.voiceAssignments[cleaned];
   if (assignedName) {
@@ -705,16 +729,49 @@ function pickVoiceForSpeaker(speakerName) {
   for (let i = 0; i < cleaned.length; i++) {
     h = (h * 31 + cleaned.charCodeAt(i)) >>> 0;
   }
-  return voices[h % voices.length];
+  if (allowed.length) {
+    return allowed[h % allowed.length];
+  }
+  return pool[h % pool.length];
 }
 
-function enqueueSpeech(line, speakerForVoice) {
-  if (!line) return;
-  const text = forSpeech(line);
-  if (!text) return;
-  const voice = speakerForVoice ? pickVoiceForSpeaker(speakerForVoice) : null;
-  state.speakQueue.push({ text, voiceURI: voice?.voiceURI || null });
+function archetypeOf(name) {
+  if (!name) return "narrator";
+  const n = String(name).toLowerCase();
+  // Companions - lighter and slightly quicker voices.
+  if (/^comp[_]?\d/.test(name) || /\bcompanion\b/.test(n)) return "companion";
+  // Villain first (more dramatic override) - then gravitas/wanderer/
+  // leadership as fallbacks. Order matters: 'oracle' on its own is
+  // a wanderer; 'void oracle' is a villain.
+  if (/(devastation|malaxis|greed|spectre|trickster|jester|wraith)/.test(n)) return "villain";
+  if (/(void|spectre|trickster|jester|wicked|chaos|rebel)/.test(n)) return "villain";
+  // Gravitas / lord / chancellor - reads with weight.
+  if (/(general|tyrant|emperor|lord|overlord|master|admiral|chancellor|baroness|warden|marshal)/.test(n)) return "gravitas";
+  // Wanderer / scout - a touch brighter.
+  if (/(aria|scout|harbinger|frontier|explorer|wanderer|merchant|ambassador|zealot)/.test(n)) return "wanderer";
+  // Soft glancing matches for ambiguous names.
+  if (/\boracle\b/.test(n)) return "wanderer";
+  if (/\bzenith\b/.test(n)) return "wanderer";
+  if (/\bsage\b/.test(n)) return "leadership";
+  return "leadership";
 }
+
+function voiceModulation(archetype) {
+  switch (archetype) {
+    case "gravitas":   return { rate: 0.86, pitch: 0.88 };
+    case "villain":    return { rate: 0.88, pitch: 0.90 };
+    case "companion":  return { rate: 1.02, pitch: 1.06 };
+    case "wanderer":   return { rate: 1.00, pitch: 1.02 };
+    case "leadership": return { rate: 0.94, pitch: 0.97 };
+    default:           return { rate: 0.94, pitch: 0.97 };
+  }
+}
+
+function voiceModulationForSpeaker(speakerName) {
+  const arch = archetypeOf(speakerName);
+  return voiceModulation(arch);
+}
+
 
 function speakQueueStep() {
   if (!state.speaking) return;
@@ -741,8 +798,10 @@ function speakQueueStep() {
     return;
   }
   const utterance = new SpeechSynthesisUtterance(item.text);
-  utterance.rate = 0.94;
-  utterance.pitch = 0.97;
+  // Allow per-item rate/pitch (set by archetypeOf earlier in the queue
+  // build path). Fall back to narrator defaults when not provided.
+  utterance.rate = (typeof item.rate === "number") ? item.rate : 0.94;
+  utterance.pitch = (typeof item.pitch === "number") ? item.pitch : 0.97;
   if (item.voiceURI) {
     const voice = state.voiceByURI && state.voiceByURI.get(item.voiceURI);
     if (voice) utterance.voice = voice;
@@ -805,10 +864,16 @@ function readAloud() {
     script.push({ text: "The world is waking up.", speaker: null });
   }
   state.speakQueue = script
-    .flatMap((item) => splitIntoUtterances(item.text).map((piece) => ({
-      text: piece,
-      voiceURI: pickVoiceForSpeaker(item.speaker)?.voiceURI || null,
-    })))
+    .flatMap((item) => {
+      const arch = archetypeOf(item.speaker);
+      const { rate, pitch } = voiceModulation(arch);
+      return splitIntoUtterances(item.text).map((piece) => ({
+        text: piece,
+        voiceURI: pickVoiceForSpeaker(item.speaker)?.voiceURI || null,
+        rate,
+        pitch,
+      }));
+    })
     .filter((x) => x && x.text);
   state.speaking = true;
   setReadButton(true);
@@ -1074,10 +1139,16 @@ function playActiveChannel() {
   state.spokenKeys.clear();
   for (const item of script) state.spokenKeys.add(item.text.toLowerCase().replace(/\s+/g, " ").trim());
   state.speakQueue = script
-    .flatMap((item) => splitIntoUtterances(item.text).map((piece) => ({
-      text: piece,
-      voiceURI: pickVoiceForSpeaker(item.speaker)?.voiceURI || null,
-    })))
+    .flatMap((item) => {
+      const arch = archetypeOf(item.speaker);
+      const { rate, pitch } = voiceModulation(arch);
+      return splitIntoUtterances(item.text).map((piece) => ({
+        text: piece,
+        voiceURI: pickVoiceForSpeaker(item.speaker)?.voiceURI || null,
+        rate,
+        pitch,
+      }));
+    })
     .filter((x) => x && x.text);
   state.speaking = true;
   setPlayChannelButton(true);
