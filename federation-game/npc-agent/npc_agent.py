@@ -821,6 +821,25 @@ def _session_append(r, entry: dict) -> None:
         logger.debug("[%s] session append failed: %s", CHAR_ID, e)
 
 
+def _recent_artifact_dedup_count(r, lookback: int = 12) -> int:
+    """Count recent artifact dedup events from the rolling session transcript."""
+    try:
+        raw = r.lrange(f"npc_session:{CHAR_ID}", -lookback, -1)
+    except Exception:
+        return 0
+    count = 0
+    for entry_json in raw:
+        try:
+            entry = json.loads(entry_json)
+        except Exception:
+            continue
+        kind = entry.get("kind", "")
+        body = str(entry.get("body", ""))
+        if kind == "workspace_sync" and "deferred artifact" in body:
+            count += 1
+    return count
+
+
 def _session_transcript(r) -> str:
     """Render the most recent session entries as a compact transcript.
 
@@ -963,6 +982,14 @@ Respond in this exact JSON format (no markdown, no explanation):
                 "\n\nDIRECT-MESSAGE COOLDOWN: You sent a direct note very recently. "
                 f"Wait about {cooldown}s before sending another unless you have a genuine breakthrough or direct request."
             )
+        dedup_count = _recent_artifact_dedup_count(r)
+        if dedup_count >= 2:
+            force_constraint += (
+                "\n\nARTIFACT DEDUP COOLDOWN: You recently deferred "
+                f"{dedup_count} artifact(s) because they were too similar to recent work. "
+                "Do NOT pick 'create_artifact' this turn unless you have a genuinely distinct topic and title. "
+                "Prefer read_artifacts, investigate, rest, or self_improve."
+            )
 
     system = base_system + force_constraint
     result = call_llm(system, context, r=r, call_label="decision")
@@ -990,6 +1017,16 @@ Respond in this exact JSON format (no markdown, no explanation):
                 "category": "rest",
                 "reasoning": "Anti-loop forced fallback",
                 "description": "reflecting after repeated greetings",
+            }
+        if "ARTIFACT DEDUP COOLDOWN" in force_constraint and decision.get("category") == "create_artifact":
+            logger.warning(
+                "[%s] LLM ignored ARTIFACT DEDUP COOLDOWN; forcing rest",
+                CHAR_ID,
+            )
+            return {
+                "category": "rest",
+                "reasoning": "Artifact dedup cooldown forced fallback",
+                "description": "recent artifact titles were too similar; reflecting before creating more",
             }
         return decision
     except (json.JSONDecodeError, ValueError) as e:
