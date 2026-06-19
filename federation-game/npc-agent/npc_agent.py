@@ -13,6 +13,7 @@ import json
 import logging
 import os
 import random
+import re
 import time
 import uuid
 
@@ -751,7 +752,6 @@ def _is_repetitive_artifact(r, title: str, threshold: float = 0.55) -> bool:
                   "assessment", "recommendation", "implication", "strategy",
                   "strategic", "response", "impact", "update", "review"}
     def tokenize(t: str) -> set:
-        import re
         words = re.findall(r"[a-zA-Z]{3,}", t.lower())
         return {w for w in words if w not in stop_words}
     new_tokens = tokenize(title)
@@ -1093,7 +1093,6 @@ def execute_decision(decision: dict, r):
                 "actor": NPC_NAME,
                 "body": f"deferred artifact '{title[:60]}' — content too similar to recent work",
             })
-            goto_finalize = True
         else:
             content_prompt = f"Write the full content of this artifact:\n\n{desc}\n\nOutput only the content."
             llm_result = call_llm("You are a creative writer.", content_prompt, r=r, call_label="artifact")
@@ -1136,7 +1135,6 @@ def execute_decision(decision: dict, r):
                 "title": title,
                 "body": f"{len(artifact_content)} chars; first 80: {artifact_content[:80]}",
             })
-            goto_finalize = True
 
     elif cat == "write_code":
         code_prompt = f"Generate Python code for: {desc}\n\nOutput ONLY valid Python code."
