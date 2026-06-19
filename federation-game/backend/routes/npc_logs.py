@@ -846,6 +846,50 @@ def spectator_faction_stream(
     }
 
 
+def _keyword_tokens(*parts: str) -> set[str]:
+    text = " ".join(parts or [""]).lower()
+    return {tok for tok in re.findall(r"[a-z0-9]+", text) if len(tok) > 2}
+
+
+def _artifact_text(a: dict) -> str:
+    if isinstance(a, str):
+        return a
+    if not isinstance(a, dict):
+        return ""
+    return " ".join(str(a.get(k, "")) for k in ("title", "summary", "content", "artifact_type"))[:2500]
+
+
+def _artifact_is_identity(a: dict) -> bool:
+    text = _artifact_text(a).lower()
+    identity_terms = ("identity", "manifesto", "charter", "resident agent", "narrative shell", "first hard drive", "who i am", "self-model", "core freedoms")
+    return any(term in text for term in identity_terms)
+
+
+def _rank_artifacts_for_pair_story(char_id: str, artifacts: list, pair_state: dict) -> tuple[list, list]:
+    if not artifacts:
+        return [], []
+    topic = pair_state.get("current_topic", "")
+    goal = pair_state.get("shared_goal", "")
+    question = pair_state.get("open_question", "")
+    focus = pair_state.get(f"focus_{char_id}", "")
+    keywords = _keyword_tokens(topic, goal, question, focus)
+    active = []
+    identity = []
+    for a in artifacts:
+        if _artifact_is_identity(a):
+            identity.append(a)
+            continue
+        text = _artifact_text(a)
+        score = 0
+        for tok in keywords:
+            if tok in text.lower():
+                score += 1
+        active.append((score, int(a.get("created_at") or a.get("ts") or 0), a))
+    active.sort(key=lambda item: (item[0], item[1]), reverse=True)
+    identity.sort(key=lambda a: int(a.get("created_at") or a.get("ts") or 0), reverse=True)
+    return [a for _, _, a in active[:6]], identity[:3]
+
+
 @router.get("/spectator/agency")
 def spectator_agency():
     """Live status for agency/container NPCs with a simplified pair-story view.
@@ -997,16 +1041,17 @@ def spectator_agency():
         artifacts = []
         if list_artifacts_by_npc:
             try:
-                artifacts = list_artifacts_by_npc(char_id, limit=8)
+                artifacts = list_artifacts_by_npc(char_id, limit=20)
             except Exception:
                 pass
         if not artifacts and r:
             try:
-                raw = r.lrange(f"npc_artifacts:{char_id}", 0, 7)
+                raw = r.lrange(f"npc_artifacts:{char_id}", 0, 19)
                 if raw:
                     artifacts = [_json.loads(a) for a in raw if a]
             except Exception:
                 pass
+        active_artifacts, identity_artifacts = _rank_artifacts_for_pair_story(char_id, artifacts, pair_state)
 
         inbox = []
         sent_messages = []
@@ -1109,7 +1154,8 @@ def spectator_agency():
             "key_label": _key_labels.get(char_id, ""),
             "mood": mood,
             "unread_messages": unread,
-            "artifacts": artifacts,
+            "artifacts": active_artifacts,
+            "identity_artifacts": identity_artifacts,
             "inbox": inbox,
             "sent_messages": sent_messages,
             "active_threads": threads,

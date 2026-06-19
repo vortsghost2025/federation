@@ -36,8 +36,8 @@ p{margin:0 0 8px 0}
 .icon-grey{background:#5a6a80}
 .strip .lbl{color:#5a6a80;margin-right:4px}
 .strip .val{color:#eef2f8;font-weight:700}
+.debug-strip{margin-top:12px;font-size:1rem}
 .val-green{color:#7be095}.val-red{color:#ff6464}.val-yellow{color:#ffd866}
-
 /* ── Warning ── */
 .warn{display:none;padding:14px 20px;background:#2a1a10;border:1px solid #c06020;border-radius:8px;margin-bottom:12px;color:#e8a060;font-size:1.1rem;font-weight:700}
 .warn.show{display:block}
@@ -159,11 +159,13 @@ p{margin:0 0 8px 0}
     <div><span class="lbl">Total calls</span><span class="val" id="s-calls">—</span></div>
     <div><span class="lbl">OK</span><span class="val val-green" id="s-ok">—</span></div>
     <div><span class="lbl">Fail</span><span class="val val-red" id="s-fail">—</span></div>
+    <div><span class="lbl">Last refresh</span><span class="val" id="s-time">—</span></div>
+  </div>
+  <div class="strip debug-strip" id="lifetime-strip">
     <div><span class="lbl">Lifetime calls</span><span class="val" id="s-life-calls">—</span></div>
     <div><span class="lbl">Lifetime OK</span><span class="val" id="s-life-ok">—</span></div>
     <div><span class="lbl">Lifetime fail</span><span class="val val-red" id="s-life-fail">—</span></div>
     <div><span class="lbl">Lifetime fail%</span><span class="val val-red" id="s-life-pct">—</span></div>
-    <div><span class="lbl">Last refresh</span><span class="val" id="s-time">—</span></div>
   </div>
 </details>
 
@@ -193,6 +195,7 @@ const CATEGORY_LABELS = {
   self_improve: "Reflecting on themselves",
   rest: "Resting",
   investigate: "Investigating",
+  error: "Failure/error",
   socialize: "Building connections",
   explore: "Exploring new territory",
   advance_goal: "Pursuing a goal",
@@ -210,6 +213,7 @@ const CATEGORY_GLYPH = {
   self_improve: "🪞",
   rest: "💤",
   investigate: "🔍",
+  error: "●",
   socialize: "🤝",
   explore: "🧭",
   advance_goal: "🎯",
@@ -262,14 +266,31 @@ function labelFor(cat){return CATEGORY_LABELS[cat||'unknown'] || `Thinking about
 function glyphFor(cat){return CATEGORY_GLYPH[cat||'unknown'] || CATEGORY_GLYPH.unknown}
 function colorFor(cat, ok=true){return ok ? (CATEGORY_COLOR[cat||'unknown'] || 'blue') : 'red'}
 
+function inferCategoryFromLog(log){
+  if(!log) return 'unknown';
+  const call = String(log.call_label || '').toLowerCase();
+  const response = String(log.response || log.error || '');
+  if(call === 'artifact') return 'create_artifact';
+  if(call === 'code') return 'write_code';
+  const decisionMatch = response.match(/Decision:\s*([a-z_]+)/i);
+  if(decisionMatch) return decisionMatch[1];
+  if(/Created artifact/i.test(response)) return 'create_artifact';
+  if(/Sent message|message_sent/i.test(response)) return 'send_message';
+  if(/Read artifacts|artifact_read/i.test(response)) return 'read_artifacts';
+  if(/investigat/i.test(response)) return 'investigate';
+  if(/self[-_ ]?improv/i.test(response)) return 'self_improve';
+  if(!log.success || /error|fail|timeout/i.test(response)) return 'error';
+  return 'unknown';
+}
+
 function parseLogDecision(log){
   if(!log) return null;
-  let out = {category: log.call_label || 'unknown', reasoning: '', ts: log.ts, success: log.success, raw: log.response || log.error || ''};
+  let out = {category: inferCategoryFromLog(log), reasoning: '', ts: log.ts, success: log.success, raw: log.response || log.error || ''};
   if(typeof log.response === 'string'){
     const txt = log.response.trim();
     try{
       const j = JSON.parse(txt);
-      out.category = j.category || j.action || out.category;
+      out.category = j.category || j.action || inferCategoryFromLog(log);
       out.reasoning = j.reasoning || j.description || j.action_desc || j.summary || '';
     }catch(_){
       out.reasoning = txt;
@@ -450,16 +471,22 @@ function renderSimpleFeed(npc){
   return html;
 }
 
+function artifactTitle(a){
+  if(typeof a === 'object') return a.title || 'Untitled';
+  return String(a || 'Untitled');
+}
+
 function memoryItems(npc){
   const items = [];
   const inbox = npc.inbox || [];
   const arts = npc.artifacts || [];
+  const identityArts = npc.identity_artifacts || [];
   const d = latestDecision(npc);
   if(inbox.length) items.push(`Inbox has ${inbox.length} recent message${inbox.length===1?'':'s'}; latest is from ${inbox[0].from_char_name || inbox[0].from_char_id || 'unknown'}.`);
   if(d.category) items.push(`Last decision category was ${labelFor(d.category).toLowerCase()}.`);
-  if(arts.length) items.push(`Most recent artifact is “${typeof arts[0]==='object' ? (arts[0].title||'Untitled') : arts[0]}”.`);
+  if(arts.length) items.push(`Most task-relevant artifact is “${artifactTitle(arts[0])}”.`);
   if(npc.mood) items.push(`Current mood is ${npc.mood}.`);
-  return items.slice(0,3);
+  return items.slice(0,4);
 }
 
 function renderExchange(npc){
@@ -533,6 +560,13 @@ function renderBehaviorCard(npc){
         <div class="behavior-label">Memory currently in use</div>
         <div class="memory-list">
           ${memories.length ? memories.map(m=>`<div class="memory-row">· ${esc(m)}</div>`).join('') : '<div class="memory-row muted">No memory summary exposed by this endpoint yet.</div>'}
+        </div>
+      </div>
+
+      <div class="behavior-section">
+        <div class="behavior-label">Identity memory</div>
+        <div class="memory-list">
+          ${(npc.identity_artifacts||[]).length ? (npc.identity_artifacts||[]).map(a=>`<div class="memory-row">· ${esc(artifactTitle(a))}</div>`).join('') : '<div class="memory-row muted">No identity memory exposed yet.</div>'}
         </div>
       </div>
 
