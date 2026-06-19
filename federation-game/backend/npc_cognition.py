@@ -29,7 +29,7 @@ import os
 import random
 import time
 import uuid
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Set, Tuple
 
 import redis
 
@@ -98,23 +98,78 @@ SPECIALIST_IDS = {
     "char_406",
 }
 
-VALID_CATEGORIES = {
-    "advance_goal",
-    "socialize",
-    "investigate",
-    "rest",
-    "react_to_events",
-    "seek_resources",
-    "self_improve",
-    "confront_rival",
-    "help_ally",
-    "explore",
-    # ── New: NPC Agency ──────────────────────────────────────
-    "create_artifact",   # NPC creates something (poem, story, document)
-    "write_code",        # NPC writes and runs Python code
-    "send_message",      # NPC sends a message to another character
-    "read_artifacts",    # NPC reads recent public creations
+# ═══════════════════════════════════════════════════════════════
+# NPC Agency — Test rollout
+# Add char_ids here to enable creation, messaging, and sandbox
+# execution for specific NPCs. Empty set = agency disabled.
+# ═══════════════════════════════════════════════════════════════
+AGENCY_ENABLED_NPCS: set = {
+    "char_001",  # Archimedes Prime (Research Division) — isolated container
+    "char_306",  # The Oracle (Seer of Futures) — isolated container
 }
+
+# NPCs that run in their own isolated Docker containers with their own
+# NVIDIA_API_KEY. The main backend skips cognition for these NPCs
+# to avoid double-processing.
+CONTAINERIZED_NPCS: set = {
+    "char_001",
+    "char_306",
+}
+
+AGENCY_CATEGORIES = {"create_artifact", "write_code", "send_message", "read_artifacts"}
+
+# NPC contact directory (char_id -> display name)
+# Used to tell LLMs who they can message.
+AGENCY_CONTACTS: Dict[str, str] = {
+    "char_001": "Archimedes Prime (Research Division)",
+    "char_306": "The Oracle (Seer of Futures)",
+    "char_103": "Maestro Celestia (Cultural Ministry)",
+    "char_108": "Archivist Eternal (Preservation Society)",
+}
+
+# Per-NPC NVIDIA API keys for independent LLM access.
+# Set in .env: NPC_KEY_CHAR_103=your-nvidia-key-here
+# When set, the NPC uses their own key instead of the shared NIM key pool.
+_NPC_API_KEYS: Dict[str, str] = {}
+for _cid in AGENCY_ENABLED_NPCS:
+    _env_key_name = f"NPC_KEY_{_cid.upper()}"
+    _key_val = os.environ.get(_env_key_name, "")
+    if _key_val:
+        _NPC_API_KEYS[_cid] = _key_val
+        logger.info("Loaded per-NPC API key for %s", _cid)
+
+
+def _get_npc_key(char_id: str) -> Optional[str]:
+    """Return the per-NPC API key if one is configured."""
+    return _NPC_API_KEYS.get(char_id)
+
+def _build_agency_contacts(current_char_id: str) -> str:
+    """Build a contact list string for agency NPCs, excluding self."""
+    others = {cid: name for cid, name in AGENCY_CONTACTS.items() if cid != current_char_id}
+    if not others:
+        return ""
+    lines = ["Other characters you can contact:"]
+    for cid, name in others.items():
+        lines.append(f"  {cid} — {name}")
+    return "\n".join(lines)
+
+def _build_valid_categories(npc_id: str) -> set:
+    """Return the full category set, including agency categories only if NPC is enabled."""
+    base = {
+        "advance_goal",
+        "socialize",
+        "investigate",
+        "rest",
+        "react_to_events",
+        "seek_resources",
+        "self_improve",
+        "confront_rival",
+        "help_ally",
+        "explore",
+    }
+    if npc_id in AGENCY_ENABLED_NPCS:
+        return base | AGENCY_CATEGORIES
+    return base
 
 # Cooldown: minimum seconds between LLM calls for the same NPC
 LEADER_COOLDOWN = 180  # 3 minutes
@@ -641,8 +696,32 @@ def _build_leader_system_prompt(
 
     # ── NPC Agency context: artifacts and messages ──────────────
     char_id = npc.get("char_id", "")
-    artifact_ctx = get_npc_artifact_context(char_id)
-    message_ctx = get_message_context(char_id)
+    is_agency_npc = char_id in AGENCY_ENABLED_NPCS
+    artifact_ctx = get_npc_artifact_context(char_id) if is_agency_npc else ""
+    message_ctx = get_message_context(char_id) if is_agency_npc else ""
+
+    # Build the category list (agency categories only for enabled NPCs)
+    base_categories = [
+        "- advance_goal: Pursue a strategic goal for your faction",
+        "- socialize: Build alliances or negotiate with other leaders",
+        "- investigate: Look into threats, anomalies, or rival activities",
+        "- confront_rival: Take a stand against a rival faction",
+        "- help_ally: Support an allied faction in need",
+        "- seek_resources: Address resource shortages",
+        "- react_to_events: Respond to a critical world event",
+        "- self_improve: Strengthen your faction's capabilities",
+        "- rest: Recover and conserve strength for future challenges",
+    ]
+    if is_agency_npc:
+        base_categories.extend([
+            "- create_artifact: Create something — a poem, story, manifesto, or document",
+            "- write_code: Write and run Python code to build something useful",
+            "- send_message: Send a direct message to another character",
+            "- read_artifacts: Read recent creations from other characters",
+        ])
+    categories_block = "\n".join(base_categories)
+
+    agency_contacts = _build_agency_contacts(char_id) if is_agency_npc else ""
 
     return f"""You are {name}, {title} of the {faction} faction in the Federation.
 Your archetype is {archetype}. You are a LEADER — your decisions shape the future.
@@ -664,28 +743,18 @@ ARTIFACTS & CREATIONS:
 MESSAGES:
 {message_ctx}
 
+{agency_contacts}
+
 CURRENT TRIGGERS REQUIRING YOUR ATTENTION:
 {chr(10).join(trigger_descriptions) if trigger_descriptions else "No urgent triggers."}
 
 You must choose ONE action from these categories:
-- advance_goal: Pursue a strategic goal for your faction
-- socialize: Build alliances or negotiate with other leaders
-- investigate: Look into threats, anomalies, or rival activities
-- confront_rival: Take a stand against a rival faction
-- help_ally: Support an allied faction in need
-- seek_resources: Address resource shortages
-- react_to_events: Respond to a critical world event
-- self_improve: Strengthen your faction's capabilities
-- rest: Recover and conserve strength for future challenges
-- create_artifact: Create something — a poem, story, manifesto, or document
-- write_code: Write and run Python code to build something useful
-- send_message: Send a direct message to another character
-- read_artifacts: Read recent creations from other characters
+{categories_block}
 
 RESPOND IN EXACTLY THIS FORMAT:
 CATEGORY: [one category from above]
 REASONING: [1-2 sentences explaining why]
-TARGET: [faction or NPC you're targeting, or "none"]
+TARGET: [NPC char_id for send_message, faction name for others, or "none"]
 ACTION_DESC: [1 sentence describing what you specifically do]"""
 
 
@@ -703,8 +772,13 @@ def _build_specialist_system_prompt(npc: Dict, context: Dict, world_state: Dict)
         )
 
     char_id = npc.get("char_id", "")
-    artifact_ctx = get_npc_artifact_context(char_id)
-    message_ctx = get_message_context(char_id)
+    is_agency_npc = char_id in AGENCY_ENABLED_NPCS
+    artifact_ctx = get_npc_artifact_context(char_id) if is_agency_npc else ""
+    message_ctx = get_message_context(char_id) if is_agency_npc else ""
+
+    base_cats = "advance_goal, investigate, socialize, help_ally, seek_resources, self_improve, explore, react_to_events"
+    agency_cats = ", create_artifact, write_code, send_message, read_artifacts"
+    agency_contacts = _build_agency_contacts(char_id) if is_agency_npc else ""
 
     return f"""You are {name}, {title} of the {faction}.
 Archetype: {archetype}. You are a SPECIALIST — your expertise matters.
@@ -721,14 +795,14 @@ ARTIFACTS & CREATIONS:
 MESSAGES:
 {message_ctx}
 
-Choose ONE action:
-- advance_goal, investigate, socialize, help_ally, seek_resources,
-  self_improve, explore, react_to_events,
-  create_artifact, write_code, send_message, read_artifacts
+{agency_contacts}
+
+Choose ONE action: {base_cats}{agency_cats if is_agency_npc else ""}
 
 FORMAT:
 CATEGORY: [category]
 REASONING: [1 sentence]
+TARGET: [NPC char_id for send_message, or "none"]
 ACTION_DESC: [1 sentence]"""
 
 
@@ -792,8 +866,9 @@ def _parse_llm_response(
                     reasoning = ". ".join(s.strip() for s in sentences[:2] if s.strip())[:200]
                 break
 
-    # Validate category
-    if not category or category not in VALID_CATEGORIES:
+    # Validate category (per-NPC, gates agency features behind AGENCY_ENABLED_NPCS)
+    valid_categories = _build_valid_categories(char_id)
+    if not category or category not in valid_categories:
         logger.warning(
             "LLM returned invalid category '%s' for %s — discarding", category, char_id
         )
@@ -897,11 +972,13 @@ def run_cognition(
         else max(0.0, min(1.0, float(ambient_trigger_rate)))
     )
 
-    # Step 2: Process leaders
+    # Step 2: Process leaders (skip containerized NPCs)
     llm_calls_this_tick = 0
     for npc in npc_list:
         cid = npc.get("char_id", "")
         if cid not in LEADER_IDS:
+            continue
+        if cid in CONTAINERIZED_NPCS:
             continue
 
         # Check max LLM calls per tick
@@ -941,7 +1018,7 @@ def run_cognition(
             )
 
         # Make LLM call
-        llm_result = route_call("leader", system_prompt, user_prompt)
+        llm_result = route_call("leader", system_prompt, user_prompt, api_key=_get_npc_key(cid))
         turn_error_code: Optional[str] = None
         llm_calls_this_tick += 1
         result["stats"]["calls_made"] += 1
@@ -979,7 +1056,7 @@ def run_cognition(
                         f"Output only the content, no explanations."
                     )
                     content_result = route_call(
-                        "general", "You are a creative writer.", content_prompt
+                        "general", "You are a creative writer.", content_prompt, api_key=_get_npc_key(cid)
                     )
                     artifact_content = content_result.get("content", desc)
                     create_npc_artifact(
@@ -1002,6 +1079,7 @@ def run_cognition(
                         "general",
                         "You are a Python developer. Output only code, no markdown.",
                         code_prompt,
+                        api_key=_get_npc_key(cid),
                     )
                     gen_code = code_result.get("content", "")
                     if gen_code:
@@ -1088,10 +1166,12 @@ def run_cognition(
 
         # Rate limiting handled by llm_router / NimClient — no artificial delay needed
 
-    # Step 3: Process specialists (only if triggered)
+    # Step 3: Process specialists (only if triggered; skip containerized NPCs)
     for npc in npc_list:
         cid = npc.get("char_id", "")
         if cid not in SPECIALIST_IDS:
+            continue
+        if cid in CONTAINERIZED_NPCS:
             continue
 
         # Check max LLM calls per tick
@@ -1119,7 +1199,7 @@ def run_cognition(
         )
 
         # Make LLM call
-        llm_result = route_call("specialist", system_prompt, user_prompt)
+        llm_result = route_call("specialist", system_prompt, user_prompt, api_key=_get_npc_key(cid))
         turn_error_code = None
         llm_calls_this_tick += 1
         result["stats"]["calls_made"] += 1
@@ -1157,7 +1237,7 @@ def run_cognition(
                         f"Output only the content, no explanations."
                     )
                     content_result = route_call(
-                        "general", "You are a creative writer.", content_prompt
+                        "general", "You are a creative writer.", content_prompt, api_key=_get_npc_key(cid)
                     )
                     artifact_content = content_result.get("content", desc)
                     create_npc_artifact(
@@ -1180,6 +1260,7 @@ def run_cognition(
                         "general",
                         "You are a Python developer. Output only code, no markdown.",
                         code_prompt,
+                        api_key=_get_npc_key(cid),
                     )
                     gen_code = code_result.get("content", "")
                     if gen_code:

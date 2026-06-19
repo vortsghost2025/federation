@@ -3,177 +3,894 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Federation — Spectator</title>
-<link href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&family=Libre+Baskerville:wght@400;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="spectator.css">
+<title>Councilor Watch</title>
+<link href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{box-sizing:border-box}
+body{background:#080a10;color:#e0e8f0;font-family:'Atkinson Hyperlegible',sans-serif;margin:0;padding:20px;font-size:22px;line-height:1.55}
+
+/* ── Type ── */
+h1{font-size:2.4rem;margin:0 0 4px 0;color:#eaf0fa;font-weight:700}
+h2{font-size:1.7rem;margin:0 0 4px 0;color:#e0e8f0}
+p{margin:0 0 8px 0}
+
+/* ── Layout blocks ── */
+.wrap{width:100%;max-width:none}
+.head{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:16px;flex-wrap:wrap;gap:10px}
+.head .meta{color:#7a8aa0;font-size:1.05rem}
+.head .who{color:#5a6a80;font-size:0.95rem;margin-top:2px}
+
+/* ── Buttons/tabs ── */
+.btn,.tab{background:#1a2430;border:1px solid #2a3a4a;color:#c8d6e6;padding:10px 22px;border-radius:6px;cursor:pointer;font-size:1.05rem;font-family:inherit}
+.btn:hover,.tab:hover{background:#243040}
+.tab-row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.tab.active{background:#27384f;border-color:#5a7a9a;color:#e8edf5;font-weight:700}
+.tab-row .spacer{flex:1}
+
+/* ── Status strip ── */
+.strip{display:flex;flex-wrap:wrap;gap:10px 28px;padding:14px 20px;background:#0c1018;border:1px solid #1a2430;border-radius:10px;margin-bottom:12px;font-size:1.1rem}
+.strip .icon{display:inline-block;width:14px;height:14px;border-radius:50%;margin-right:8px;vertical-align:middle}
+.icon-green{background:#2ecc71;box-shadow:0 0 8px #2ecc7166}
+.icon-red{background:#e74c3c;box-shadow:0 0 8px #e74c3c66}
+.icon-yellow{background:#f1c40f;box-shadow:0 0 8px #f1c40f66}
+.icon-grey{background:#5a6a80}
+.strip .lbl{color:#5a6a80;margin-right:4px}
+.strip .val{color:#eef2f8;font-weight:700}
+.val-green{color:#7be095}.val-red{color:#ff6464}.val-yellow{color:#ffd866}
+
+/* ── Warning ── */
+.warn{display:none;padding:14px 20px;background:#2a1a10;border:1px solid #c06020;border-radius:8px;margin-bottom:12px;color:#e8a060;font-size:1.1rem;font-weight:700}
+.warn.show{display:block}
+
+/* ── Simple behavior dashboard ── */
+.system-line{padding:18px 22px;background:#0e1624;border:1px solid #263a54;border-radius:14px;margin-bottom:14px;color:#eaf0fa;font-size:1.25rem;font-weight:700}
+.system-line small{display:block;color:#8da3ba;font-size:1rem;font-weight:400;margin-top:4px}
+.behavior-card{padding:22px 26px;background:#0e121c;border:1px solid #26384f;border-radius:18px;margin-bottom:16px;box-shadow:0 0 0 1px #00000044}
+.behavior-head{display:flex;justify-content:space-between;gap:12px;align-items:flex-start;flex-wrap:wrap;margin-bottom:10px}
+.behavior-name{font-size:1.75rem;font-weight:700;color:#f2f6ff}
+.behavior-meta{color:#93a6bd;font-size:1.05rem}
+.plain-state{font-size:1.45rem;line-height:1.38;color:#ffffff;font-weight:700;margin:12px 0 18px 0;padding:14px 16px;background:#111b2a;border-left:5px solid #7aa7ff;border-radius:10px}
+.behavior-section{margin-top:16px;padding-top:14px;border-top:1px solid #1a2638}
+.behavior-label{color:#8da3ba;font-size:0.95rem;text-transform:uppercase;letter-spacing:0.1em;margin-bottom:6px}
+.reasoning{font-size:1.35rem;color:#e8edf5;line-height:1.45;max-width:80ch}
+.doing{font-size:1.3rem;color:#eaf0fa;font-weight:700}
+.signal{display:inline-block;margin-top:8px;color:#dce9ff;background:#18263a;border:1px solid #2e496c;border-radius:999px;padding:5px 12px;font-size:1rem}
+.exchange-list,.memory-list,.comm-list{display:grid;gap:8px}
+.exchange-row,.memory-row,.comm-row{padding:10px 12px;background:#0a0e16;border:1px solid #172234;border-radius:10px;color:#d8e2f0;font-size:1.08rem}
+.muted{color:#8798ad}
+.timeline{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px}
+.glyph{border:1px solid #22344c;border-radius:999px;background:#101827;color:#e8edf5;padding:8px 11px;min-width:44px;text-align:center;font-size:1.15rem;cursor:pointer}
+.glyph.blue{background:#112033;border-color:#29527e}.glyph.green{background:#112a20;border-color:#28704b}.glyph.amber{background:#2d2410;border-color:#9a7222}.glyph.red{background:#351719;border-color:#aa3a42}
+.tick-detail{display:none;margin-top:10px;padding:12px 14px;background:#0a0e16;border-left:4px solid #7aa7ff;border-radius:8px;color:#d6e2f0;font-size:1.05rem}
+.tick-detail.show{display:block}
+.comm-panel,.timeline-panel{padding:20px 24px;background:#0e121c;border:1px solid #26384f;border-radius:18px;margin-bottom:16px}
+.debug-drawer{margin-bottom:14px;background:#0c1018;border:1px solid #1a2430;border-radius:12px;padding:0}
+.debug-drawer summary{cursor:pointer;padding:14px 18px;color:#d8e2f0;font-weight:700;font-size:1.05rem}
+.debug-drawer .strip{border:none;margin:0;border-top:1px solid #1a2430;border-radius:0 0 12px 12px}
+
+/* ── Councilor cards (single mode) ── */
+.single{padding:18px 24px;background:#0e121c;border:1px solid #1a2430;border-radius:14px;margin-bottom:12px}
+.single .name{font-size:1.8rem;font-weight:700;color:#eef2f8}
+.single .id{color:#5a6a80;font-size:0.95rem;font-family:monospace;display:inline-block;margin-left:10px}
+.single .key{color:#7be095;font-family:monospace;font-size:0.95rem;padding:2px 10px;background:#141c28;border-radius:4px;margin-left:10px;display:inline-block}
+.kpis{margin-top:8px;padding:10px 14px;background:#0a0e16;border-radius:8px;display:flex;flex-wrap:wrap;gap:8px 28px;font-size:1.15rem}
+.kpis .lbl{color:#5a6a80}.kpis .num{color:#eef2f8;font-weight:700}
+
+/* ── Recent activity (drop-down feed) ── */
+.recents{margin-top:10px;padding:10px 14px;background:#0a0e16;border-radius:8px}
+.recents h3{font-size:1.05rem;margin:0 0 6px 0;color:#5a6a80;text-transform:uppercase;letter-spacing:1px;font-weight:400}
+.r-item{padding:6px 0;font-size:1.1rem;border-bottom:1px solid #121a24;display:grid;grid-template-columns:auto auto 1fr auto;gap:10px;align-items:center}
+.r-item:last-child{border-bottom:none}
+.r-time{color:#5a6a80;font-family:monospace;font-size:0.95rem}
+.r-actor{color:#eef2f8;font-weight:700}
+.r-action{color:#9bb8d0;font-size:0.95rem;text-transform:uppercase;letter-spacing:0.5px;background:#1a2430;padding:2px 8px;border-radius:3px}
+.r-body{color:#d0d8e8;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+/* ── Detailed mode ── */
+.detail-toggle{padding:12px 20px;background:#0a2430;border:1px solid #2a4a6a;border-radius:10px;margin:14px 0;cursor:pointer;font-size:1.05rem;color:#9bb8d0;font-family:inherit;width:100%;text-align:left}
+.detail-toggle:hover{background:#1a3850}
+.detail-table{font-size:0.95rem;width:100%;border-collapse:collapse;margin-top:8px}
+.detail-table th{color:#7a8aa0;font-weight:400;padding:6px 10px;font-size:0.85rem;text-transform:uppercase;letter-spacing:0.5px;border-bottom:1px solid #1a2430;text-align:left;white-space:nowrap}
+.detail-table td{padding:6px 10px;border-bottom:1px solid #121a24;vertical-align:top;line-height:1.5}
+.dt-good{color:#7be095;font-weight:700}
+.dt-bad{color:#ff6464;font-weight:700}
+.expand-x{cursor:pointer}
+.expand-x .ic{display:inline-block;width:0;height:0;border-left:8px solid #5a6a80;border-top:6px solid transparent;border-bottom:6px solid transparent;margin-right:8px;vertical-align:middle;transition:transform 0.15s}
+.expand-x.open .ic{transform:rotate(90deg);border-left-color:#9bb8d0}
+.detail-tr{display:none;background:#0a0e16}
+.detail-tr.show{display:table-row}
+.detail-tr td{padding:10px 18px;background:#0a0e16;border-bottom:1px solid #1a2430}
+.detail-pre{color:#9eb6d0;font-size:0.9rem;line-height:1.55;white-space:pre-wrap;word-break:break-word;max-height:300px;overflow-y:auto;background:#0c1018;padding:10px 14px;border-radius:6px;border-left:3px solid #3a5a7a;margin:4px 0}
+
+/* ── List-mode history (multi-NPC side-by-side) ── */
+.dual{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+@media(max-width:1100px){.dual{grid-template-columns:1fr}}
+
+.feed{padding:14px 18px;background:#0a0e16;border:1px solid #1a2430;border-radius:10px}
+.feed h4{font-size:1.1rem;margin:0 0 8px 0;color:#e0e8f0}
+.feed .stamp{font-family:monospace;font-size:0.85rem;color:#5a6a80;margin-right:6px}
+.feed p.line{margin:0 0 6px 0;color:#c8d2e0;font-size:1.0rem;line-height:1.4}
+.feed .empty{padding:14px;color:#5a6a80;font-style:italic;font-size:0.95rem}
+
+/* ── Misc ── */
+.empty-card{padding:30px;background:#0e121c;border:1px solid #1a2430;border-radius:14px;color:#5a6a80;font-style:italic;font-size:1.1rem;text-align:center}
+.copy-msg{display:inline-block;color:#7be095;font-size:0.95rem;margin-left:10px;opacity:0;transition:opacity 0.3s}
+.copy-msg.show{opacity:1}
+</style>
 </head>
 <body>
-<div class="watch-shell">
+<div class="wrap">
 
-  <header class="hero">
-    <p class="eyebrow" id="era-label">LATEST SCENE</p>
-    <h1 id="headline">The Federation is between visible moments.</h1>
-    <p class="plain-summary" id="summary"></p>
-    <p class="pulse-meta">
-      <span id="status-dot" class="dot idle" aria-hidden="true"></span>
-      <span id="status-text">live</span>
-      <span class="sep">·</span>
-      <span id="last-update"></span>
-    </p>
-    <div class="controls">
-      <button id="refresh-btn" type="button">Refresh</button>
-      <button id="read-btn" type="button">Read aloud</button>
-      <button id="pause-btn" type="button" data-paused="false">Pause</button>
-      <button id="clear-dossier-btn" type="button" hidden>Close dossier</button>
-    </div>
-  </header>
-
-  <section class="vitals-panel" aria-label="World vitals">
-    <h2>World vitals</h2>
-    <div id="vitals-grid" class="vitals-grid">
-      <div class="vital-tile placeholder" aria-busy="true">Loading vitals...</div>
-    </div>
-    <div id="operator-warnings" class="operator-warnings" hidden></div>
-  </section>
-
-  <section class="channels-panel" aria-label="Story channels">
-    <div class="channels-header">
-      <div>
-        <p class="channels-eyebrow">Live channels</p>
-        <h2 class="channels-title">Pick a storyline to follow</h2>
-      </div>
-      <div class="channels-controls">
-        <button id="auto-channel-btn" type="button" data-auto="off">Auto-rotate: off</button>
-      </div>
-    </div>
-    <div id="channel-grid" class="channel-grid">
-      <p class="empty">Loading channels...</p>
-    </div>
-  </section>
-
-  <section class="channel-active-panel" aria-label="Currently-watched channel">
-    <div class="channel-active-header">
-      <div>
-        <p class="channel-eyebrow">Now watching</p>
-        <h2 id="channel-name">No channel selected</h2>
-        <p class="channel-meta" id="channel-meta"></p>
-      </div>
-      <div class="channel-controls">
-        <button id="play-channel-btn" type="button" disabled>Play this channel</button>
-        <button id="refresh-channel-btn" type="button" disabled>Refresh</button>
-      </div>
-    </div>
-    <article id="channel-feed" class="channel-feed">
-      <p class="empty">No channel selected.</p>
-    </article>
-  </section>
-
-  <section class="voice-controls-panel" aria-label="Voice calibration">
-    <h2>Voice calibration</h2>
-    <p id="voice-status" class="voice-status">Detecting installed voices...</p>
-    <div class="voice-mode-row">
-      <label class="voice-mode-label" for="voice-mode">Voice mode</label>
-      <select id="voice-mode" class="voice-mode-select">
-        <option value="best-pick">Best available (default)</option>
-        <option value="local-only">Local voices only (skip cloud-downloaded)</option>
-        <option value="custom">Custom — only voices I allow</option>
-      </select>
-      <button id="ban-all-cloud" type="button" class="voice-mode-action">Ban all cloud voices</button>
-    </div>
-    <div id="voice-grid" class="voice-grid"></div>
-    <p class="voice-legend">
-      <span class="legend-chip ok">Allowed</span>
-      <span class="legend-chip bad">Banned</span>
-      Click any voice card to hear a sample. Open a card's menu to ban it.
-      Voices you ban never play, even in auto-hash mode.
-      <br>
-      Reproduction also slows on "Gravitas" and "Villain" characters and lightens on
-      "Comp" companions so the same voice reads differently per role.
-    </p>
-    <details class="voice-defaults">
-      <summary>How voices are assigned</summary>
-      <p>The browser voices are matched to NPCs by hashing the character name
-      and picking a deterministic slot. Each character plays in the same voice
-      reliably so you can recognise them by ear. Archetype (Gravitas / Wanderer /
-      Companion) tweaks rate and pitch subtly so even the same voice feels
-      distinctly spoken for each role.</p>
-    </details>
-  </section>
-
-  <section class="episode-panel" aria-label="Currently on air">
-    <div class="episode-header">
-      <div>
-        <p class="episode-eyebrow">Now on air</p>
-        <h2 id="episode-title">Pick an episode to start watching</h2>
-        <p class="episode-meta" id="episode-meta"></p>
-      </div>
-      <div class="episode-controls">
-        <button id="play-episode-btn" type="button" disabled>Play this episode</button>
-        <button id="next-episode-btn" type="button" disabled>Next episode</button>
-        <button id="clear-episode-btn" type="button" hidden>Back to all episodes</button>
-      </div>
-    </div>
-    <article id="episode-body" class="episode-body">
-      <p class="empty">No episode loaded yet. Click any thumbnail below.</p>
-    </article>
-
-    <div class="episode-rail-label">
-      <span>Next episodes</span>
-      <span id="episode-rail-count" class="episode-rail-count"></span>
-    </div>
-    <div id="episode-rail" class="episode-rail" role="tablist">
-      <p class="empty">Loading episodes...</p>
-    </div>
-  </section>
-
-  <div class="story-grid">
-
-    <section class="story-panel" aria-label="Scene feed">
-      <h2>What just happened</h2>
-      <div id="scene-list" class="scene-list">
-        <p class="empty" id="scene-empty">The world is still thinking. Refresh in a moment.</p>
-      </div>
-    </section>
-
-    <aside class="dossier-panel" id="dossier-panel" aria-label="Character dossier" hidden>
-      <h2 id="dossier-name">Character</h2>
-      <p class="dossier-subtitle"><span id="dossier-faction">Unknown</span></p>
-      <p class="dossier-meta" id="dossier-meta"></p>
-      <div class="dossier-block">
-        <h3>Current plan</h3>
-        <p id="dossier-plan" class="empty">No plan found.</p>
-      </div>
-      <div class="dossier-block">
-        <h3>Recent thoughts</h3>
-        <ul id="dossier-thoughts" class="dossier-list"><li class="empty">Loading...</li></ul>
-      </div>
-      <div class="dossier-block">
-        <h3>Recent decisions</h3>
-        <ul id="dossier-decisions" class="dossier-list"><li class="empty">Loading...</li></ul>
-      </div>
-      <div class="dossier-block">
-        <h3>Memorable relationships</h3>
-        <ul id="dossier-relationships" class="dossier-list"><li class="empty">Loading...</li></ul>
-      </div>
-      <div class="dossier-block">
-        <h3>Ask the world about them</h3>
-        <p class="empty">Ask Schend: "What is <span id="dossier-name-inline">they</span> planning?"</p>
-      </div>
-    </aside>
-
+<div class="head">
+  <div>
+    <h1>Councilor Watch</h1>
+    <div class="who">Archimedes Prime &middot; The Oracle &middot; 2 of 38 NPCs</div>
   </div>
+  <div class="tab-row">
+    <span id="live-pill"><span class="icon icon-green"></span><span id="live-text">live</span></span>
+    <button class="btn" id="refresh-btn">⟳ Refresh</button>
+    <button class="btn" id="copy-btn">📋 Copy Report</button>
+    <span class="copy-msg" id="copy-msg">Copied</span>
+  </div>
+</div>
 
-  <section class="assistant-panel" aria-label="Ask Schend">
-    <h2>Ask Schend</h2>
-    <form id="assistant-form" class="assistant-form">
-      <input id="question-input" type="text" placeholder="Ask about the Federation..." autocomplete="off">
-      <button type="submit">Ask</button>
-    </form>
-    <div id="assistant-answer" class="assistant-answer"></div>
-  </section>
+<nav style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px;padding:10px 14px;background:#0c1018;border:1px solid #1a2430;border-radius:8px">
+<a href="/bridge.html" style="color:#7a8aa0;text-decoration:none;padding:6px 14px;border-radius:4px;font-size:0.95rem">Bridge</a>
+<a href="/starmap.html" style="color:#7a8aa0;text-decoration:none;padding:6px 14px;border-radius:4px;font-size:0.95rem">Star Map</a>
+<a href="/" style="color:#7a8aa0;text-decoration:none;padding:6px 14px;border-radius:4px;font-size:0.95rem">Simulator</a>
+<a href="/simulation.html" style="color:#7a8aa0;text-decoration:none;padding:6px 14px;border-radius:4px;font-size:0.95rem">Live Sim</a>
+<a href="/adult.html" style="color:#7a8aa0;text-decoration:none;padding:6px 14px;border-radius:4px;font-size:0.95rem">Control</a>
+<a href="/worldguide.html" style="color:#7a8aa0;text-decoration:none;padding:6px 14px;border-radius:4px;font-size:0.95rem">World Guide</a>
+<a href="/earth.html" style="color:#7a8aa0;text-decoration:none;padding:6px 14px;border-radius:4px;font-size:0.95rem">Earth</a>
+<a href="/spectator.html" style="color:#e8edf5;text-decoration:none;padding:6px 14px;border-radius:4px;font-size:0.95rem;background:#27384f;font-weight:700">Spectator</a>
+</nav>
+
+<div id="warn" class="warn">⚠ API failures detected</div>
+
+<div id="system-line" class="system-line">
+  Loading behavior state…
+  <small>Simple mode shows behavior first. API calls and raw logs are under Debug.</small>
+</div>
+
+<details class="debug-drawer" id="debug-drawer">
+  <summary id="debug-summary">Debug drawer — API health, models, raw calls</summary>
+  <div class="strip" id="strip">
+    <div><span class="lbl">Tick</span><span class="val" id="s-tick">—</span></div>
+    <div><span class="lbl">Total calls</span><span class="val" id="s-calls">—</span></div>
+    <div><span class="lbl">OK</span><span class="val val-green" id="s-ok">—</span></div>
+    <div><span class="lbl">Fail</span><span class="val val-red" id="s-fail">—</span></div>
+    <div><span class="lbl">Last refresh</span><span class="val" id="s-time">—</span></div>
+  </div>
+</details>
+
+<div class="tab-row" style="margin-bottom:12px">
+  <button class="tab active" data-mode="both">Simple behavior view</button>
+  <span class="spacer"></span>
+  <button class="tab" data-mode="detail">⚙ Detailed mode</button>
+</div>
+
+<div id="content"></div>
 
 </div>
 
-<script src="spectator.js"></script>
+<script>
+const $ = id => document.getElementById(id);
+const REFRESH_MS = 30000;
+let timer = null;
+let lastData = null;
+let viewMode = 'both';
+
+const CATEGORY_LABELS = {
+  read_artifacts: "Reading memory/artifacts",
+  react_to_events: "Responding to world events",
+  create_artifact: "Writing a report/artifact",
+  send_message: "Communicating with another NPC",
+  write_code: "Building something with code",
+  self_improve: "Reflecting on themselves",
+  rest: "Resting",
+  investigate: "Investigating",
+  socialize: "Building connections",
+  explore: "Exploring new territory",
+  advance_goal: "Pursuing a goal",
+  confront_rival: "Engaging a rival",
+  help_ally: "Helping an ally",
+  seek_resources: "Seeking resources",
+};
+
+const CATEGORY_GLYPH = {
+  read_artifacts: "📖",
+  react_to_events: "📡",
+  create_artifact: "📝",
+  send_message: "📩",
+  write_code: "🛠",
+  self_improve: "🪞",
+  rest: "💤",
+  investigate: "🔍",
+  socialize: "🤝",
+  explore: "🧭",
+  advance_goal: "🎯",
+  confront_rival: "⚔",
+  help_ally: "🛡",
+  seek_resources: "⛏",
+  unknown: "•",
+};
+
+const CATEGORY_COLOR = {
+  read_artifacts: "blue",
+  self_improve: "blue",
+  rest: "blue",
+  investigate: "blue",
+  create_artifact: "green",
+  send_message: "green",
+  write_code: "green",
+  socialize: "green",
+  help_ally: "green",
+  react_to_events: "amber",
+  explore: "amber",
+  advance_goal: "amber",
+  confront_rival: "amber",
+  seek_resources: "amber",
+};
+
+/* helpers */
+function esc(t){const d=document.createElement('div');d.textContent=t;return d.innerHTML}
+function ts(t){if(!t)return '?';const d=new Date(Number(t)*1000);return d.toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit',second:'2-digit'})}
+function ago(t){if(!t)return '';const s=Math.floor(Date.now()/1000)-Number(t);if(s<60)return s+'s ago';if(s<3600)return Math.floor(s/60)+'m ago';if(s<86400)return Math.floor(s/3600)+'h ago';return Math.floor(s/86400)+'d ago'}
+function short(m){if(!m)return '?';return m.replace(/^nvidia\//,'').replace(/^z-ai\//,'').slice(0,40)}
+function dur(ms){if(!ms && ms!==0)return '';const n=Number(ms);if(n<1000)return n+'ms';return (n/1000).toFixed(1)+'s'}
+function words(t,n=18){return (t||'').replace(/\s+/g,' ').trim().split(' ').slice(0,n).join(' ') + (((t||'').trim().split(/\s+/).length>n)?'…':'')}
+function firstSentence(t,max=280){
+  if(!t) return '';
+  let s = String(t).replace(/\s+/g,' ').trim();
+  try{
+    if(s.startsWith('{')){
+      const j = JSON.parse(s);
+      s = j.reasoning || j.description || j.action_desc || j.summary || j.category || s;
+    }
+  }catch(_){}
+  const m = s.match(/^(.{30,}?[.!?])\s/);
+  if(m) s = m[1];
+  if(s.length>max) s = s.slice(0,max).trim() + '…';
+  return s;
+}
+
+function labelFor(cat){return CATEGORY_LABELS[cat||'unknown'] || `Thinking about what to do next (${cat})`}
+function glyphFor(cat){return CATEGORY_GLYPH[cat||'unknown'] || CATEGORY_GLYPH.unknown}
+function colorFor(cat, ok=true){return ok ? (CATEGORY_COLOR[cat||'unknown'] || 'blue') : 'red'}
+
+function parseLogDecision(log){
+  if(!log) return null;
+  let out = {category: log.call_label || 'unknown', reasoning: '', ts: log.ts, success: log.success, raw: log.response || log.error || ''};
+  if(typeof log.response === 'string'){
+    const txt = log.response.trim();
+    try{
+      const j = JSON.parse(txt);
+      out.category = j.category || j.action || out.category;
+      out.reasoning = j.reasoning || j.description || j.action_desc || j.summary || '';
+    }catch(_){
+      out.reasoning = txt;
+    }
+  }
+  return out;
+}
+
+function latestDecision(npc){
+  const decs = npc.recent_decisions || [];
+  if(decs.length){
+    const d = decs[0];
+    return {
+      category: d.category || d.action || d.call_label || 'unknown',
+      reasoning: d.reasoning || d.description || d.action_desc || d.summary || '',
+      ts: d.ts || d.created_at || (npc.stats||{}).last_ts || 0,
+      success: true,
+      raw: JSON.stringify(d)
+    };
+  }
+  const logs = (npc.llm_logs||[]).filter(l => (l.call_label||'').includes('decision') || l.response);
+  return parseLogDecision(logs[0]) || {category:'unknown',reasoning:'No recent reasoning available yet.',ts:(npc.stats||{}).last_ts||0,success:true,raw:''};
+}
+
+function pairStory(){
+  return (lastData && lastData.pair_story) ? lastData.pair_story : null;
+}
+
+function storyFocus(npc){
+  const pair = pairStory();
+  return npc.story_focus || (pair && pair.focus_by_char ? pair.focus_by_char[npc.char_id] : '') || '';
+}
+
+function storyCategory(npc){
+  const pair = pairStory();
+  return npc.story_category || (pair && pair.category_by_char ? pair.category_by_char[npc.char_id] : '') || latestDecision(npc).category;
+}
+
+function deriveBehaviorSignal(decisions){
+  const list = (decisions||[]).slice(0,10);
+  if(!list.length) return 'observing';
+  const counts = {};
+  list.forEach(d => { const c = d.category || d.action || 'unknown'; counts[c] = (counts[c]||0)+1; });
+  const weights = {
+    confront_rival: ['courageous','direct'],
+    react_to_events: ['reactive','alert'],
+    read_artifacts: ['analytical','reflective'],
+    investigate: ['analytical'],
+    send_message: ['social','relationship-building'],
+    write_code: ['builder','experimental'],
+    create_artifact: ['productive','documenting'],
+    rest: ['quiet','steady'],
+    self_improve: ['introspective'],
+    explore: ['curious'],
+    help_ally: ['cooperative'],
+    seek_resources: ['practical'],
+  };
+  const labels = {};
+  for(const cat in counts){(weights[cat]||[]).forEach(l => { labels[l] = (labels[l]||0)+counts[cat]; });}
+  const top = Object.entries(labels).sort((a,b)=>b[1]-a[1]).slice(0,3).map(e=>e[0]);
+  return top.length ? top.join(' / ') : 'observing';
+}
+
+function behaviorStateSentence(npc){
+  const d = latestDecision(npc);
+  const name = npc.name || 'This NPC';
+  const doing = labelFor(d.category).toLowerCase();
+  const focus = storyFocus(npc);
+  const inbox = npc.inbox || [];
+  const arts = npc.artifacts || [];
+  if(focus) return `${name} is focused on ${focus.replace(/[.\s]+$/,'')}.`;
+  if(d.category === 'read_artifacts' && inbox.length){
+    const from = inbox[0].from_char_name || inbox[0].from_char_id || 'another NPC';
+    return `${name} is reading ${from}'s messages before deciding what to do next.`;
+  }
+  if(d.category === 'create_artifact'){
+    const title = arts[0] && (typeof arts[0] === 'object' ? arts[0].title : arts[0]);
+    return `${name} is writing or refining an artifact${title ? ': '+title : ''}.`;
+  }
+  if(d.category === 'send_message') return `${name} is communicating with another NPC and building the relationship thread.`;
+  if(d.category === 'react_to_events') return `${name} is responding to recent world events.`;
+  return `${name} is ${doing}.`;
+}
+
+function summarize(npc){
+  const s = npc.stats||{};
+  return {
+    calls: parseInt(s.llm_calls)||0,
+    ok:    parseInt(s.llm_success)||0,
+    fail:  parseInt(s.llm_failures)||0,
+    arts:  parseInt(s.artifacts_created)||0,
+    code:  parseInt(s.code_written)||0,
+    sends: parseInt(s.messages_sent)||0,
+    lastModel: s.last_model||'-',
+    lastLabel: s.last_call_label||'-',
+    lastTs:    parseInt(s.last_ts)||0,
+    rate: (()=>{const c=parseInt(s.llm_calls)||0; const o=parseInt(s.llm_success)||0; return c? Math.round((o/c)*100) : 0})()
+  };
+}
+
+function renderSingle(npc){
+  const s = summarize(npc);
+  const status = s.fail>s.ok*0.3 ? 'red' : s.calls>0 ? 'green' : 'grey';
+  const dots = {green:'icon-green',red:'icon-red',grey:'icon-grey',yellow:'icon-yellow'};
+  const mood = npc.mood || 'unknown';
+  const arts = npc.artifacts||[];
+  const lastArt = arts[0];
+  let lastArtHtml = '<p style="color:#5a6a80;margin:0;font-style:italic">No artifacts yet.</p>';
+  if(lastArt && typeof lastArt==='object'){
+    lastArtHtml = `<div style="font-size:1.15rem;color:#e0e8f0;font-weight:700;margin-bottom:4px">${esc(lastArt.title||'Untitled')}</div>
+      <div style="color:#8898b0;font-size:1.0rem;line-height:1.4;max-height:200px;overflow-y:auto">
+        ${esc((lastArt.content||'').slice(0,400))}${(lastArt.content||'').length>400?'…':''}
+      </div>
+      <div style="color:#5a6a80;font-size:0.9rem;margin-top:4px">${ago(parseInt(lastArt.created_at)||0)} · ${(lastArt.content||'').length} chars</div>`;
+  } else if(typeof lastArt === 'string'){
+    lastArtHtml = `<div style="font-size:1.1rem;color:#e0e8f0">${esc(lastArt)}</div>`;
+  }
+
+  const lastArtTitle = (lastArt && (typeof lastArt==='object' ? lastArt.title : lastArt)) || '(none)';
+  const decisionCount = (npc.recent_decisions||[]).length;
+  const inboxCount = npc.unread_messages||0;
+  const keyLabel = npc.key_label || 'shared key';
+  return `
+    <div class="single">
+      <div>
+        <span class="name">${esc(npc.name)}</span>
+        <span class="id">${esc(npc.char_id)}</span>
+        <span class="key">${esc(keyLabel)}</span>
+        <span style="margin-left:14px"><span class="icon ${dots[status]}"></span>${s.rate}% OK · mood: ${esc(mood)}</span>
+      </div>
+
+      <div class="kpis">
+        <div><span class="lbl">Calls</span><span class="num">${s.calls}</span></div>
+        <div><span class="lbl">OK</span><span class="num val-green">${s.ok}</span></div>
+        <div><span class="lbl">Fail</span><span class="num val-red">${s.fail}</span></div>
+        <div><span class="lbl">Artifacts</span><span class="num">${s.arts}</span></div>
+        <div><span class="lbl">Code runs</span><span class="num">${s.code}</span></div>
+        <div><span class="lbl">Sent</span><span class="num">${s.sends}</span></div>
+        <div><span class="lbl">Inbox</span><span class="num">${inboxCount}</span></div>
+        <div><span class="lbl">Decisions</span><span class="num">${decisionCount}</span></div>
+        <div><span class="lbl">Last model</span><span class="num" style="color:#7be095;font-family:monospace;font-size:0.95rem">${esc(short(s.lastModel))}</span></div>
+        <div><span class="lbl">Last action</span><span class="num">${esc(s.lastLabel)}</span></div>
+        <div><span class="lbl">Last tick</span><span class="num" style="font-family:monospace;color:#5a6a80">${s.lastTs?ts(s.lastTs):'—'} <span style="color:#5a6a80;font-size:0.85rem">(${ago(s.lastTs)})</span></span></div>
+      </div>
+
+      <div class="recents">
+        <h3>Latest artifact</h3>
+        <p style="margin:0 0 8px 0;color:#5a6a80;font-size:0.95rem">${esc(lastArtTitle)}</p>
+        ${lastArtHtml}
+      </div>
+
+      <div class="recents" style="margin-top:10px">
+        <h3>Recent activity</h3>
+        ${renderSimpleFeed(npc)}
+      </div>
+    </div>
+  `;
+}
+
+function renderSimpleFeed(npc){
+  const logs = (npc.llm_logs||[]).slice(0, 8);
+  if(!logs.length) return '<div class="empty" style="padding:8px 0">No activity yet.</div>';
+  let html = '';
+  for(const l of logs.reverse()){
+    const cls = l.success ? 'val-green' : 'val-red';
+    const status = l.success ? 'OK' : 'FAIL';
+    const label = l.call_label || '?';
+    const body = l.success
+      ? (l.response||'').slice(0,140)
+      : ('ERR: '+(l.error||'fail')).slice(0,140);
+    html += `<div class="r-item">
+      <span class="r-time">${ts(l.ts)}</span>
+      <span class="r-action">${esc(label)}</span>
+      <span class="r-body">${esc(body)}</span>
+      <span class="${cls}">${status}</span>
+    </div>`;
+  }
+  return html;
+}
+
+function memoryItems(npc){
+  const items = [];
+  const inbox = npc.inbox || [];
+  const arts = npc.artifacts || [];
+  const d = latestDecision(npc);
+  if(inbox.length) items.push(`Inbox has ${inbox.length} recent message${inbox.length===1?'':'s'}; latest is from ${inbox[0].from_char_name || inbox[0].from_char_id || 'unknown'}.`);
+  if(d.category) items.push(`Last decision category was ${labelFor(d.category).toLowerCase()}.`);
+  if(arts.length) items.push(`Most recent artifact is “${typeof arts[0]==='object' ? (arts[0].title||'Untitled') : arts[0]}”.`);
+  if(npc.mood) items.push(`Current mood is ${npc.mood}.`);
+  return items.slice(0,3);
+}
+
+function renderExchange(npc){
+  const rows = [];
+  const inbox = (npc.inbox || []).slice(0,1);
+  const sent = (npc.sent_messages || npc.sent || []).slice(0,1);
+  for(const m of inbox){
+    const from = m.from_char_name || m.from_char_id || 'unknown';
+    const subj = m.subject || m.body || '(no subject)';
+    rows.push(`<div class="exchange-row">← from <strong>${esc(from)}</strong> <span class="muted">· ${ago(m.created_at||m.ts)}</span><br>${esc(words(subj,16))}</div>`);
+  }
+  for(const m of sent){
+    const to = m.to_char_name || m.to_char_id || 'unknown';
+    const subj = m.subject || m.body || '(no subject)';
+    rows.push(`<div class="exchange-row">→ to <strong>${esc(to)}</strong> <span class="muted">· ${ago(m.created_at||m.ts)}</span><br>${esc(words(subj,16))}</div>`);
+  }
+  return rows.length ? rows.join('') : '<div class="exchange-row muted">No recent exchange exposed by this endpoint yet.</div>';
+}
+
+function renderTimeline(npc, limit=12){
+  const logs = (npc.llm_logs || []).slice(0,limit);
+  if(!logs.length) return '<div class="muted">No timeline yet.</div>';
+  return `<div class="timeline">${logs.reverse().map((l,i)=>{
+    const d = parseLogDecision(l) || {category:l.call_label||'unknown', reasoning:l.response||l.error||'', success:l.success, ts:l.ts};
+    const cat = d.category || 'unknown';
+    return `<button class="glyph ${colorFor(cat, l.success)}" data-tick="${esc(npc.char_id)}-${i}" aria-label="${esc(labelFor(cat))}">${glyphFor(cat)}</button>
+      <div class="tick-detail" id="tick-${esc(npc.char_id)}-${i}">
+        <strong>${esc(labelFor(cat))}</strong> <span class="muted">· ${ts(l.ts)} · ${l.success?'OK':'error'}</span><br>
+        ${esc(firstSentence(d.reasoning || d.raw || l.error || 'No reasoning text available.', 320))}
+      </div>`;
+  }).join('')}</div>`;
+}
+
+function renderBehaviorCard(npc){
+  const s = summarize(npc);
+  const d = latestDecision(npc);
+  const currentCategory = storyCategory(npc) || d.category;
+  const currentThought = storyFocus(npc) || firstSentence(d.reasoning || d.raw || 'No current reasoning available yet.');
+  const signal = deriveBehaviorSignal(npc.recent_decisions || [d]);
+  const memories = memoryItems(npc);
+  const acted = s.lastTs ? ago(s.lastTs) : 'unknown';
+  return `
+    <section class="behavior-card">
+      <div class="behavior-head">
+        <div>
+          <div class="behavior-name">${esc(npc.name)}</div>
+          <div class="behavior-meta">${esc(npc.char_id)} · mood: ${esc(npc.mood||'unknown')} · NPC acted ${acted}</div>
+        </div>
+        <div><span class="icon ${s.fail>s.ok*0.3?'icon-red':'icon-green'}"></span><span class="muted">live</span></div>
+      </div>
+
+      <div class="plain-state">${esc(behaviorStateSentence(npc))}</div>
+
+      <div class="behavior-section">
+        <div class="behavior-label">Current reasoning / thought</div>
+        <div class="reasoning">“${esc(currentThought)}”</div>
+      </div>
+
+      <div class="behavior-section">
+        <div class="behavior-label">Doing</div>
+        <div class="doing">${glyphFor(currentCategory)} ${esc(labelFor(currentCategory))}</div>
+        <span class="signal">${esc(signal)}</span>
+      </div>
+
+      <div class="behavior-section">
+        <div class="behavior-label">Last exchange</div>
+        <div class="exchange-list">${renderExchange(npc)}</div>
+      </div>
+
+      <div class="behavior-section">
+        <div class="behavior-label">Memory currently in use</div>
+        <div class="memory-list">
+          ${memories.length ? memories.map(m=>`<div class="memory-row">· ${esc(m)}</div>`).join('') : '<div class="memory-row muted">No memory summary exposed by this endpoint yet.</div>'}
+        </div>
+      </div>
+
+      <div class="behavior-section">
+        <div class="behavior-label">Behaviour timeline — last 12 ticks</div>
+        ${renderTimeline(npc,12)}
+      </div>
+    </section>
+  `;
+}
+
+function renderPairStoryPanel(npcs){
+  const pair = pairStory();
+  if(!pair) return '';
+  const headline = pair.headline || pair.current_topic || pair.shared_goal || 'They are quietly working out their next move together.';
+  const goal = pair.shared_goal || '';
+  const topic = pair.current_topic || '';
+  const question = pair.open_question || '';
+  const beats = (pair.journal || []).slice(-4).reverse();
+  const focusRows = npcs.map(n => {
+    const focus = storyFocus(n);
+    if(!focus) return '';
+    return `<div class="exchange-row"><strong>${esc(n.name)}</strong> — ${esc(focus)}</div>`;
+  }).filter(Boolean).join('');
+  const beatRows = beats.length
+    ? beats.map(entry => `<div class="exchange-row"><strong>${esc(entry.actor_name || entry.actor || 'Someone')}</strong> <span class="muted">· ${ago(entry.ts)}</span><br>${esc(entry.summary || '')}</div>`).join('')
+    : '<div class="exchange-row muted">No shared beats recorded yet.</div>';
+
+  return `
+    <section class="comm-panel">
+      <h2>The story right now</h2>
+      <div class="plain-state">${esc(headline)}</div>
+      <div class="comm-list">
+        ${goal ? `<div class="comm-row"><strong>Shared goal</strong><br>${esc(goal)}</div>` : ''}
+        ${topic && topic !== goal ? `<div class="comm-row"><strong>Current topic</strong><br>${esc(topic)}</div>` : ''}
+        ${question ? `<div class="comm-row"><strong>Open question</strong><br>${esc(question)}</div>` : ''}
+      </div>
+      <div class="behavior-section">
+        <div class="behavior-label">What each one is focused on</div>
+        <div class="exchange-list">${focusRows || '<div class="exchange-row muted">No focus summary yet.</div>'}</div>
+      </div>
+      <div class="behavior-section">
+        <div class="behavior-label">Recent story beats</div>
+        <div class="exchange-list">${beatRows}</div>
+      </div>
+    </section>
+  `;
+}
+
+function renderCommunicationPanel(npcs){
+  const pair = pairStory();
+  if(pair && pair.active_thread && pair.active_thread.length){
+    const rows = pair.active_thread.slice(-8).map(m => {
+      const from = m.from_name || m.from_char_name || m.from_char_id || 'unknown';
+      const to = m.to_name || m.to_char_name || m.to_char_id || 'unknown';
+      const body = m.body || m.subject || '(no message body)';
+      return `<div class="comm-row"><strong>${esc(from)}</strong> → <strong>${esc(to)}</strong> <span class="muted">· ${ago(m.created_at||m.ts)}</span><br>${esc(body)}</div>`;
+    });
+    return `
+      <section class="comm-panel">
+        <h2>What they are saying to each other</h2>
+        <div class="comm-list">${rows.join('')}</div>
+      </section>
+    `;
+  }
+
+  const rows = [];
+  for(const n of npcs){
+    for(const m of (n.inbox||[]).slice(0,4)){
+      rows.push({
+        ts: Number(m.created_at || m.ts || 0),
+        html: `<div class="comm-row">← <strong>${esc(m.from_char_name || m.from_char_id || 'unknown')}</strong> → <strong>${esc(n.name)}</strong> <span class="muted">· ${ago(m.created_at||m.ts)}</span><br>${esc(words(m.subject || m.body || '(no subject)',18))}</div>`
+      });
+    }
+    for(const m of (n.sent_messages || n.sent || []).slice(0,4)){
+      rows.push({
+        ts: Number(m.created_at || m.ts || 0),
+        html: `<div class="comm-row">→ <strong>${esc(n.name)}</strong> → <strong>${esc(m.to_char_name || m.to_char_id || 'unknown')}</strong> <span class="muted">· ${ago(m.created_at||m.ts)}</span><br>${esc(words(m.subject || m.body || '(no subject)',18))}</div>`
+      });
+    }
+  }
+  rows.sort((a,b)=>b.ts-a.ts);
+  return `
+    <section class="comm-panel">
+      <h2>Recent communication between them</h2>
+      <div class="comm-list">${rows.length ? rows.slice(0,6).map(r=>r.html).join('') : '<div class="comm-row muted">No message bodies exposed by this endpoint yet.</div>'}</div>
+    </section>
+  `;
+}
+
+function renderWholeTimeline(npcs){
+  return `
+    <section class="timeline-panel">
+      <h2>Behaviour over time</h2>
+      ${npcs.map(n=>`<div style="margin-top:12px"><strong>${esc(n.name)}</strong>${renderTimeline(n,10)}</div>`).join('')}
+      <p class="muted" style="margin-top:12px">Legend: blue = reading/thinking, green = writing/social/helping, amber = reacting/events, red = errors. Click a glyph to expand that tick inline.</p>
+    </section>
+  `;
+}
+
+function renderBoth(npcs, agenda){
+  return `
+    ${renderPairStoryPanel(npcs)}
+    ${npcs.map(renderBehaviorCard).join('')}
+    ${renderCommunicationPanel(npcs)}
+    ${renderWholeTimeline(npcs)}
+  `;
+}
+
+function renderFeed(npc){
+  const s = summarize(npc);
+  const arts = npc.artifacts || [];
+  const inbox = npc.inbox || [];
+  const decs = (npc.recent_decisions||[]).slice(0,3);
+  const logs = (npc.llm_logs||[]).slice(0, 5);
+
+  let h = `
+    <p class="line"><span style="color:#5a6a80;font-family:monospace">${esc(npc.char_id)}</span>
+       <span style="color:#5a6a80;margin:0 8px">·</span>
+       <span style="color:#9bb8d0">${s.calls} calls</span>
+       <span class="val-green">${s.ok} OK</span>
+       <span class="val-red">${s.fail} fail</span>
+       <span style="color:#5a6a80;margin:0 8px">·</span>
+       mood: <span style="color:#e0e8f0">${esc(npc.mood||'-')}</span>
+    </p>
+    <p class="line"><span style="color:#5a6a80">Last:</span> ${esc(short(s.lastModel))}
+       <span style="color:#5a6a80;margin:0 6px">·</span>
+       <span style="color:#9bb8d0;font-weight:700">${esc(s.lastLabel)}</span>
+       <span style="color:#5a6a80;margin:0 6px">·</span>
+       ${s.lastTs ? ts(s.lastTs) : '-'}
+    </p>
+  `;
+
+  if(arts.length){
+    h += `<p class="line"><span style="color:#5a6a80">Latest artifact:</span> ${esc((arts[0]&&(typeof arts[0]==='object'?arts[0].title:arts[0]))||'—')}</p>`;
+  }
+
+  if(decs.length){
+    const d = decs[0];
+    const cat = d.category||'?';
+    const desc = (d.description||d.action_desc||d.summary||'').slice(0,160);
+    h += `<p class="line"><span style="color:#5a6a80">Last decision:</span> <strong style="color:#9bb8d0">${esc(cat)}</strong> — ${esc(desc)}</p>`;
+  }
+
+  if(inbox.length){
+    const m = inbox[0];
+    const from = m.from_char_name || m.from_char_id || '?';
+    const subj = (m.subject || (m.body||'').slice(0,80) || '(no subject)').slice(0,120);
+    h += `<p class="line"><span style="color:#5a6a80">Inbox top:</span> from <strong>${esc(from)}</strong> — ${esc(subj)}</p>`;
+  }
+
+  if(logs.length){
+    h += '<p class="line" style="margin-top:8px"><span style="color:#5a6a80">Recent API calls:</span></p>';
+    for(const l of logs.reverse().slice(0,5)){
+      const cls = l.success ? 'val-green' : 'val-red';
+      const status = l.success ? 'OK' : 'FAIL';
+      h += `<p class="line" style="padding-left:8px;font-size:0.95rem">
+        <span style="font-family:monospace;color:#5a6a80">${ts(l.ts)}</span>
+        <span style="color:#9bb8d0;font-size:0.85rem">${esc(l.call_label||'?')}</span>
+        <span class="${cls}">${status}</span>
+        <span style="color:#8898b0">${esc(typeof l.response==='string'?l.response.slice(0,160):(l.error||'fail').slice(0,160))}</span>
+      </p>`;
+    }
+  }
+  return h;
+}
+
+function renderDetail(data){
+  if(!lastData) return '<div class="empty-card">Waiting…</div>';
+  const npcs = lastData.agency_npcs||[];
+  let events = [];
+  for(const n of npcs){
+    for(const l of (n.llm_logs||[])) events.push({...l, npc:n.name, char_id:n.char_id});
+  }
+  events.sort((a,b)=>(b.ts||0)-(a.ts||0));
+  events = events.slice(0, 150);
+  if(!events.length) return '<div class="empty-card">No events.</div>';
+
+  const rows = events.map((e,i) => {
+    const cls = e.success ? 'val-green' : 'val-red';
+    const status = e.success ? 'OK' : 'FAIL';
+    const prompt = e.user_prompt || '';
+    const resp = e.success ? (e.response||'') : ('ERR: '+(e.error||'fail'));
+    return `<tr class="expand-x" data-idx="${i}">
+      <td><span class="ic"></span></td>
+      <td style="color:#5a6a80;font-family:monospace">${ts(e.ts)}</td>
+      <td style="color:#eef2f8;font-weight:700">${esc(short(e.npc||e.char_id))}</td>
+      <td style="background:#1a2430;color:#9bb8d0;font-size:0.85rem;text-transform:uppercase;padding:1px 6px;border-radius:3px;display:inline-block">${esc(e.call_label||'?')}</td>
+      <td><span class="${cls}">${status}</span></td>
+      <td style="color:#5a6a80;font-family:monospace">${dur(e.latency_ms)}</td>
+      <td style="color:#8898b0;max-width:300px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(prompt.slice(0,140))}</td>
+    </tr>
+    <tr class="detail-tr" data-detail="${i}">
+      <td colspan="7">
+        <div style="color:#5a6a80;font-size:0.9rem;text-transform:uppercase;letter-spacing:0.5px">Prompt</div>
+        <pre class="detail-pre">${esc(prompt)}</pre>
+        <div style="color:#5a6a80;font-size:0.9rem;text-transform:uppercase;letter-spacing:0.5px;margin-top:10px">${e.success?'Response':'Error'}</div>
+        <pre class="detail-pre" style="border-left-color:${e.success?'#3a7a5a':'#c06020'}">${esc(resp)}</pre>
+      </td>
+    </tr>`;
+  }).join('');
+
+  return `
+    <button class="detail-toggle" id="expand-all">⊞ Expand all rows</button>
+    <table class="detail-table">
+      <thead>
+        <tr><th></th><th>Time</th><th>NPC</th><th>Type</th><th>Status</th><th>ms</th><th>Prompt excerpt</th></tr>
+      </thead>
+      <tbody>${rows}</tbody>
+    </table>
+  `;
+}
+
+function render(){
+  if(!lastData || !lastData.agency_npcs) return '<div class="empty-card">Loading…</div>';
+  const npcs = lastData.agency_npcs;
+  if(!npcs.length) return '<div class="empty-card">No NPCs registered.</div>';
+
+  if(viewMode==='001') return renderSingle(npcs.find(n=>n.char_id==='char_001')||npcs[0]);
+  if(viewMode==='306') return renderSingle(npcs.find(n=>n.char_id==='char_306')||npcs[1]||npcs[0]);
+  if(viewMode==='detail') return renderDetail(lastData);
+  return renderBoth(npcs);
+}
+
+function updateStrip(data){
+  let totalCalls=0, totalOk=0, totalFail=0, npcCount=0;
+  for(const n of (data.agency_npcs||[])){
+    const s = n.stats||{};
+    totalCalls += parseInt(s.llm_calls)||0;
+    totalOk    += parseInt(s.llm_success)||0;
+    totalFail  += parseInt(s.llm_failures)||0;
+    if(n.key_label) npcCount++;
+  }
+  $('s-tick').textContent = new Date().toLocaleTimeString([], {hour:'2-digit',minute:'2-digit',second:'2-digit'});
+  $('s-calls').textContent = totalCalls;
+  $('s-ok').textContent = totalOk;
+  $('s-fail').textContent = totalFail;
+  $('s-time').textContent = new Date().toLocaleTimeString();
+  $('debug-summary').textContent = totalFail > totalOk*0.2 && totalFail > 2
+    ? `Debug drawer — ⚠ ${totalFail} failures detected`
+    : 'Debug drawer — API health, models, raw calls';
+  const warn = $('warn');
+  if(totalFail > totalOk*0.2 && totalFail > 2){
+    warn.classList.add('show');
+    warn.textContent = `⚠ ${totalFail} failed calls — ${(100-totalOk/totalCalls*100).toFixed(0)}% failure rate`;
+  } else {
+    warn.classList.remove('show');
+  }
+}
+
+function updateSystemLine(data){
+  const npcs = data.agency_npcs || [];
+  if(!npcs.length) return;
+  const pair = data.pair_story || {};
+  if(pair.current_topic || pair.shared_goal || pair.headline){
+    const lead = pair.current_topic || pair.headline || pair.shared_goal;
+    const small = pair.open_question
+      ? `${pair.shared_goal || 'They are acting as an ongoing pair inside the sim.'} · Open question: ${pair.open_question}`
+      : `${pair.shared_goal || 'They are acting as an ongoing pair inside the sim.'} · Page refreshed ${new Date().toLocaleTimeString()}.`;
+    $('system-line').innerHTML = `${esc(lead)}<small>${esc(small)}</small>`;
+    return;
+  }
+  const pieces = npcs.slice(0,2).map(n => {
+    const d = latestDecision(n);
+    const s = summarize(n);
+    return `${n.name} is ${labelFor(d.category).toLowerCase()}${s.lastTs ? ' ('+ago(s.lastTs)+')' : ''}`;
+  });
+  $('system-line').innerHTML = `${esc(pieces.join('. '))}.<small>Page refreshed ${esc(new Date().toLocaleTimeString())}. Detailed raw logs are collapsed under Debug.</small>`;
+}
+
+async function load(){
+  try{
+    const r = await fetch('/spectator/agency', {headers:{Accept:'application/json'}});
+    if(!r.ok) throw new Error('HTTP '+r.status);
+    lastData = await r.json();
+    $('content').innerHTML = render();
+    updateStrip(lastData);
+    updateSystemLine(lastData);
+    $('live-text').textContent = 'live';
+    $('live-pill').querySelector('.icon').className = 'icon icon-green';
+    wireExpandToggles();
+  } catch(e){
+    $('content').innerHTML = '<div class="empty-card">Error: '+esc(e.message)+'</div>';
+    $('live-text').textContent='error';
+    $('live-pill').querySelector('.icon').className='icon icon-red';
+  }
+}
+
+function wireExpandToggles(){
+  document.querySelectorAll('tr.expand-x').forEach(tr=>{
+    tr.onclick = ()=>{
+      const i = tr.dataset.idx;
+      tr.classList.toggle('open');
+      const row = document.querySelector('tr.detail-tr[data-detail="'+i+'"]');
+      if(row) row.classList.toggle('show');
+    };
+  });
+  const exp = $('expand-all');
+  if(exp){
+    exp.onclick = ()=>{
+      document.querySelectorAll('tr.expand-x').forEach(tr=>{
+        if(!tr.classList.contains('open')){
+          tr.click();
+        }
+      });
+    };
+  }
+  document.querySelectorAll('.glyph').forEach(btn=>{
+    btn.onclick = ()=>{
+      const row = $('tick-'+btn.dataset.tick);
+      if(row) row.classList.toggle('show');
+    };
+  });
+}
+
+/* Tab logic */
+document.querySelectorAll('[data-mode]').forEach(btn=>{
+  btn.onclick = ()=>{
+    document.querySelectorAll('[data-mode]').forEach(b=>b.classList.remove('active'));
+    btn.classList.add('active');
+    viewMode = btn.dataset.mode;
+    if(viewMode==='detail'){
+      if(timer) clearInterval(timer);
+      timer = null;
+      load();
+      timer = setInterval(load, 15000);
+    } else {
+      if(timer) clearInterval(timer);
+      timer = null;
+      load();
+      timer = setInterval(load, REFRESH_MS);
+    }
+  };
+});
+
+/* Copy */
+$('copy-btn').onclick = ()=>{
+  if(!lastData) return;
+  const lines = [];
+  lines.push('Councilor Watch — '+new Date().toISOString());
+  for(const n of (lastData.agency_npcs||[])){
+    const s = n.stats||{};
+    lines.push('');
+    lines.push('== '+n.name+' ('+n.char_id+') ==');
+    lines.push('Key: '+(n.key_label||'none')+'  Mood: '+(n.mood||'-'));
+    lines.push('Calls: '+(s.llm_calls||0)+'  OK: '+(s.llm_success||0)+'  Fail: '+(s.llm_failures||0));
+    lines.push('Last: '+(s.last_model||'-')+' · '+(s.last_call_label||'-')+' @ '+ts(parseInt(s.last_ts)||0));
+    const arts = n.artifacts||[];
+    if(arts.length){
+      lines.push('Latest artifact: '+ (typeof arts[0]==='object'?(arts[0].title||'?'):arts[0]));
+    }
+  }
+  navigator.clipboard.writeText(lines.join('\n')).then(()=>{
+    const m = $('copy-msg'); m.classList.add('show');
+    setTimeout(()=>m.classList.remove('show'), 1800);
+  });
+};
+
+$('refresh-btn').onclick = load;
+
+load();
+timer = setInterval(load, REFRESH_MS);
+</script>
 </body>
 </html>

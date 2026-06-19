@@ -50,6 +50,15 @@ OPENROUTER_API_KEY = os.environ.get("OPENROUTER_API_KEY", "")
 OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
 DEFAULT_MODEL = "openrouter/free"
 
+# NPCs with their own dedicated long-lived agent runtime should not also
+# receive deterministic autonomy decisions here, or they end up with split
+# ownership of cognition/state.
+EXTERNAL_AGENT_NPCS = {
+    cid.strip()
+    for cid in os.environ.get("EXTERNAL_AGENT_NPCS", "char_001,char_306").split(",")
+    if cid.strip()
+}
+
 # LLM priority: NVIDIA NIM (free, fast) -> OpenRouter (free, fallback)
 LLM_USE_NIM = True  # Toggle NIM integration
 
@@ -1186,6 +1195,10 @@ def _process_single_npc(npc: Dict) -> Dict[str, Any]:
         "errors": [],
     }
 
+    if char_id in EXTERNAL_AGENT_NPCS:
+        logger.debug("Skipping npc_autonomy ownership for external-agent NPC %s", char_id)
+        return npc_result
+
     try:
         new_mood = update_mood(char_id, archetype)
         npc_result["moods"].append({"char_id": char_id, "mood": new_mood})
@@ -1319,12 +1332,15 @@ def simulation_tick(npc_list: List[Dict]) -> Dict[str, Any]:
     # and _call_llm() uses _run_async() which is thread-safe.
     tick_start = time.time()
     npc_results: List[Dict[str, Any]] = []
+    active_npc_list = [
+        npc for npc in npc_list if (npc.get("char_id") or npc.get("id", "")) not in EXTERNAL_AGENT_NPCS
+    ]
 
     with concurrent.futures.ThreadPoolExecutor(
         max_workers=_NPC_PARALLEL_WORKERS
     ) as executor:
         future_to_npc = {
-            executor.submit(_process_single_npc, npc): npc for npc in npc_list
+            executor.submit(_process_single_npc, npc): npc for npc in active_npc_list
         }
         for future in concurrent.futures.as_completed(future_to_npc):
             npc = future_to_npc[future]
@@ -1354,7 +1370,7 @@ def simulation_tick(npc_list: List[Dict]) -> Dict[str, Any]:
         llm_used = _tick_llm_calls
     logger.info(
         "Parallel NPC processing: %d NPCs in %.1fs (%d workers) | LLM budget: %d/%d | thought cache: %d hits/%d misses (%.0f%% hit rate, %d stored)",
-        len(npc_list),
+        len(active_npc_list),
         parallel_elapsed,
         _NPC_PARALLEL_WORKERS,
         llm_used,
@@ -1370,10 +1386,10 @@ def simulation_tick(npc_list: List[Dict]) -> Dict[str, Any]:
         _cache_stats["misses"] = 0
         _cache_stats["stores"] = 0
 
-    if len(npc_list) >= 2:
-        num_interactions = random.randint(1, min(3, len(npc_list) // 2))
+    if len(active_npc_list) >= 2:
+        num_interactions = random.randint(1, min(3, len(active_npc_list) // 2))
         for _ in range(num_interactions):
-            pair = random.sample(npc_list, 2)
+            pair = random.sample(active_npc_list, 2)
             try:
                 event = generate_npc_interaction(pair[0], pair[1])
                 if event:

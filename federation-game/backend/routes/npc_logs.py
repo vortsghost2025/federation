@@ -845,3 +845,288 @@ def spectator_faction_stream(
         "updated_at": datetime.utcnow().isoformat() + "Z",
     }
 
+
+@router.get("/spectator/agency")
+def spectator_agency():
+    """Live status for agency/container NPCs with a simplified pair-story view.
+
+    Returns artifacts, messages, cognition state, mood, and recent
+    activity for each NPC in the AGENCY_ENABLED_NPCS set, so the
+    spectator can render a live NPC Agency monitoring panel.
+    """
+    import os as _os
+    import redis as _redis_mod
+    import json as _json
+    import time as _time
+
+    r = None
+    try:
+        r = _redis_mod.from_url(
+            _os.environ.get("REDIS_URL", "redis://redis:6379/0"),
+            decode_responses=True,
+            socket_connect_timeout=3,
+            socket_timeout=3,
+        )
+    except Exception:
+        pass
+
+    # Import NPC agency modules
+    try:
+        from npc_cognition import AGENCY_ENABLED_NPCS, AGENCY_CONTACTS, CONTAINERIZED_NPCS
+    except ImportError:
+        return {"status": "unavailable", "agency_npcs": []}
+
+    # Build key labels from the NPC key env vars (truncated prefix, never full key)
+    # OR check if NPC is in CONTAINERIZED_NPCS (guarantees a dedicated key)
+    _key_labels = {}
+    for _cid in AGENCY_ENABLED_NPCS:
+        _env_name = f"NPC_KEY_{_cid.upper()}"
+        _val = _os.environ.get(_env_name, "")
+        if _val and len(_val) > 12:
+            _key_labels[_cid] = _val[:12] + "..."
+        elif _val:
+            _key_labels[_cid] = _val[:8] + "..."
+        elif _cid in CONTAINERIZED_NPCS:
+            _key_labels[_cid] = "dedicated key"
+        else:
+            _key_labels[_cid] = ""
+
+    try:
+        from npc_artifacts import list_artifacts_by_npc
+    except ImportError:
+        list_artifacts_by_npc = None
+
+    try:
+        from npc_messaging import get_inbox, get_active_threads, get_unread_count
+    except ImportError:
+        get_inbox = get_active_threads = get_unread_count = None
+
+    agency_ids = sorted(
+        AGENCY_ENABLED_NPCS,
+        key=lambda cid: (0 if cid == "char_001" else 1 if cid == "char_306" else 2, cid),
+    )
+
+    pair_story = {
+        "pair_ids": [],
+        "headline": "",
+        "shared_goal": "",
+        "current_topic": "",
+        "open_question": "",
+        "last_message_preview": "",
+        "last_message_from": "",
+        "last_message_ts": 0,
+        "active_thread_id": "",
+        "focus_by_char": {},
+        "action_by_char": {},
+        "category_by_char": {},
+        "journal": [],
+        "active_thread": [],
+    }
+    if r and "char_001" in agency_ids and "char_306" in agency_ids:
+        pair_ids = ["char_001", "char_306"]
+        pair_slug = "__".join(sorted(pair_ids))
+        pair_state_key = f"npc_pair:{pair_slug}:state"
+        pair_journal_key = f"npc_pair:{pair_slug}:journal"
+        try:
+            pair_state = r.hgetall(pair_state_key) or {}
+        except Exception:
+            pair_state = {}
+        pair_journal = []
+        try:
+            raw_journal = r.lrange(pair_journal_key, -8, -1)
+            for item in raw_journal:
+                try:
+                    pair_journal.append(_json.loads(item))
+                except Exception:
+                    pass
+        except Exception:
+            pass
+        pair_thread = []
+        active_thread_id = pair_state.get("active_thread_id", "")
+        if active_thread_id:
+            try:
+                msg_keys = r.zrevrange(f"msg:thread:{active_thread_id}", 0, 7)
+                for msg_key in reversed(msg_keys):
+                    raw_msg = r.get(msg_key)
+                    if not raw_msg:
+                        continue
+                    try:
+                        pair_thread.append(_json.loads(raw_msg))
+                    except Exception:
+                        pass
+            except Exception:
+                pass
+
+        focus_by_char = {cid: pair_state.get(f"focus_{cid}", "") for cid in pair_ids}
+        action_by_char = {cid: pair_state.get(f"action_{cid}", "") for cid in pair_ids}
+        category_by_char = {cid: pair_state.get(f"category_{cid}", "") for cid in pair_ids}
+        headline = (
+            pair_state.get("current_topic", "")
+            or pair_state.get("shared_goal", "")
+            or pair_state.get("last_message_preview", "")
+        )
+        if not headline and pair_journal:
+            headline = pair_journal[-1].get("summary", "")
+
+        try:
+            last_message_ts = int(pair_state.get("last_message_ts", 0) or 0)
+        except Exception:
+            last_message_ts = 0
+
+        pair_story = {
+            "pair_ids": pair_ids,
+            "headline": headline,
+            "shared_goal": pair_state.get("shared_goal", ""),
+            "current_topic": pair_state.get("current_topic", ""),
+            "open_question": pair_state.get("open_question", ""),
+            "last_message_preview": pair_state.get("last_message_preview", ""),
+            "last_message_from": pair_state.get("last_message_from", ""),
+            "last_message_ts": last_message_ts,
+            "active_thread_id": active_thread_id,
+            "focus_by_char": focus_by_char,
+            "action_by_char": action_by_char,
+            "category_by_char": category_by_char,
+            "journal": pair_journal,
+            "active_thread": pair_thread,
+        }
+
+    agency_npcs = []
+    for char_id in agency_ids:
+        name = AGENCY_CONTACTS.get(char_id, char_id)
+
+        artifacts = []
+        if list_artifacts_by_npc:
+            try:
+                artifacts = list_artifacts_by_npc(char_id, limit=8)
+            except Exception:
+                pass
+        if not artifacts and r:
+            try:
+                raw = r.lrange(f"npc_artifacts:{char_id}", 0, 7)
+                if raw:
+                    artifacts = [_json.loads(a) for a in raw if a]
+            except Exception:
+                pass
+
+        inbox = []
+        sent_messages = []
+        threads = []
+        unread = 0
+        if get_inbox:
+            try:
+                inbox = get_inbox(char_id, limit=10)
+            except Exception:
+                pass
+        if not inbox and r:
+            try:
+                raw = r.lrange(f"npc_messages:{char_id}:inbox", 0, 9)
+                if raw:
+                    inbox = []
+                    for m in raw:
+                        try:
+                            obj = _json.loads(m)
+                            obj["from_char_name"] = obj.pop("from_name", obj.get("from_char_name", ""))
+                            inbox.append(obj)
+                        except Exception:
+                            inbox.append({"body": str(m)[:100]})
+                    unread = len(inbox)
+            except Exception:
+                pass
+        if get_active_threads:
+            try:
+                threads = get_active_threads(char_id, limit=5)
+            except Exception:
+                pass
+        if r:
+            try:
+                raw_sent = r.lrange(f"npc_messages:{char_id}:sent", -10, -1)
+                for m in reversed(raw_sent):
+                    try:
+                        obj = _json.loads(m)
+                        obj["to_char_name"] = obj.get("to_name", obj.get("to_char_name", ""))
+                        sent_messages.append(obj)
+                    except Exception:
+                        sent_messages.append({"body": str(m)[:100]})
+            except Exception:
+                pass
+        if get_unread_count and unread == 0:
+            try:
+                unread = get_unread_count(char_id)
+            except Exception:
+                pass
+
+        cognition_state = {}
+        if r:
+            try:
+                cog = r.hgetall(f"npc_cognition:{char_id}")
+                if cog:
+                    cognition_state = dict(cog)
+            except Exception:
+                pass
+
+        mood = ""
+        if r:
+            try:
+                mood_raw = r.get(f"npc_mood:{char_id}")
+                if mood_raw:
+                    mood = mood_raw
+            except Exception:
+                pass
+
+        decisions = []
+        if r:
+            try:
+                raw_decisions = r.zrevrange(f"npc_decisions:{char_id}", 0, 4)
+                for item in raw_decisions:
+                    try:
+                        decisions.append(_json.loads(item))
+                    except Exception:
+                        decisions.append({"raw": str(item)[:100]})
+            except Exception:
+                pass
+
+        llm_logs = []
+        if r:
+            try:
+                raw_logs = r.lrange(f"npc_llm_logs:{char_id}", 0, 29)
+                if raw_logs:
+                    llm_logs = [_json.loads(log) for log in raw_logs if log]
+            except Exception:
+                pass
+
+        stats = {}
+        if r:
+            try:
+                raw_stats = r.hgetall(f"npc_stats:{char_id}")
+                if raw_stats:
+                    stats = dict(raw_stats)
+            except Exception:
+                pass
+
+        agency_npcs.append({
+            "char_id": char_id,
+            "name": name,
+            "key_label": _key_labels.get(char_id, ""),
+            "mood": mood,
+            "unread_messages": unread,
+            "artifacts": artifacts,
+            "inbox": inbox,
+            "sent_messages": sent_messages,
+            "active_threads": threads,
+            "cognition": cognition_state,
+            "recent_decisions": decisions,
+            "llm_logs": llm_logs,
+            "stats": stats,
+            "story_focus": pair_story.get("focus_by_char", {}).get(char_id, ""),
+            "story_action": pair_story.get("action_by_char", {}).get(char_id, ""),
+            "story_category": pair_story.get("category_by_char", {}).get(char_id, ""),
+            "last_updated": int(_time.time()),
+        })
+
+    return {
+        "status": "ok",
+        "agency_npcs": agency_npcs,
+        "pair_story": pair_story,
+        "updated_at": datetime.utcnow().isoformat() + "Z",
+    }
+
