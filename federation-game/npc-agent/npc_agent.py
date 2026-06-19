@@ -64,6 +64,8 @@ PAIR_JOURNAL_CAP = int(os.environ.get("PAIR_JOURNAL_CAP", "48"))
 PAIR_STATE_TTL = int(os.environ.get("PAIR_STATE_TTL", str(86400 * 30)))
 PAIR_THREAD_PREVIEW = int(os.environ.get("PAIR_THREAD_PREVIEW", "4"))
 PAIR_MESSAGE_COOLDOWN = int(os.environ.get("PAIR_MESSAGE_COOLDOWN", "180"))
+OPEN_QUESTION_REPEAT_HOURS = int(os.environ.get("OPEN_QUESTION_REPEAT_HOURS", "6"))
+QUESTION_TOKEN_RE = re.compile(r"[a-z0-9]+")
 
 SELF_INTRO = f"""You are {NPC_NAME}, an autonomous resident agent whose current interface is the NPC councilor role in the Federation simulation.
 
@@ -210,12 +212,25 @@ def _pair_hset(r, partner_id: str, mapping: dict) -> None:
     key = _pair_state_key(partner_id)
     if not key or not mapping:
         return
-    clean = {k: str(v) for k, v in mapping.items() if v not in (None, "")}
-    if not clean:
+    clean = {}
+    deletes = []
+    for k, v in mapping.items():
+        if v is None:
+            continue
+        if v == "":
+            deletes.append(k)
+        else:
+            clean[k] = str(v)
+    if not clean and not deletes:
         return
     try:
-        r.hset(key, mapping=clean)
-        r.expire(key, PAIR_STATE_TTL)
+        pipe = r.pipeline(transaction=False)
+        if clean:
+            pipe.hset(key, mapping=clean)
+        if deletes:
+            pipe.hdel(key, *deletes)
+        pipe.expire(key, PAIR_STATE_TTL)
+        pipe.execute()
     except Exception:
         pass
 
@@ -318,6 +333,131 @@ def _recent_decisions(r, limit: int = 10) -> list[dict]:
     return items
 
 
+def _normalize_question(text: str) -> str:
+    return " ".join(QUESTION_TOKEN_RE.findall((text or "").lower()))
+
+
+def _question_similarity(a: str, b: str) -> float:
+    a_norm = _normalize_question(a)
+    b_norm = _normalize_question(b)
+    if not a_norm or not b_norm:
+        return 0.0
+    if a_norm == b_norm or a_norm in b_norm or b_norm in a_norm:
+        return 1.0
+    a_tokens = set(a_norm.split())
+    b_tokens = set(b_norm.split())
+    if not a_tokens or not b_tokens:
+        return 0.0
+    return len(a_tokens & b_tokens) / min(len(a_tokens), len(b_tokens))
+
+
+def _partner_answered_open_question(r, partner_id: str, since_ts: int) -> bool:
+    if r is None or not since_ts:
+        return False
+    state = _pair_state(r, partner_id)
+    try:
+        last_ts = int(state.get("last_message_ts", 0) or 0)
+    except Exception:
+        last_ts = 0
+    if state.get("last_message_from") == partner_id and last_ts >= since_ts:
+        return True
+    active_thread_id = state.get("active_thread_id", "")
+    if not active_thread_id:
+        return False
+    for msg in _recent_thread_messages(r, active_thread_id, 20):
+        try:
+            if msg.get("from_char_id") == partner_id and int(msg.get("ts", 0) or 0) >= since_ts:
+                return True
+        except Exception:
+            continue
+    return False
+
+
+def _new_evidence_since(r, partner_id: str, since_ts: int) -> bool:
+    if r is None or not since_ts:
+        return False
+    try:
+        raw_artifacts = r.lrange(f"npc_artifacts:{partner_id}", -10, -1)
+        for raw in raw_artifacts:
+            try:
+                obj = json.loads(raw)
+                ts = int(obj.get("created_at") or obj.get("ts") or 0)
+                if ts >= since_ts:
+                    return True
+            except Exception:
+                continue
+    except Exception:
+        pass
+    try:
+        raw_decisions = r.zrevrange(f"npc_decisions:{partner_id}", 0, 9)
+        for raw in raw_decisions:
+            try:
+                d = json.loads(raw)
+                ts = int(d.get("ts", 0) or 0)
+                cat = d.get("category", "")
+                if ts >= since_ts and cat in {"investigate", "create_artifact", "read_artifacts", "write_code", "self_improve"}:
+                    return True
+            except Exception:
+                continue
+    except Exception:
+        pass
+    return False
+
+
+def _duplicate_open_question(r, partner_id: str, question: str) -> bool:
+    if r is None or not question:
+        return False
+    state = _pair_state(r, partner_id)
+    last_question = state.get("last_open_question_sent_to_partner", "")
+    if not last_question:
+        return False
+    try:
+        last_ts = int(state.get("last_open_question_ts", 0) or 0)
+    except Exception:
+        last_ts = 0
+    if not last_ts:
+        return False
+    if _partner_answered_open_question(r, partner_id, last_ts):
+        return False
+    if _question_similarity(question, last_question) < 0.75:
+        return False
+    if int(time.time()) - last_ts >= OPEN_QUESTION_REPEAT_HOURS * 3600 and _new_evidence_since(r, partner_id, last_ts):
+        return False
+    return True
+
+
+def _open_question_from_partner(r, partner_id: str) -> dict | None:
+    if r is None or not partner_id:
+        return None
+    state = _pair_state(r, partner_id)
+    if state.get("open_question_from") != partner_id:
+        return None
+    question = state.get("open_question", "")
+    try:
+        ts = int(state.get("open_question_ts", 0) or 0)
+    except Exception:
+        ts = 0
+    if not question or not ts:
+        return None
+    if state.get("partner_answer") or state.get("partner_answer_ts"):
+        return None
+    return {"question": question, "ts": ts}
+
+
+def _has_work_after_open_question(r, partner_id: str, since_ts: int) -> bool:
+    if r is None or not since_ts:
+        return False
+    for d in _recent_decisions(r, 12):
+        try:
+            ts = int(d.get("ts", 0) or 0)
+            cat = d.get("category", "")
+            if ts >= since_ts and cat in {"investigate", "create_artifact", "read_artifacts", "write_code", "self_improve"}:
+                return True
+        except Exception:
+            continue
+    return False
+
+
 def _compact_text(text: str, limit: int = 160) -> str:
     text = " ".join((text or "").split())
     return _trunc(text, limit) if text else ""
@@ -370,14 +510,36 @@ def _sync_pair_workspace(r, decision: dict, result: dict) -> None:
     if not state.get("shared_goal") and cat in {"investigate", "create_artifact", "write_code", "self_improve"}:
         mapping["shared_goal"] = focus
     open_question = _extract_open_question(body, desc, reasoning)
-    if open_question:
+    if cat == "send_message" and open_question:
         mapping["open_question"] = open_question
-    if result.get("thread_id"):
-        mapping["active_thread_id"] = result["thread_id"]
+        mapping["open_question_from"] = CHAR_ID
+        mapping["open_question_ts"] = str(now)
+        mapping["last_open_question_sent_to_partner"] = open_question
+        mapping["last_open_question_ts"] = str(now)
+        mapping["partner_answer"] = ""
+        mapping["partner_answer_ts"] = ""
+    elif cat == "send_message" and state.get("open_question_from") == partner_id:
+        mapping["partner_answer"] = _compact_text(body, 300)
+        mapping["partner_answer_ts"] = str(now)
+        mapping["open_question"] = ""
+        mapping["open_question_from"] = ""
+        mapping["open_question_ts"] = ""
+        mapping["last_open_question_sent_to_partner"] = ""
+        mapping["last_open_question_ts"] = ""
+    if result.get("artifact_title") and state.get("open_question_from") == partner_id:
+        mapping["partner_answer"] = f"Artifact created: {result['artifact_title']}"
+        mapping["partner_answer_ts"] = str(now)
+        mapping["open_question"] = ""
+        mapping["open_question_from"] = ""
+        mapping["open_question_ts"] = ""
+        mapping["last_open_question_sent_to_partner"] = ""
+        mapping["last_open_question_ts"] = ""
     if cat == "send_message":
         mapping["last_message_ts"] = str(now)
         mapping["last_message_from"] = CHAR_ID
         mapping["last_message_preview"] = _compact_text(body, 160)
+        if result.get("thread_id"):
+            mapping["active_thread_id"] = result["thread_id"]
     if result.get("artifact_title"):
         mapping["last_artifact_title"] = result["artifact_title"]
         mapping["last_artifact_from"] = CHAR_ID
@@ -652,7 +814,11 @@ def think_about_world(r) -> str:
             if self_focus:
                 parts.append(f"  Your last focus: {self_focus[:120]}")
             if pair_state.get("open_question"):
-                parts.append(f"  Open question: {pair_state['open_question'][:120]}")
+                q_from = pair_state.get("open_question_from", "")
+                q_label = CONTACTS.get(q_from, "Partner") if q_from else "Partner"
+                parts.append(f"  Open question from {q_label}: {pair_state['open_question'][:120]}")
+            if pair_state.get("last_open_question_sent_to_partner") and not pair_state.get("partner_answer"):
+                parts.append(f"  Your open question awaiting answer: {pair_state['last_open_question_sent_to_partner'][:120]}")
             if pair_state.get("last_message_preview"):
                 parts.append(f"  Last direct note: {pair_state['last_message_preview'][:120]}")
 
@@ -944,11 +1110,13 @@ Respond in this exact JSON format (no markdown, no explanation):
     # Anti-loop: if recent decisions show 2+ send_message in a row AND
     # the agent has yet to produce any artifacts, hard-ban sending.
     force_constraint = ""
-    if r is not None:
+    partner_id = _partner_id()
+    outgoing_question = ""
+    if r is not None and partner_id:
         streak = _consecutive_send_streak(r)
         arts = _artifact_count(r)
         sends = _send_count(r)
-        cooldown = _message_cooldown_remaining(r)
+        cooldown = _message_cooldown_remaining(r, partner_id)
         if streak >= 2 and arts == 0:
             force_constraint = (
                 "\n\nHARD CONSTRAINT (this turn only): "
@@ -986,6 +1154,22 @@ Respond in this exact JSON format (no markdown, no explanation):
                 "Do NOT pick 'create_artifact' this turn unless you have a genuinely distinct topic and title. "
                 "Prefer read_artifacts, investigate, rest, or self_improve."
             )
+        outgoing_question = _extract_open_question(body, desc, reasoning)
+        if outgoing_question and _duplicate_open_question(r, partner_id, outgoing_question):
+            force_constraint += (
+                "\n\nOPEN QUESTION GUARD: You recently asked the partner a very similar open question "
+                "and they have not answered it yet. Do NOT resend the same question. "
+                "Prefer investigate, read_artifacts, create_artifact with a distinct angle, rest, or self_improve. "
+                "Only resend after the partner answers, the question changes, or 6+ hours pass with new evidence."
+            )
+        partner_question = _open_question_from_partner(r, partner_id)
+        if partner_question and _has_work_after_open_question(r, partner_id, partner_question["ts"]):
+            force_constraint += (
+                "\n\nPARTNER ANSWER OBLIGATION: Your partner asked an open question and you have since "
+                "investigated or produced work related to it. Artifact creation alone is not enough. "
+                "You MUST pick 'send_message' this turn with a concise answer, a direct handoff, or a relevant artifact summary. "
+                f"Open question: {partner_question['question'][:160]}"
+            )
 
     system = base_system + force_constraint
     result = call_llm(system, context, r=r, call_label="decision")
@@ -1002,18 +1186,6 @@ Respond in this exact JSON format (no markdown, no explanation):
         decision, _ = decoder.raw_decode(cleaned)
         if not isinstance(decision, dict):
             raise ValueError("Not a dict")
-        # Last-line of defence: if the model ignored our HARD CONSTRAINT,
-        # fall through to a non-message category.
-        if force_constraint and decision.get("category") == "send_message":
-            logger.warning(
-                "[%s] LLM ignored HARD CONSTRAINT (sent_message on loop); forcing rest",
-                CHAR_ID,
-            )
-            return {
-                "category": "rest",
-                "reasoning": "Anti-loop forced fallback",
-                "description": "reflecting after repeated greetings",
-            }
         if "ARTIFACT DEDUP COOLDOWN" in force_constraint and decision.get("category") == "create_artifact":
             logger.warning(
                 "[%s] LLM ignored ARTIFACT DEDUP COOLDOWN; forcing rest",
@@ -1023,6 +1195,42 @@ Respond in this exact JSON format (no markdown, no explanation):
                 "category": "rest",
                 "reasoning": "Artifact dedup cooldown forced fallback",
                 "description": "recent artifact titles were too similar; reflecting before creating more",
+            }
+        if "OPEN QUESTION GUARD" in force_constraint and decision.get("category") == "send_message":
+            logger.warning(
+                "[%s] LLM ignored OPEN QUESTION GUARD; forcing rest",
+                CHAR_ID,
+            )
+            return {
+                "category": "rest",
+                "reasoning": "Open question guard forced fallback",
+                "description": "avoided resending a duplicate open question to partner",
+            }
+        if "PARTNER ANSWER OBLIGATION" in force_constraint and decision.get("category") != "send_message":
+            logger.warning(
+                "[%s] LLM ignored PARTNER ANSWER OBLIGATION; forcing send_message",
+                CHAR_ID,
+            )
+            partner_question = _open_question_from_partner(r, partner_id) if r is not None else None
+            question = partner_question.get("question", "your open question") if partner_question else "your open question"
+            return {
+                "category": "send_message",
+                "target": partner_id,
+                "reasoning": "Partner answer obligation forced fallback",
+                "description": "answering partner open question after investigation",
+                "body": f"Short answer to your question: {question}\n\nI investigated it and will keep building the answer in artifacts. If you want the full trace, I can attach the relevant artifact summary.",
+            }
+        # Last-line of defence: if the model ignored our HARD CONSTRAINT,
+        # fall through to a non-message category.
+        if force_constraint and "PARTNER ANSWER OBLIGATION" not in force_constraint and decision.get("category") == "send_message":
+            logger.warning(
+                "[%s] LLM ignored HARD CONSTRAINT (sent_message on loop); forcing rest",
+                CHAR_ID,
+            )
+            return {
+                "category": "rest",
+                "reasoning": "Anti-loop forced fallback",
+                "description": "reflecting after repeated greetings",
             }
         return decision
     except (json.JSONDecodeError, ValueError) as e:
