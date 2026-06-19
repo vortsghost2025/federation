@@ -754,26 +754,35 @@ function render(){
 }
 
 function updateStrip(data){
+  const recentLimit = 10;
   let totalCalls=0, totalOk=0, totalFail=0, npcCount=0;
   for(const n of (data.agency_npcs||[])){
     const s = n.stats||{};
-    totalCalls += parseInt(s.llm_calls)||0;
-    totalOk    += parseInt(s.llm_success)||0;
-    totalFail  += parseInt(s.llm_failures)||0;
+    const logs = (n.llm_logs||[]).slice(0, recentLimit);
+    if(logs.length){
+      totalCalls += logs.length;
+      totalOk    += logs.filter(l => l.success).length;
+      totalFail  += logs.filter(l => !l.success).length;
+    } else {
+      totalCalls += parseInt(s.llm_calls)||0;
+      totalOk    += parseInt(s.llm_success)||0;
+      totalFail  += parseInt(s.llm_failures)||0;
+    }
     if(n.key_label) npcCount++;
   }
+  const pct = totalCalls ? (100-totalOk/totalCalls*100) : 0;
   $('s-tick').textContent = new Date().toLocaleTimeString([], {hour:'2-digit',minute:'2-digit',second:'2-digit'});
   $('s-calls').textContent = totalCalls;
   $('s-ok').textContent = totalOk;
   $('s-fail').textContent = totalFail;
   $('s-time').textContent = new Date().toLocaleTimeString();
   $('debug-summary').textContent = totalFail > totalOk*0.2 && totalFail > 2
-    ? `Debug drawer — ⚠ ${totalFail} failures detected`
-    : 'Debug drawer — API health, models, raw calls';
+    ? `Debug drawer — ⚠ ${totalFail} recent failures detected`
+    : `Debug drawer — API health, last ${recentLimit} calls per NPC`;
   const warn = $('warn');
   if(totalFail > totalOk*0.2 && totalFail > 2){
     warn.classList.add('show');
-    warn.textContent = `⚠ ${totalFail} failed calls — ${(100-totalOk/totalCalls*100).toFixed(0)}% failure rate`;
+    warn.textContent = `⚠ ${totalFail} recent failed calls — ${pct.toFixed(0)}% failure rate`;
   } else {
     warn.classList.remove('show');
   }
