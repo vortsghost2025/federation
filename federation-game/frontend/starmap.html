@@ -324,12 +324,28 @@
     <button class="vt-btn" data-view="network" onclick="setView('network')">Network</button>
     <button class="vt-btn" data-view="crisis" onclick="setView('crisis')">Crisis</button>
   </div>
+  <div id="network-mode-toggle">
+    <button class="lt-btn active" data-network-mode="overview" onclick="setNetworkMode('overview')" title="Clean overview with filtered relationships">Overview</button>
+    <button class="lt-btn" data-network-mode="mesh" onclick="setNetworkMode('mesh')" title="Full mesh / Debug mode - visually noisy">Full Mesh</button>
+  </div>
   <div id="label-toggle">
     <button class="lt-btn" data-labels="factions" onclick="setLabelMode('factions')">Factions Only</button>
     <button class="lt-btn active" data-labels="important" onclick="setLabelMode('important')">Important NPCs</button>
     <button class="lt-btn" data-labels="all" onclick="setLabelMode('all')">All Labels</button>
   </div>
-   <div id="readable-toggle">
+  <div id="density-toggle">
+    <button class="lt-btn active" data-density="full" onclick="setLineDensity('full')" title="Show all relationship lines">Full</button>
+    <button class="lt-btn" data-density="compact" onclick="setLineDensity('compact')" title="Show only strong relationships">Compact</button>
+    <button class="lt-btn" data-density="minimal" onclick="setLineDensity('minimal')" title="Show only strongest connections">Minimal</button>
+  </div>
+  <div id="threshold-control" style="margin:8px 0;padding:8px;background:rgba(10,15,30,0.8);border-radius:6px">
+    <label style="display:flex;align-items:center;gap:8px;font-size:14px;color:#78909c;margin-bottom:4px">
+      <span>Strength</span>
+      <input type="range" id="rel-threshold" min="0" max="100" value="30" oninput="setRelThreshold(this.value)" style="flex:1">
+      <span id="threshold-val" style="min-width:36px;text-align:right">30%</span>
+    </label>
+  </div>
+    <div id="readable-toggle">
       <button class="lt-btn" id="readable-spatial-btn" onclick="toggleReadableSpatialMode()" title="Toggle readable spatial mode for enhanced visibility" aria-label="Toggle readable spatial mode">Readable Spatial</button>
    </div>
    <div class="rm-label-size" id="rm-label-size" style="display:none">
@@ -340,6 +356,18 @@
     <input type="range" id="rm-label-range" min="10" max="24" value="14" oninput="setLabelSize(this.value)" style="flex:1">
   </div>
   <button class="rm-focus-btn" id="rm-focus-faction" onclick="toggleFocusFaction()" style="display:none">&#x1F50D; Focus Selected Faction</button>
+   <button class="rm-focus-btn" id="rm-clear-focus" onclick="clearFocus()" style="display:none;background:rgba(244,67,54,0.1);border-color:rgba(244,67,54,0.4);color:#ef5350">&#x1F5D1; Clear Focus</button>
+</div>
+
+<!-- NPC Detail Card (for focus mode) -->
+<div id="npc-detail-card" style="display:none;position:fixed;bottom:12px;left:12px;width:min(400px,45vw);max-height:40vh;background:#0d1117;border:1px solid #30363d;border-radius:8px;padding:16px;z-index:25;overflow-y:auto">
+  <button onclick="clearFocus()" style="position:absolute;top:8px;right:8px;background:none;border:none;color:#78909c;font-size:18px;cursor:pointer;line-height:1">&#10005;</button>
+  <div id="npc-detail-name" style="font-size:18px;font-weight:bold;color:#ffd700;margin-bottom:4px"></div>
+  <div id="npc-detail-faction" style="font-size:14px;color:#78909c;margin-bottom:6px"></div>
+  <div id="npc-detail-role" style="font-size:13px;color:#4fc3f7;margin-bottom:4px"></div>
+  <div id="npc-detail-mood" style="font-size:13px;color:#ab47bc;margin-bottom:8px;font-style:italic"></div>
+  <div id="npc-detail-stats" style="font-size:12px;color:#b0b0b0;margin-bottom:8px"></div>
+  <div id="npc-detail-actions" style="font-size:12px;color:#e0e0e0"></div>
 </div>
 
 <!-- Crisis Readout panel — case-file view -->
@@ -454,9 +482,28 @@
 </div>
 </div>
 
+    <script>
+    // VISIBLE ERROR OVERLAY — removes itself after 15 seconds or on click
+    window.onerror = function(msg, url, line, col, err) {
+      var d = document.createElement('div');
+      d.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:99999;background:red;color:#fff;padding:20px;font:16px monospace;cursor:pointer;text-shadow:none';
+      d.innerHTML = '<b>JS ERROR:</b> ' + msg + '<br><small>' + url + ':' + line + ':' + col + '</small>';
+      d.onclick = function(){ d.remove(); };
+      document.body.appendChild(d);
+      setTimeout(function(){ d.remove(); }, 15000);
+    };
+    window.addEventListener('unhandledrejection', function(e) {
+      var d = document.createElement('div');
+      d.style.cssText = 'position:fixed;bottom:0;left:0;right:0;z-index:99999;background:#c00;color:#fff;padding:20px;font:16px monospace;cursor:pointer';
+      d.innerHTML = '<b>UNHANDLED REJECTION:</b> ' + (e.reason && e.reason.message || e.reason || 'unknown');
+      d.onclick = function(){ d.remove(); };
+      document.body.appendChild(d);
+      setTimeout(function(){ d.remove(); }, 15000);
+    });
+    </script>
     <script src="fed-fetch.js"></script>
     <script src="error-reporter.js"></script>
-    <script src="starmap.js"></script>
+    <script src="starmap.js?v=20260618b"></script>
 </body>
 </html>
 

@@ -501,3 +501,21 @@ body{background:#0a0a1a;color:#e0e0e0;font-family:'Courier New',monospace;overfl
 #map-legend{flex-shrink:0}
 .ai-chat{flex-shrink:0;margin-top:auto}
 
+/* ═══ ACCESSIBILITY: Minimum font sizes for TV/low-vision display ═══ */
+@media screen and (max-width: 1200px) {
+  #left-panel, #view-toggle, #label-toggle, #density-toggle, #network-mode-toggle, #threshold-control {
+    font-size: 18px !important;
+  }
+  #left-panel button, #vt-btn, #lt-btn {
+    font-size: 18px !important;
+    min-height: 44px !important;
+    min-width: 44px !important;
+  }
+  #npc-detail-card, #npc-detail-name, #npc-detail-faction, #npc-detail-role, #npc-detail-mood, #npc-detail-stats, #npc-detail-actions {
+    font-size: 20px !important;
+  }
+  #threshold-control label, #threshold-control span {
+    font-size: 18px !important;
+  }
+}
+
