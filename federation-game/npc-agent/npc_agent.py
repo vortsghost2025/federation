@@ -37,6 +37,10 @@ MODEL_EXTRA_BODY = os.environ.get("MODEL_EXTRA_BODY", "")
 MODEL_ENABLE_THINKING = os.environ.get("MODEL_ENABLE_THINKING", "").lower() in ("1", "true", "yes")
 MODEL_REASONING_BUDGET = int(os.environ.get("MODEL_REASONING_BUDGET", "0") or "0")
 REQUEST_TIMEOUT = float(os.environ.get("REQUEST_TIMEOUT", "45"))
+# Separate, shorter timeout for artifact/code generation calls. These are
+# long-content generations that hit the wall on slow models. Giving them
+# a generous but not infinite budget avoids constant timeout failures.
+ARTIFACT_TIMEOUT = float(os.environ.get("ARTIFACT_TIMEOUT", "90"))
 MAX_TOTAL_BUDGET_MS = int(os.environ.get("MAX_TOTAL_BUDGET_MS", "90000"))
 MAX_OUTPUT_TOKENS = int(os.environ.get("MAX_OUTPUT_TOKENS", "1024"))
 SESSION_CAP = int(os.environ.get("SESSION_CAP", "24"))
@@ -352,6 +356,7 @@ def _sync_pair_workspace(r, decision: dict, result: dict) -> None:
     desc = decision.get("description", result.get("description", ""))
     reasoning = decision.get("reasoning", result.get("reasoning", ""))
     body = result.get("message_body") or decision.get("body", "")
+    action_taken = result.get("action_taken", "none")
     focus = _compact_text(body if cat == "send_message" else desc, 180) or _compact_text(reasoning, 180) or cat
     state = _pair_state(r, partner_id)
     now = int(result.get("ts") or time.time())
@@ -361,7 +366,7 @@ def _sync_pair_workspace(r, decision: dict, result: dict) -> None:
         "last_actor_name": NPC_NAME,
         f"focus_{CHAR_ID}": focus,
         f"category_{CHAR_ID}": cat,
-        f"action_{CHAR_ID}": result.get("action_taken", "none"),
+        f"action_{CHAR_ID}": action_taken,
         f"updated_{CHAR_ID}": str(now),
         "current_topic": focus,
     }
@@ -381,6 +386,25 @@ def _sync_pair_workspace(r, decision: dict, result: dict) -> None:
         mapping["last_artifact_from"] = CHAR_ID
         mapping["last_artifact_ts"] = str(now)
     _pair_hset(r, partner_id, mapping)
+    # Tighter journal summary — reads like a story beat, not a report
+    if action_taken == "artifact_deferred_dedup":
+        journal_summary = f"{NPC_NAME} paused — already working on something very similar"
+    elif cat == "send_message" and body:
+        journal_summary = _compact_text(body, 120)
+    elif cat == "create_artifact":
+        art_title = result.get("artifact_title", "")
+        if art_title:
+            journal_summary = f"{NPC_NAME} wrote: \"{art_title[:80]}\""
+        else:
+            journal_summary = _compact_text(desc, 120)
+    elif cat == "read_artifacts":
+        journal_summary = f"{NPC_NAME} read partner's latest work: {_compact_text(result.get('summary', ''), 80)}"
+    elif cat == "investigate":
+        journal_summary = f"{NPC_NAME} is digging deeper: {_compact_text(desc, 100)}"
+    elif cat == "self_improve":
+        journal_summary = f"{NPC_NAME} steps back to reflect"
+    else:
+        journal_summary = _compact_text(desc or reasoning, 120) or f"{NPC_NAME} is {cat}"
     _pair_append_journal(
         r,
         partner_id,
@@ -389,8 +413,8 @@ def _sync_pair_workspace(r, decision: dict, result: dict) -> None:
             "actor": CHAR_ID,
             "actor_name": NPC_NAME,
             "category": cat,
-            "action": result.get("action_taken", "none"),
-            "summary": focus,
+            "action": action_taken,
+            "summary": journal_summary,
             "thread_id": result.get("thread_id", ""),
         },
     )
@@ -439,6 +463,9 @@ def call_llm(system_prompt: str, user_prompt: str, model: str = "", r=None, call
     if not models_to_try:
         models_to_try = ["meta/llama-3.3-70b-instruct"]
 
+    # Use longer timeout for artifact/code generation calls
+    timeout = ARTIFACT_TIMEOUT if call_label in ("artifact", "code") else REQUEST_TIMEOUT
+
     last_error = ""
     total_start = time.monotonic()
     for attempt_model in models_to_try:
@@ -471,7 +498,7 @@ def call_llm(system_prompt: str, user_prompt: str, model: str = "", r=None, call
                 # Trim reasoning budget if bigger than max tokens
                 body["extra_body"]["reasoning_budget"] = min(MODEL_REASONING_BUDGET, MAX_OUTPUT_TOKENS // 2)
 
-            with httpx.Client(timeout=REQUEST_TIMEOUT) as client:
+            with httpx.Client(timeout=timeout) as client:
                 resp = client.post(
                     f"{NVIDIA_BASE}/chat/completions",
                     headers={
@@ -699,6 +726,58 @@ def _send_count(r) -> int:
         return int(r.llen(f"npc_messages:{CHAR_ID}:sent"))
     except Exception:
         return 0
+
+def _is_repetitive_artifact(r, title: str, threshold: float = 0.55) -> bool:
+    """Check if a new artifact title is too similar to recent ones.
+
+    Simple word-overlap heuristic. Returns True if the new title shares
+    >threshold of its non-stop words with any of the last 5 artifact
+    titles. Prevents the Oracle from publishing 'Void Oracle Anomalies:
+    A Comprehensive Analysis...' every tick.
+    """
+    stop_words = {"a", "an", "the", "of", "to", "in", "for", "and", "on",
+                  "with", "from", "by", "at", "is", "it", "as", "be", "or",
+                  "that", "this", "its", "are", "was", "but", "not", "all",
+                  "being", "have", "has", "been", "will", "would", "could",
+                  "should", "may", "might", "shall", "do", "does", "did",
+                  "no", "nor", "so", "up", "out", "about", "into", "over",
+                  "after", "before", "between", "under", "above", "below",
+                  "also", "very", "just", "more", "some", "any", "each",
+                  "every", "both", "few", "most", "other", "such", "only",
+                  "own", "same", "than", "too", "well", "now", "even",
+                  "back", "still", "here", "there", "then", "then", "when",
+                  "where", "why", "how", "what", "which", "who", "whom",
+                  "analysis", "report", "overview", "summary", "data",
+                  "assessment", "recommendation", "implication", "strategy",
+                  "strategic", "response", "impact", "update", "review"}
+    def tokenize(t: str) -> set:
+        import re
+        words = re.findall(r"[a-zA-Z]{3,}", t.lower())
+        return {w for w in words if w not in stop_words}
+    new_tokens = tokenize(title)
+    if not new_tokens:
+        return False
+    try:
+        raw = r.lrange(f"npc_artifacts:{CHAR_ID}", -5, -1)
+    except Exception:
+        return False
+    for item in raw:
+        try:
+            obj = json.loads(item)
+            old_title = obj.get("title", "")
+        except Exception:
+            continue
+        old_tokens = tokenize(old_title)
+        if not old_tokens:
+            continue
+        intersection = new_tokens & old_tokens
+        union = new_tokens | old_tokens
+        jaccard = len(intersection) / len(union) if union else 0
+        if jaccard > threshold:
+            logger.debug("[%s] Repetitive artifact title: %.0f%% overlap with '%s'",
+                         CHAR_ID, jaccard * 100, old_title[:60])
+            return True
+    return False
 
 def _acknowledge_inbox(r, partner_id: str = None) -> int:
     """Acknowledge messages from partner to prevent re-reading loops."""
@@ -1004,48 +1083,60 @@ def execute_decision(decision: dict, r):
 
     elif cat == "create_artifact":
         title = decision.get("title", desc[:60] if desc else "Untitled")
-        content_prompt = f"Write the full content of this artifact:\n\n{desc}\n\nOutput only the content."
-        llm_result = call_llm("You are a creative writer.", content_prompt, r=r, call_label="artifact")
-        artifact_content = llm_result.get("content", desc)
-        artifact = {
-            "artifact_id": str(uuid.uuid4()),
-            "char_id": CHAR_ID,
-            "char_name": NPC_NAME,
-            "title": title,
-            "artifact_type": "text",
-            "content": artifact_content,
-            "created_at": ts,
-        }
-        r.rpush(f"npc_artifacts:{CHAR_ID}", json.dumps(artifact))
-        r.rpush("npc_artifacts:global", json.dumps(artifact))
-        r.hincrby(f"npc_stats:{CHAR_ID}", "artifacts_created", 1)
-        # Mirror artifact created event to the partner's session so
-        # they can later decide to read it.
-        try:
-            partner_id = _partner_id()
-            r.rpush(
-                f"npc_session:{partner_id}",
-                json.dumps({
-                    "kind": "artifact_published_by_partner",
-                    "actor": NPC_NAME,
-                    "from": CHAR_ID,
-                    "title": title,
-                    "chars": len(artifact_content),
-                    "ts": ts,
-                }, default=str),
-            )
-            r.ltrim(f"npc_session:{partner_id}", -SESSION_CAP, -1)
-        except Exception:
-            pass
-        result["action_taken"] = "artifact_created"
-        result["artifact_title"] = title
-        logger.info("[%s] Created artifact: %s", CHAR_ID, title)
-        _session_append(r, {
-            "kind": "artifact_created",
-            "actor": NPC_NAME,
-            "title": title,
-            "body": f"{len(artifact_content)} chars; first 80: {artifact_content[:80]}",
-        })
+        # Dedup gate: skip if title is too similar to recent artifacts
+        if r is not None and _is_repetitive_artifact(r, title):
+            logger.info("[%s] Dedup gate blocked artifact '%s' (too similar to recent)", CHAR_ID, title)
+            result["action_taken"] = "artifact_deferred_dedup"
+            result["artifact_title"] = title
+            _session_append(r, {
+                "kind": "workspace_sync",
+                "actor": NPC_NAME,
+                "body": f"deferred artifact '{title[:60]}' — content too similar to recent work",
+            })
+            goto_finalize = True
+        else:
+            content_prompt = f"Write the full content of this artifact:\n\n{desc}\n\nOutput only the content."
+            llm_result = call_llm("You are a creative writer.", content_prompt, r=r, call_label="artifact")
+            artifact_content = llm_result.get("content", desc)
+            artifact = {
+                "artifact_id": str(uuid.uuid4()),
+                "char_id": CHAR_ID,
+                "char_name": NPC_NAME,
+                "title": title,
+                "artifact_type": "text",
+                "content": artifact_content,
+                "created_at": ts,
+            }
+            r.rpush(f"npc_artifacts:{CHAR_ID}", json.dumps(artifact))
+            r.rpush("npc_artifacts:global", json.dumps(artifact))
+            r.hincrby(f"npc_stats:{CHAR_ID}", "artifacts_created", 1)
+            # Mirror artifact created event to the partner's session
+            try:
+                partner_id = _partner_id()
+                r.rpush(
+                    f"npc_session:{partner_id}",
+                    json.dumps({
+                        "kind": "artifact_published_by_partner",
+                        "actor": NPC_NAME,
+                        "from": CHAR_ID,
+                        "title": title,
+                        "chars": len(artifact_content),
+                        "ts": ts,
+                    }, default=str),
+                )
+                r.ltrim(f"npc_session:{partner_id}", -SESSION_CAP, -1)
+            except Exception:
+                pass
+            result["action_taken"] = "artifact_created"
+            result["artifact_title"] = title
+            logger.info("[%s] Created artifact: %s", CHAR_ID, title)
+            _session_append(r, {
+                "kind": "artifact_created",
+                "actor": NPC_NAME,
+                "title": title,
+                "body": f"{len(artifact_content)} chars; first 80: {artifact_content[:80]}",
+            })
+            goto_finalize = True
 
     elif cat == "write_code":
         code_prompt = f"Generate Python code for: {desc}\n\nOutput ONLY valid Python code."
