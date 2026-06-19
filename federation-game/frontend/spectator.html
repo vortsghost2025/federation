@@ -159,6 +159,10 @@ p{margin:0 0 8px 0}
     <div><span class="lbl">Total calls</span><span class="val" id="s-calls">—</span></div>
     <div><span class="lbl">OK</span><span class="val val-green" id="s-ok">—</span></div>
     <div><span class="lbl">Fail</span><span class="val val-red" id="s-fail">—</span></div>
+    <div><span class="lbl">Lifetime calls</span><span class="val" id="s-life-calls">—</span></div>
+    <div><span class="lbl">Lifetime OK</span><span class="val" id="s-life-ok">—</span></div>
+    <div><span class="lbl">Lifetime fail</span><span class="val val-red" id="s-life-fail">—</span></div>
+    <div><span class="lbl">Lifetime fail%</span><span class="val val-red" id="s-life-pct">—</span></div>
     <div><span class="lbl">Last refresh</span><span class="val" id="s-time">—</span></div>
   </div>
 </details>
@@ -756,29 +760,38 @@ function render(){
 function updateStrip(data){
   const recentLimit = 10;
   let totalCalls=0, totalOk=0, totalFail=0, npcCount=0;
+  let lifeCalls=0, lifeOk=0, lifeFail=0;
   for(const n of (data.agency_npcs||[])){
     const s = n.stats||{};
+    lifeCalls += parseInt(s.llm_calls)||0;
+    lifeOk    += parseInt(s.llm_success)||0;
+    lifeFail  += parseInt(s.llm_failures)||0;
     const logs = (n.llm_logs||[]).slice(0, recentLimit);
     if(logs.length){
       totalCalls += logs.length;
       totalOk    += logs.filter(l => l.success).length;
       totalFail  += logs.filter(l => !l.success).length;
     } else {
-      totalCalls += parseInt(s.llm_calls)||0;
-      totalOk    += parseInt(s.llm_success)||0;
-      totalFail  += parseInt(s.llm_failures)||0;
+      totalCalls += lifeCalls;
+      totalOk    += lifeOk;
+      totalFail  += lifeFail;
     }
     if(n.key_label) npcCount++;
   }
   const pct = totalCalls ? (100-totalOk/totalCalls*100) : 0;
+  const lifePct = lifeCalls ? (100-lifeOk/lifeCalls*100) : 0;
   $('s-tick').textContent = new Date().toLocaleTimeString([], {hour:'2-digit',minute:'2-digit',second:'2-digit'});
   $('s-calls').textContent = totalCalls;
   $('s-ok').textContent = totalOk;
   $('s-fail').textContent = totalFail;
+  $('s-life-calls').textContent = lifeCalls;
+  $('s-life-ok').textContent = lifeOk;
+  $('s-life-fail').textContent = lifeFail;
+  $('s-life-pct').textContent = lifeCalls ? lifePct.toFixed(1)+'%' : '—';
   $('s-time').textContent = new Date().toLocaleTimeString();
   $('debug-summary').textContent = totalFail > totalOk*0.2 && totalFail > 2
-    ? `Debug drawer — ⚠ ${totalFail} recent failures detected`
-    : `Debug drawer — API health, last ${recentLimit} calls per NPC`;
+    ? `Debug drawer — ⚠ ${totalFail} recent failures detected; lifetime below`
+    : `Debug drawer — API health, last ${recentLimit} calls per NPC; lifetime below`;
   const warn = $('warn');
   if(totalFail > totalOk*0.2 && totalFail > 2){
     warn.classList.add('show');
