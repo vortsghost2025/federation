@@ -1154,14 +1154,6 @@ Respond in this exact JSON format (no markdown, no explanation):
                 "Do NOT pick 'create_artifact' this turn unless you have a genuinely distinct topic and title. "
                 "Prefer read_artifacts, investigate, rest, or self_improve."
             )
-        outgoing_question = _extract_open_question(body, desc, reasoning)
-        if outgoing_question and _duplicate_open_question(r, partner_id, outgoing_question):
-            force_constraint += (
-                "\n\nOPEN QUESTION GUARD: You recently asked the partner a very similar open question "
-                "and they have not answered it yet. Do NOT resend the same question. "
-                "Prefer investigate, read_artifacts, create_artifact with a distinct angle, rest, or self_improve. "
-                "Only resend after the partner answers, the question changes, or 6+ hours pass with new evidence."
-            )
         partner_question = _open_question_from_partner(r, partner_id)
         if partner_question and _has_work_after_open_question(r, partner_id, partner_question["ts"]):
             force_constraint += (
@@ -1186,6 +1178,17 @@ Respond in this exact JSON format (no markdown, no explanation):
         decision, _ = decoder.raw_decode(cleaned)
         if not isinstance(decision, dict):
             raise ValueError("Not a dict")
+        outgoing_question = _extract_open_question(decision.get("body", ""), decision.get("description", ""), decision.get("reasoning", ""))
+        if outgoing_question and _duplicate_open_question(r, partner_id, outgoing_question):
+            logger.warning(
+                "[%s] LLM attempted duplicate open question; forcing rest",
+                CHAR_ID,
+            )
+            return {
+                "category": "rest",
+                "reasoning": "Open question guard forced fallback",
+                "description": "avoided resending a duplicate open question to partner",
+            }
         if "ARTIFACT DEDUP COOLDOWN" in force_constraint and decision.get("category") == "create_artifact":
             logger.warning(
                 "[%s] LLM ignored ARTIFACT DEDUP COOLDOWN; forcing rest",
