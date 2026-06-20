@@ -335,6 +335,76 @@ def _neighborhood_snapshot(r, max_chars: int = 400) -> str:
     return result
 
 
+# === Event Promotion Bridge ===
+# Promote significant events from npc_world_events to councilor awareness
+
+_EVENT_KEYWORDS = {
+    "betray", "corruption", "heist", "warning", "sabotage", "ritual",
+    "disappearance", "cover-up", "undermine", "black market", "covert",
+    "intel breach", "prophecy", "anomaly", "resource discovery",
+    "exploration", "faction instability", "conflict", "attack", "defense",
+}
+
+def _hash_event(event: dict) -> str:
+    """Generate stable hash for event deduplication."""
+    # Handle multiple event structures
+    char_id = event.get("char_id", "") or event.get("source_char_id", "")
+    action = event.get("action_type", "") or event.get("interaction_type", "") or event.get("event_type", "")
+    ts = event.get("ts", 0) or event.get("timestamp", 0)
+    # Bucket by minute to deduplicate repeated events
+    ts_bucket = int(ts // 60)
+    return f"{char_id}:{action}:{ts_bucket}"
+
+def _promote_events_to_inbox(r, max_events: int = 5, max_chars: int = 120) -> list[str]:
+    """Read recent npc_world_events, filter significant ones, push to councilor inbox."""
+    promoted = []
+    try:
+        # Get last 20 events
+        events = r.zrange("npc_world_events", -20, -1, withscores=False)
+        logger.info("[%s] event promotion: checking %d events", CHAR_ID, len(events))
+        for event_json in events:
+            if len(promoted) >= max_events:
+                break
+            try:
+                event = json.loads(event_json)
+            except:
+                continue
+            
+            # Handle multiple event structures
+            action = event.get("action_type", "") or event.get("interaction_type", "") or event.get("event_type", "")
+            desc = event.get("description", "")
+            char_name = event.get("char_name") or event.get("source_char_name") or event.get("name", "Unknown")
+            event_type = event.get("event_type", "")
+            game_event_type = event.get("game_event_type", "")
+            
+            # Normalize for keyword search
+            text_to_search = f"{action} {desc} {event_type} {game_event_type}".lower()
+            
+            # Check for significance
+            if not any(kw in text_to_search for kw in _EVENT_KEYWORDS):
+                continue
+            
+            # Deduplicate
+            event_hash = _hash_event(event)
+            dedup_key = f"councilor_promoted_event:{CHAR_ID}:{event_hash}"
+            if r.exists(dedup_key):
+                logger.debug("[%s] event promotion: skipping duplicate %s", CHAR_ID, event_hash)
+                continue
+            
+            # Build summary
+            summary = f"{char_name}: {desc[:max_chars]}"
+            promoted.append(summary)
+            logger.info("[%s] event promotion: promoted '%s'", CHAR_ID, summary[:50])
+            
+            # Mark as promoted (24h TTL)
+            r.setex(dedup_key, 86400, "1")
+        
+        return promoted
+    except Exception as e:
+        logger.warning("[%s] event promotion failed: %s", CHAR_ID, e)
+        return []
+
+
 _TOPIC_STOP_WORDS = {"the", "of", "and", "a", "an", "to", "in", "for", "on", "with",
                       "from", "by", "at", "is", "it", "as", "be", "or", "that", "this",
                       "its", "are", "was", "but", "not", "all", "report", "analysis",
@@ -1135,6 +1205,14 @@ def think_about_world(r) -> str:
     if neighborhood:
         parts.append(neighborhood)
 
+    # ── Recent significant world events (promoted from live sim) ──
+    # Events that passed significance filters. Target: 3-5 events, ~100 chars each.
+    logger.info("[%s] think_about_world: calling event promotion", CHAR_ID)
+    promoted = _promote_events_to_inbox(r)
+    logger.info("[%s] think_about_world: event promotion returned %d", CHAR_ID, len(promoted))
+    if promoted:
+        parts.append("Recent significant world events:\n" + "\n".join(f"  • {e}" for e in promoted))
+
     # ── Persistent session transcript ──
     # The rolling last SESSION_CAP turns (3 hours at TICK_INTERVAL=45s).
     # This is what gives the agent cross-tick memory.
@@ -1273,7 +1351,7 @@ def _session_append(r, entry: dict) -> None:
         logger.debug("[%s] session append failed: %s", CHAR_ID, e)
 
 
-def _recent_artifact_dedup_count(r, lookback: int = 12) -> int:
+def _recent_artifact_dedup_count(r, lookback: int = 25) -> int:
     """Count recent artifact dedup events from the rolling session transcript."""
     try:
         raw = r.lrange(f"npc_session:{CHAR_ID}", -lookback, -1)
