@@ -1351,23 +1351,13 @@ def _session_append(r, entry: dict) -> None:
         logger.debug("[%s] session append failed: %s", CHAR_ID, e)
 
 
-def _recent_artifact_dedup_count(r, lookback: int = 25) -> int:
-    """Count recent artifact dedup events from the rolling session transcript."""
+def _recent_artifact_dedup_count(r) -> int:
+    """Return consecutive artifact dedup block count (10 min TTL)."""
     try:
-        raw = r.lrange(f"npc_session:{CHAR_ID}", -lookback, -1)
+        val = r.get(f"npc_dedup_streak:{CHAR_ID}")
+        return int(val) if val is not None else 0
     except Exception:
         return 0
-    count = 0
-    for entry_json in raw:
-        try:
-            entry = json.loads(entry_json)
-        except Exception:
-            continue
-        kind = entry.get("kind", "")
-        body = str(entry.get("body", ""))
-        if kind == "workspace_sync" and "deferred artifact" in body:
-            count += 1
-    return count
 
 
 def _session_transcript(r) -> str:
@@ -1734,6 +1724,9 @@ def execute_decision(decision: dict, r):
                 "actor": NPC_NAME,
                 "body": f"deferred artifact '{title[:60]}' — content too similar to recent work",
             })
+            streak_key = f"npc_dedup_streak:{CHAR_ID}"
+            r.incr(streak_key)
+            r.expire(streak_key, 600)
         else:
             content_prompt = f"Write the full content of this artifact:\n\n{desc}\n\nOutput only the content."
             llm_result = call_llm("You are a creative writer.", content_prompt, r=r, call_label="artifact")
@@ -1750,6 +1743,9 @@ def execute_decision(decision: dict, r):
             r.rpush(f"npc_artifacts:{CHAR_ID}", json.dumps(artifact))
             r.rpush("npc_artifacts:global", json.dumps(artifact))
             r.hincrby(f"npc_stats:{CHAR_ID}", "artifacts_created", 1)
+            streak_key = f"npc_dedup_streak:{CHAR_ID}"
+            if r.exists(streak_key):
+                r.delete(streak_key)
             # Mirror artifact created event to the partner's session
             try:
                 partner_id = _partner_id()
