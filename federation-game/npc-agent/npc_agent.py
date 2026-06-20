@@ -335,6 +335,87 @@ def _neighborhood_snapshot(r, max_chars: int = 400) -> str:
     return result
 
 
+_TOPIC_STOP_WORDS = {"the", "of", "and", "a", "an", "to", "in", "for", "on", "with",
+                      "from", "by", "at", "is", "it", "as", "be", "or", "that", "this",
+                      "its", "are", "was", "but", "not", "all", "report", "analysis",
+                      "assessment", "strategic", "recommendation", "overview",
+                      "comprehensive", "updated", "interim", "final", "review",
+                      "implication", "response", "data", "summary", "integration"}
+
+def _most_common_topic_word(titles: list[str]) -> str:
+    """Return the most frequently repeated content word across artifact titles.
+
+    Used to detect topic fixation — if the last 3 artifacts all mention
+    'void oracle', the agent should pivot to something else.
+    """
+    if not titles:
+        return ""
+    words = []
+    for t in titles:
+        tokens = re.findall(r"[a-zA-Z]{3,}", t.lower())
+        words.extend(w for w in tokens if w not in _TOPIC_STOP_WORDS)
+    if not words:
+        return ""
+    from collections import Counter
+    counts = Counter(words)
+    top_word, top_count = counts.most_common(1)[0]
+    if top_count >= len(titles):
+        return top_word
+    return ""
+
+
+def _top_neighborhood_npcs(r, n: int = 3) -> str:
+    """Return a short comma-separated string of the top N most notable NPCs.
+
+    Lightweight version of _neighborhood_snapshot that only returns
+    names and statuses — used to redirect stuck agents toward fresh
+    investigation targets.
+    """
+    try:
+        all_state_keys = list(r.keys("npc_state:*"))
+        pipe = r.pipeline(transaction=False)
+        for k in all_state_keys:
+            pipe.hgetall(k)
+        states = pipe.execute()
+        mood_pipe = r.pipeline(transaction=False)
+        for k in all_state_keys:
+            cid = k.split(":", 1)[1]
+            mood_pipe.get(f"npc_mood:{cid}")
+        moods = mood_pipe.execute()
+
+        entries = []
+        for key, state, mood in zip(all_state_keys, states, moods):
+            if not state:
+                continue
+            cid = key.split(":", 1)[1]
+            if cid == CHAR_ID or cid == _partner_id() or cid not in _NPC_ROSTER:
+                continue
+            name, faction = _NPC_ROSTER[cid]
+            status = state.get("status", "active")
+            corruption = float(state.get("corruption_level", 0))
+            mood_str = (mood or "")
+            score = _STATUS_WEIGHT.get(status, 0) * 2
+            score += int(corruption * 6)
+            if mood_str.lower() in _ALERT_MOODS:
+                score += 3
+            label = f"{name} ({faction[:12]})" if faction != "independent" else name
+            flags = []
+            if status not in ("active",):
+                flags.append(status)
+            if corruption > 0:
+                flags.append(f"corruption {corruption:.0f}")
+            if mood_str and mood_str.lower() in _ALERT_MOODS:
+                flags.append(mood_str)
+            line = f"{label}: {', '.join(flags)}" if flags else f"{label}: nominal"
+            entries.append((score, line))
+
+        entries.sort(key=lambda e: e[0], reverse=True)
+        top = [e[1] for e in entries[:n]]
+        return "; ".join(top) if top else ""
+    except Exception:
+        return ""
+
+
 def _trunc(s, n=400):
     return s[:n] + "..." if len(s) > n else s
 
@@ -1360,12 +1441,38 @@ Respond in this exact JSON format (no markdown, no explanation):
             )
         dedup_count = _recent_artifact_dedup_count(r)
         if dedup_count >= 2:
+            top_npcs = _top_neighborhood_npcs(r, 3)
+            npc_hint = f" Your neighborhood scan shows these NPCs in notable states: {top_npcs}." if top_npcs else ""
             force_constraint += (
                 "\n\nARTIFACT DEDUP COOLDOWN: You recently deferred "
-                f"{dedup_count} artifact(s) because they were too similar to recent work. "
-                "Do NOT pick 'create_artifact' this turn unless you have a genuinely distinct topic and title. "
-                "Prefer read_artifacts, investigate, rest, or self_improve."
+                f"{dedup_count} artifact(s) because they were too similar to recent work."
+                f"{npc_hint}"
+                " Do NOT pick 'create_artifact' this turn unless you have a genuinely distinct topic and title. "
+                "Pick investigate, read_artifacts (from a DIFFERENT NPC), rest, or self_improve."
             )
+        # Topic-fatigue: if the last 3 artifacts all share a common keyword,
+        # suggest rotating to a fresh topic from the neighborhood.
+        if r is not None and r.llen(f"npc_artifacts:{CHAR_ID}") >= 3:
+            try:
+                recent_arts = r.lrange(f"npc_artifacts:{CHAR_ID}", -3, -1)
+                titles = []
+                for art in recent_arts:
+                    try:
+                        titles.append(json.loads(art).get("title", ""))
+                    except Exception:
+                        pass
+                common = _most_common_topic_word(titles)
+                if common and len(titles) >= 3:
+                    top_npcs = _top_neighborhood_npcs(r, 3)
+                    npc_hint = f" For example, these NPCs have notable states: {top_npcs}." if top_npcs else ""
+                    force_constraint += (
+                        "\n\nTOPIC FATIGUE: Your last 3 artifacts all relate to \""
+                        f"{common}\". Pivot to something entirely different."
+                        f"{npc_hint}"
+                        " Consider investigating, writing about, or messaging an NPC you have not interacted with recently."
+                    )
+            except Exception:
+                pass
         partner_question = _open_question_from_partner(r, partner_id)
         if partner_question and _has_work_after_open_question(r, partner_id, partner_question["ts"]):
             force_constraint += (
