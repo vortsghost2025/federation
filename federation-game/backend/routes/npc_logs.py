@@ -921,17 +921,13 @@ def spectator_agency():
     except ImportError:
         return {"status": "unavailable", "agency_npcs": []}
 
-    # Build key labels from the NPC key env vars (truncated prefix, never full key)
-    # OR check if NPC is in CONTAINERIZED_NPCS (guarantees a dedicated key)
+    # Build key labels without exposing any credential prefix in the public API.
+    # A containerized NPC guarantees a dedicated key; the UI only needs that fact.
     _key_labels = {}
     for _cid in AGENCY_ENABLED_NPCS:
         _env_name = f"NPC_KEY_{_cid.upper()}"
         _val = _os.environ.get(_env_name, "")
-        if _val and len(_val) > 12:
-            _key_labels[_cid] = _val[:12] + "..."
-        elif _val:
-            _key_labels[_cid] = _val[:8] + "..."
-        elif _cid in CONTAINERIZED_NPCS:
+        if _cid in CONTAINERIZED_NPCS or _val:
             _key_labels[_cid] = "dedicated key"
         else:
             _key_labels[_cid] = ""
@@ -960,6 +956,10 @@ def spectator_agency():
         "last_message_preview": "",
         "last_message_from": "",
         "last_message_ts": 0,
+        "partner_answer": "",
+        "partner_answer_ts": 0,
+        "partner_answer_from": "",
+        "partner_answer_to": "",
         "active_thread_id": "",
         "focus_by_char": {},
         "action_by_char": {},
@@ -1017,6 +1017,10 @@ def spectator_agency():
             last_message_ts = int(pair_state.get("last_message_ts", 0) or 0)
         except Exception:
             last_message_ts = 0
+        try:
+            partner_answer_ts = int(pair_state.get("partner_answer_ts", 0) or 0)
+        except Exception:
+            partner_answer_ts = 0
 
         pair_story = {
             "pair_ids": pair_ids,
@@ -1027,6 +1031,10 @@ def spectator_agency():
             "last_message_preview": pair_state.get("last_message_preview", ""),
             "last_message_from": pair_state.get("last_message_from", ""),
             "last_message_ts": last_message_ts,
+            "partner_answer": pair_state.get("partner_answer", ""),
+            "partner_answer_ts": partner_answer_ts,
+            "partner_answer_from": pair_state.get("partner_answer_from", ""),
+            "partner_answer_to": pair_state.get("partner_answer_to", ""),
             "active_thread_id": active_thread_id,
             "focus_by_char": focus_by_char,
             "action_by_char": action_by_char,
@@ -1053,6 +1061,11 @@ def spectator_agency():
             except Exception:
                 pass
         active_artifacts, identity_artifacts = _rank_artifacts_for_pair_story(char_id, artifacts, pair_state)
+        recent_artifacts = sorted(
+            artifacts,
+            key=lambda a: int(a.get("created_at") or a.get("ts") or 0) if isinstance(a, dict) else 0,
+            reverse=True,
+        )[:6]
 
         inbox = []
         sent_messages = []
@@ -1156,6 +1169,7 @@ def spectator_agency():
             "mood": mood,
             "unread_messages": unread,
             "artifacts": active_artifacts,
+            "recent_artifacts": recent_artifacts,
             "identity_artifacts": identity_artifacts,
             "inbox": inbox,
             "sent_messages": sent_messages,
@@ -1167,6 +1181,10 @@ def spectator_agency():
             "story_focus": pair_story.get("focus_by_char", {}).get(char_id, ""),
             "story_action": pair_story.get("action_by_char", {}).get(char_id, ""),
             "story_category": pair_story.get("category_by_char", {}).get(char_id, ""),
+            "partner_answer": pair_story.get("partner_answer", ""),
+            "partner_answer_ts": pair_story.get("partner_answer_ts", 0),
+            "partner_answer_from": pair_story.get("partner_answer_from", ""),
+            "partner_answer_to": pair_story.get("partner_answer_to", ""),
             "last_updated": int(_time.time()),
         })
 

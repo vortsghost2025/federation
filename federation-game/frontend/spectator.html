@@ -266,8 +266,36 @@ function labelFor(cat){return CATEGORY_LABELS[cat||'unknown'] || `Thinking about
 function glyphFor(cat){return CATEGORY_GLYPH[cat||'unknown'] || CATEGORY_GLYPH.unknown}
 function colorFor(cat, ok=true){return ok ? (CATEGORY_COLOR[cat||'unknown'] || 'blue') : 'red'}
 
+function categoryFromAction(action){
+  const s = String(action || '').toLowerCase();
+  if(!s) return '';
+  if(/artifact_(created|deferred)|created artifact|published artifact/.test(s)) return 'create_artifact';
+  if(/message_(sent|deferred)|sent message|direct note|answering partner/.test(s)) return 'send_message';
+  if(/read.*artifact|artifact_read|read_artifacts/.test(s)) return 'read_artifacts';
+  if(/investigation|investigat/.test(s)) return 'investigate';
+  if(/code_(executed|failed)|wrote code|write_code/.test(s)) return 'write_code';
+  if(/self_improvement|self_improve/.test(s)) return 'self_improve';
+  if(/reflection|rest/.test(s)) return 'rest';
+  if(/error|failed|fail/.test(s)) return 'error';
+  return '';
+}
+
+function decisionCategory(d, fallback='unknown'){
+  if(!d) return fallback;
+  const direct = d.category || d.call_label || '';
+  if(direct && CATEGORY_LABELS[direct]) return direct;
+  return categoryFromAction([d.action_taken, d.action, d.summary, d.description, d.reasoning, d.raw].filter(Boolean).join(' ')) || direct || fallback;
+}
+
+function npcNameById(id){
+  if(!id || !lastData) return id || '';
+  const n = (lastData.agency_npcs || []).find(x => x.char_id === id);
+  return n ? n.name : id;
+}
+
 function inferCategoryFromLog(log){
   if(!log) return 'unknown';
+  if(log.success === false || log.success === 'false') return 'error';
   const call = String(log.call_label || '').toLowerCase();
   const response = String(log.response || log.error || '');
   if(call === 'artifact') return 'create_artifact';
@@ -290,8 +318,8 @@ function parseLogDecision(log){
     const txt = log.response.trim();
     try{
       const j = JSON.parse(txt);
-      out.category = j.category || j.action || inferCategoryFromLog(log);
-      out.reasoning = j.reasoning || j.description || j.action_desc || j.summary || '';
+      out.category = decisionCategory(j, inferCategoryFromLog(log));
+      out.reasoning = j.reasoning || j.description || j.action_desc || j.summary || j.action_taken || '';
     }catch(_){
       out.reasoning = txt;
     }
@@ -304,10 +332,10 @@ function latestDecision(npc){
   if(decs.length){
     const d = decs[0];
     return {
-      category: d.category || d.action || d.call_label || 'unknown',
-      reasoning: d.reasoning || d.description || d.action_desc || d.summary || '',
+      category: decisionCategory(d),
+      reasoning: d.reasoning || d.description || d.action_desc || d.summary || d.action_taken || '',
       ts: d.ts || d.created_at || (npc.stats||{}).last_ts || 0,
-      success: true,
+      success: !/error|failed|fail/.test(String(d.action_taken || d.summary || '').toLowerCase()),
       raw: JSON.stringify(d)
     };
   }
@@ -327,6 +355,17 @@ function storyFocus(npc){
 function storyCategory(npc){
   const pair = pairStory();
   return npc.story_category || (pair && pair.category_by_char ? pair.category_by_char[npc.char_id] : '') || latestDecision(npc).category;
+}
+
+function partnerAnswer(t){
+  const n = t || currentNpc();
+  if(!n) return '';
+  const pair = pairStory() || {};
+  const a = (n.partner_answer || (n.pair_state && n.pair_state.partner_answer) || pair.partner_answer || '').trim();
+  const from = n.partner_answer_from || (n.pair_state && n.pair_state.partner_answer_from) || pair.partner_answer_from || '';
+  const ts = parseInt(n.partner_answer_ts || (n.pair_state && n.pair_state.partner_answer_ts) || pair.partner_answer_ts || '0', 10);
+  if(!a) return '';
+  return `${ts ? ago(ts) + ' · ' : ''}${from ? npcNameById(from) + ': ' : ''}${a}`;
 }
 
 function deriveBehaviorSignal(decisions){
@@ -506,28 +545,67 @@ function renderExchange(npc){
   return rows.length ? rows.join('') : '<div class="exchange-row muted">No recent exchange exposed by this endpoint yet.</div>';
 }
 
+function timelineEntries(npc, limit=12){
+  const entries = [];
+  const decisionTimes = [];
+  for(const d of (npc.recent_decisions || []).slice(0, limit)){
+    const cat = decisionCategory(d);
+    const dts = Number(d.ts || d.created_at || d.timestamp || 0);
+    if(dts) decisionTimes.push(dts);
+    entries.push({
+      category: cat,
+      reasoning: d.reasoning || d.description || d.summary || d.action_taken || d.action_desc || '',
+      ts: dts,
+      success: !/error|failed|fail/.test(String(d.action_taken || d.summary || '').toLowerCase()),
+      raw: JSON.stringify(d),
+      source: 'decision'
+    });
+  }
+  for(const l of (npc.llm_logs || []).slice(0, limit)){
+    const lts = Number(l.ts || 0);
+    const isDecisionLog = String(l.call_label || '').toLowerCase().includes('decision');
+    if(isDecisionLog && l.success !== false && decisionTimes.some(t => Math.abs(t - lts) <= 1)) continue;
+    const d = parseLogDecision(l);
+    if(isDecisionLog && l.success !== false && (!d || d.category === 'unknown')) continue;
+    if(d) entries.push({...d, source: 'llm'});
+  }
+  const seen = new Set();
+  return entries
+    .sort((a,b)=>Number(b.ts||0)-Number(a.ts||0))
+    .filter(e => {
+      const key = `${e.ts || 0}:${e.category}:${e.source}`;
+      if(seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    })
+    .slice(0, limit)
+    .reverse();
+}
+
 function renderTimeline(npc, limit=12){
-  const logs = (npc.llm_logs || []).slice(0,limit);
-  if(!logs.length) return '<div class="muted">No timeline yet.</div>';
-  return `<div class="timeline">${logs.reverse().map((l,i)=>{
-    const d = parseLogDecision(l) || {category:l.call_label||'unknown', reasoning:l.response||l.error||'', success:l.success, ts:l.ts};
+  const entries = timelineEntries(npc, limit);
+  if(!entries.length) return '<div class="muted">No timeline yet.</div>';
+  return `<div class="timeline">${entries.map((d,i)=>{
     const cat = d.category || 'unknown';
-    return `<button class="glyph ${colorFor(cat, l.success)}" data-tick="${esc(npc.char_id)}-${i}" aria-label="${esc(labelFor(cat))}">${glyphFor(cat)}</button>
+    return `<button class="glyph ${colorFor(cat, d.success)}" data-tick="${esc(npc.char_id)}-${i}" aria-label="${esc(labelFor(cat))}">${glyphFor(cat)}</button>
       <div class="tick-detail" id="tick-${esc(npc.char_id)}-${i}">
-        <strong>${esc(labelFor(cat))}</strong> <span class="muted">· ${ts(l.ts)} · ${l.success?'OK':'error'}</span><br>
-        ${esc(firstSentence(d.reasoning || d.raw || l.error || 'No reasoning text available.', 320))}
+        <strong>${esc(labelFor(cat))}</strong> <span class="muted">· ${ts(d.ts)} · ${d.success?'OK':'error'} · ${esc(d.source || 'tick')}</span><br>
+        ${esc(firstSentence(d.reasoning || d.raw || 'No reasoning text available.', 320))}
       </div>`;
   }).join('')}</div>`;
 }
-
 function renderBehaviorCard(npc){
   const s = summarize(npc);
   const d = latestDecision(npc);
   const currentCategory = storyCategory(npc) || d.category;
   const currentThought = storyFocus(npc) || firstSentence(d.reasoning || d.raw || 'No current reasoning available yet.');
   const signal = deriveBehaviorSignal(npc.recent_decisions || [d]);
-  const memories = memoryItems(npc);
   const acted = s.lastTs ? ago(s.lastTs) : 'unknown';
+  const arts = npc.artifacts || [];
+  const recentArts = npc.recent_artifacts || [];
+  const identityArts = npc.identity_artifacts || [];
+  const lastArt = recentArts[0] || arts[0];
+  const lastArtTitle = (lastArt && (typeof lastArt === 'object' ? lastArt.title : lastArt)) || '(none)';
   return `
     <section class="behavior-card">
       <div class="behavior-head">
@@ -555,18 +633,27 @@ function renderBehaviorCard(npc){
         <div class="behavior-label">Last exchange</div>
         <div class="exchange-list">${renderExchange(npc)}</div>
       </div>
-
       <div class="behavior-section">
-        <div class="behavior-label">Memory currently in use</div>
+        <div class="behavior-label">Partner answer / loop closure</div>
+        <div class="exchange-list">${partnerAnswer(npc) ? `<div class="exchange-row">${esc(partnerAnswer(npc))}</div>` : '<div class="exchange-row muted">No partner answer recorded yet.</div>'}</div>
+      </div>
+      <div class="behavior-section">
+        <div class="behavior-label">Most relevant artifact</div>
         <div class="memory-list">
-          ${memories.length ? memories.map(m=>`<div class="memory-row">· ${esc(m)}</div>`).join('') : '<div class="memory-row muted">No memory summary exposed by this endpoint yet.</div>'}
+          ${(arts&&arts.length) ? `<div class="memory-row">· ${esc(artifactTitle(arts[0]))}</div>` : '<div class="memory-row muted">No task-relevant artifact available yet.</div>'}
+        </div>
+      </div>
+      <div class="behavior-section">
+        <div class="behavior-label">Most recent artifact</div>
+        <div class="memory-list">
+          ${(recentArts&&recentArts.length) ? `<div class="memory-row">· ${esc(lastArtTitle)}</div>` : '<div class="memory-row muted">No recent artifact yet.</div>'}
         </div>
       </div>
 
       <div class="behavior-section">
         <div class="behavior-label">Identity memory</div>
         <div class="memory-list">
-          ${(npc.identity_artifacts||[]).length ? (npc.identity_artifacts||[]).map(a=>`<div class="memory-row">· ${esc(artifactTitle(a))}</div>`).join('') : '<div class="memory-row muted">No identity memory exposed yet.</div>'}
+          ${(identityArts||[]).length ? identityArts.map(a=>`<div class="memory-row">· ${esc(artifactTitle(a))}</div>`).join('') : '<div class="memory-row muted">No identity memory exposed yet.</div>'}
         </div>
       </div>
 
