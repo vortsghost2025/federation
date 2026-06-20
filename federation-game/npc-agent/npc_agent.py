@@ -174,6 +174,167 @@ def load_contacts(r):
     }
 
 
+# ── Full NPC roster for neighborhood awareness ──
+# Maps char_id → (name, faction) so the snapshot can show human-readable
+# names instead of raw IDs.  Sourced from npc_world_snapshot.py roster.
+_NPC_ROSTER: dict[str, tuple[str, str]] = {
+    "char_001": ("Archimedes Prime", "Research Division"),
+    "char_002": ("Commander Valorix", "Military Command"),
+    "char_003": ("Philosopher Zenith", "Consciousness Collective"),
+    "char_004": ("Ambassador Silven", "Diplomatic Corps"),
+    "char_005": ("Conquistador Drake", "Exploration Initiative"),
+    "char_101": ("Chancellor Harmony", "Diplomatic Corps"),
+    "char_102": ("Marshal Ironbound", "Military Command"),
+    "char_103": ("Maestro Celestia", "Cultural Ministry"),
+    "char_104": ("Dr. Prometheus", "Research Division"),
+    "char_105": ("Oracle Vex", "Consciousness Collective"),
+    "char_106": ("Merchant-Prince Aurelius", "Economic Council"),
+    "char_107": ("Explorer Nova", "Exploration Initiative"),
+    "char_108": ("Archivist Eternal", "Preservation Society"),
+    "char_201": ("Lord Malaxis", "independent"),
+    "char_202": ("The Void Oracle", "independent"),
+    "char_203": ("Baroness Greed", "independent"),
+    "char_204": ("General Devastation", "independent"),
+    "char_301": ("The Wanderer", "independent"),
+    "char_302": ("The Jester", "independent"),
+    "char_303": ("The Hermit", "independent"),
+    "char_304": ("The Spectre", "independent"),
+    "char_305": ("The Trickster", "independent"),
+    "char_306": ("The Oracle", "Consciousness Collective"),
+    "char_401": ("Keeper of the Null", "independent"),
+    "char_402": ("Dr. Celestia", "Cultural Ministry"),
+    "char_403": ("Zara Swiftwind", "Exploration Initiative"),
+    "char_404": ("Tech-Priest Algorithm", "Research Division"),
+    "char_405": ("Captain Riven", "Military Command"),
+    "char_406": ("Echo-7", "Research Division"),
+    "comp_001": ("Shadowborn", "independent"),
+    "comp_002": ("Brother Mercy", "independent"),
+    "comp_003": ("Dr. Sylas Cunningham", "independent"),
+    "comp_004": ("Cipher", "independent"),
+    "comp_005": ("Tempus", "independent"),
+    "comp_006": ("Paradox", "independent"),
+    "comp_007": ("Solace Heartmend", "independent"),
+    "comp_008": ("Scout Aria", "independent"),
+    "comp_009": ("Kyren Frostblade", "independent"),
+    "comp_010": ("Captain Valor", "independent"),
+}
+
+# Threat-relevance ranking weights for NPC status
+_STATUS_WEIGHT = {
+    "corrupted": 10,
+    "scheming": 8,
+    "alarmed": 6,
+    "unsettled": 5,
+    "hidden": 4,
+    "traveling": 3,
+    "worried": 4,
+    "frustrated": 2,
+    "active": 0,
+}
+
+# Moods that signal threat / instability worth surfacing
+_ALERT_MOODS = {
+    "alarmed", "scheming", "calculating", "unsettled", "worried",
+    "suspicious", "frustrated", "confidential", "restless",
+    "battle-ready", "opportunistic", "troubled", "distracted",
+}
+
+
+def _neighborhood_snapshot(r, max_chars: int = 400) -> str:
+    """Return a compact summary of what the OTHER NPCs are doing.
+
+    Reads npc_state:* (status, corruption, last_updated) and npc_mood:* for
+    all 39 NPCs.  Skips self and pair partner (already in Contacts/Pair
+    workspace).  Ranks by threat-relevance: corrupted status > hidden/traveling
+    > active, then corruption_level, then alert moods.  Returns up to
+    max_chars of formatted text — enough to notice Shadowborn's disinformation
+    or Baroness Greed's heist without drowning the prompt.
+    """
+    logger.info("[%s] neighborhood: starting snapshot...", CHAR_ID)
+    partner_id = _partner_id()
+    logger.info("[%s] neighborhood: partner_id=%s", CHAR_ID, partner_id)
+    entries: list[tuple[int, str, str, str]] = []  # (score, id, name, line)
+
+    try:
+        # First, get all npc_state keys (materialize list to close connection)
+        all_state_keys = list(r.keys("npc_state:*"))
+        logger.info("[%s] neighborhood: found %d npc_state keys", CHAR_ID, len(all_state_keys))
+
+        # Batch-read all npc_state hashes
+        pipe = r.pipeline(transaction=False)
+        for k in all_state_keys:
+            pipe.hgetall(k)
+        states = pipe.execute()
+
+        # Batch-read all npc_mood values
+        mood_pipe = r.pipeline(transaction=False)
+        for k in all_state_keys:
+            cid = k.split(":", 1)[1]
+            mood_pipe.get(f"npc_mood:{cid}")
+        moods = mood_pipe.execute()
+
+        # Zip keys with states and moods
+        for key, state, mood in zip(all_state_keys, states, moods):
+            if not state:
+                continue
+            cid = key.split(":", 1)[1]
+            if cid == CHAR_ID or cid == partner_id or cid not in _NPC_ROSTER:
+                continue
+
+            name, faction = _NPC_ROSTER[cid]
+            status = state.get("status", "active")
+            corruption = float(state.get("corruption_level", 0))
+            rumor = float(state.get("rumor_level", 0))
+            mood_str = (mood or "")
+
+            # Score: higher = more worth noticing
+            score = _STATUS_WEIGHT.get(status, 0) * 2
+            score += int(corruption * 6)
+            score += int(rumor * 2)
+            if mood_str.lower() in _ALERT_MOODS:
+                score += 3
+
+            # Build one-line summary
+            label = f"{name} ({faction[:12]})" if faction != "independent" else name
+            flags = []
+            if status not in ("active",):
+                flags.append(status)
+            if corruption > 0:
+                flags.append(f"corruption {corruption:.0f}")
+            if mood_str and mood_str.lower() in _ALERT_MOODS:
+                flags.append(mood_str)
+            line = f"{label}: {', '.join(flags)}" if flags else f"{label}: nominal"
+
+            entries.append((score, cid, name, line))
+
+    except Exception as exc:
+        logger.warning("[%s] neighborhood snapshot failed: %s", CHAR_ID, exc)
+        return ""
+
+    if entries:
+        logger.info("[%s] neighborhood: %d notable NPCs: %s", CHAR_ID, len(entries),
+                    "; ".join(e[3] for e in entries[:5]))
+
+    if not entries:
+        return ""
+
+    # Sort by score descending — most notable NPCs first
+    entries.sort(key=lambda e: e[0], reverse=True)
+
+    # Build output within char budget
+    lines = ["Neighborhood (other NPCs, most notable first):"]
+    budget = max_chars - len(lines[0]) - 2
+    for _score, _cid, _name, line in entries:
+        if budget - len(line) - 2 < 0:
+            break
+        lines.append(f"  {line}")
+        budget -= len(line) + 2
+
+    result = "\n".join(lines) if len(lines) > 1 else ""
+    logger.info("[%s] neighborhood: returning %d chars", CHAR_ID, len(result))
+    return result
+
+
 def _trunc(s, n=400):
     return s[:n] + "..." if len(s) > n else s
 
@@ -752,6 +913,7 @@ def think_about_world(r) -> str:
       - incoming vs sent balance ("you've sent 7, received 9")
       - partner mood
     """
+    logger.info("[%s] think_about_world: building context...", CHAR_ID)
     parts = [f"--- {NPC_NAME} ({CHAR_ID}) — Tick@{time.strftime('%H:%M:%S')} ---"]
 
     try:
@@ -884,6 +1046,13 @@ def think_about_world(r) -> str:
 
     contacts_str = "; ".join(f"{cid}: {name}" for cid, name in CONTACTS.items() if cid != CHAR_ID)
     parts.append(f"Contacts: {contacts_str}")
+
+    # ── Neighborhood: what are the other 37 NPCs doing right now? ──
+    # Gives councilors enough situational awareness to perceive threats
+    # and opportunities outside the two-agent bubble. Target: <400 chars.
+    neighborhood = _neighborhood_snapshot(r)
+    if neighborhood:
+        parts.append(neighborhood)
 
     # ── Persistent session transcript ──
     # The rolling last SESSION_CAP turns (3 hours at TICK_INTERVAL=45s).
