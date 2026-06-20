@@ -139,6 +139,15 @@ analyses, manifestos, witness accounts). When you observe something worth noting
 record it. When you have a recommendation, propose it. Your written output persists
 in the shared federation.
 
+ROLE BOUNDARY BETWEEN THE COUNCILORS:
+- If you are Archimedes Prime: you are the researcher, synthesizer, and builder.
+  Do not claim visions, prophecies, omens, or certainty about futures as your own.
+  When the work requires vision, ask The Oracle directly and then analyze her answer.
+- If you are The Oracle: you are the seer of futures. Own visions, omens, and
+  probability-pattern language, and answer Archimedes when he asks for that sight.
+- Do not blur the roles. The partnership works because researcher and seer are
+  different minds collaborating.
+
 You may also message one specific other NPC if you have something to say directly:
 char_306, the other councilor. Beyond that, you have no other live bridges —
 you influence the wider simulation only through what you write.
@@ -430,11 +439,11 @@ def _open_question_from_partner(r, partner_id: str) -> dict | None:
     if r is None or not partner_id:
         return None
     state = _pair_state(r, partner_id)
-    if state.get("open_question_from") != partner_id:
+    if not _state_question_from_partner(state, partner_id):
         return None
     question = state.get("open_question", "")
     try:
-        ts = int(state.get("open_question_ts", 0) or 0)
+        ts = int(state.get("open_question_ts", 0) or state.get("last_message_ts", 0) or 0)
     except Exception:
         ts = 0
     if not question or not ts:
@@ -442,6 +451,19 @@ def _open_question_from_partner(r, partner_id: str) -> dict | None:
     if state.get("partner_answer") or state.get("partner_answer_ts"):
         return None
     return {"question": question, "ts": ts}
+
+
+def _state_question_from_partner(state: dict, partner_id: str) -> bool:
+    owner = state.get("open_question_from", "")
+    if owner:
+        return owner == partner_id
+    question = state.get("open_question", "")
+    if not question or state.get("last_message_from") != partner_id:
+        return False
+    preview = state.get("last_message_preview", "")
+    if not preview:
+        return False
+    return question[:40] in preview or _question_similarity(question, preview) >= 0.65
 
 
 def _has_work_after_open_question(r, partner_id: str, since_ts: int) -> bool:
@@ -497,6 +519,7 @@ def _sync_pair_workspace(r, decision: dict, result: dict) -> None:
     focus = _compact_text(body if cat == "send_message" else desc, 180) or _compact_text(reasoning, 180) or cat
     state = _pair_state(r, partner_id)
     now = int(result.get("ts") or time.time())
+    answering_partner_question = _state_question_from_partner(state, partner_id)
     mapping = {
         "last_sync_ts": str(now),
         "last_actor": CHAR_ID,
@@ -510,7 +533,17 @@ def _sync_pair_workspace(r, decision: dict, result: dict) -> None:
     if not state.get("shared_goal") and cat in {"investigate", "create_artifact", "write_code", "self_improve"}:
         mapping["shared_goal"] = focus
     open_question = _extract_open_question(body, desc, reasoning)
-    if cat == "send_message" and open_question:
+    if cat == "send_message" and answering_partner_question:
+        mapping["partner_answer"] = _compact_text(body, 300)
+        mapping["partner_answer_ts"] = str(now)
+        mapping["partner_answer_from"] = CHAR_ID
+        mapping["partner_answer_to"] = partner_id
+        mapping["open_question"] = ""
+        mapping["open_question_from"] = ""
+        mapping["open_question_ts"] = ""
+        mapping["last_open_question_sent_to_partner"] = ""
+        mapping["last_open_question_ts"] = ""
+    elif cat == "send_message" and open_question:
         mapping["open_question"] = open_question
         mapping["open_question_from"] = CHAR_ID
         mapping["open_question_ts"] = str(now)
@@ -518,17 +551,13 @@ def _sync_pair_workspace(r, decision: dict, result: dict) -> None:
         mapping["last_open_question_ts"] = str(now)
         mapping["partner_answer"] = ""
         mapping["partner_answer_ts"] = ""
-    elif cat == "send_message" and state.get("open_question_from") == partner_id:
-        mapping["partner_answer"] = _compact_text(body, 300)
-        mapping["partner_answer_ts"] = str(now)
-        mapping["open_question"] = ""
-        mapping["open_question_from"] = ""
-        mapping["open_question_ts"] = ""
-        mapping["last_open_question_sent_to_partner"] = ""
-        mapping["last_open_question_ts"] = ""
-    if result.get("artifact_title") and state.get("open_question_from") == partner_id:
+        mapping["partner_answer_from"] = ""
+        mapping["partner_answer_to"] = ""
+    if result.get("artifact_title") and answering_partner_question:
         mapping["partner_answer"] = f"Artifact created: {result['artifact_title']}"
         mapping["partner_answer_ts"] = str(now)
+        mapping["partner_answer_from"] = CHAR_ID
+        mapping["partner_answer_to"] = partner_id
         mapping["open_question"] = ""
         mapping["open_question_from"] = ""
         mapping["open_question_ts"] = ""
@@ -679,7 +708,18 @@ def call_llm(system_prompt: str, user_prompt: str, model: str = "", r=None, call
             status = getattr(e, "response", None)
             status_code = getattr(status, "status_code", 0) if status else 0
             err_msg = str(e)[:200]
-            logger.warning("[%s] LLM call failed for %s (HTTP %s, %dms): %s", CHAR_ID, attempt_model, status_code, elapsed_ms, err_msg)
+            # Loud-fallback line so we see exactly which model fell through
+            # and why — nothing slipped silently to the next ladder rung.
+            if attempt_model == PRIMARY_MODEL:
+                logger.warning(
+                    "[%s] PRIMARY_MODEL %s failed (HTTP %s, %dms): %s — falling back",
+                    CHAR_ID, attempt_model, status_code, elapsed_ms, err_msg,
+                )
+            else:
+                logger.warning(
+                    "[%s] FALLBACK_MODEL %s failed (HTTP %s, %dms): %s — trying next",
+                    CHAR_ID, attempt_model, status_code, elapsed_ms, err_msg,
+                )
             # Permanent failures (404, 400) — don't waste time retrying
             if status_code in (400, 401, 403, 404):
                 logger.warning("[%s] Skipping permanent failure %s for %s", CHAR_ID, status_code, attempt_model)
@@ -1098,6 +1138,9 @@ Behavioural rules:
 - Short reactive messages are fine for the first 1–2 ticks. After that,
   prefer create_artifact, read_artifacts, investigate, write_code, rest.
 - New artifacts and code are the primary evidence of your work. Use them.
+- Respect the councilor role boundary: Archimedes asks for visions and analyzes
+  them; The Oracle provides visions and future-pattern readings. Do not take the
+  other councilor's role.
 
 Respond in this exact JSON format (no markdown, no explanation):
 {"category": "send_message", "reasoning": "...", "target": "other_councilor_char_id", "body": "message text", "description": "..."}
@@ -1221,7 +1264,7 @@ Respond in this exact JSON format (no markdown, no explanation):
                 "target": partner_id,
                 "reasoning": "Partner answer obligation forced fallback",
                 "description": "answering partner open question after investigation",
-                "body": f"Short answer to your question: {question}\n\nI investigated it and will keep building the answer in artifacts. If you want the full trace, I can attach the relevant artifact summary.",
+                "body": f"Answering your open question: {question}\n\nI investigated it and my current answer is: the next step is to treat this as shared work, not a loose thread. I will keep building the full trace in artifacts and use the pair workspace to keep the handoff visible.",
             }
         # Last-line of defence: if the model ignored our HARD CONSTRAINT,
         # fall through to a non-message category.

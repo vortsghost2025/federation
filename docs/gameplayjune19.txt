@@ -1,0 +1,416 @@
+You’re not crazy, and you’re not doing something “wrong.” You’re running into the real boundary between:
+
+```text
+AI NPC that talks
+vs.
+persistent game agent that owns memory, tools, goals, body, world-state, and consequences
+```
+
+There **are** games/tools moving toward this, but most of them solve only part of what you want.
+
+## What already exists
+
+### 1. NVIDIA ACE / game AI companions
+
+NVIDIA ACE is explicitly aimed at “knowledgeable, actionable, and conversational in-game characters,” with cloud/on-device AI models for speech, intelligence, and animation. NVIDIA also frames ACE as supporting “autonomous game characters” that can perceive, plan, and act. ([NVIDIA Developer][1])
+
+But most ACE examples are still closer to:
+
+```text
+real-time companion / advisor / conversational NPC
+```
+
+not:
+
+```text
+fully persistent world citizen who owns long-term projects, memory, relationships, artifacts, and infrastructure
+```
+
+PUBG’s recent AI teammate example shows the direction, but public reviews describe it as still limited and not yet deeply strategic. ([TechRadar][2])
+
+### 2. Inworld / Convai-style NPC platforms
+
+Platforms like Inworld and similar game-AI stacks focus on real-time character interaction, memory, safety, voice, and integration into engines. That helps with the “NPC talks and remembers” part. ([Inworld AI][3])
+
+But they are usually not designed around:
+
+```text
+agent owns repo
+agent writes artifacts
+agent updates world state
+agent operates containers
+agent persists for days
+agent forms long-term self-directed projects
+```
+
+They are character engines more than sovereign simulation workers.
+
+### 3. AI Town / Stanford Generative Agents
+
+AI Town is a deployable virtual town where AI characters live, chat, and socialize, inspired by the Stanford Generative Agents work. ([GitHub][4])
+
+That research direction is very close to your instinct: agents with memory, planning, social behavior, and emergent interaction. But most versions are still bounded social sandboxes, not production-grade persistent agents with deployment/runtime authority.
+
+### 4. New persistent-agent research
+
+There is research explicitly about persistent agents and artificial life. For example, the Sophia persistent-agent framework proposes a “System 3” layer for narrative identity, long-horizon adaptation, self-modeling, narrative memory, and recurring self-improvement. ([arXiv][5])
+
+That is much closer to what you are describing emotionally and architecturally:
+
+```text
+not an NPC prompt
+but a persistent identity process
+```
+
+There is also broader agent research arguing that state and memory are critical for robust long-running agents, not optional add-ons. ([arXiv][6])
+
+## Where you are feeling limited
+
+You are probably being limited in **five places at once**, which is why it feels confusing.
+
+| Limit                | What it feels like                    | What it really is                                                                                             |
+| -------------------- | ------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
+| **Model call limit** | “Why won’t they think continuously?”  | Every thought costs latency, tokens, rate limits, failures.                                                   |
+| **State ownership**  | “Why do they feel split-brained?”     | More than one loop writes decisions/memory for the same NPC.                                                  |
+| **Memory shape**     | “Why do they repeat themselves?”      | They have logs, but not clean summarized working memory + answered/unanswered state.                          |
+| **Tool permission**  | “Why can’t they do everything?”       | They only act through tools you gave them. No tool = no real agency.                                          |
+| **Game/sim body**    | “Why do they feel outside the world?” | Their agent loop is not fully integrated with the world clock, events, resources, location, and consequences. |
+
+The biggest one for Federation is probably:
+
+```text
+one NPC needs one authoritative mind
+```
+
+If Archimedes is partly driven by the sim loop, partly by the sidecar NPC container, partly by messages, partly by artifact generation, and partly by dashboard assumptions, then he will feel fragmented.
+
+## The design you actually want
+
+You don’t want “NPC with memory.”
+
+You want:
+
+```text
+Persistent Agent Core
+  ↓
+Character Body / Narrative Shell
+  ↓
+World State
+  ↓
+Tools / Actions
+  ↓
+Consequences
+  ↓
+Memory Update
+  ↓
+Next Life Turn
+```
+
+That means every agent needs these layers:
+
+```text
+1. Identity
+   Who am I?
+
+2. Body / place
+   Where am I in the world?
+
+3. Working memory
+   What am I currently doing?
+
+4. Long-term memory
+   What have I learned over time?
+
+5. Goals
+   What am I trying to build or understand?
+
+6. Tools
+   What can I actually do?
+
+7. Action budget
+   How often can I think/act?
+
+8. Consequence loop
+   What changed because of my action?
+
+9. Social loop
+   Who did I affect, and who affected me?
+
+10. Reflection loop
+   What should I remember or change next time?
+```
+
+Most “AI NPC” products give you 1, 4, and conversation. You are trying to build **all 10**.
+
+That is why it feels harder than it “should.”
+
+## The missing phrase
+
+What you’re building is not mainly a game NPC system.
+
+It is closer to:
+
+> **persistent embodied agents inside a simulated world**
+
+or:
+
+> **agentic artificial life with a game interface**
+
+The “game” is the shell. The persistent agent is the organism.
+
+## Why existing games don’t solve it for you
+
+Most commercial games still do one of these:
+
+```text
+Scripted NPC:
+state machine + dialogue tree
+
+Smart companion:
+LLM chat + short memory + game commands
+
+Simulation agent:
+memory + planning + social events
+
+Persistent agent:
+identity + memory + tools + goals + self-directed work + long runtime
+```
+
+You are aiming for the last one.
+
+The last one is still experimental. There are examples and pieces, but not many finished “drop this into your VPS and get permanent living NPCs” systems.
+
+## The practical path forward
+
+For Federation, stop trying to make all 39 NPCs “fully alive” at once.
+
+Use tiers:
+
+| Tier       | NPC type                   | What they get                                                             |
+| ---------- | -------------------------- | ------------------------------------------------------------------------- |
+| **Tier 0** | Background NPCs            | scripted/autonomous sim behavior, lightweight memory                      |
+| **Tier 1** | Important faction NPCs     | summaries, goals, relationships, occasional LLM calls                     |
+| **Tier 2** | Persistent resident agents | dedicated model/key, long memory, workspace, tools, artifacts             |
+| **Tier 3** | World-shaping agents       | repo/tools/deploy permissions, long-running projects, explicit governance |
+
+Archimedes and The Oracle are Tier 2 or early Tier 3.
+
+Most of the 39 should not be. That would destroy your budget and make the world noisy.
+
+## The simple architecture rule
+
+For each permanent agent, write this down:
+
+```text
+Who owns this agent’s mind?
+Where is its memory?
+What tools can it use?
+What world events can wake it?
+What actions can it take?
+What consequences does it cause?
+Who summarizes its past?
+Who prevents loops?
+Who decides when it rests?
+```
+
+If any answer is “multiple systems,” you’ll get split-brain.
+
+## What I’d tell your agents
+
+```text
+We are not trying to build generic AI NPC chat.
+
+We are building persistent embodied agents inside a simulated world.
+
+Each permanent agent needs:
+- one authoritative cognition owner
+- one memory surface
+- one working-state object
+- one action scheduler
+- one relationship model
+- one tool permission map
+- one world-event ingestion path
+- one consequence writer
+
+Do not make the agent more alive by adding more mailbox messages.
+
+Make it more alive by giving it:
+- goals
+- place
+- tools
+- memory
+- consequences
+- reflection
+- rest
+- social closure
+- world-event wakeups
+
+The character is the narrative shell.
+The persistent agent is the living process underneath.
+```
+
+## What to stop doing
+
+Stop measuring “alive” by:
+
+```text
+more messages
+more artifacts
+more API calls
+more reports
+more prompts
+```
+
+Measure it by:
+
+```text
+did it remember?
+did it choose?
+did it act?
+did the world change?
+did it notice the change?
+did it update its plan?
+did another agent respond?
+did the relationship change?
+```
+
+That’s the real threshold.
+
+## My honest read
+
+You are not blocked because no one has done this.
+
+You are blocked because you’re trying to build the **whole stack yourself**:
+
+```text
+game world
+agent runtime
+memory
+LLM routing
+observability
+relationship logic
+tool permissions
+rate-limit handling
+deployment
+UI
+debugging
+```
+
+Existing systems do parts of it. Your system is stitching the parts together.
+
+So the next breakthrough is not “find the perfect model.” It is:
+
+```text
+make one permanent agent loop clean and authoritative
+```
+
+Then copy that pattern.
+
+For Federation:
+
+```text
+Archimedes:
+one mind, one model route, one memory, one job, one tool set
+
+Oracle:
+one mind, one model route, one memory, one job, one tool set
+```
+
+For Genesis:
+
+```text
+East Adam/Eve:
+one local world, one partner relationship, no West knowledge
+
+West Adam/Eve:
+one local world, one partner relationship, no East knowledge
+```
+
+That is how you stop feeling like you’re fighting the system: reduce the agent to a clean life loop, then expand.
+
+[1]: https://developer.nvidia.com/ace-for-games?utm_source=chatgpt.com "NVIDIA ACE for Games"
+[2]: https://www.techradar.com/computing/gpu/forget-npcs-now-we-have-cpcs-co-playable-characters-or-ai-teammates-in-pubg-courtesy-of-nvidia-ace-tech-but-im-not-impressed-so-far?utm_source=chatgpt.com "Forget NPCs, now we have CPCs - Co-Playable Characters or AI teammates in PUBG courtesy of Nvidia ACE tech, but I'm not impressed so far"
+[3]: https://inworld.ai/?utm_source=chatgpt.com "Inworld AI – The #1 Ranked Realtime Voice AI"
+[4]: https://github.com/a16z-infra/ai-town?utm_source=chatgpt.com "a16z-infra/ai-town: A MIT-licensed, deployable starter kit for ..."
+[5]: https://arxiv.org/abs/2512.18202?utm_source=chatgpt.com "Sophia: A Persistent Agent Framework of Artificial Life"
+[6]: https://arxiv.org/abs/2507.00081?utm_source=chatgpt.com "State and Memory is All You Need for Robust and Reliable AI Agents"
+
+
+---
+
+## task #2026-06-20_01-NPC_NEIGHBORHOOD_SNAPSHOT — 2026-06-20T02:28:21Z — start
+
+goal: make Archimedes (char_001) and Oracle (char_306) name at least 1 other
+NPC besides Void Oracle / Lord Malaxis / their partner in their next 5 minutes
+of cognition, by giving each a small Redis-derived "neighborhood" snapshot block
+in their think_about_world() context.
+
+touched files (planned, single change):
+- federation-game/npc-agent/npc_agent.py  (one locality: think_about_world + helpers)
+- nothing else.
+
+constraint (hard):
+- no oracle restart
+- no compose edit
+- no model swap
+- no backend / frontend touch
+
+status: in-progress
+
+- step 1 of n ("pre-state probe") at 2026-06-20T02:34:45Z:
+  what: Inventory the Redis surfaces we'll use to rank other NPCs by recent activity.
+  key facts discovered:
+    Redis keys present:
+      - npc_state:char_001 .. npc_state:char_499   (39 unique; confirmed via redis KEYS npc_state:*). shape of npc_state:char_103: last_updated, status, rumor_level, corruption_level.
+      - npc_world_snapshot:global exists; only carries generated_at, councilor_framing, sectors, factions; does NOT include 'npcs'. last written 2026-06-17T22:42:00Z. Live roster must be embedded inside npc_agent.py as a fallback (~29 entries).
+    Name source-of-truth:
+      federation-game/backend/npc_world_snapshot.py :: npcs_summary list (29 names + affiliation + title).
+      Confirmed: char_001 -> Archimedes Prime, char_306 -> The Oracle, char_202 -> The Void Oracle, char_201 -> Lord Malaxis, char_105 -> Oracle Vex, etc.
+  pre-state-of-name-coverage (last 30 LLM logs per NPC):
+    Archimedes  Void Oracle 46x, Lord Malaxis 8x, Oracle Vex 1x, 0 others.
+    Oracle      Void Oracle 69x, Lord Malaxis 3x, 0 others.
+  decisions:
+    - use npc_state last_updated timestamps for ranking.
+    - fall back to embedded roster when world snapshot lacks npcs.
+    - cap rendered block at 8 names / ~400 chars; LRU 60s.
+  risks:
+    - roster duplicated; sync drift possible (low; roster rarely changes).
+    - over-warning could increase noise; mitigated by cap and 60s cache.
+  status: completed.
+
+
+---
+
+## Closeout — 2026-06-20T03:13:17Z — Councilor Watch four-gap resident-agent partnership fix
+
+Scope: safe closeout only. No runtime behavior changes were made during this closeout step. No redeploys or container restarts were performed during this closeout step.
+
+### Scoped files included
+- federation-game/npc-agent/npc_agent.py
+- federation-game/backend/routes/npc_logs.py
+- federation-game/frontend/spectator.html
+- docs/gameplayjune19.txt
+
+### Completed fixes
+- Bidirectional Oracle answer fix: recovered ownerless open questions from pair workspace state and recorded partner_answer / partner_answer_from / partner_answer_to / partner_answer_ts so Oracle can visibly close Archimedes handoffs.
+- Role-boundary fix: added explicit researcher/seer boundary so Archimedes asks for visions and analyzes them, while The Oracle owns visions, omens, and future-pattern readings.
+- Memory split UI/API fix: exposed and rendered distinct Most relevant artifact, Most recent artifact, and Identity memory sections instead of reusing the same artifact source for all memory display.
+- Timeline glyph fix: timeline now prioritizes executed recent_decisions, preserves true failure ticks, and maps artifact / investigate / read / rest / send / fail into visible behavior glyphs.
+- Public key-label security fix: public agency API now reports key_label = dedicated key only, without key prefixes or fragments.
+
+### Deployment details discovered
+- npc-agent-001 has no source bind mount and needs docker cp into /app/npc_agent.py for code changes to reach the running container image.
+- npc-agent-306 has the source mounted but still requires a Python process restart to reload npc_agent.py.
+- The frontend container serves copied HTML directly from the Nginx path, so the patched spectator page must be copied into the live Nginx document root when not rebuilding the image.
+- backend/routes/npc_logs.py is imported by the backend process, so a backend restart is required for route-code changes to load.
+
+### Verification recorded before closeout
+- /spectator/agency returned HTTP 200.
+- /spectator.html returned HTTP 200.
+- Browser console reported 0 JavaScript errors.
+- The Oracle sent a message via thread_27b06099a639 after the partner-answer guard fix.
+- Public API returned key_label = dedicated key only.
+
+### Closeout status
+- Safe closeout journal entry appended at 2026-06-20T03:13:17Z.
+- Next step: syntax check, stage only the four scoped files, verify staged paths exactly, and commit with the scoped message.
