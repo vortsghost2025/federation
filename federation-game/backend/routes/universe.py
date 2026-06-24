@@ -10,11 +10,22 @@ ASSETS_DIR = "/docker/federation-game/universe/assets"
 router = APIRouter(prefix="/universe", tags=["universe"])
 
 
-@router.get("/assets/{asset_id}")
+@router.get("/assets/{asset_id:path}")
 async def get_asset(asset_id: str):
-    """Serve a generated asset by ID. Looks for {asset_id}.webp or {asset_id}.png."""
+    """Serve a generated asset by ID or path.
+    
+    Accepts:
+      /assets/abyss          -> looks for abyss.png
+      /assets/abyss.png      -> looks for abyss.png (extension stripped)
+    """
+    base = asset_id
+    for ext in (".png", ".webp", ".jpg", ".jpeg"):
+        if base.endswith(ext):
+            base = base[:-len(ext)]
+            break
+    
     for ext in [".webp", ".png", ".jpg", ".jpeg"]:
-        path = os.path.join(ASSETS_DIR, asset_id + ext)
+        path = os.path.join(ASSETS_DIR, base + ext)
         if os.path.isfile(path):
             return FileResponse(path, media_type=f"image/{ext.lstrip('.')}")
     raise HTTPException(status_code=404, detail="Asset not found")
