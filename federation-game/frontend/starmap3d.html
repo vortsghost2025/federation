@@ -130,9 +130,9 @@ let targetCamPos = new THREE.Vector3(0, 400, 800);
 let targetLookAt = new THREE.Vector3(0, 0, 0);
 
 const CAMERA_PRESETS = {
-  [SCALE.LOCAL]: { pos: [0, 400, 800], target: [0, 0, 0], far: 5000, labelOpacity: 1, objScale: 1 },
-  [SCALE.GALAXY]: { pos: [0, 2500, 5000], target: [0, 0, 0], far: 25000, labelOpacity: 0.5, objScale: 0.65 },
-  [SCALE.DEEP]: { pos: [0, 15000, 30000], target: [0, 0, 0], far: 80000, labelOpacity: 0.12, objScale: 0.3 },
+  [SCALE.LOCAL]: { pos: [0, 400, 800], target: [0, 0, 0], far: 5000, labelOpacity: 1, objScale: 1, gridOpacity: 0.3, boundaryScale: 1, starOpacities: [0.7, 0.35, 0.15] },
+  [SCALE.GALAXY]: { pos: [0, 2500, 5000], target: [0, 0, 0], far: 25000, labelOpacity: 0.5, objScale: 0.65, gridOpacity: 0.08, boundaryScale: 3, starOpacities: [0.5, 0.55, 0.35] },
+  [SCALE.DEEP]: { pos: [0, 15000, 30000], target: [0, 0, 0], far: 80000, labelOpacity: 0.12, objScale: 0.3, gridOpacity: 0, boundaryScale: 6, starOpacities: [0.25, 0.4, 0.7] },
 };
 
 // --- Lighting ---
@@ -141,35 +141,39 @@ const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
 dirLight.position.set(100, 200, 100);
 scene.add(dirLight);
 
-// --- Cosmic Starfield ---
-const STAR_COUNT = 12000;
-const STAR_RADIUS = 60000;
-const starGeo = new THREE.BufferGeometry();
-const starPositions = new Float32Array(STAR_COUNT * 3);
-const starColors = new Float32Array(STAR_COUNT * 3);
-for (let i = 0; i < STAR_COUNT; i++) {
-  const theta = Math.random() * Math.PI * 2;
-  const phi = Math.acos(2 * Math.random() - 1);
-  const r = STAR_RADIUS * (0.15 + 0.85 * Math.pow(Math.random(), 0.6));
-  starPositions[i * 3] = r * Math.sin(phi) * Math.cos(theta);
-  starPositions[i * 3 + 1] = r * Math.sin(phi) * Math.sin(theta);
-  starPositions[i * 3 + 2] = r * Math.cos(phi);
-  const temp = Math.random();
-  starColors[i * 3] = 0.75 + temp * 0.25;
-  starColors[i * 3 + 1] = 0.8 + temp * 0.2;
-  starColors[i * 3 + 2] = 0.85 + (1 - temp) * 0.15;
+// --- Multi-layer Cosmic Starfield ---
+function createStarLayer(count, radius, yBias, size, opacity, sizeAtten) {
+  const geo = new THREE.BufferGeometry();
+  const pos = new Float32Array(count * 3);
+  const col = new Float32Array(count * 3);
+  for (let i = 0; i < count; i++) {
+    const theta = Math.random() * Math.PI * 2;
+    const phi = Math.acos(2 * Math.random() - 1);
+    const r = radius * (0.2 + 0.8 * Math.pow(Math.random(), 0.55));
+    pos[i * 3] = r * Math.sin(phi) * Math.cos(theta);
+    pos[i * 3 + 1] = r * Math.sin(phi) * Math.sin(theta) * (1 - yBias) + (Math.random() - 0.5) * radius * yBias;
+    pos[i * 3 + 2] = r * Math.cos(phi);
+    const t = Math.random();
+    col[i * 3] = 0.7 + t * 0.3;
+    col[i * 3 + 1] = 0.75 + t * 0.25;
+    col[i * 3 + 2] = 0.8 + (1 - t) * 0.2;
+  }
+  geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+  geo.setAttribute('color', new THREE.BufferAttribute(col, 3));
+  const mat = new THREE.PointsMaterial({
+    size,
+    vertexColors: true,
+    transparent: true,
+    opacity,
+    sizeAttenuation: sizeAtten,
+  });
+  return new THREE.Points(geo, mat);
 }
-starGeo.setAttribute('position', new THREE.BufferAttribute(starPositions, 3));
-starGeo.setAttribute('color', new THREE.BufferAttribute(starColors, 3));
-const starMat = new THREE.PointsMaterial({
-  size: 2.5,
-  vertexColors: true,
-  transparent: true,
-  opacity: 0.85,
-  sizeAttenuation: true,
-});
-const starField = new THREE.Points(starGeo, starMat);
-scene.add(starField);
+const starNear = createStarLayer(6000, 4000, 0.15, 2.0, 0.7, true);
+const starMid = createStarLayer(4000, 15000, 0.35, 3.0, 0.5, true);
+const starFar = createStarLayer(3000, 60000, 0.4, 4.5, 0.35, false);
+scene.add(starNear, starMid, starFar);
+const starLayers = [starNear, starMid, starFar];
 
 // --- Grid helper ---
 const grid = new THREE.GridHelper(2000, 40, 0x1a2035, 0x1a2035);
@@ -484,26 +488,28 @@ window.setScale = (mode) => {
   currentScale = mode;
   document.querySelectorAll('#scale-ctrl button').forEach(b => b.classList.remove('active'));
   document.getElementById(`btn-scale-${mode}`).classList.add('active');
+  applyScalePreset(mode);
+};
+
+function applyScalePreset(mode) {
   const preset = CAMERA_PRESETS[mode];
   targetCamPos.set(...preset.pos);
   targetLookAt.set(...preset.target);
   camera.far = preset.far;
   camera.updateProjectionMatrix();
+  grid.material.opacity = preset.gridOpacity;
+  boundary.scale.setScalar(preset.boundaryScale);
+  starLayers.forEach((layer, i) => { layer.material.opacity = preset.starOpacities[i]; });
   sectorMeshes.forEach(m => m.scale.setScalar(preset.objScale));
   sectorRings.forEach(r => r.scale.setScalar(preset.objScale));
   npcMeshes.forEach(n => n.scale.setScalar(preset.objScale));
-};
+  setLabelScale(labelScale);
+}
 
 // --- Zoom ---
 window.zoomIn = () => camera.position.multiplyScalar(0.8);
 window.zoomOut = () => camera.position.multiplyScalar(1.25);
-window.resetView = () => {
-  const preset = CAMERA_PRESETS[currentScale];
-  targetCamPos.set(...preset.pos);
-  targetLookAt.set(...preset.target);
-  camera.far = preset.far;
-  camera.updateProjectionMatrix();
-};
+window.resetView = () => applyScalePreset(currentScale);
 
 // --- Resize ---
 window.addEventListener('resize', () => {
