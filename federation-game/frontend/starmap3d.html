@@ -131,9 +131,9 @@ let targetCamPos = new THREE.Vector3(0, 400, 800);
 let targetLookAt = new THREE.Vector3(0, 0, 0);
 
 const CAMERA_PRESETS = {
-  [SCALE.LOCAL]: { pos: [0, 400, 800], target: [0, 0, 0], far: 5000, labelOpacity: 1, objScale: 1, gridOpacity: 0.3, boundaryScale: 1, starOpacities: [0.7, 0.35, 0.15], showNPCs: true, showSectors: true, showFactionClouds: false },
-  [SCALE.GALAXY]: { pos: [0, 2500, 5000], target: [0, 0, 0], far: 25000, labelOpacity: 0.5, objScale: 0.65, gridOpacity: 0.08, boundaryScale: 3, starOpacities: [0.5, 0.55, 0.35], showNPCs: false, showSectors: true, showFactionClouds: false },
-  [SCALE.DEEP]: { pos: [0, 15000, 30000], target: [0, 0, 0], far: 80000, labelOpacity: 0.12, objScale: 0.3, gridOpacity: 0, boundaryScale: 6, starOpacities: [0.25, 0.4, 0.7], showNPCs: false, showSectors: false, showFactionClouds: true },
+  [SCALE.LOCAL]: { pos: [0, 300, 2000], target: [0, 0, 0], far: 6000, labelOpacity: 1, objScale: 1, gridOpacity: 0.25, boundaryScale: 1, starOpacities: [0.6, 0.3, 0.12], showNPCs: true, showSectors: true, showFactionClouds: false, cloudScale: 0 },
+  [SCALE.GALAXY]: { pos: [0, 1200, 8000], target: [0, 0, 0], far: 30000, labelOpacity: 0.45, objScale: 0.5, gridOpacity: 0.06, boundaryScale: 2, starOpacities: [0.45, 0.5, 0.3], showNPCs: false, showSectors: true, showFactionClouds: false, cloudScale: 0 },
+  [SCALE.DEEP]: { pos: [0, 8000, 50000], target: [0, 0, 0], far: 200000, labelOpacity: 0.06, objScale: 0.12, gridOpacity: 0, boundaryScale: 4, starOpacities: [0.2, 0.35, 0.75], showNPCs: false, showSectors: false, showFactionClouds: true, cloudScale: 3 },
 };
 
 // --- Lighting ---
@@ -172,7 +172,7 @@ function createStarLayer(count, radius, yBias, size, opacity, sizeAtten) {
 }
 const starNear = createStarLayer(6000, 4000, 0.15, 2.0, 0.7, true);
 const starMid = createStarLayer(4000, 15000, 0.35, 3.0, 0.5, true);
-const starFar = createStarLayer(3000, 60000, 0.4, 4.5, 0.35, false);
+const starFar = createStarLayer(3000, 250000, 0.4, 5.0, 0.4, false);
 scene.add(starNear, starMid, starFar);
 const starLayers = [starNear, starMid, starFar];
 
@@ -370,7 +370,7 @@ function rebuildScene() {
     const color = FACTION_COLORS[fid] || 0x9e9e9e;
     const cx = fs.x / fs.count;
     const cz = fs.y / fs.count;
-    const cloudSize = 120 + fs.count * 50;
+    const cloudSize = 800 + fs.count * 300;
     const mat = new THREE.MeshBasicMaterial({
       color,
       transparent: true,
@@ -537,7 +537,7 @@ function applyScalePreset(mode) {
   sectorMeshes.forEach(m => { m.visible = preset.showSectors; m.scale.setScalar(preset.objScale); });
   sectorRings.forEach(r => { r.visible = preset.showSectors; r.scale.setScalar(preset.objScale); });
   npcMeshes.forEach(n => { n.visible = preset.showNPCs; n.scale.setScalar(preset.objScale); });
-  factionClouds.forEach(c => { c.visible = preset.showFactionClouds; });
+  factionClouds.forEach(c => { c.visible = preset.showFactionClouds; c.scale.setScalar(preset.cloudScale); });
   setLabelScale(labelScale);
 }
 
