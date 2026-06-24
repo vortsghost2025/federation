@@ -1,0 +1,700 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Federation Galaxy - Three.js Starmap</title>
+<link rel="stylesheet" href="starmap.css">
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+<style>
+  body { margin: 0; overflow: hidden; background: #0a0e1a; }
+  #three-canvas { position: fixed; inset: 0; z-index: 0; }
+  #ui-layer { position: fixed; inset: 0; z-index: 10; pointer-events: none; }
+  #ui-layer > * { pointer-events: auto; }
+  .worldbar { position: fixed; top: 0; left: 0; right: 0; z-index: 20; pointer-events: auto; }
+  #sidebar { position: fixed; top: 60px; right: 12px; width: 200px; max-height: calc(100vh - 80px); overflow-y: auto; z-index: 20; pointer-events: auto; font-size: 12px; }
+  #detail { position: fixed; bottom: 12px; left: 12px; z-index: 20; pointer-events: auto; display: none; }
+  #zoom-ctrl { position: fixed; bottom: 12px; left: 50%; transform: translateX(-50%); z-index: 20; pointer-events: auto; }
+  #loading { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; background: #0a0e1a; color: #4fc3f7; font: 16px 'Share Tech Mono', monospace; z-index: 100; }
+  #legend { position: fixed; bottom: 60px; left: 12px; z-index: 20; pointer-events: auto; background: rgba(10,15,30,0.9); border: 1px solid rgba(79,195,247,0.4); border-radius: 6px; padding: 10px 12px; color: #e2dfd0; font: 12px 'Share Tech Mono', monospace; }
+  .sector-label { position: absolute; color: rgba(226,223,208,0.85); font: 12px 'Share Tech Mono', monospace; pointer-events: none; transform: translate(-50%, -50%); text-shadow: 0 0 6px rgba(0,0,0,0.9); }
+  .legend-item { display: flex; align-items: center; gap: 8px; margin: 3px 0; }
+  .legend-dot { width: 12px; height: 12px; border-radius: 50%; display: inline-block; }
+  #font-ctrl { position: fixed; top: 60px; left: 12px; z-index: 20; pointer-events: auto; display: flex; gap: 4px; }
+  #font-ctrl button { background: rgba(10,15,30,0.85); border: 1px solid rgba(79,195,247,0.4); color: #4fc3f7; width: 36px; height: 36px; border-radius: 4px; cursor: pointer; font: bold 16px 'Share Tech Mono', monospace; }
+  #scale-ctrl { position: fixed; top: 44px; left: 50%; transform: translateX(-50%); z-index: 20; pointer-events: auto; display: flex; gap: 4px; }
+  #scale-ctrl button { background: rgba(10,15,30,0.85); border: 1px solid rgba(79,195,247,0.4); color: #4fc3f7; padding: 4px 14px; border-radius: 4px; cursor: pointer; font: bold 10px Orbitron,sans-serif; letter-spacing: 1px; }
+  #scale-ctrl button.active { background: rgba(79,195,247,0.2); border-color: rgba(79,195,247,0.8); color: #fff; }
+</style>
+</head>
+<body>
+<canvas id="three-canvas"></canvas>
+<div id="ui-layer">
+  <div class="worldbar" id="worldbar">
+    <div style="display:flex;gap:8px;padding:8px;background:rgba(10,15,30,0.85);border-bottom:1px solid rgba(79,195,247,0.15)">
+      <span style="color:#4fc3f7;font:12px Orbitron,sans-serif;letter-spacing:2px">THREE.JS STARMAP</span>
+      <span style="color:#78909c;font:11px 'Share Tech Mono',monospace" id="fps-counter">-- FPS</span>
+      <span style="margin-left:auto;color:#78909c;font:11px 'Share Tech Mono',monospace" id="obj-count">-- objects</span>
+    </div>
+  </div>
+  <div id="sidebar">
+    <div style="padding:10px;background:rgba(10,15,30,0.9);border:1px solid rgba(79,195,247,0.2);border-radius:6px;color:#e2dfd0;font:12px 'Share Tech Mono',monospace">
+      <div style="color:#4fc3f7;font-size:11px;letter-spacing:1px;margin-bottom:6px">GALACTIC DATA</div>
+      <div id="sector-summary">Loading...</div>
+    </div>
+  </div>
+  <div id="detail" style="background:rgba(10,15,30,0.95);border:1px solid rgba(79,195,247,0.3);border-radius:6px;padding:10px;color:#e2dfd0;font:12px 'Share Tech Mono',monospace;min-width:220px;max-width:280px">
+    <div id="detail-name" style="color:#ffd700;font:bold 14px Orbitron,sans-serif;margin-bottom:4px"></div>
+    <div id="detail-rows"></div>
+  </div>
+  <div id="zoom-ctrl" style="display:flex;gap:4px">
+    <button onclick="zoomIn()" style="background:rgba(10,15,30,0.8);border:1px solid rgba(79,195,247,0.3);color:#4fc3f7;width:32px;height:32px;border-radius:4px;cursor:pointer;font:16px monospace">+</button>
+    <button onclick="zoomOut()" style="background:rgba(10,15,30,0.8);border:1px solid rgba(79,195,247,0.3);color:#4fc3f7;width:32px;height:32px;border-radius:4px;cursor:pointer;font:16px monospace">-</button>
+    <button onclick="resetView()" style="background:rgba(10,15,30,0.8);border:1px solid rgba(79,195,247,0.3);color:#4fc3f7;padding:0 10px;height:32px;border-radius:4px;cursor:pointer;font:12px monospace">RST</button>
+  </div>
+  <div id="legend">
+    <div style="color:#4fc3f7;font-size:10px;margin-bottom:4px;letter-spacing:1px">LEGEND</div>
+    <div class="legend-item"><span class="legend-dot" style="background:#4fc3f7"></span> Sector (textured)</div>
+    <div class="legend-item"><span class="legend-dot" style="background:#4fc3f7;opacity:0.5"></span> Sector (procedural)</div>
+    <div class="legend-item"><span class="legend-dot" style="background:#ffd700"></span> NPC node</div>
+    <div style="margin-top:4px;color:#78909c;font-size:10px">Click node for details</div>
+  </div>
+  <div id="font-ctrl">
+    <button id="btn-font-down" onclick="fontDown()" title="Smaller labels">A-</button>
+    <button id="btn-font-up" onclick="fontUp()" title="Larger labels">A+</button>
+  </div>
+  <div id="scale-ctrl">
+    <button id="btn-scale-local" onclick="setScale('local')" class="active">LOCAL</button>
+    <button id="btn-scale-galaxy" onclick="setScale('galaxy')">GALAXY</button>
+    <button id="btn-scale-deep" onclick="setScale('deep')">DEEP</button>
+  </div>
+  <div id="scale-labels" style="position:fixed;bottom:80px;left:50%;transform:translateX(-50%);z-index:20;pointer-events:none;text-align:center;font:10px 'Share Tech Mono',monospace;color:#4fc3f7;opacity:0;transition:opacity 0.5s">
+    <div id="scale-label-primary" style="font:bold 12px Orbitron,sans-serif;letter-spacing:2px;margin-bottom:2px"></div>
+    <div id="scale-label-secondary" style="font-size:9px;color:#78909c"></div>
+  </div>
+</div>
+<div id="loading">Initializing Three.js starmap...</div>
+
+<script src="fed-fetch.js"></script>
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+    "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+  }
+}
+</script>
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+const canvas = document.getElementById('three-canvas');
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.setSize(window.innerWidth, window.innerHeight);
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x0a0e1a);
+scene.fog = new THREE.FogExp2(0x0a0e1a, 0.0008);
+
+const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 1, 10000);
+camera.position.set(0, 400, 800);
+
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true;
+controls.dampingFactor = 0.05;
+controls.maxDistance = 2000;
+controls.minDistance = 50;
+
+const raycaster = new THREE.Raycaster();
+const mouse = new THREE.Vector2();
+let hoveredObj = null;
+let labelScale = 1.0;
+
+let mapData = null;
+let npcMeshes = [];
+let sectorMeshes = [];
+let sectorRings = [];
+let factionClouds = [];
+let clusterMarker, clusterHalo, horizonBand;
+let nebulaSprites = [];
+let labelDivs = [];
+const FACTION_COLORS = {
+  research_division: 0x4fc3f7,
+  military_command: 0xef5350,
+  diplomatic_corps: 0x66bb6a,
+  consciousness_collective: 0xab47bc,
+  cultural_ministry: 0xffa726,
+  economic_council: 0xffd700,
+  exploration_initiative: 0x26c6da,
+  preservation_society: 0x8d6e63,
+};
+
+// --- Cosmic Scale System ---
+const SCALE = { LOCAL: 'local', GALAXY: 'galaxy', DEEP: 'deep' };
+let currentScale = SCALE.LOCAL;
+let targetCamPos = new THREE.Vector3(0, 400, 800);
+let targetLookAt = new THREE.Vector3(0, 0, 0);
+
+const CAMERA_PRESETS = {
+  [SCALE.LOCAL]: { pos: [0, 300, 2000], target: [0, 0, 0], far: 6000, labelOpacity: 1, objScale: 1, gridOpacity: 0.25, boundaryScale: 1, starOpacities: [0.6, 0.3, 0.12], showNPCs: true, showSectors: true, showFactionClouds: false, cloudScale: 0, showClusterMarker: false, showHalo: false, showHorizon: false, showNebula: false, showNearStars: true, showMidStars: true, showFarStars: false },
+  [SCALE.GALAXY]: { pos: [0, 1200, 8000], target: [0, 0, 0], far: 30000, labelOpacity: 0.45, objScale: 0.5, gridOpacity: 0.06, boundaryScale: 2, starOpacities: [0.45, 0.5, 0.3], showNPCs: false, showSectors: true, showFactionClouds: true, cloudScale: 1, showClusterMarker: true, showHalo: true, showHorizon: false, showNebula: true, showNearStars: false, showMidStars: true, showFarStars: true },
+  [SCALE.DEEP]: { pos: [0, 8000, 50000], target: [0, 0, 0], far: 200000, labelOpacity: 0.06, objScale: 0.12, gridOpacity: 0, boundaryScale: 4, starOpacities: [0.2, 0.35, 0.75], showNPCs: false, showSectors: false, showFactionClouds: true, cloudScale: 3, showClusterMarker: true, showHalo: true, showHorizon: true, showNebula: true, showNearStars: false, showMidStars: false, showFarStars: true },
+};
+
+// --- Lighting ---
+scene.add(new THREE.AmbientLight(0x404060, 0.5));
+const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
+dirLight.position.set(100, 200, 100);
+scene.add(dirLight);
+
+// --- Multi-layer Cosmic Starfield ---
+function createStarLayer(count, radius, yBias, size, opacity, sizeAtten) {
+  const geo = new THREE.BufferGeometry();
+  const pos = new Float32Array(count * 3);
+  const col = new Float32Array(count * 3);
+  for (let i = 0; i < count; i++) {
+    const theta = Math.random() * Math.PI * 2;
+    const phi = Math.acos(2 * Math.random() - 1);
+    const r = radius * (0.2 + 0.8 * Math.pow(Math.random(), 0.55));
+    pos[i * 3] = r * Math.sin(phi) * Math.cos(theta);
+    pos[i * 3 + 1] = r * Math.sin(phi) * Math.sin(theta) * (1 - yBias) + (Math.random() - 0.5) * radius * yBias;
+    pos[i * 3 + 2] = r * Math.cos(phi);
+    const t = Math.random();
+    col[i * 3] = 0.7 + t * 0.3;
+    col[i * 3 + 1] = 0.75 + t * 0.25;
+    col[i * 3 + 2] = 0.8 + (1 - t) * 0.2;
+  }
+  geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+  geo.setAttribute('color', new THREE.BufferAttribute(col, 3));
+  const mat = new THREE.PointsMaterial({
+    size,
+    vertexColors: true,
+    transparent: true,
+    opacity,
+    sizeAttenuation: sizeAtten,
+  });
+  return new THREE.Points(geo, mat);
+}
+const starNear = createStarLayer(6000, 4000, 0.15, 2.0, 0.7, true);
+const starMid = createStarLayer(4000, 15000, 0.35, 3.0, 0.5, true);
+const starFar = createStarLayer(3000, 250000, 0.4, 5.0, 0.4, false);
+scene.add(starNear, starMid, starFar);
+const starLayers = [starNear, starMid, starFar];
+
+// --- Grid helper ---
+const grid = new THREE.GridHelper(2000, 40, 0x1a2035, 0x1a2035);
+grid.material.transparent = true;
+grid.material.opacity = 0.3;
+scene.add(grid);
+
+// --- Nebula dust bands ---
+function makeNebulaTexture(r, g, b) {
+  const c = document.createElement('canvas');
+  c.width = 256;
+  c.height = 256;
+  const ctx = c.getContext('2d');
+  const grad = ctx.createRadialGradient(128, 128, 0, 128, 128, 128);
+  grad.addColorStop(0, `rgba(${r},${g},${b},0.12)`);
+  grad.addColorStop(0.5, `rgba(${r},${g},${b},0.04)`);
+  grad.addColorStop(1, `rgba(${r},${g},${b},0)`);
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, 256, 256);
+  return new THREE.CanvasTexture(c);
+}
+const nebulaDefs = [
+  { color: [79, 195, 247], pos: [3000, 2500, -8000], scale: [20000, 10000, 1] },
+  { color: [171, 71, 188], pos: [-5000, 1500, -12000], scale: [18000, 9000, 1] },
+  { color: [255, 167, 38], pos: [2000, -1000, -6000], scale: [15000, 7000, 1] },
+  { color: [140, 200, 255], pos: [-3000, 3000, -15000], scale: [25000, 12000, 1] },
+];
+nebulaDefs.forEach(def => {
+  const tex = makeNebulaTexture(...def.color);
+  const mat = new THREE.SpriteMaterial({
+    map: tex,
+    transparent: true,
+    blending: THREE.AdditiveBlending,
+    depthWrite: false,
+  });
+  const sprite = new THREE.Sprite(mat);
+  sprite.scale.set(...def.scale);
+  sprite.position.set(...def.pos);
+  scene.add(sprite);
+  nebulaSprites.push(sprite);
+});
+
+// --- Known space boundary ---
+const boundaryGeo = new THREE.TorusGeometry(2000, 4, 16, 100);
+const boundaryMat = new THREE.MeshBasicMaterial({
+  color: 0x4fc3f7,
+  transparent: true,
+  opacity: 0.1,
+});
+const boundary = new THREE.Mesh(boundaryGeo, boundaryMat);
+boundary.rotation.x = Math.PI / 2;
+boundary.position.y = -2;
+boundary.userData = { type: 'boundary' };
+scene.add(boundary);
+
+// --- Federation cluster marker (DEEP/GALAXY focal point) ---
+const clusterGeo = new THREE.SphereGeometry(8, 32, 32);
+const clusterMat = new THREE.MeshBasicMaterial({
+  color: 0x4fc3f7,
+  transparent: true,
+  opacity: 0.9,
+});
+clusterMarker = new THREE.Mesh(clusterGeo, clusterMat);
+clusterMarker.position.set(0, 0, 0);
+clusterMarker.visible = false;
+scene.add(clusterMarker);
+
+// Cluster halo sprite
+const haloCanvas = document.createElement('canvas');
+haloCanvas.width = 128;
+haloCanvas.height = 128;
+const hctx = haloCanvas.getContext('2d');
+const hgrad = hctx.createRadialGradient(64, 64, 0, 64, 64, 64);
+hgrad.addColorStop(0, 'rgba(79,195,247,0.25)');
+hgrad.addColorStop(0.4, 'rgba(79,195,247,0.08)');
+hgrad.addColorStop(1, 'rgba(79,195,247,0)');
+hctx.fillStyle = hgrad;
+hctx.fillRect(0, 0, 128, 128);
+const haloTex = new THREE.CanvasTexture(haloCanvas);
+const haloMat = new THREE.SpriteMaterial({
+  map: haloTex,
+  transparent: true,
+  blending: THREE.AdditiveBlending,
+  depthWrite: false,
+});
+clusterHalo = new THREE.Sprite(haloMat);
+clusterHalo.scale.set(600, 600, 1);
+clusterHalo.visible = false;
+scene.add(clusterHalo);
+
+// --- Horizon band (DEEP mode galactic plane suggestion) ---
+const horizonGeo = new THREE.TorusGeometry(18000, 80, 16, 120);
+const horizonMat = new THREE.MeshBasicMaterial({
+  color: 0x4fc3f7,
+  transparent: true,
+  opacity: 0.04,
+  side: THREE.DoubleSide,
+});
+horizonBand = new THREE.Mesh(horizonGeo, horizonMat);
+horizonBand.rotation.x = Math.PI / 2;
+horizonBand.position.y = -100;
+horizonBand.visible = false;
+scene.add(horizonBand);
+
+// --- Axes ---
+// const axes = new THREE.AxesHelper(500);
+// scene.add(axes);
+
+// --- Fetch data ---
+async function fetchData() {
+  const data = await fedFetch('starmap3d', '/map/data');
+  if (!data) return;
+  mapData = data;
+  rebuildScene();
+  updateUI();
+  resetView();
+}
+
+function rebuildScene() {
+  npcMeshes.forEach(m => scene.remove(m));
+  sectorMeshes.forEach(m => scene.remove(m));
+  factionClouds.forEach(c => scene.remove(c));
+  labelDivs.forEach(l => l.remove());
+  npcMeshes = [];
+  sectorMeshes = [];
+  factionClouds = [];
+  labelDivs = [];
+
+  if (!mapData) return;
+
+  const npcs = mapData.npcs || [];
+  const sectors = mapData.sectors || [];
+  const factions = mapData.factions || {};
+
+  // Build faction lookup: home_sector_id -> faction
+  const sectorFaction = {};
+  for (const [fid, fdata] of Object.entries(factions)) {
+    if (fdata.home_sector_id) {
+      sectorFaction[fdata.home_sector_id] = fid;
+    }
+  }
+
+  // Compute data bounds for auto-framing
+  let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+  for (const s of sectors) {
+    if (s.x < minX) minX = s.x;
+    if (s.x > maxX) maxX = s.x;
+    if (s.y < minY) minY = s.y;
+    if (s.y > maxY) maxY = s.y;
+  }
+
+  // --- Sector markers (real coordinates) ---
+  const sectorGeo = new THREE.SphereGeometry(14, 32, 32);
+  const ringGeo = new THREE.RingGeometry(18, 22, 32);
+  const textureLoader = new THREE.TextureLoader();
+  sectors.forEach((s) => {
+    const fid = sectorFaction[s.id];
+    const factionColor = fid && factions[fid] ? factions[fid].color : null;
+    const baseColor = factionColor ? parseInt(factionColor.replace('#', ''), 16) : 0x4fc3f7;
+
+    const mat = new THREE.MeshStandardMaterial({
+      color: baseColor,
+      emissive: baseColor,
+      emissiveIntensity: 0.6,
+      transparent: true,
+      opacity: 0.9,
+    });
+    const mesh = new THREE.Mesh(sectorGeo, mat);
+    mesh.position.set(s.x, 0, s.y);
+    mesh.userData = { type: 'sector', id: s.id, name: s.name, data: s, factionId: fid, hasTexture: false, baseColor };
+    const preset = CAMERA_PRESETS[currentScale];
+    mesh.scale.setScalar(preset.objScale);
+    scene.add(mesh);
+    sectorMeshes.push(mesh);
+
+    // Faction territory ring (soft halo)
+    const ringMat = new THREE.MeshBasicMaterial({
+      color: baseColor,
+      transparent: true,
+      opacity: 0.15,
+      side: THREE.DoubleSide,
+    });
+    const ring = new THREE.Mesh(ringGeo, ringMat);
+    ring.rotation.x = -Math.PI / 2;
+    ring.position.set(s.x, 1, s.y);
+    ring.userData = { type: 'ring', sectorId: s.id };
+    ring.scale.setScalar(preset.objScale);
+    scene.add(ring);
+    sectorRings.push(ring);
+
+    // Sector name label
+    const label = document.createElement('div');
+    label.className = 'sector-label';
+    label.textContent = s.name;
+    label.style.color = factionColor || 'rgba(226,223,208,0.85)';
+    document.getElementById('ui-layer').appendChild(label);
+    labelDivs.push(label);
+  });
+
+  // --- NPC nodes ---
+  const npcGeo = new THREE.SphereGeometry(5, 16, 16);
+  npcs.forEach(npc => {
+    const fid = npc.faction_id || npc.faction || 'unknown';
+    const color = FACTION_COLORS[fid] || 0x9e9e9e;
+    const mat = new THREE.MeshStandardMaterial({
+      color,
+      emissive: color,
+      emissiveIntensity: 0.6,
+    });
+    const mesh = new THREE.Mesh(npcGeo, mat);
+
+    // Position near sector if sector_id matches, else random
+    const sector = sectors.find(s => s.id === (npc.sector_id || npc.location));
+    if (sector) {
+      const angle = Math.random() * Math.PI * 2;
+      const dist = 30 + Math.random() * 40;
+      mesh.position.set(sector.x + Math.cos(angle) * dist, 0, sector.y + Math.sin(angle) * dist);
+    } else {
+      const hash = simpleHash(npc.id || npc.char_id);
+      mesh.position.set((hash % 500) - 250, 0, ((hash * 7) % 500) - 250);
+    }
+    mesh.userData = { type: 'npc', data: npc };
+    const preset = CAMERA_PRESETS[currentScale];
+    mesh.scale.setScalar(preset.objScale);
+    scene.add(mesh);
+    npcMeshes.push(mesh);
+  });
+
+  document.getElementById('obj-count').textContent = `${sectorMeshes.length + npcMeshes.length} objects`;
+
+  // --- Faction clouds (DEEP mode territory blobs) ---
+  const factionSectors = {};
+  sectors.forEach(s => {
+    const fid = sectorFaction[s.id];
+    if (!fid) return;
+    if (!factionSectors[fid]) factionSectors[fid] = { x: 0, y: 0, count: 0 };
+    factionSectors[fid].x += s.x;
+    factionSectors[fid].y += s.y;
+    factionSectors[fid].count++;
+  });
+  const cloudGeo = new THREE.SphereGeometry(1, 24, 24);
+  for (const [fid, fs] of Object.entries(factionSectors)) {
+    const color = FACTION_COLORS[fid] || 0x9e9e9e;
+    const cx = fs.x / fs.count;
+    const cz = fs.y / fs.count;
+    const cloudSize = 800 + fs.count * 300;
+    const mat = new THREE.MeshBasicMaterial({
+      color,
+      transparent: true,
+      opacity: 0.08,
+      depthWrite: false,
+    });
+    const cloud = new THREE.Mesh(cloudGeo, mat);
+    cloud.position.set(cx, 0, cz);
+    cloud.scale.setScalar(cloudSize);
+    cloud.userData = { type: 'factionCloud', factionId: fid };
+    cloud.visible = false;
+    scene.add(cloud);
+    factionClouds.push(cloud);
+  }
+}
+
+function simpleHash(str) {
+  let h = 0;
+  for (let i = 0; i < (str || '').length; i++) {
+    h = ((h << 5) - h + str.charCodeAt(i)) | 0;
+  }
+  return Math.abs(h);
+}
+
+// --- UI ---
+function updateUI() {
+  if (!mapData) return;
+  const npcs = mapData.npcs || [];
+  const factions = mapData.factions || {};
+
+  const coreNPCs = npcs.filter(n => !n.id?.startsWith('comp_')).length;
+  const companionNPCs = npcs.filter(n => n.id?.startsWith('comp_')).length;
+
+  document.getElementById('sector-summary').innerHTML = `
+    <div style="color:#4fc3f7;font-size:11px;letter-spacing:1px;margin-bottom:6px">GALACTIC DATA</div>
+    <div>Sectors: <strong style="color:#4fc3f7">21</strong></div>
+    <div>NPCs: <strong style="color:#ffd700">${coreNPCs} core / ${companionNPCs} companion = ${npcs.length} total</strong></div>
+    <div>Factions: <strong style="color:#66bb6a">${Object.keys(factions).length}</strong></div>
+    <div style="margin-top:6px;color:#78909c;font-size:10px">Click nodes for details. Drag to rotate. Scroll to zoom.</div>
+  `;
+  document.getElementById('sidebar').style.display = 'block';
+}
+
+// --- Interaction ---
+canvas.addEventListener('click', (e) => {
+  mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
+  mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
+  raycaster.setFromCamera(mouse, camera);
+  const intersects = raycaster.intersectObjects([...sectorMeshes, ...npcMeshes]);
+  const detail = document.getElementById('detail');
+  if (intersects.length > 0) {
+    const obj = intersects[0].object;
+    const ud = obj.userData;
+    if (ud.type === 'npc') {
+      showNPC(ud.data);
+    } else if (ud.type === 'sector') {
+      showSectorDetail(ud);
+    }
+  } else {
+    detail.style.display = 'none';
+  }
+});
+
+canvas.addEventListener('mousemove', (e) => {
+  mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
+  mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
+  raycaster.setFromCamera(mouse, camera);
+  const intersects = raycaster.intersectObjects([...sectorMeshes, ...npcMeshes]);
+  if (intersects.length > 0) {
+    canvas.style.cursor = 'pointer';
+    const obj = intersects[0].object;
+    if (hoveredObj !== obj) {
+      if (hoveredObj) unhighlight(hoveredObj);
+      highlight(obj);
+      hoveredObj = obj;
+    }
+  } else {
+    canvas.style.cursor = 'default';
+    if (hoveredObj) {
+      unhighlight(hoveredObj);
+      hoveredObj = null;
+    }
+  }
+});
+
+function highlight(obj) {
+  obj.scale.set(1.4, 1.4, 1.4);
+  if (obj.material.emissiveIntensity !== undefined) {
+    obj.userData._savedEmissive = obj.material.emissiveIntensity;
+    obj.material.emissiveIntensity = 0.9;
+  }
+}
+
+function unhighlight(obj) {
+  obj.scale.set(1, 1, 1);
+  if (obj.userData._savedEmissive !== undefined) {
+    obj.material.emissiveIntensity = obj.userData._savedEmissive;
+  }
+}
+
+function showNPC(npc) {
+  const sidebar = document.getElementById('sidebar');
+  const fid = npc.faction_id || npc.faction || '-';
+  const factionColor = FACTION_COLORS[fid] || '#9e9e9e';
+  document.getElementById('sector-summary').innerHTML = `
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+      <span style="color:#ffd700;font:bold 14px Orbitron,sans-serif">${npc.name || npc.id || 'Unknown'}</span>
+      <button onclick="resetSidebar()" style="background:none;border:1px solid rgba(79,195,247,0.3);color:#4fc3f7;border-radius:3px;cursor:pointer;font:10px monospace;padding:2px 6px">X</button>
+    </div>
+    <div>Faction: <span style="color:${factionColor}">${fid}</span></div>
+    <div>Mood: ${npc.mood || '-'}</div>
+    <div>Location: ${npc.sector_id || npc.location || '-'}</div>
+    <div>Status: ${npc.status || '-'}</div>
+    <div style="margin-top:6px;color:#78909c;font-size:10px">Thought:</div>
+    <div style="font-size:11px;line-height:1.4">${(npc.latest_thought || '-').substring(0, 200)}${(npc.latest_thought || '').length > 200 ? '...' : ''}</div>
+  `;
+}
+
+function showSectorDetail(ud) {
+  const sidebar = document.getElementById('sidebar');
+  const s = ud.data;
+  const npcs = mapData.npcs || [];
+  const sectorNPCs = npcs.filter(n => (n.sector_id || n.location) === s.id);
+  document.getElementById('sector-summary').innerHTML = `
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+      <span style="color:#ffd700;font:bold 14px Orbitron,sans-serif">${s.name || `Sector ${ud.id}`}</span>
+      <button onclick="resetSidebar()" style="background:none;border:1px solid rgba(79,195,247,0.3);color:#4fc3f7;border-radius:3px;cursor:pointer;font:10px monospace;padding:2px 6px">X</button>
+    </div>
+    <div style="display:flex;justify-content:space-between;gap:8px;margin-bottom:4px">
+      <span>Region: <strong>${s.region_type || '-'}</strong></span>
+      <span>Danger: <strong style="color:${s.danger_level >= 7 ? '#ef5350' : s.danger_level >= 4 ? '#ffa726' : '#66bb6a'}">${s.danger_level ?? '-'}/10</strong></span>
+    </div>
+    <div style="margin-bottom:4px">Resources: <strong>${s.resource_profile || '-'}</strong></div>
+    <div style="margin-bottom:4px">Faction: <span style="color:${ud.factionId && mapData.factions[ud.factionId] ? mapData.factions[ud.factionId].color : '#78909c'}">${ud.factionId && mapData.factions[ud.factionId] ? mapData.factions[ud.factionId].display_name : 'None'}</span></div>
+    <div style="margin-bottom:4px">Asset: ${ud.hasTexture ? '✓ textured' : '○ procedural'}</div>
+    <div style="margin-bottom:4px">NPCs here: <strong>${sectorNPCs.length}</strong></div>
+    <div style="margin-bottom:4px;color:#78909c;font-size:10px">Adjacent: ${(s.adjacent_sector_ids || []).join(', ') || '-'}</div>
+    <div style="font-size:11px;line-height:1.4;margin-top:4px">${(s.description || '-').substring(0, 180)}${(s.description || '').length > 180 ? '...' : ''}</div>
+  `;
+}
+
+window.resetSidebar = () => {
+  updateUI();
+  document.getElementById('detail').style.display = 'none';
+};
+
+// --- Scale Mode ---
+window.setScale = (mode) => {
+  currentScale = mode;
+  document.querySelectorAll('#scale-ctrl button').forEach(b => b.classList.remove('active'));
+  document.getElementById(`btn-scale-${mode}`).classList.add('active');
+  applyScalePreset(mode);
+};
+
+function applyScalePreset(mode) {
+  const preset = CAMERA_PRESETS[mode];
+  targetCamPos.set(...preset.pos);
+  targetLookAt.set(...preset.target);
+  camera.far = preset.far;
+  camera.updateProjectionMatrix();
+  grid.material.opacity = preset.gridOpacity;
+  boundary.scale.setScalar(preset.boundaryScale);
+  boundary.visible = preset.showBoundary !== false;
+  starLayers.forEach((layer, i) => {
+    const visKey = ['showNearStars', 'showMidStars', 'showFarStars'][i];
+    layer.visible = preset[visKey] !== false;
+    layer.material.opacity = preset.starOpacities[i];
+  });
+  nebulaSprites.forEach(s => { s.visible = preset.showNebula !== false; });
+  sectorMeshes.forEach(m => { m.visible = preset.showSectors; m.scale.setScalar(preset.objScale); });
+  sectorRings.forEach(r => { r.visible = preset.showSectors; r.scale.setScalar(preset.objScale); });
+  npcMeshes.forEach(n => { n.visible = preset.showNPCs; n.scale.setScalar(preset.objScale); });
+  factionClouds.forEach(c => { c.visible = preset.showFactionClouds; c.scale.setScalar(preset.cloudScale); });
+  clusterMarker.visible = preset.showClusterMarker === true;
+  clusterHalo.visible = preset.showHalo === true;
+  horizonBand.visible = preset.showHorizon === true;
+  
+  const labelsEl = document.getElementById('scale-labels');
+  const primaryEl = document.getElementById('scale-label-primary');
+  const secondaryEl = document.getElementById('scale-label-secondary');
+  if (mode === SCALE.LOCAL) {
+    labelsEl.style.opacity = '0';
+  } else if (mode === SCALE.GALAXY) {
+    primaryEl.textContent = 'KNOWN SPACE';
+    secondaryEl.textContent = 'Federation Local Cluster';
+    labelsEl.style.opacity = '0.7';
+  } else if (mode === SCALE.DEEP) {
+    primaryEl.textContent = 'DEEP UNKNOWN';
+    secondaryEl.textContent = 'Known Federation Space — Outer Signal Layer';
+    labelsEl.style.opacity = '0.5';
+  }
+  
+  setLabelScale(labelScale);
+}
+
+// --- Zoom ---
+window.zoomIn = () => camera.position.multiplyScalar(0.8);
+window.zoomOut = () => camera.position.multiplyScalar(1.25);
+window.resetView = () => applyScalePreset(currentScale);
+
+// --- Resize ---
+window.addEventListener('resize', () => {
+  camera.aspect = window.innerWidth / window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight);
+});
+
+// --- Label accessibility toggle ---
+function setLabelScale(scale) {
+  labelScale = scale;
+  const preset = CAMERA_PRESETS[currentScale];
+  for (const lbl of labelDivs) {
+    lbl.style.fontSize = `${10 * scale * (0.6 + 0.4 * preset.labelOpacity)}px`;
+  }
+  document.getElementById('btn-font-down').style.opacity = scale <= 1.0 ? '0.4' : '1';
+  document.getElementById('btn-font-up').style.opacity = scale >= 2.0 ? '0.4' : '1';
+}
+window.fontUp = () => { if (labelScale < 2.0) setLabelScale(labelScale + 0.25); };
+window.fontDown = () => { if (labelScale > 0.75) setLabelScale(labelScale - 0.25); };
+
+// --- Label positioning ---
+function updateLabels() {
+  const preset = CAMERA_PRESETS[currentScale];
+  const uiLayer = document.getElementById('ui-layer');
+  const rect = canvas.getBoundingClientRect();
+  const baseSize = 10 * labelScale;
+  for (let i = 0; i < sectorMeshes.length; i++) {
+    const mesh = sectorMeshes[i];
+    const pos = mesh.position.clone().project(camera);
+    const x = (pos.x * 0.5 + 0.5) * rect.width;
+    const y = (-pos.y * 0.5 + 0.5) * rect.height;
+    if (pos.z > 1 || x < 0 || x > rect.width || y < 0 || y > rect.height) {
+      labelDivs[i].style.display = 'none';
+    } else {
+      labelDivs[i].style.display = 'block';
+      labelDivs[i].style.left = `${x + 16}px`;
+      labelDivs[i].style.top = `${y - 8}px`;
+      labelDivs[i].style.opacity = preset.labelOpacity;
+      labelDivs[i].style.fontSize = `${baseSize * (0.6 + 0.4 * preset.labelOpacity)}px`;
+    }
+  }
+}
+
+// --- Loop ---
+let lastTime = performance.now();
+let frames = 0;
+function animate(time) {
+  requestAnimationFrame(animate);
+  frames++;
+  if (time - lastTime >= 1000) {
+    document.getElementById('fps-counter').textContent = `${frames} FPS`;
+    frames = 0;
+    lastTime = time;
+  }
+  const preset = CAMERA_PRESETS[currentScale];
+  camera.position.lerp(targetCamPos, 0.035);
+  controls.target.lerp(targetLookAt, 0.035);
+  controls.update();
+  updateLabels();
+  renderer.render(scene, camera);
+}
+
+// --- Init ---
+fetchData();
+setInterval(fetchData, 5000);
+animate();
+setLabelScale(1.0);
+document.getElementById('loading').style.display = 'none';
+</script>
+</body>
+</html>
