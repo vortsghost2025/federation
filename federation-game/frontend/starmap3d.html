@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Federation Galaxy — Three.js Starmap</title>
+<title>Federation Galaxy â€” Three.js Starmap</title>
 <link rel="stylesheet" href="starmap.css">
 <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&family=Share+Tech+Mono&display=swap" rel="stylesheet">
 <style>
@@ -41,7 +41,7 @@
   </div>
   <div id="zoom-ctrl" style="display:flex;gap:4px">
     <button onclick="zoomIn()" style="background:rgba(10,15,30,0.8);border:1px solid rgba(79,195,247,0.3);color:#4fc3f7;width:32px;height:32px;border-radius:4px;cursor:pointer;font:16px monospace">+</button>
-    <button onclick="zoomOut()" style="background:rgba(10,15,30,0.8);border:1px solid rgba(79,195,247,0.3);color:#4fc3f7;width:32px;height:32px;border-radius:4px;cursor:pointer;font:16px monospace">−</button>
+    <button onclick="zoomOut()" style="background:rgba(10,15,30,0.8);border:1px solid rgba(79,195,247,0.3);color:#4fc3f7;width:32px;height:32px;border-radius:4px;cursor:pointer;font:16px monospace">âˆ’</button>
     <button onclick="resetView()" style="background:rgba(10,15,30,0.8);border:1px solid rgba(79,195,247,0.3);color:#4fc3f7;padding:0 10px;height:32px;border-radius:4px;cursor:pointer;font:12px monospace">RST</button>
   </div>
 </div>
@@ -160,6 +160,7 @@ function rebuildScene() {
 
   // --- Sector markers ---
   const sectorGeo = new THREE.SphereGeometry(8, 16, 16);
+  const textureLoader = new THREE.TextureLoader();
   sectorPositions.forEach((s, idx) => {
     const mat = new THREE.MeshStandardMaterial({
       color: 0x4fc3f7,
@@ -169,8 +170,26 @@ function rebuildScene() {
       opacity: 0.7,
     });
     const mesh = new THREE.Mesh(sectorGeo, mat);
+
+    // Try loading generated texture from /universe/assets/sector_{id}
+    textureLoader.load(
+      `/universe/assets/sector_${s.id}`,
+      (tex) => {
+        mat.map = tex;
+        mat.color.set(0xffffff);
+        mat.emissive.set(0x000000);
+        mat.emissiveIntensity = 0;
+        mat.transparent = false;
+        mat.opacity = 1;
+        mat.needsUpdate = true;
+        mesh.userData.hasTexture = true;
+      },
+      undefined,
+      () => { /* no texture â€” keep default blue */ }
+    );
+
     mesh.position.set(s.x, 0, s.z);
-    mesh.userData = { type: 'sector', id: s.id };
+    mesh.userData = { type: 'sector', id: s.id, hasTexture: false };
     scene.add(mesh);
     sectorMeshes.push(mesh);
   });
@@ -245,10 +264,10 @@ function showNPC(npc) {
   const panel = document.getElementById('detail');
   document.getElementById('detail-name').textContent = npc.name || npc.id || 'Unknown';
   const rows = [
-    `Faction: ${npc.faction_id || npc.faction || '—'}`,
-    `Mood: ${npc.mood || '—'}`,
-    `Location: ${npc.sector_id || npc.location || '—'}`,
-    `Status: ${npc.status || '—'}`,
+    `Faction: ${npc.faction_id || npc.faction || 'â€”'}`,
+    `Mood: ${npc.mood || 'â€”'}`,
+    `Location: ${npc.sector_id || npc.location || 'â€”'}`,
+    `Status: ${npc.status || 'â€”'}`,
   ];
   document.getElementById('detail-rows').innerHTML = rows.join('<br>');
   panel.style.display = 'block';
@@ -257,7 +276,9 @@ function showNPC(npc) {
 function showSector(id) {
   const panel = document.getElementById('detail');
   document.getElementById('detail-name').textContent = `Sector ${id}`;
-  document.getElementById('detail-rows').innerHTML = `Coordinates: ${id ? '—' : 'N/A'}`;
+  const mesh = sectorMeshes.find(m => m.userData.id === id);
+  const texStatus = mesh && mesh.userData.hasTexture ? 'âœ“ textured' : 'â—‹ procedural';
+  document.getElementById('detail-rows').innerHTML = `Asset: ${texStatus}<br>Request: /universe/assets/sector_${id}`;
   panel.style.display = 'block';
 }
 
