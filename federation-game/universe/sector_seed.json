@@ -1,0 +1,173 @@
+{
+  "seed": 20260623,
+  "sectors": [
+    {
+      "id": "ghost",
+      "name": "Ghost",
+      "x": 160,
+      "y": 280,
+      "region_type": "frontier",
+      "danger_level": 7
+    },
+    {
+      "id": "beyond",
+      "name": "Beyond",
+      "x": 240,
+      "y": -160,
+      "region_type": "frontier",
+      "danger_level": 9
+    },
+    {
+      "id": "fracture",
+      "name": "Fracture",
+      "x": -270,
+      "y": 100,
+      "region_type": "frontier",
+      "danger_level": 8
+    },
+    {
+      "id": "threshold",
+      "name": "Threshold",
+      "x": 270,
+      "y": 100,
+      "region_type": "frontier",
+      "danger_level": 7
+    },
+    {
+      "id": "veil",
+      "name": "The Veil",
+      "x": 200,
+      "y": 60,
+      "region_type": "outer",
+      "danger_level": 5
+    },
+    {
+      "id": "reach",
+      "name": "The Reach",
+      "x": -170,
+      "y": -100,
+      "region_type": "outer",
+      "danger_level": 5
+    },
+    {
+      "id": "abyss",
+      "name": "The Abyss",
+      "x": -240,
+      "y": -160,
+      "region_type": "frontier",
+      "danger_level": 8
+    },
+    {
+      "id": "helix",
+      "name": "Helix",
+      "x": -110,
+      "y": -65,
+      "region_type": "inner",
+      "danger_level": 3
+    },
+    {
+      "id": "harbor",
+      "name": "Harbor",
+      "x": 110,
+      "y": -65,
+      "region_type": "inner",
+      "danger_level": 3
+    },
+    {
+      "id": "pinnacle",
+      "name": "Pinnacle",
+      "x": 100,
+      "y": 180,
+      "region_type": "outer",
+      "danger_level": 5
+    },
+    {
+      "id": "crucible",
+      "name": "Crucible",
+      "x": 60,
+      "y": 35,
+      "region_type": "core",
+      "danger_level": 2
+    },
+    {
+      "id": "drift",
+      "name": "The Drift",
+      "x": -100,
+      "y": 180,
+      "region_type": "outer",
+      "danger_level": 5
+    },
+    {
+      "id": "forge",
+      "name": "Forge",
+      "x": -130,
+      "y": 40,
+      "region_type": "inner",
+      "danger_level": 3
+    },
+    {
+      "id": "signal",
+      "name": "Signal",
+      "x": -160,
+      "y": 280,
+      "region_type": "frontier",
+      "danger_level": 7
+    },
+    {
+      "id": "sol-prime",
+      "name": "Sol Prime",
+      "x": 0,
+      "y": 0,
+      "region_type": "core",
+      "danger_level": 1
+    },
+    {
+      "id": "archive",
+      "name": "Archive",
+      "x": 50,
+      "y": 100,
+      "region_type": "inner",
+      "danger_level": 3
+    },
+    {
+      "id": "shroud",
+      "name": "The Shroud",
+      "x": -200,
+      "y": 60,
+      "region_type": "outer",
+      "danger_level": 6
+    },
+    {
+      "id": "meridian",
+      "name": "Meridian",
+      "x": -60,
+      "y": 35,
+      "region_type": "core",
+      "danger_level": 2
+    },
+    {
+      "id": "prism",
+      "name": "Prism",
+      "x": 130,
+      "y": 40,
+      "region_type": "inner",
+      "danger_level": 3
+    },
+    {
+      "id": "expanse",
+      "name": "The Expanse",
+      "x": 170,
+      "y": -100,
+      "region_type": "outer",
+      "danger_level": 5
+    },
+    {
+      "id": "bastion",
+      "name": "Bastion",
+      "x": -50,
+      "y": 100,
+      "region_type": "inner",
+      "danger_level": 3
+    }
+  ]
+}
