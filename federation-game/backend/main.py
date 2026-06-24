@@ -57,7 +57,7 @@ from technology import create_technology_tree, TechTree
 from dataclasses import asdict
 
 from federation_game_db import db_manager
-from state import game_state
+from state import game_state, seed_spatial_system
 from faction_ai import FACTION_IDEOLOGY
 from faction_dynamics import FACTION_DISPLAY
 from routes.core import router as core_router
@@ -79,6 +79,8 @@ from routes.factions import router as factions_router
 from routes.websocket import router as websocket_router
 from routes.error_reports import router as error_reports_router
 from routes.npc_logs import router as npc_logs_router
+from routes.agents import router as agents_router
+from routes.universe import router as universe_router
 from map_endpoints import router as map_router
 from data.events import EVENTS
 
@@ -323,6 +325,8 @@ app.include_router(factions_router)
 app.include_router(websocket_router)
 app.include_router(error_reports_router)
 app.include_router(npc_logs_router)
+app.include_router(agents_router)
+app.include_router(universe_router)
 app.include_router(map_router)
 
 
@@ -347,3 +351,13 @@ async def _clear_stale_tick_state():
                 r.hset(key, mapping={"running": "False", "last_end": str(time.time())})
     except Exception as exc:
         logger.warning("Failed to clear stale tick state: %s", exc)
+
+    # Auto-seed spatial system on startup (idempotent)
+    try:
+        result = seed_spatial_system()
+        if result.get("status") == "seeded":
+            logger.info("Spatial system auto-seeded on startup: %s", result)
+        else:
+            logger.info("Spatial system already present, skipping seed")
+    except Exception as exc:
+        logger.warning("Failed to auto-seed spatial system: %s", exc)
