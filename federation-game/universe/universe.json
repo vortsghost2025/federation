@@ -1,0 +1,2142 @@
+{
+  "faction_territory": {
+    "consciousness_collective": {
+      "members": [
+        {
+          "char_id": "char_003",
+          "name": "Philosopher Zenith",
+          "role": ""
+        },
+        {
+          "char_id": "char_105",
+          "name": "Oracle Vex",
+          "role": ""
+        }
+      ],
+      "sectors": [
+        "drift",
+        "harbor"
+      ]
+    },
+    "cultural_ministry": {
+      "members": [
+        {
+          "char_id": "char_103",
+          "name": "Maestro Celestia",
+          "role": ""
+        }
+      ],
+      "sectors": [
+        "archive"
+      ]
+    },
+    "diplomatic_corps": {
+      "members": [
+        {
+          "char_id": "char_101",
+          "name": "Chancellor Harmony",
+          "role": ""
+        },
+        {
+          "char_id": "char_004",
+          "name": "Ambassador Silven",
+          "role": ""
+        }
+      ],
+      "sectors": [
+        "bastion",
+        "helix"
+      ]
+    },
+    "economic_council": {
+      "members": [
+        {
+          "char_id": "char_106",
+          "name": "Merchant-Prince Aurelius",
+          "role": ""
+        }
+      ],
+      "sectors": [
+        "signal"
+      ]
+    },
+    "exploration_initiative": {
+      "members": [
+        {
+          "char_id": "char_107",
+          "name": "Captain Frontier",
+          "role": ""
+        },
+        {
+          "char_id": "char_005",
+          "name": "Conquistador Drake",
+          "role": ""
+        }
+      ],
+      "sectors": [
+        "beyond",
+        "ghost"
+      ]
+    },
+    "military_command": {
+      "members": [
+        {
+          "char_id": "char_102",
+          "name": "Marshal Ironbound",
+          "role": ""
+        },
+        {
+          "char_id": "char_002",
+          "name": "Commander Valorix",
+          "role": ""
+        }
+      ],
+      "sectors": [
+        "drift",
+        "reach"
+      ]
+    },
+    "orbital_free": {
+      "members": [
+        {
+          "char_id": "research_division",
+          "name": "research_division",
+          "role": ""
+        },
+        {
+          "char_id": "comp_008",
+          "name": "Scout Aria",
+          "role": ""
+        },
+        {
+          "char_id": "comp_007",
+          "name": "Zephyr Silverspeak",
+          "role": ""
+        },
+        {
+          "char_id": "char_301",
+          "name": "The Wanderer",
+          "role": ""
+        },
+        {
+          "char_id": "diplomatic_corps",
+          "name": "diplomatic_corps",
+          "role": ""
+        },
+        {
+          "char_id": "comp_002",
+          "name": "Thorg Ironhammer",
+          "role": ""
+        },
+        {
+          "char_id": "consciousness_collective",
+          "name": "consciousness_collective",
+          "role": ""
+        },
+        {
+          "char_id": "char_404",
+          "name": "Cipher",
+          "role": ""
+        },
+        {
+          "char_id": "comp_010",
+          "name": "Shadowborn",
+          "role": ""
+        },
+        {
+          "char_id": "comp_006",
+          "name": "Kyren Frostblade",
+          "role": ""
+        },
+        {
+          "char_id": "char_303",
+          "name": "The Hermit",
+          "role": ""
+        },
+        {
+          "char_id": "char_401",
+          "name": "Keeper of the Null",
+          "role": ""
+        },
+        {
+          "char_id": "char_305",
+          "name": "The Trickster",
+          "role": ""
+        },
+        {
+          "char_id": "char_201",
+          "name": "Lord Malaxis",
+          "role": ""
+        },
+        {
+          "char_id": "char_406",
+          "name": "Paradox",
+          "role": ""
+        },
+        {
+          "char_id": "char_202",
+          "name": "The Void Oracle",
+          "role": ""
+        },
+        {
+          "char_id": "comp_001",
+          "name": "Lyra Swiftwind",
+          "role": ""
+        },
+        {
+          "char_id": "char_204",
+          "name": "General Devastation",
+          "role": ""
+        },
+        {
+          "char_id": "char_402",
+          "name": "The Cartographer",
+          "role": ""
+        },
+        {
+          "char_id": "exploration_initiative",
+          "name": "exploration_initiative",
+          "role": ""
+        },
+        {
+          "char_id": "preservation_society",
+          "name": "preservation_society",
+          "role": ""
+        },
+        {
+          "char_id": "char_203",
+          "name": "Baroness Greed",
+          "role": ""
+        },
+        {
+          "char_id": "char_403",
+          "name": "Solace Heartmend",
+          "role": ""
+        },
+        {
+          "char_id": "cultural_ministry",
+          "name": "cultural_ministry",
+          "role": ""
+        },
+        {
+          "char_id": "comp_009",
+          "name": "Brother Mercy",
+          "role": ""
+        },
+        {
+          "char_id": "military_command",
+          "name": "military_command",
+          "role": ""
+        },
+        {
+          "char_id": "economic_council",
+          "name": "economic_council",
+          "role": ""
+        },
+        {
+          "char_id": "comp_005",
+          "name": "Dr. Sylas Cunningham",
+          "role": ""
+        },
+        {
+          "char_id": "comp_004",
+          "name": "Captain Valor",
+          "role": ""
+        },
+        {
+          "char_id": "comp_003",
+          "name": "Elara Moonwhisper",
+          "role": ""
+        },
+        {
+          "char_id": "char_306",
+          "name": "The Oracle",
+          "role": ""
+        },
+        {
+          "char_id": "char_302",
+          "name": "The Jester",
+          "role": ""
+        },
+        {
+          "char_id": "char_304",
+          "name": "The Spectre",
+          "role": ""
+        },
+        {
+          "char_id": "char_405",
+          "name": "Tempus",
+          "role": ""
+        }
+      ],
+      "sectors": [
+        "abyss",
+        "archive",
+        "bastion",
+        "beyond",
+        "crucible",
+        "drift",
+        "expanse",
+        "forge",
+        "fracture",
+        "ghost",
+        "harbor",
+        "helix",
+        "meridian",
+        "pinnacle",
+        "prism",
+        "reach",
+        "shroud",
+        "signal",
+        "sol-prime"
+      ]
+    },
+    "preservation_society": {
+      "members": [
+        {
+          "char_id": "char_108",
+          "name": "Archivist Eternal",
+          "role": ""
+        }
+      ],
+      "sectors": [
+        "reach"
+      ]
+    },
+    "research_division": {
+      "members": [
+        {
+          "char_id": "char_001",
+          "name": "Archimedes Prime",
+          "role": ""
+        },
+        {
+          "char_id": "char_104",
+          "name": "Dr. Prometheus",
+          "role": ""
+        }
+      ],
+      "sectors": [
+        "crucible",
+        "signal"
+      ]
+    }
+  },
+  "generated_at": 2480501846,
+  "npc_count": 47,
+  "sector_count": 21,
+  "sectors": [
+    {
+      "adjacent_sector_ids": [
+        "pinnacle",
+        "signal",
+        "threshold"
+      ],
+      "danger_level": 7,
+      "description": "Echoes of what was. Shadows of what could be.",
+      "id": "ghost",
+      "name": "Ghost",
+      "region_type": "frontier",
+      "resource_profile": "mixed",
+      "x": 160,
+      "y": 280
+    },
+    {
+      "adjacent_sector_ids": [
+        "expanse",
+        "threshold"
+      ],
+      "danger_level": 9,
+      "description": "Past the map. Past the rules. Past the reason.",
+      "id": "beyond",
+      "name": "Beyond",
+      "region_type": "frontier",
+      "resource_profile": "research",
+      "x": 240,
+      "y": -160
+    },
+    {
+      "adjacent_sector_ids": [
+        "shroud",
+        "abyss",
+        "signal"
+      ],
+      "danger_level": 8,
+      "description": "Broken space. Splintered reality. War without fronts.",
+      "id": "fracture",
+      "name": "Fracture",
+      "region_type": "frontier",
+      "resource_profile": "military",
+      "x": -270,
+      "y": 100
+    },
+    {
+      "adjacent_sector_ids": [
+        "veil",
+        "ghost",
+        "beyond"
+      ],
+      "danger_level": 7,
+      "description": "The edge of everything. Where profit meets the unknown.",
+      "id": "threshold",
+      "name": "Threshold",
+      "region_type": "frontier",
+      "resource_profile": "economic",
+      "x": 270,
+      "y": 100
+    },
+    {
+      "adjacent_sector_ids": [
+        "prism",
+        "harbor",
+        "pinnacle",
+        "expanse",
+        "threshold"
+      ],
+      "danger_level": 5,
+      "description": "A thin curtain between what is known and what is whispered.",
+      "id": "veil",
+      "name": "The Veil",
+      "region_type": "outer",
+      "resource_profile": "diplomatic",
+      "x": 200,
+      "y": 60
+    },
+    {
+      "adjacent_sector_ids": [
+        "helix",
+        "shroud",
+        "abyss"
+      ],
+      "danger_level": 5,
+      "description": "The far hand of curiosity, grasping past the known.",
+      "id": "reach",
+      "name": "The Reach",
+      "region_type": "outer",
+      "resource_profile": "research",
+      "x": -170,
+      "y": -100
+    },
+    {
+      "adjacent_sector_ids": [
+        "reach",
+        "fracture"
+      ],
+      "danger_level": 8,
+      "description": "Where light gives up. Where the simulation questions itself.",
+      "id": "abyss",
+      "name": "The Abyss",
+      "region_type": "frontier",
+      "resource_profile": "research",
+      "x": -240,
+      "y": -160
+    },
+    {
+      "adjacent_sector_ids": [
+        "sol-prime",
+        "meridian",
+        "reach",
+        "shroud"
+      ],
+      "danger_level": 3,
+      "description": "Spiral archives of forgotten knowledge, decoded endlessly.",
+      "id": "helix",
+      "name": "Helix",
+      "region_type": "inner",
+      "resource_profile": "research",
+      "x": -110,
+      "y": -65
+    },
+    {
+      "adjacent_sector_ids": [
+        "sol-prime",
+        "crucible",
+        "veil",
+        "expanse"
+      ],
+      "danger_level": 3,
+      "description": "The port of call for wanderers, seekers, and refugees.",
+      "id": "harbor",
+      "name": "Harbor",
+      "region_type": "inner",
+      "resource_profile": "mixed",
+      "x": 110,
+      "y": -65
+    },
+    {
+      "adjacent_sector_ids": [
+        "archive",
+        "prism",
+        "drift",
+        "veil",
+        "ghost"
+      ],
+      "danger_level": 5,
+      "description": "The high ground, fought over since the first war.",
+      "id": "pinnacle",
+      "name": "Pinnacle",
+      "region_type": "outer",
+      "resource_profile": "military",
+      "x": 100,
+      "y": 180
+    },
+    {
+      "adjacent_sector_ids": [
+        "sol-prime",
+        "archive",
+        "prism",
+        "harbor"
+      ],
+      "danger_level": 2,
+      "description": "The proving ground of commerce and competition.",
+      "id": "crucible",
+      "name": "Crucible",
+      "region_type": "core",
+      "resource_profile": "economic",
+      "x": 60,
+      "y": 35
+    },
+    {
+      "adjacent_sector_ids": [
+        "forge",
+        "bastion",
+        "shroud",
+        "pinnacle",
+        "signal"
+      ],
+      "danger_level": 5,
+      "description": "Currents of trade flowing through uncertain space.",
+      "id": "drift",
+      "name": "The Drift",
+      "region_type": "outer",
+      "resource_profile": "economic",
+      "x": -100,
+      "y": 180
+    },
+    {
+      "adjacent_sector_ids": [
+        "sol-prime",
+        "meridian",
+        "shroud",
+        "drift"
+      ],
+      "danger_level": 3,
+      "description": "Foundries that never cool. Production without pause.",
+      "id": "forge",
+      "name": "Forge",
+      "region_type": "inner",
+      "resource_profile": "economic",
+      "x": -130,
+      "y": 40
+    },
+    {
+      "adjacent_sector_ids": [
+        "drift",
+        "fracture",
+        "ghost"
+      ],
+      "danger_level": 7,
+      "description": "A repeating pattern in the noise. Something is calling.",
+      "id": "signal",
+      "name": "Signal",
+      "region_type": "frontier",
+      "resource_profile": "diplomatic",
+      "x": -160,
+      "y": 280
+    },
+    {
+      "adjacent_sector_ids": [
+        "meridian",
+        "crucible",
+        "helix",
+        "forge",
+        "bastion",
+        "archive",
+        "prism",
+        "harbor"
+      ],
+      "danger_level": 1,
+      "description": "The heart of the Federation. All roads lead here.",
+      "id": "sol-prime",
+      "name": "Sol Prime",
+      "region_type": "core",
+      "resource_profile": "mixed",
+      "x": 0,
+      "y": 0
+    },
+    {
+      "adjacent_sector_ids": [
+        "sol-prime",
+        "crucible",
+        "pinnacle"
+      ],
+      "danger_level": 3,
+      "description": "Libraries that remember what the living cannot.",
+      "id": "archive",
+      "name": "Archive",
+      "region_type": "inner",
+      "resource_profile": "research",
+      "x": 50,
+      "y": 100
+    },
+    {
+      "adjacent_sector_ids": [
+        "helix",
+        "forge",
+        "reach",
+        "drift",
+        "fracture"
+      ],
+      "danger_level": 6,
+      "description": "Mists that conceal more than they reveal.",
+      "id": "shroud",
+      "name": "The Shroud",
+      "region_type": "outer",
+      "resource_profile": "mixed",
+      "x": -200,
+      "y": 60
+    },
+    {
+      "adjacent_sector_ids": [
+        "sol-prime",
+        "helix",
+        "forge",
+        "bastion"
+      ],
+      "danger_level": 2,
+      "description": "Where treaties are forged and alliances balanced.",
+      "id": "meridian",
+      "name": "Meridian",
+      "region_type": "core",
+      "resource_profile": "diplomatic",
+      "x": -60,
+      "y": 35
+    },
+    {
+      "adjacent_sector_ids": [
+        "sol-prime",
+        "crucible",
+        "pinnacle",
+        "veil"
+      ],
+      "danger_level": 3,
+      "description": "Where every perspective refracts into understanding.",
+      "id": "prism",
+      "name": "Prism",
+      "region_type": "inner",
+      "resource_profile": "diplomatic",
+      "x": 130,
+      "y": 40
+    },
+    {
+      "adjacent_sector_ids": [
+        "harbor",
+        "veil",
+        "beyond"
+      ],
+      "danger_level": 5,
+      "description": "Open void where signals stretch thin and strange.",
+      "id": "expanse",
+      "name": "The Expanse",
+      "region_type": "outer",
+      "resource_profile": "research",
+      "x": 170,
+      "y": -100
+    },
+    {
+      "adjacent_sector_ids": [
+        "sol-prime",
+        "meridian",
+        "drift"
+      ],
+      "danger_level": 3,
+      "description": "The shield that never sleeps. Garrison of the watchful.",
+      "id": "bastion",
+      "name": "Bastion",
+      "region_type": "inner",
+      "resource_profile": "military",
+      "x": -50,
+      "y": 100
+    }
+  ],
+  "seed": 20260623,
+  "star_systems": {
+    "abyss": {
+      "adjacent_sector_ids": [
+        "reach",
+        "fracture"
+      ],
+      "danger_level": 8,
+      "id": "abyss",
+      "name": "The Abyss",
+      "narrative_seed": 2209889905,
+      "planets": [
+        {
+          "biome": "lava_plains",
+          "habitable": false,
+          "idx": 0,
+          "moons": 2,
+          "orbit_au": 2.66,
+          "resources": [
+            "iron",
+            "neutron_dust"
+          ],
+          "type": "gas_giant"
+        },
+        {
+          "biome": "frozen_dunes",
+          "habitable": false,
+          "idx": 1,
+          "moons": 4,
+          "orbit_au": 2.745,
+          "resources": [
+            "rare_water"
+          ],
+          "type": "volcanic_world"
+        },
+        {
+          "biome": "deep_kelp_forest",
+          "habitable": false,
+          "idx": 2,
+          "moons": 1,
+          "orbit_au": 17.842,
+          "resources": [
+            "copper"
+          ],
+          "type": "carbon_world"
+        },
+        {
+          "biome": "verdant_continents",
+          "habitable": false,
+          "idx": 3,
+          "moons": 2,
+          "orbit_au": 3.54,
+          "resources": [
+            "pura-ice",
+            "cobalt",
+            "fusion_grade_lithium",
+            "agricultural_mass"
+          ],
+          "type": "rocky_inner"
+        }
+      ],
+      "region_type": "frontier",
+      "resource_profile": "research",
+      "star": {
+        "class": "O",
+        "luminosity_factor": 0.95,
+        "mass_solar": 16.0,
+        "temperature_k": 30000
+      },
+      "x": -240,
+      "y": -160
+    },
+    "archive": {
+      "adjacent_sector_ids": [
+        "sol-prime",
+        "crucible",
+        "pinnacle"
+      ],
+      "danger_level": 3,
+      "id": "archive",
+      "name": "Archive",
+      "narrative_seed": 2792300385,
+      "planets": [
+        {
+          "biome": "sulfuric_lowlands",
+          "habitable": false,
+          "idx": 0,
+          "moons": 1,
+          "orbit_au": 8.647,
+          "resources": [
+            "fusion_grade_lithium",
+            "luminite"
+          ],
+          "type": "sub_neptune"
+        },
+        {
+          "biome": "deep_kelp_forest",
+          "habitable": false,
+          "idx": 1,
+          "moons": 5,
+          "orbit_au": 2.243,
+          "resources": [
+            "void_crystal",
+            "pura-ice",
+            "luminite",
+            "titanium"
+          ],
+          "type": "sub_neptune"
+        },
+        {
+          "biome": "frozen_dunes",
+          "habitable": false,
+          "idx": 2,
+          "moons": 5,
+          "orbit_au": 6.472,
+          "resources": [
+            "luminite",
+            "pura-ice"
+          ],
+          "type": "ice_giant"
+        },
+        {
+          "biome": "salt_flats",
+          "habitable": false,
+          "idx": 3,
+          "moons": 1,
+          "orbit_au": 8.751,
+          "resources": [
+            "neutron_dust",
+            "void_crystal",
+            "silicon",
+            "cobalt"
+          ],
+          "type": "desert_world"
+        },
+        {
+          "biome": "verdant_continents",
+          "habitable": false,
+          "idx": 4,
+          "moons": 1,
+          "orbit_au": 12.602,
+          "resources": [
+            "cobalt",
+            "luminite",
+            "silicon"
+          ],
+          "type": "rocky_inner"
+        },
+        {
+          "biome": "salt_flats",
+          "habitable": true,
+          "idx": 5,
+          "moons": 2,
+          "orbit_au": 2.67,
+          "resources": [
+            "void_crystal",
+            "rare_water",
+            "fusion_grade_lithium"
+          ],
+          "type": "tidally_locked"
+        }
+      ],
+      "region_type": "inner",
+      "resource_profile": "research",
+      "star": {
+        "class": "O",
+        "luminosity_factor": 0.95,
+        "mass_solar": 16.0,
+        "temperature_k": 30000
+      },
+      "x": 50,
+      "y": 100
+    },
+    "bastion": {
+      "adjacent_sector_ids": [
+        "sol-prime",
+        "meridian",
+        "drift"
+      ],
+      "danger_level": 3,
+      "id": "bastion",
+      "name": "Bastion",
+      "narrative_seed": 2646250145,
+      "planets": [
+        {
+          "biome": "salt_flats",
+          "habitable": false,
+          "idx": 0,
+          "moons": 4,
+          "orbit_au": 2.703,
+          "resources": [
+            "titanium",
+            "cobalt",
+            "rare_water",
+            "neutron_dust"
+          ],
+          "type": "volcanic_world"
+        },
+        {
+          "biome": "verdant_continents",
+          "habitable": false,
+          "idx": 1,
+          "moons": 2,
+          "orbit_au": 2.106,
+          "resources": [
+            "copper"
+          ],
+          "type": "desert_world"
+        },
+        {
+          "biome": "lava_plains",
+          "habitable": false,
+          "idx": 2,
+          "moons": 1,
+          "orbit_au": 0.994,
+          "resources": [
+            "silicon",
+            "titanium",
+            "cobalt",
+            "pura-ice"
+          ],
+          "type": "sub_neptune"
+        },
+        {
+          "biome": "bioluminescent_tundra",
+          "habitable": false,
+          "idx": 3,
+          "moons": 4,
+          "orbit_au": 15.938,
+          "resources": [
+            "silicon"
+          ],
+          "type": "carbon_world"
+        },
+        {
+          "biome": "lava_plains",
+          "habitable": false,
+          "idx": 4,
+          "moons": 5,
+          "orbit_au": 12.652,
+          "resources": [
+            "fusion_grade_lithium",
+            "agricultural_mass"
+          ],
+          "type": "gas_giant"
+        },
+        {
+          "biome": "lava_plains",
+          "habitable": false,
+          "idx": 5,
+          "moons": 0,
+          "orbit_au": 1.868,
+          "resources": [
+            "titanium"
+          ],
+          "type": "sub_neptune"
+        },
+        {
+          "biome": "sulfuric_lowlands",
+          "habitable": false,
+          "idx": 6,
+          "moons": 5,
+          "orbit_au": 17.619,
+          "resources": [
+            "void_crystal",
+            "luminite",
+            "fusion_grade_lithium",
+            "titanium"
+          ],
+          "type": "tidally_locked"
+        }
+      ],
+      "region_type": "inner",
+      "resource_profile": "military",
+      "star": {
+        "class": "O",
+        "luminosity_factor": 0.95,
+        "mass_solar": 16.0,
+        "temperature_k": 30000
+      },
+      "x": -50,
+      "y": 100
+    },
+    "beyond": {
+      "adjacent_sector_ids": [
+        "expanse",
+        "threshold"
+      ],
+      "danger_level": 9,
+      "id": "beyond",
+      "name": "Beyond",
+      "narrative_seed": 1652598724,
+      "planets": [
+        {
+          "biome": "crystal_forests",
+          "habitable": false,
+          "idx": 0,
+          "moons": 0,
+          "orbit_au": 13.794,
+          "resources": [
+            "luminite",
+            "silicon"
+          ],
+          "type": "sub_neptune"
+        },
+        {
+          "biome": "sulfuric_lowlands",
+          "habitable": false,
+          "idx": 1,
+          "moons": 4,
+          "orbit_au": 7.854,
+          "resources": [
+            "pura-ice",
+            "iron"
+          ],
+          "type": "volcanic_world"
+        }
+      ],
+      "region_type": "frontier",
+      "resource_profile": "research",
+      "star": {
+        "class": "B",
+        "luminosity_factor": 0.9,
+        "mass_solar": 2.9,
+        "temperature_k": 20000
+      },
+      "x": 240,
+      "y": -160
+    },
+    "crucible": {
+      "adjacent_sector_ids": [
+        "sol-prime",
+        "archive",
+        "prism",
+        "harbor"
+      ],
+      "danger_level": 2,
+      "id": "crucible",
+      "name": "Crucible",
+      "narrative_seed": 2589422467,
+      "planets": [
+        {
+          "biome": "bioluminescent_tundra",
+          "habitable": false,
+          "idx": 0,
+          "moons": 4,
+          "orbit_au": 7.267,
+          "resources": [
+            "agricultural_mass",
+            "copper",
+            "iron"
+          ],
+          "type": "desert_world"
+        }
+      ],
+      "region_type": "core",
+      "resource_profile": "economic",
+      "star": {
+        "class": "K",
+        "luminosity_factor": 0.7,
+        "mass_solar": 0.8,
+        "temperature_k": 5100
+      },
+      "x": 60,
+      "y": 35
+    },
+    "drift": {
+      "adjacent_sector_ids": [
+        "forge",
+        "bastion",
+        "shroud",
+        "pinnacle",
+        "signal"
+      ],
+      "danger_level": 5,
+      "id": "drift",
+      "name": "The Drift",
+      "narrative_seed": 4204870017,
+      "planets": [
+        {
+          "biome": "verdant_continents",
+          "habitable": false,
+          "idx": 0,
+          "moons": 2,
+          "orbit_au": 11.642,
+          "resources": [
+            "agricultural_mass",
+            "void_crystal",
+            "rare_water"
+          ],
+          "type": "rocky_inner"
+        },
+        {
+          "biome": "bioluminescent_tundra",
+          "habitable": false,
+          "idx": 1,
+          "moons": 4,
+          "orbit_au": 8.946,
+          "resources": [
+            "copper",
+            "cobalt"
+          ],
+          "type": "carbon_world"
+        },
+        {
+          "biome": "magnetically_scrubbed_cliffs",
+          "habitable": false,
+          "idx": 2,
+          "moons": 0,
+          "orbit_au": 14.408,
+          "resources": [
+            "void_crystal",
+            "silicon"
+          ],
+          "type": "sub_neptune"
+        },
+        {
+          "biome": "salt_flats",
+          "habitable": false,
+          "idx": 3,
+          "moons": 3,
+          "orbit_au": 2.807,
+          "resources": [
+            "luminite"
+          ],
+          "type": "carbon_world"
+        },
+        {
+          "biome": "salt_flats",
+          "habitable": false,
+          "idx": 4,
+          "moons": 5,
+          "orbit_au": 17.068,
+          "resources": [
+            "iron",
+            "silicon",
+            "titanium"
+          ],
+          "type": "volcanic_world"
+        },
+        {
+          "biome": "lava_plains",
+          "habitable": true,
+          "idx": 5,
+          "moons": 4,
+          "orbit_au": 7.38,
+          "resources": [
+            "cobalt",
+            "fusion_grade_lithium"
+          ],
+          "type": "ocean_world"
+        },
+        {
+          "biome": "salt_flats",
+          "habitable": false,
+          "idx": 6,
+          "moons": 4,
+          "orbit_au": 3.424,
+          "resources": [
+            "cobalt",
+            "neutron_dust"
+          ],
+          "type": "tidally_locked"
+        },
+        {
+          "biome": "frozen_dunes",
+          "habitable": false,
+          "idx": 7,
+          "moons": 4,
+          "orbit_au": 14.664,
+          "resources": [
+            "luminite",
+            "fusion_grade_lithium",
+            "cobalt"
+          ],
+          "type": "carbon_world"
+        }
+      ],
+      "region_type": "outer",
+      "resource_profile": "economic",
+      "star": {
+        "class": "G",
+        "luminosity_factor": 0.75,
+        "mass_solar": 1.04,
+        "temperature_k": 5800
+      },
+      "x": -100,
+      "y": 180
+    },
+    "expanse": {
+      "adjacent_sector_ids": [
+        "harbor",
+        "veil",
+        "beyond"
+      ],
+      "danger_level": 5,
+      "id": "expanse",
+      "name": "The Expanse",
+      "narrative_seed": 1226402108,
+      "planets": [
+        {
+          "biome": "crystal_forests",
+          "habitable": false,
+          "idx": 0,
+          "moons": 0,
+          "orbit_au": 6.314,
+          "resources": [
+            "cobalt",
+            "luminite",
+            "titanium",
+            "agricultural_mass"
+          ],
+          "type": "desert_world"
+        },
+        {
+          "biome": "salt_flats",
+          "habitable": false,
+          "idx": 1,
+          "moons": 3,
+          "orbit_au": 10.253,
+          "resources": [
+            "silicon"
+          ],
+          "type": "gas_giant"
+        },
+        {
+          "biome": "bioluminescent_tundra",
+          "habitable": false,
+          "idx": 2,
+          "moons": 5,
+          "orbit_au": 3.008,
+          "resources": [
+            "silicon"
+          ],
+          "type": "desert_world"
+        },
+        {
+          "biome": "deep_kelp_forest",
+          "habitable": false,
+          "idx": 3,
+          "moons": 0,
+          "orbit_au": 4.85,
+          "resources": [
+            "luminite",
+            "fusion_grade_lithium",
+            "copper"
+          ],
+          "type": "carbon_world"
+        }
+      ],
+      "region_type": "outer",
+      "resource_profile": "research",
+      "star": {
+        "class": "F",
+        "luminosity_factor": 0.8,
+        "mass_solar": 1.4,
+        "temperature_k": 7200
+      },
+      "x": 170,
+      "y": -100
+    },
+    "forge": {
+      "adjacent_sector_ids": [
+        "sol-prime",
+        "meridian",
+        "shroud",
+        "drift"
+      ],
+      "danger_level": 3,
+      "id": "forge",
+      "name": "Forge",
+      "narrative_seed": 2131300182,
+      "planets": [
+        {
+          "biome": "bioluminescent_tundra",
+          "habitable": false,
+          "idx": 0,
+          "moons": 1,
+          "orbit_au": 4.477,
+          "resources": [
+            "rare_water",
+            "pura-ice"
+          ],
+          "type": "gas_giant"
+        },
+        {
+          "biome": "magnetically_scrubbed_cliffs",
+          "habitable": false,
+          "idx": 1,
+          "moons": 2,
+          "orbit_au": 3.609,
+          "resources": [
+            "copper"
+          ],
+          "type": "ice_giant"
+        },
+        {
+          "biome": "crystal_forests",
+          "habitable": false,
+          "idx": 2,
+          "moons": 2,
+          "orbit_au": 11.31,
+          "resources": [
+            "copper",
+            "void_crystal",
+            "cobalt"
+          ],
+          "type": "carbon_world"
+        },
+        {
+          "biome": "deep_kelp_forest",
+          "habitable": false,
+          "idx": 3,
+          "moons": 4,
+          "orbit_au": 3.692,
+          "resources": [
+            "iron"
+          ],
+          "type": "sub_neptune"
+        },
+        {
+          "biome": "crystal_forests",
+          "habitable": false,
+          "idx": 4,
+          "moons": 3,
+          "orbit_au": 5.39,
+          "resources": [
+            "cobalt"
+          ],
+          "type": "carbon_world"
+        },
+        {
+          "biome": "frozen_dunes",
+          "habitable": true,
+          "idx": 5,
+          "moons": 3,
+          "orbit_au": 16.714,
+          "resources": [
+            "void_crystal"
+          ],
+          "type": "rocky_inner"
+        }
+      ],
+      "region_type": "inner",
+      "resource_profile": "economic",
+      "star": {
+        "class": "O",
+        "luminosity_factor": 0.95,
+        "mass_solar": 16.0,
+        "temperature_k": 30000
+      },
+      "x": -130,
+      "y": 40
+    },
+    "fracture": {
+      "adjacent_sector_ids": [
+        "shroud",
+        "abyss",
+        "signal"
+      ],
+      "danger_level": 8,
+      "id": "fracture",
+      "name": "Fracture",
+      "narrative_seed": 3487932084,
+      "planets": [
+        {
+          "biome": "sulfuric_lowlands",
+          "habitable": true,
+          "idx": 0,
+          "moons": 2,
+          "orbit_au": 13.513,
+          "resources": [
+            "void_crystal"
+          ],
+          "type": "tidally_locked"
+        },
+        {
+          "biome": "sulfuric_lowlands",
+          "habitable": false,
+          "idx": 1,
+          "moons": 3,
+          "orbit_au": 6.905,
+          "resources": [
+            "agricultural_mass"
+          ],
+          "type": "volcanic_world"
+        }
+      ],
+      "region_type": "frontier",
+      "resource_profile": "military",
+      "star": {
+        "class": "G",
+        "luminosity_factor": 0.75,
+        "mass_solar": 1.04,
+        "temperature_k": 5800
+      },
+      "x": -270,
+      "y": 100
+    },
+    "ghost": {
+      "adjacent_sector_ids": [
+        "pinnacle",
+        "signal",
+        "threshold"
+      ],
+      "danger_level": 7,
+      "id": "ghost",
+      "name": "Ghost",
+      "narrative_seed": 3017391102,
+      "planets": [
+        {
+          "biome": "salt_flats",
+          "habitable": true,
+          "idx": 0,
+          "moons": 0,
+          "orbit_au": 10.859,
+          "resources": [
+            "copper"
+          ],
+          "type": "ocean_world"
+        }
+      ],
+      "region_type": "frontier",
+      "resource_profile": "mixed",
+      "star": {
+        "class": "A",
+        "luminosity_factor": 0.85,
+        "mass_solar": 2.0,
+        "temperature_k": 9000
+      },
+      "x": 160,
+      "y": 280
+    },
+    "harbor": {
+      "adjacent_sector_ids": [
+        "sol-prime",
+        "crucible",
+        "veil",
+        "expanse"
+      ],
+      "danger_level": 3,
+      "id": "harbor",
+      "name": "Harbor",
+      "narrative_seed": 126862146,
+      "planets": [
+        {
+          "biome": "bioluminescent_tundra",
+          "habitable": false,
+          "idx": 0,
+          "moons": 4,
+          "orbit_au": 8.403,
+          "resources": [
+            "luminite",
+            "neutron_dust",
+            "copper"
+          ],
+          "type": "ocean_world"
+        },
+        {
+          "biome": "frozen_dunes",
+          "habitable": false,
+          "idx": 1,
+          "moons": 2,
+          "orbit_au": 10.343,
+          "resources": [
+            "void_crystal",
+            "copper",
+            "luminite"
+          ],
+          "type": "gas_giant"
+        },
+        {
+          "biome": "magnetically_scrubbed_cliffs",
+          "habitable": false,
+          "idx": 2,
+          "moons": 2,
+          "orbit_au": 8.778,
+          "resources": [
+            "luminite"
+          ],
+          "type": "desert_world"
+        }
+      ],
+      "region_type": "inner",
+      "resource_profile": "mixed",
+      "star": {
+        "class": "M",
+        "luminosity_factor": 0.6,
+        "mass_solar": 0.45,
+        "temperature_k": 3500
+      },
+      "x": 110,
+      "y": -65
+    },
+    "helix": {
+      "adjacent_sector_ids": [
+        "sol-prime",
+        "meridian",
+        "reach",
+        "shroud"
+      ],
+      "danger_level": 3,
+      "id": "helix",
+      "name": "Helix",
+      "narrative_seed": 1909842423,
+      "planets": [
+        {
+          "biome": "verdant_continents",
+          "habitable": false,
+          "idx": 0,
+          "moons": 1,
+          "orbit_au": 13.081,
+          "resources": [
+            "neutron_dust",
+            "cobalt",
+            "agricultural_mass",
+            "fusion_grade_lithium"
+          ],
+          "type": "carbon_world"
+        },
+        {
+          "biome": "sulfuric_lowlands",
+          "habitable": false,
+          "idx": 1,
+          "moons": 0,
+          "orbit_au": 10.549,
+          "resources": [
+            "titanium",
+            "rare_water",
+            "cobalt"
+          ],
+          "type": "sub_neptune"
+        }
+      ],
+      "region_type": "inner",
+      "resource_profile": "research",
+      "star": {
+        "class": "F",
+        "luminosity_factor": 0.8,
+        "mass_solar": 1.4,
+        "temperature_k": 7200
+      },
+      "x": -110,
+      "y": -65
+    },
+    "meridian": {
+      "adjacent_sector_ids": [
+        "sol-prime",
+        "helix",
+        "forge",
+        "bastion"
+      ],
+      "danger_level": 2,
+      "id": "meridian",
+      "name": "Meridian",
+      "narrative_seed": 1621009742,
+      "planets": [
+        {
+          "biome": "frozen_dunes",
+          "habitable": false,
+          "idx": 0,
+          "moons": 0,
+          "orbit_au": 10.865,
+          "resources": [
+            "copper",
+            "pura-ice"
+          ],
+          "type": "sub_neptune"
+        },
+        {
+          "biome": "crystal_forests",
+          "habitable": false,
+          "idx": 1,
+          "moons": 5,
+          "orbit_au": 3.816,
+          "resources": [
+            "agricultural_mass",
+            "iron"
+          ],
+          "type": "ringed_giant"
+        }
+      ],
+      "region_type": "core",
+      "resource_profile": "diplomatic",
+      "star": {
+        "class": "O",
+        "luminosity_factor": 0.95,
+        "mass_solar": 16.0,
+        "temperature_k": 30000
+      },
+      "x": -60,
+      "y": 35
+    },
+    "pinnacle": {
+      "adjacent_sector_ids": [
+        "archive",
+        "prism",
+        "drift",
+        "veil",
+        "ghost"
+      ],
+      "danger_level": 5,
+      "id": "pinnacle",
+      "name": "Pinnacle",
+      "narrative_seed": 2599941032,
+      "planets": [
+        {
+          "biome": "verdant_continents",
+          "habitable": false,
+          "idx": 0,
+          "moons": 3,
+          "orbit_au": 16.652,
+          "resources": [
+            "void_crystal",
+            "fusion_grade_lithium",
+            "luminite"
+          ],
+          "type": "desert_world"
+        },
+        {
+          "biome": "sulfuric_lowlands",
+          "habitable": false,
+          "idx": 1,
+          "moons": 5,
+          "orbit_au": 8.52,
+          "resources": [
+            "void_crystal"
+          ],
+          "type": "rocky_inner"
+        }
+      ],
+      "region_type": "outer",
+      "resource_profile": "military",
+      "star": {
+        "class": "A",
+        "luminosity_factor": 0.85,
+        "mass_solar": 2.0,
+        "temperature_k": 9000
+      },
+      "x": 100,
+      "y": 180
+    },
+    "prism": {
+      "adjacent_sector_ids": [
+        "sol-prime",
+        "crucible",
+        "pinnacle",
+        "veil"
+      ],
+      "danger_level": 3,
+      "id": "prism",
+      "name": "Prism",
+      "narrative_seed": 2574166513,
+      "planets": [
+        {
+          "biome": "salt_flats",
+          "habitable": false,
+          "idx": 0,
+          "moons": 3,
+          "orbit_au": 6.949,
+          "resources": [
+            "titanium",
+            "agricultural_mass",
+            "rare_water",
+            "neutron_dust"
+          ],
+          "type": "ringed_giant"
+        }
+      ],
+      "region_type": "inner",
+      "resource_profile": "diplomatic",
+      "star": {
+        "class": "A",
+        "luminosity_factor": 0.85,
+        "mass_solar": 2.0,
+        "temperature_k": 9000
+      },
+      "x": 130,
+      "y": 40
+    },
+    "reach": {
+      "adjacent_sector_ids": [
+        "helix",
+        "shroud",
+        "abyss"
+      ],
+      "danger_level": 5,
+      "id": "reach",
+      "name": "The Reach",
+      "narrative_seed": 2234682627,
+      "planets": [
+        {
+          "biome": "crystal_forests",
+          "habitable": false,
+          "idx": 0,
+          "moons": 1,
+          "orbit_au": 17.018,
+          "resources": [
+            "titanium"
+          ],
+          "type": "gas_giant"
+        },
+        {
+          "biome": "verdant_continents",
+          "habitable": false,
+          "idx": 1,
+          "moons": 1,
+          "orbit_au": 15.831,
+          "resources": [
+            "silicon"
+          ],
+          "type": "ocean_world"
+        },
+        {
+          "biome": "acid_seas",
+          "habitable": false,
+          "idx": 2,
+          "moons": 0,
+          "orbit_au": 13.585,
+          "resources": [
+            "fusion_grade_lithium",
+            "titanium",
+            "iron"
+          ],
+          "type": "desert_world"
+        }
+      ],
+      "region_type": "outer",
+      "resource_profile": "research",
+      "star": {
+        "class": "M",
+        "luminosity_factor": 0.6,
+        "mass_solar": 0.45,
+        "temperature_k": 3500
+      },
+      "x": -170,
+      "y": -100
+    },
+    "shroud": {
+      "adjacent_sector_ids": [
+        "helix",
+        "forge",
+        "reach",
+        "drift",
+        "fracture"
+      ],
+      "danger_level": 6,
+      "id": "shroud",
+      "name": "The Shroud",
+      "narrative_seed": 810358192,
+      "planets": [
+        {
+          "biome": "frozen_dunes",
+          "habitable": false,
+          "idx": 0,
+          "moons": 4,
+          "orbit_au": 3.318,
+          "resources": [
+            "silicon",
+            "titanium",
+            "pura-ice"
+          ],
+          "type": "desert_world"
+        },
+        {
+          "biome": "magnetically_scrubbed_cliffs",
+          "habitable": false,
+          "idx": 1,
+          "moons": 0,
+          "orbit_au": 12.049,
+          "resources": [
+            "titanium"
+          ],
+          "type": "ice_giant"
+        },
+        {
+          "biome": "magnetically_scrubbed_cliffs",
+          "habitable": false,
+          "idx": 2,
+          "moons": 2,
+          "orbit_au": 10.046,
+          "resources": [
+            "silicon",
+            "rare_water"
+          ],
+          "type": "ringed_giant"
+        },
+        {
+          "biome": "crystal_forests",
+          "habitable": false,
+          "idx": 3,
+          "moons": 4,
+          "orbit_au": 17.737,
+          "resources": [
+            "pura-ice"
+          ],
+          "type": "tidally_locked"
+        },
+        {
+          "biome": "acid_seas",
+          "habitable": false,
+          "idx": 4,
+          "moons": 2,
+          "orbit_au": 2.32,
+          "resources": [
+            "agricultural_mass",
+            "rare_water",
+            "fusion_grade_lithium",
+            "iron"
+          ],
+          "type": "ringed_giant"
+        },
+        {
+          "biome": "salt_flats",
+          "habitable": false,
+          "idx": 5,
+          "moons": 4,
+          "orbit_au": 15.599,
+          "resources": [
+            "iron",
+            "titanium",
+            "copper"
+          ],
+          "type": "gas_giant"
+        },
+        {
+          "biome": "acid_seas",
+          "habitable": false,
+          "idx": 6,
+          "moons": 3,
+          "orbit_au": 5.012,
+          "resources": [
+            "cobalt",
+            "copper",
+            "silicon"
+          ],
+          "type": "volcanic_world"
+        }
+      ],
+      "region_type": "outer",
+      "resource_profile": "mixed",
+      "star": {
+        "class": "M",
+        "luminosity_factor": 0.6,
+        "mass_solar": 0.45,
+        "temperature_k": 3500
+      },
+      "x": -200,
+      "y": 60
+    },
+    "signal": {
+      "adjacent_sector_ids": [
+        "drift",
+        "fracture",
+        "ghost"
+      ],
+      "danger_level": 7,
+      "id": "signal",
+      "name": "Signal",
+      "narrative_seed": 4044547708,
+      "planets": [
+        {
+          "biome": "lava_plains",
+          "habitable": false,
+          "idx": 0,
+          "moons": 1,
+          "orbit_au": 10.143,
+          "resources": [
+            "iron"
+          ],
+          "type": "sub_neptune"
+        },
+        {
+          "biome": "lava_plains",
+          "habitable": true,
+          "idx": 1,
+          "moons": 3,
+          "orbit_au": 16.189,
+          "resources": [
+            "void_crystal",
+            "neutron_dust",
+            "cobalt"
+          ],
+          "type": "tidally_locked"
+        },
+        {
+          "biome": "acid_seas",
+          "habitable": false,
+          "idx": 2,
+          "moons": 1,
+          "orbit_au": 1.812,
+          "resources": [
+            "iron"
+          ],
+          "type": "desert_world"
+        },
+        {
+          "biome": "frozen_dunes",
+          "habitable": false,
+          "idx": 3,
+          "moons": 1,
+          "orbit_au": 6.92,
+          "resources": [
+            "fusion_grade_lithium"
+          ],
+          "type": "sub_neptune"
+        },
+        {
+          "biome": "deep_kelp_forest",
+          "habitable": false,
+          "idx": 4,
+          "moons": 4,
+          "orbit_au": 0.361,
+          "resources": [
+            "rare_water",
+            "agricultural_mass"
+          ],
+          "type": "carbon_world"
+        }
+      ],
+      "region_type": "frontier",
+      "resource_profile": "diplomatic",
+      "star": {
+        "class": "O",
+        "luminosity_factor": 0.95,
+        "mass_solar": 16.0,
+        "temperature_k": 30000
+      },
+      "x": -160,
+      "y": 280
+    },
+    "sol-prime": {
+      "adjacent_sector_ids": [
+        "meridian",
+        "crucible",
+        "helix",
+        "forge",
+        "bastion",
+        "archive",
+        "prism",
+        "harbor"
+      ],
+      "danger_level": 1,
+      "id": "sol-prime",
+      "name": "Sol Prime",
+      "narrative_seed": 916405809,
+      "planets": [
+        {
+          "biome": "frozen_dunes",
+          "habitable": false,
+          "idx": 0,
+          "moons": 2,
+          "orbit_au": 4.131,
+          "resources": [
+            "cobalt",
+            "void_crystal",
+            "rare_water"
+          ],
+          "type": "volcanic_world"
+        },
+        {
+          "biome": "deep_kelp_forest",
+          "habitable": false,
+          "idx": 1,
+          "moons": 5,
+          "orbit_au": 7.146,
+          "resources": [
+            "rare_water"
+          ],
+          "type": "ice_giant"
+        },
+        {
+          "biome": "crystal_forests",
+          "habitable": false,
+          "idx": 2,
+          "moons": 5,
+          "orbit_au": 3.304,
+          "resources": [
+            "fusion_grade_lithium",
+            "silicon"
+          ],
+          "type": "gas_giant"
+        },
+        {
+          "biome": "sulfuric_lowlands",
+          "habitable": false,
+          "idx": 3,
+          "moons": 3,
+          "orbit_au": 8.327,
+          "resources": [
+            "rare_water"
+          ],
+          "type": "gas_giant"
+        },
+        {
+          "biome": "acid_seas",
+          "habitable": false,
+          "idx": 4,
+          "moons": 2,
+          "orbit_au": 15.283,
+          "resources": [
+            "silicon"
+          ],
+          "type": "rocky_inner"
+        },
+        {
+          "biome": "deep_kelp_forest",
+          "habitable": false,
+          "idx": 5,
+          "moons": 5,
+          "orbit_au": 17.47,
+          "resources": [
+            "luminite",
+            "rare_water",
+            "fusion_grade_lithium"
+          ],
+          "type": "ringed_giant"
+        }
+      ],
+      "region_type": "core",
+      "resource_profile": "mixed",
+      "star": {
+        "class": "F",
+        "luminosity_factor": 0.8,
+        "mass_solar": 1.4,
+        "temperature_k": 7200
+      },
+      "x": 0,
+      "y": 0
+    },
+    "threshold": {
+      "adjacent_sector_ids": [
+        "veil",
+        "ghost",
+        "beyond"
+      ],
+      "danger_level": 7,
+      "id": "threshold",
+      "name": "Threshold",
+      "narrative_seed": 2334758743,
+      "planets": [
+        {
+          "biome": "lava_plains",
+          "habitable": false,
+          "idx": 0,
+          "moons": 0,
+          "orbit_au": 1.944,
+          "resources": [
+            "copper",
+            "fusion_grade_lithium",
+            "titanium",
+            "luminite"
+          ],
+          "type": "ice_giant"
+        },
+        {
+          "biome": "lava_plains",
+          "habitable": false,
+          "idx": 1,
+          "moons": 0,
+          "orbit_au": 9.655,
+          "resources": [
+            "neutron_dust",
+            "fusion_grade_lithium",
+            "titanium"
+          ],
+          "type": "gas_giant"
+        },
+        {
+          "biome": "verdant_continents",
+          "habitable": false,
+          "idx": 2,
+          "moons": 0,
+          "orbit_au": 11.951,
+          "resources": [
+            "luminite",
+            "rare_water",
+            "fusion_grade_lithium",
+            "void_crystal"
+          ],
+          "type": "gas_giant"
+        },
+        {
+          "biome": "salt_flats",
+          "habitable": false,
+          "idx": 3,
+          "moons": 4,
+          "orbit_au": 7.574,
+          "resources": [
+            "cobalt",
+            "copper",
+            "neutron_dust"
+          ],
+          "type": "volcanic_world"
+        }
+      ],
+      "region_type": "frontier",
+      "resource_profile": "economic",
+      "star": {
+        "class": "K",
+        "luminosity_factor": 0.7,
+        "mass_solar": 0.8,
+        "temperature_k": 5100
+      },
+      "x": 270,
+      "y": 100
+    },
+    "veil": {
+      "adjacent_sector_ids": [
+        "prism",
+        "harbor",
+        "pinnacle",
+        "expanse",
+        "threshold"
+      ],
+      "danger_level": 5,
+      "id": "veil",
+      "name": "The Veil",
+      "narrative_seed": 2121727576,
+      "planets": [
+        {
+          "biome": "crystal_forests",
+          "habitable": false,
+          "idx": 0,
+          "moons": 2,
+          "orbit_au": 8.734,
+          "resources": [
+            "silicon"
+          ],
+          "type": "carbon_world"
+        },
+        {
+          "biome": "bioluminescent_tundra",
+          "habitable": false,
+          "idx": 1,
+          "moons": 4,
+          "orbit_au": 2.179,
+          "resources": [
+            "iron"
+          ],
+          "type": "desert_world"
+        },
+        {
+          "biome": "verdant_continents",
+          "habitable": false,
+          "idx": 2,
+          "moons": 3,
+          "orbit_au": 5.629,
+          "resources": [
+            "copper",
+            "titanium",
+            "neutron_dust"
+          ],
+          "type": "ocean_world"
+        },
+        {
+          "biome": "crystal_forests",
+          "habitable": false,
+          "idx": 3,
+          "moons": 3,
+          "orbit_au": 18.191,
+          "resources": [
+            "cobalt"
+          ],
+          "type": "ringed_giant"
+        }
+      ],
+      "region_type": "outer",
+      "resource_profile": "diplomatic",
+      "star": {
+        "class": "B",
+        "luminosity_factor": 0.9,
+        "mass_solar": 2.9,
+        "temperature_k": 20000
+      },
+      "x": 200,
+      "y": 60
+    }
+  },
+  "version": "0.1.0"
+}
