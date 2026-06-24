@@ -85,16 +85,18 @@ camera.position.set(0, 400, 800);
 const controls = new OrbitControls(camera, renderer.domElement);
 controls.enableDamping = true;
 controls.dampingFactor = 0.05;
-controls.maxDistance = 3000;
-controls.minDistance = 100;
+controls.maxDistance = 2000;
+controls.minDistance = 50;
 
 const raycaster = new THREE.Raycaster();
 const mouse = new THREE.Vector2();
+let hoveredObj = null;
 
 let mapData = null;
 let npcMeshes = [];
 let sectorMeshes = [];
 let sectorLabels = [];
+let labelDivs = [];
 const FACTION_COLORS = {
   research_division: 0x4fc3f7,
   military_command: 0xef5350,
@@ -142,70 +144,72 @@ async function fetchData() {
   mapData = data;
   rebuildScene();
   updateUI();
+  frameCamera();
 }
 
 function rebuildScene() {
-  // Clear old objects
   npcMeshes.forEach(m => scene.remove(m));
   sectorMeshes.forEach(m => scene.remove(m));
-  sectorLabels.forEach(l => l.remove());
+  labelDivs.forEach(l => l.remove());
   npcMeshes = [];
   sectorMeshes = [];
-  sectorLabels = [];
+  labelDivs = [];
 
   if (!mapData) return;
 
   const npcs = mapData.npcs || [];
+  const sectors = mapData.sectors || [];
   const factions = mapData.factions || {};
 
-  // --- Sector centers (simulated 21-sector grid) ---
-  const sectorPositions = [];
-  const gridSize = 5;
-  const spacing = 200;
-  for (let i = 0; i < 21; i++) {
-    const x = (i % gridSize) * spacing - (gridSize * spacing) / 2;
-    const z = Math.floor(i / gridSize) * spacing - (4 * spacing) / 2;
-    sectorPositions.push({ x, z, id: i + 1 });
+  // Build faction lookup: home_sector_id -> faction
+  const sectorFaction = {};
+  for (const [fid, fdata] of Object.entries(factions)) {
+    if (fdata.home_sector_id) {
+      sectorFaction[fdata.home_sector_id] = fid;
+    }
   }
 
-  // --- Sector markers ---
-  const sectorGeo = new THREE.SphereGeometry(10, 20, 20);
+  // Compute data bounds for auto-framing
+  let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+  for (const s of sectors) {
+    if (s.x < minX) minX = s.x;
+    if (s.x > maxX) maxX = s.x;
+    if (s.y < minY) minY = s.y;
+    if (s.y > maxY) maxY = s.y;
+  }
+
+  // --- Sector markers (real coordinates) ---
+  const sectorGeo = new THREE.SphereGeometry(12, 24, 24);
   const textureLoader = new THREE.TextureLoader();
-  sectorPositions.forEach((s, idx) => {
+  sectors.forEach((s) => {
+    const fid = sectorFaction[s.id];
+    const factionColor = fid && factions[fid] ? factions[fid].color : null;
+    const baseColor = factionColor ? parseInt(factionColor.replace('#', ''), 16) : 0x4fc3f7;
+
     const mat = new THREE.MeshStandardMaterial({
-      color: 0x4fc3f7,
-      emissive: 0x4fc3f7,
-      emissiveIntensity: 0.4,
+      color: baseColor,
+      emissive: baseColor,
+      emissiveIntensity: 0.35,
       transparent: true,
-      opacity: 0.7,
+      opacity: 0.75,
     });
     const mesh = new THREE.Mesh(sectorGeo, mat);
-
-    // Try loading generated texture from /universe/assets/sector_{id}
-    textureLoader.load(
-      `/universe/assets/sector_${s.id}`,
-      (tex) => {
-        mat.map = tex;
-        mat.color.set(0xffffff);
-        mat.emissive.set(0x000000);
-        mat.emissiveIntensity = 0;
-        mat.transparent = false;
-        mat.opacity = 1;
-        mat.needsUpdate = true;
-        mesh.userData.hasTexture = true;
-      },
-      undefined,
-      () => { /* no texture - keep default blue */ }
-    );
-
-    mesh.position.set(s.x, 0, s.z);
-    mesh.userData = { type: 'sector', id: s.id, hasTexture: false };
+    mesh.position.set(s.x, 0, s.y);
+    mesh.userData = { type: 'sector', id: s.id, name: s.name, data: s, factionId: fid, hasTexture: false, baseColor };
     scene.add(mesh);
     sectorMeshes.push(mesh);
+
+    // Sector name label
+    const label = document.createElement('div');
+    label.className = 'sector-label';
+    label.textContent = s.name;
+    label.style.color = factionColor || 'rgba(226,223,208,0.7)';
+    document.getElementById('ui-layer').appendChild(label);
+    labelDivs.push(label);
   });
 
   // --- NPC nodes ---
-  const npcGeo = new THREE.SphereGeometry(6, 16, 16);
+  const npcGeo = new THREE.SphereGeometry(5, 16, 16);
   npcs.forEach(npc => {
     const fid = npc.faction_id || npc.faction || 'unknown';
     const color = FACTION_COLORS[fid] || 0x9e9e9e;
@@ -216,12 +220,16 @@ function rebuildScene() {
     });
     const mesh = new THREE.Mesh(npcGeo, mat);
 
-    // Position: hash NPC id to a location near a sector
-    const hash = simpleHash(npc.id || npc.char_id);
-    const sx = sectorPositions[hash % sectorPositions.length];
-    const offsetX = (hash % 100) - 50;
-    const offsetZ = ((hash * 7) % 100) - 50;
-    mesh.position.set(sx.x + offsetX, 0, sx.z + offsetZ);
+    // Position near sector if sector_id matches, else random
+    const sector = sectors.find(s => s.id === (npc.sector_id || npc.location));
+    if (sector) {
+      const angle = Math.random() * Math.PI * 2;
+      const dist = 30 + Math.random() * 40;
+      mesh.position.set(sector.x + Math.cos(angle) * dist, 0, sector.y + Math.sin(angle) * dist);
+    } else {
+      const hash = simpleHash(npc.id || npc.char_id);
+      mesh.position.set((hash % 500) - 250, 0, ((hash * 7) % 500) - 250);
+    }
     mesh.userData = { type: 'npc', data: npc };
     scene.add(mesh);
     npcMeshes.push(mesh);
@@ -263,36 +271,90 @@ canvas.addEventListener('click', (e) => {
   mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
   raycaster.setFromCamera(mouse, camera);
   const intersects = raycaster.intersectObjects([...sectorMeshes, ...npcMeshes]);
+  const detail = document.getElementById('detail');
   if (intersects.length > 0) {
     const obj = intersects[0].object;
     const ud = obj.userData;
     if (ud.type === 'npc') {
       showNPC(ud.data);
     } else if (ud.type === 'sector') {
-      showSector(ud.id);
+      showSector(ud);
+    }
+  } else {
+    detail.style.display = 'none';
+  }
+});
+
+canvas.addEventListener('mousemove', (e) => {
+  mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
+  mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
+  raycaster.setFromCamera(mouse, camera);
+  const intersects = raycaster.intersectObjects([...sectorMeshes, ...npcMeshes]);
+  if (intersects.length > 0) {
+    canvas.style.cursor = 'pointer';
+    const obj = intersects[0].object;
+    if (hoveredObj !== obj) {
+      if (hoveredObj) unhighlight(hoveredObj);
+      highlight(obj);
+      hoveredObj = obj;
+    }
+  } else {
+    canvas.style.cursor = 'default';
+    if (hoveredObj) {
+      unhighlight(hoveredObj);
+      hoveredObj = null;
     }
   }
 });
 
+function highlight(obj) {
+  obj.scale.set(1.4, 1.4, 1.4);
+  if (obj.material.emissiveIntensity !== undefined) {
+    obj.userData._savedEmissive = obj.material.emissiveIntensity;
+    obj.material.emissiveIntensity = 0.9;
+  }
+}
+
+function unhighlight(obj) {
+  obj.scale.set(1, 1, 1);
+  if (obj.userData._savedEmissive !== undefined) {
+    obj.material.emissiveIntensity = obj.userData._savedEmissive;
+  }
+}
+
 function showNPC(npc) {
   const panel = document.getElementById('detail');
   document.getElementById('detail-name').textContent = npc.name || npc.id || 'Unknown';
+  const fid = npc.faction_id || npc.faction || '-';
+  const factionColor = FACTION_COLORS[fid] || '#9e9e9e';
   const rows = [
-    `Faction: ${npc.faction_id || npc.faction || '-'}`,
+    `Faction: <span style="color:${factionColor}">${fid}</span>`,
     `Mood: ${npc.mood || '-'}`,
     `Location: ${npc.sector_id || npc.location || '-'}`,
     `Status: ${npc.status || '-'}`,
+    `Thought: ${(npc.latest_thought || '-').substring(0, 120)}${(npc.latest_thought || '').length > 120 ? '...' : ''}`,
   ];
   document.getElementById('detail-rows').innerHTML = rows.join('<br>');
   panel.style.display = 'block';
 }
 
-function showSector(id) {
+function showSector(ud) {
   const panel = document.getElementById('detail');
-  document.getElementById('detail-name').textContent = `Sector ${id}`;
-  const mesh = sectorMeshes.find(m => m.userData.id === id);
-  const texStatus = mesh && mesh.userData.hasTexture ? 'âœ“ textured' : 'â—‹ procedural';
-  document.getElementById('detail-rows').innerHTML = `Asset: ${texStatus}<br>Request: /universe/assets/sector_${id}`;
+  const s = ud.data;
+  document.getElementById('detail-name').textContent = s.name || `Sector ${ud.id}`;
+  const texStatus = ud.hasTexture ? 'âœ“ textured' : 'â—‹ procedural';
+  const factionColor = ud.factionId && mapData.factions[ud.factionId] ? mapData.factions[ud.factionId].color : null;
+  const factionName = factionColor ? `<span style="color:${factionColor}">${mapData.factions[ud.factionId]?.display_name || ud.factionId}</span>` : 'None';
+  const rows = [
+    `ID: ${s.id}`,
+    `Region: ${s.region_type || '-'}`,
+    `Resources: ${s.resource_profile || '-'}`,
+    `Danger: ${s.danger_level ?? '-'}/10`,
+    `Faction: ${factionName}`,
+    `Asset: ${texStatus}`,
+    `Desc: ${(s.description || '-').substring(0, 100)}${(s.description || '').length > 100 ? '...' : ''}`,
+  ];
+  document.getElementById('detail-rows').innerHTML = rows.join('<br>');
   panel.style.display = 'block';
 }
 
@@ -311,6 +373,25 @@ window.addEventListener('resize', () => {
   renderer.setSize(window.innerWidth, window.innerHeight);
 });
 
+// --- Label positioning ---
+function updateLabels() {
+  const uiLayer = document.getElementById('ui-layer');
+  const rect = canvas.getBoundingClientRect();
+  for (let i = 0; i < sectorMeshes.length; i++) {
+    const mesh = sectorMeshes[i];
+    const pos = mesh.position.clone().project(camera);
+    const x = (pos.x * 0.5 + 0.5) * rect.width;
+    const y = (-pos.y * 0.5 + 0.5) * rect.height;
+    if (pos.z > 1 || x < 0 || x > rect.width || y < 0 || y > rect.height) {
+      labelDivs[i].style.display = 'none';
+    } else {
+      labelDivs[i].style.display = 'block';
+      labelDivs[i].style.left = `${x + 14}px`;
+      labelDivs[i].style.top = `${y - 6}px`;
+    }
+  }
+}
+
 // --- Loop ---
 let lastTime = performance.now();
 let frames = 0;
@@ -323,6 +404,7 @@ function animate(time) {
     lastTime = time;
   }
   controls.update();
+  updateLabels();
   renderer.render(scene, camera);
 }
 
