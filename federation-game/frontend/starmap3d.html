@@ -111,6 +111,7 @@ let mapData = null;
 let npcMeshes = [];
 let sectorMeshes = [];
 let sectorRings = [];
+let factionClouds = [];
 let labelDivs = [];
 const FACTION_COLORS = {
   research_division: 0x4fc3f7,
@@ -130,9 +131,9 @@ let targetCamPos = new THREE.Vector3(0, 400, 800);
 let targetLookAt = new THREE.Vector3(0, 0, 0);
 
 const CAMERA_PRESETS = {
-  [SCALE.LOCAL]: { pos: [0, 400, 800], target: [0, 0, 0], far: 5000, labelOpacity: 1, objScale: 1, gridOpacity: 0.3, boundaryScale: 1, starOpacities: [0.7, 0.35, 0.15] },
-  [SCALE.GALAXY]: { pos: [0, 2500, 5000], target: [0, 0, 0], far: 25000, labelOpacity: 0.5, objScale: 0.65, gridOpacity: 0.08, boundaryScale: 3, starOpacities: [0.5, 0.55, 0.35] },
-  [SCALE.DEEP]: { pos: [0, 15000, 30000], target: [0, 0, 0], far: 80000, labelOpacity: 0.12, objScale: 0.3, gridOpacity: 0, boundaryScale: 6, starOpacities: [0.25, 0.4, 0.7] },
+  [SCALE.LOCAL]: { pos: [0, 400, 800], target: [0, 0, 0], far: 5000, labelOpacity: 1, objScale: 1, gridOpacity: 0.3, boundaryScale: 1, starOpacities: [0.7, 0.35, 0.15], showNPCs: true, showSectors: true, showFactionClouds: false },
+  [SCALE.GALAXY]: { pos: [0, 2500, 5000], target: [0, 0, 0], far: 25000, labelOpacity: 0.5, objScale: 0.65, gridOpacity: 0.08, boundaryScale: 3, starOpacities: [0.5, 0.55, 0.35], showNPCs: false, showSectors: true, showFactionClouds: false },
+  [SCALE.DEEP]: { pos: [0, 15000, 30000], target: [0, 0, 0], far: 80000, labelOpacity: 0.12, objScale: 0.3, gridOpacity: 0, boundaryScale: 6, starOpacities: [0.25, 0.4, 0.7], showNPCs: false, showSectors: false, showFactionClouds: true },
 };
 
 // --- Lighting ---
@@ -245,9 +246,11 @@ async function fetchData() {
 function rebuildScene() {
   npcMeshes.forEach(m => scene.remove(m));
   sectorMeshes.forEach(m => scene.remove(m));
+  factionClouds.forEach(c => scene.remove(c));
   labelDivs.forEach(l => l.remove());
   npcMeshes = [];
   sectorMeshes = [];
+  factionClouds = [];
   labelDivs = [];
 
   if (!mapData) return;
@@ -351,6 +354,37 @@ function rebuildScene() {
   });
 
   document.getElementById('obj-count').textContent = `${sectorMeshes.length + npcMeshes.length} objects`;
+
+  // --- Faction clouds (DEEP mode territory blobs) ---
+  const factionSectors = {};
+  sectors.forEach(s => {
+    const fid = sectorFaction[s.id];
+    if (!fid) return;
+    if (!factionSectors[fid]) factionSectors[fid] = { x: 0, y: 0, count: 0 };
+    factionSectors[fid].x += s.x;
+    factionSectors[fid].y += s.y;
+    factionSectors[fid].count++;
+  });
+  const cloudGeo = new THREE.SphereGeometry(1, 24, 24);
+  for (const [fid, fs] of Object.entries(factionSectors)) {
+    const color = FACTION_COLORS[fid] || 0x9e9e9e;
+    const cx = fs.x / fs.count;
+    const cz = fs.y / fs.count;
+    const cloudSize = 120 + fs.count * 50;
+    const mat = new THREE.MeshBasicMaterial({
+      color,
+      transparent: true,
+      opacity: 0.08,
+      depthWrite: false,
+    });
+    const cloud = new THREE.Mesh(cloudGeo, mat);
+    cloud.position.set(cx, 0, cz);
+    cloud.scale.setScalar(cloudSize);
+    cloud.userData = { type: 'factionCloud', factionId: fid };
+    cloud.visible = false;
+    scene.add(cloud);
+    factionClouds.push(cloud);
+  }
 }
 
 function simpleHash(str) {
@@ -500,9 +534,10 @@ function applyScalePreset(mode) {
   grid.material.opacity = preset.gridOpacity;
   boundary.scale.setScalar(preset.boundaryScale);
   starLayers.forEach((layer, i) => { layer.material.opacity = preset.starOpacities[i]; });
-  sectorMeshes.forEach(m => m.scale.setScalar(preset.objScale));
-  sectorRings.forEach(r => r.scale.setScalar(preset.objScale));
-  npcMeshes.forEach(n => n.scale.setScalar(preset.objScale));
+  sectorMeshes.forEach(m => { m.visible = preset.showSectors; m.scale.setScalar(preset.objScale); });
+  sectorRings.forEach(r => { r.visible = preset.showSectors; r.scale.setScalar(preset.objScale); });
+  npcMeshes.forEach(n => { n.visible = preset.showNPCs; n.scale.setScalar(preset.objScale); });
+  factionClouds.forEach(c => { c.visible = preset.showFactionClouds; });
   setLabelScale(labelScale);
 }
 
