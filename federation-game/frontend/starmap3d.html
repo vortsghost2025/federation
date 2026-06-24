@@ -304,7 +304,6 @@ function rebuildScene() {
     ring.rotation.x = -Math.PI / 2;
     ring.position.set(s.x, 1, s.y);
     ring.userData = { type: 'ring', sectorId: s.id };
-    const preset = CAMERA_PRESETS[currentScale];
     ring.scale.setScalar(preset.objScale);
     scene.add(ring);
     sectorRings.push(ring);
