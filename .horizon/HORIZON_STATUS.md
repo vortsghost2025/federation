@@ -1,20 +1,19 @@
 # Horizon Status — Living Document
-**Last Updated:** 2026-06-10 18:30
-**Updated By:** GLM-5.1
+**Last Updated:** 2026-06-24 20:20
+**Updated By:** Kilo (mimo-v2.5-free)
 
 ## Current State
 
 | Item | Value |
 |------|-------|
-| HEAD commit | b66d9e1 |
-| VPS health | All containers up, frontend restarted |
+| HEAD commit | a760cce |
+| VPS health | All containers up (frontend 19h, backend 19h, worker 16min, NPC agents 19h) |
 | Production URL | https://federation-game.deliberatefederation.cloud/ |
 | SSH alias | `ssh hostinger` or `ssh federation-vps` (public IP 187.77.3.56) |
-| Active agents | GLM-5.1 (plan), Nemotron 3 Ultra (build), Codex (debug), Kilo IDE (MiniMax-M2.7) |
-| Bridge system | Operational — P001–P006 all completed |
-| Bridge status | `session/bridge/bridge_state.json` → status="completed" (P006) |
+| Dirty tree | 38 modified, 42 untracked |
 | Race condition | FIXED end-to-end — backend + frontend both use choice_token |
 | Spatial mode | DEPLOYED — sticky flag live on production |
+| Starmap 3D | DEPLOYED — cosmic scale-of-reality visual pass live on VPS |
 
 ## Completed This Session
 
@@ -42,6 +41,16 @@
 - [x] P009 — Session-startup probe (fed-state.sh + AGENTS hook) — committed (eef00e3), future agents auto-load fed-state on session start
 - [x] P010 — Recover deployed chat-NPC improvements — committed (8265504); npc_autonomy.py rewrite + npc_event_log.py added back to git. The 26 remaining dirty-tree files are unchanged and still need individual review.
 
+## Completed 2026-06-24 (Starmap 3D Visual Pass)
+
+- [x] Starmap 3D Three.js visualization — committed (`a760cce`)
+- [x] Cosmic scale-of-reality visual pass — LOCAL/GALAXY/DEEP modes with multi-layer starfield, nebula, horizon band, cluster markers, scale labels (`2ba0035`)
+- [x] Dramatic cosmic scale — 8x-25x camera distance between modes (`c28b9dc`)
+- [x] LOD scale modes — faction clouds for DEEP, NPC/sector visibility per mode (`9f35109`)
+- [x] Deep-space atmosphere pass — multi-layer starfield, scale-reactive grid/boundary (`e57d4ea`)
+- [x] Merge conflict resolution in starmap3d.html (`a760cce`)
+- [x] Starmap 3D deployed to VPS — verified live via HTTP
+
 ## Deploy History
 
 | Commit | What | Deployed? |
@@ -56,6 +65,14 @@
 | (scp) | P007 Leader cognition retry loop fix (timeout+cooldown) | ✅ Yes |
 | (none) | P008 Tracked scratch cleanup (delete-only) | ✅ Yes |
 | (none) | P009 Session-startup probe (fed-state.sh + AGENTS hook) | ✅ Yes |
+| a760cce | Starmap 3D cosmic scale-of-reality visual pass | ✅ Yes (frontend baked into container) |
+
+## Dirty Tree Summary (2026-06-24)
+
+- **38 modified files** — mostly backend/frontend changes from starmap + NPC work
+- **42 untracked files** — includes screenshots, session scratch, debug scripts, archived docs
+- **Stash:** `b6250c9` exists (may contain additional uncommitted work)
+- **Local ahead of remote** by several commits (starmap 3D work)
 
 ## In Progress
 
@@ -71,8 +88,11 @@
 ## Next Steps (Prioritized)
 
 1. **Deploy P011 to VPS** — build sandbox image, `docker compose up -d`, restart backend+worker
-2. **VPS git deploy script** — automate `git pull → cp → docker restart` pattern
-3. **Frontend hardening** — error handling, loading states, offline resilience
+2. **Clean dirty tree** — categorize 38 modified + 42 untracked files, commit starmap work, gitignore temp files
+3. **Examine stash `b6250c9`** — may contain additional uncommitted work
+4. **VPS git deploy script** — automate `git pull → cp → docker restart` pattern
+5. **Frontend hardening** — error handling, loading states, offline resilience
+6. **Update starmap3d.html Traefik routing** — add to router list if needed
 
 ## Agent File Ownership
 
@@ -116,11 +136,10 @@
 1. DB init retry loop blocks test runner 30s+ if Postgres unreachable
 2. Redis persist_npc_traits_to_redis hangs if Redis unreachable
 3. gastown-rig/deploy.js modified but not committed
-4. GLM at 76% context in 128K — high compaction risk
-5. Kilo IDE hit Gemma 4 rate limit — fell back to MiniMax-M2.7
-6. `.horizon/HORIZON_STATUS.md` was stale (said HEAD=994ba2e, should be b66d9e1) — now updated
-7. `.claude/skills` and `.agents/skills` still have duplicate warnings (326 remaining)
-8. **NVIDIA API key leaked in commit `e587a11` (`.kilo/kilo.json`).** Working copy + index clean (`.kilo/kilo.json` gitignored, key blanked) but the old key is still in GitHub history at `vortsghost2025/federation`. **Action: rotate the key at `integrate.api.nvidia.com`. Sean needs sighted help from his brother to do the rotation — flagged 2026-06-15.** Until rotated, treat the leaked prefix `nvapi-s7xc…` as compromised.
+4. `.claude/skills` and `.agents/skills` still have duplicate warnings (326 remaining)
+5. **NVIDIA API key leaked in commit `e587a11` (`.kilo/kilo.json`).** Working copy + index clean (`.kilo/kilo.json` gitignored, key blanked) but the old key is still in GitHub history at `vortsghost2025/federation`. **Action: rotate the key at `integrate.api.nvidia.com`. Sean needs sighted help from his brother to do the rotation — flagged 2026-06-15.** Until rotated, treat the leaked prefix `nvapi-s7xc…` as compromised.
+6. **starmap3d.html NOT in Traefik router list** — served via nginx catch-all, not explicitly routed. May need Traefik rule update if caching/routing matters.
+7. **Stash `b6250c9` unexamined** — may contain additional uncommitted work.
 
 ## Architecture
 
