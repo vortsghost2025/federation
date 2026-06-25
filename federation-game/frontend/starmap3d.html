@@ -85,8 +85,10 @@
 }
 </script>
 <script type="module">
+console.log('MODULE START');
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+console.log('imports done');
 
 const canvas = document.getElementById('three-canvas');
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
@@ -116,8 +118,9 @@ let npcMeshes = [];
 let sectorMeshes = [];
 let sectorRings = [];
 let factionClouds = [];
-let clusterMarker, clusterHalo, horizonBand;
+let clusterMarker, clusterHalo, horizonBand, galacticDisk;
 let nebulaSprites = [];
+let distantGalaxies = [];
 let labelDivs = [];
 const FACTION_COLORS = {
   research_division: 0x4fc3f7,
@@ -137,9 +140,9 @@ let targetCamPos = new THREE.Vector3(0, 400, 800);
 let targetLookAt = new THREE.Vector3(0, 0, 0);
 
 const CAMERA_PRESETS = {
-  [SCALE.LOCAL]: { pos: [0, 300, 2000], target: [0, 0, 0], far: 6000, labelOpacity: 1, objScale: 1, gridOpacity: 0.25, boundaryScale: 1, starOpacities: [0.6, 0.3, 0.12], showNPCs: true, showSectors: true, showFactionClouds: false, cloudScale: 0, showClusterMarker: false, showHalo: false, showHorizon: false, showNebula: false, showNearStars: true, showMidStars: true, showFarStars: false },
-  [SCALE.GALAXY]: { pos: [0, 1200, 8000], target: [0, 0, 0], far: 30000, labelOpacity: 0.45, objScale: 0.5, gridOpacity: 0.06, boundaryScale: 2, starOpacities: [0.45, 0.5, 0.3], showNPCs: false, showSectors: true, showFactionClouds: true, cloudScale: 1, showClusterMarker: true, showHalo: true, showHorizon: false, showNebula: true, showNearStars: false, showMidStars: true, showFarStars: true },
-  [SCALE.DEEP]: { pos: [0, 8000, 50000], target: [0, 0, 0], far: 200000, labelOpacity: 0.06, objScale: 0.12, gridOpacity: 0, boundaryScale: 4, starOpacities: [0.2, 0.35, 0.75], showNPCs: false, showSectors: false, showFactionClouds: true, cloudScale: 3, showClusterMarker: true, showHalo: true, showHorizon: true, showNebula: true, showNearStars: false, showMidStars: false, showFarStars: true },
+  [SCALE.LOCAL]: { pos: [0, 300, 2000], target: [0, 0, 0], far: 6000, labelOpacity: 1, objScale: 1, gridOpacity: 0.25, boundaryScale: 1, starOpacities: [0.6, 0.3, 0.12], showNPCs: true, showSectors: true, showFactionClouds: false, cloudScale: 0, showClusterMarker: false, showHalo: false, showHorizon: false, showNebula: false, showGalacticDisk: false, showDistantGalaxies: false, galacticDiskScale: 0, distantGalaxiesScale: 0, showNearStars: true, showMidStars: true, showFarStars: false },
+  [SCALE.GALAXY]: { pos: [0, 2000, 12000], target: [0, 0, 0], far: 40000, labelOpacity: 0.5, objScale: 0.12, gridOpacity: 0.04, boundaryScale: 3, starOpacities: [0.3, 0.5, 0.4], showNPCs: false, showSectors: true, showFactionClouds: true, cloudScale: 1.5, showClusterMarker: true, showHalo: true, showHorizon: false, showNebula: true, showGalacticDisk: true, showDistantGalaxies: true, galacticDiskScale: 1.5, distantGalaxiesScale: 1, showNearStars: false, showMidStars: true, showFarStars: true },
+  [SCALE.DEEP]: { pos: [0, 20000, 80000], target: [0, 0, 0], far: 250000, labelOpacity: 0.04, objScale: 0.02, gridOpacity: 0, boundaryScale: 8, starOpacities: [0.1, 0.2, 0.8], showNPCs: false, showSectors: false, showFactionClouds: true, cloudScale: 4, showClusterMarker: true, showHalo: true, showHorizon: true, showNebula: true, showGalacticDisk: true, showDistantGalaxies: true, galacticDiskScale: 4, distantGalaxiesScale: 2.5, showNearStars: false, showMidStars: false, showFarStars: true },
 };
 
 // --- Lighting ---
@@ -284,6 +287,61 @@ horizonBand.rotation.x = Math.PI / 2;
 horizonBand.position.y = -100;
 horizonBand.visible = false;
 scene.add(horizonBand);
+
+// --- Galactic disk (fills void between cluster and camera) ---
+const diskGeo = new THREE.TorusGeometry(5000, 300, 32, 100);
+const diskMat = new THREE.MeshBasicMaterial({
+  color: 0x1a2a4a,
+  transparent: true,
+  opacity: 0.08,
+  side: THREE.DoubleSide,
+});
+galacticDisk = new THREE.Mesh(diskGeo, diskMat);
+galacticDisk.rotation.x = Math.PI / 2;
+galacticDisk.position.y = -30;
+galacticDisk.visible = false;
+galacticDisk.userData = { type: 'galacticDisk' };
+scene.add(galacticDisk);
+
+// --- Distant galaxy markers (scatter to fill void) ---
+const galaxyTex = (() => {
+  const c = document.createElement('canvas');
+  c.width = 64; c.height = 64;
+  const ctx = c.getContext('2d');
+  const g = ctx.createRadialGradient(32, 32, 0, 32, 32, 32);
+  g.addColorStop(0, 'rgba(255,255,255,0.9)');
+  g.addColorStop(0.15, 'rgba(200,220,255,0.5)');
+  g.addColorStop(0.5, 'rgba(100,150,255,0.08)');
+  g.addColorStop(1, 'rgba(0,0,0,0)');
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, 64, 64);
+  return new THREE.CanvasTexture(c);
+})();
+const galaxySpriteMat = new THREE.SpriteMaterial({
+  map: galaxyTex,
+  transparent: true,
+  blending: THREE.AdditiveBlending,
+  depthWrite: false,
+});
+distantGalaxies = [];
+const galaxyPositions = [
+  [8000, 2000, -12000], [-7000, -1500, -10000], [10000, -3000, -8000],
+  [-9000, 3000, -14000], [6000, 4000, -16000], [-11000, -2000, -11000],
+  [13000, 1000, -9000], [-5000, 5000, -18000], [15000, -4000, -13000],
+  [-14000, 2500, -7000], [4000, -5000, -20000], [-16000, -3000, -15000],
+  [18000, 3500, -11000], [-3000, -6000, -22000], [20000, -1000, -16000],
+  [-18000, 4000, -8000], [10000, 6000, -25000], [-20000, -5000, -19000],
+];
+galaxyPositions.forEach(pos => {
+  const s = new THREE.Sprite(galaxySpriteMat.clone());
+  const dist = Math.sqrt(pos[0]**2 + pos[1]**2 + pos[2]**2);
+  const size = 200 + Math.random() * 600;
+  s.scale.set(size, size, 1);
+  s.position.set(...pos);
+  s.visible = false;
+  scene.add(s);
+  distantGalaxies.push(s);
+});
 
 // --- Axes ---
 // const axes = new THREE.AxesHelper(500);
@@ -603,6 +661,9 @@ function applyScalePreset(mode) {
   clusterMarker.visible = preset.showClusterMarker === true;
   clusterHalo.visible = preset.showHalo === true;
   horizonBand.visible = preset.showHorizon === true;
+  galacticDisk.visible = preset.showGalacticDisk === true;
+  galacticDisk.scale.setScalar(preset.galacticDiskScale || 1);
+  distantGalaxies.forEach(s => { s.visible = preset.showDistantGalaxies === true; s.scale.setScalar(preset.distantGalaxiesScale || 1); });
   
   const labelsEl = document.getElementById('scale-labels');
   const primaryEl = document.getElementById('scale-label-primary');
@@ -695,6 +756,7 @@ setInterval(fetchData, 5000);
 animate();
 setLabelScale(1.0);
 document.getElementById('loading').style.display = 'none';
+console.log('MODULE END');
 </script>
 </body>
 </html>
