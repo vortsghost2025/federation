@@ -83,6 +83,7 @@ NPCChatSystem.js
 
 # VPS backend test/check/debug files (pulled from server but not part of clean repo)
 federation-game/backend/test_*.py
+!federation-game/backend/test_institutions.py
 federation-game/backend/check_*.py
 federation-game/backend/npc_autonomy.py
 federation-game/backend/npc_chat.py

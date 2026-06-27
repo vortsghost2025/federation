@@ -300,6 +300,23 @@ def run_councilor_sync():
     except Exception as e:
         log.warning(f" Councilor bridge failed: {e}")
 
+    try:
+        from institutions import run_institution_tick
+
+        institution_result = run_institution_tick(r)
+        log.info(
+            " Institutions: seeded %s institutions, %s roles; advanced %s workflows (%s active, %s completed)",
+            institution_result.get("institutions_seeded", 0),
+            institution_result.get("roles_seeded", 0),
+            institution_result.get("workflows_advanced", 0),
+            institution_result.get("active_workflows", 0),
+            institution_result.get("completed_workflows", 0),
+        )
+    except ImportError:
+        log.warning(" Institutions module not available")
+    except Exception as e:
+        log.warning(f" Institutions tick failed: {e}")
+
 
 # ── Faction display map for notifications ────────────────────
 _FACTION_NAMES = {

@@ -51,13 +51,23 @@ def sync_artifacts_to_simulation(r, councilor_id: str) -> int:
                 artifact_id = _stable_id(councilor_id, artifact)
                 if not r.sadd(ARTIFACT_DEDUPE_KEY, artifact_id):
                     continue
-                
+                artifact["artifact_id"] = artifact_id
+
+                try:
+                    from institutions import annotate_artifact
+
+                    artifact = annotate_artifact(r, councilor_id, artifact)
+                except ImportError:
+                    artifact.setdefault("institution_id", "")
+                    artifact.setdefault("role_id", "")
+                    artifact.setdefault("workflow_id", "")
+                    artifact.setdefault("artifact_kind", "councilor_note")
+
                 # Mark as councilor artifact
                 artifact["councilor_id"] = councilor_id
                 artifact["councilor_name"] = artifact.get("author", councilor_id)
                 artifact["synced_at"] = int(time.time())
-                
-                artifact["artifact_id"] = artifact_id
+
                 r.lpush("federation_councilor_artifacts", json.dumps(artifact))
                 r.ltrim("federation_councilor_artifacts", 0, 999)  # Keep last 1000
                 synced += 1
