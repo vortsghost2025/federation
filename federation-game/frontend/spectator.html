@@ -116,6 +116,31 @@ p{margin:0 0 8px 0}
 .empty-card{padding:30px;background:#0e121c;border:1px solid #1a2430;border-radius:14px;color:#5a6a80;font-style:italic;font-size:1.1rem;text-align:center}
 .copy-msg{display:inline-block;color:#7be095;font-size:0.95rem;margin-left:10px;opacity:0;transition:opacity 0.3s}
 .copy-msg.show{opacity:1}
+
+/* ── Institutions panel ── */
+.inst-card{padding:22px 26px;background:#0e121c;border:1px solid #26384f;border-radius:18px;margin-bottom:16px;box-shadow:0 0 0 1px #00000044}
+.inst-card h3{font-size:1.6rem;margin:0 0 6px 0;color:#eaf0fa;font-weight:700}
+.inst-kind{display:inline-block;background:#1a2430;border:1px solid #2a3a4a;color:#9bb8d0;padding:2px 10px;border-radius:4px;font-size:0.9rem;text-transform:uppercase;letter-spacing:0.05em;margin-left:10px}
+.inst-mandate{color:#8da3ba;font-size:1.05rem;line-height:1.45;margin:8px 0 12px 0}
+.inst-roles{padding:10px 14px;background:#0a0e16;border-radius:8px;margin-bottom:10px}
+.inst-role-row{padding:6px 0;border-bottom:1px solid #121a24;display:grid;grid-template-columns:1fr auto;gap:8px;align-items:center;font-size:1.05rem}
+.inst-role-row:last-child{border-bottom:none}
+.inst-role-title{color:#e0e8f0;font-weight:700}
+.inst-role-holder{color:#7be095;font-family:monospace;font-size:0.95rem}
+.inst-role-auth{color:#5a6a80;font-size:0.85rem;font-style:italic}
+.inst-kpis{display:flex;flex-wrap:wrap;gap:8px 28px;padding:10px 14px;background:#0a0e16;border-radius:8px;font-size:1.1rem;margin-top:8px}
+.inst-kpis .lbl{color:#5a6a80}.inst-kpis .num{color:#eef2f8;font-weight:700}
+.wf-card{padding:16px 20px;background:#0e121c;border:1px solid #1a2638;border-radius:14px;margin-bottom:10px}
+.wf-card.active{border-left:4px solid #f1c40f}
+.wf-card.completed{border-left:4px solid #2ecc71}
+.wf-proposal{font-size:1.2rem;color:#eaf0fa;font-weight:700;margin-bottom:6px}
+.wf-meta{color:#8da3ba;font-size:1.0rem;display:flex;flex-wrap:wrap;gap:8px 18px}
+.wf-events{margin-top:10px;padding:10px 14px;background:#0a0e16;border-radius:8px}
+.wf-event{padding:5px 0;border-bottom:1px solid #121a24;font-size:0.95rem;color:#9bb8d0;display:grid;grid-template-columns:auto 1fr auto;gap:8px;align-items:center}
+.wf-event:last-child{border-bottom:none}
+.wf-event .state{font-weight:700;color:#e0e8f0;text-transform:uppercase;font-size:0.85rem;background:#1a2430;padding:2px 8px;border-radius:3px}
+.wf-event .actor{color:#7be095;font-family:monospace;font-size:0.85rem}
+.wf-event .time{color:#5a6a80;font-family:monospace;font-size:0.85rem}
 </style>
 </head>
 <body>
@@ -140,7 +165,8 @@ p{margin:0 0 8px 0}
 <a href="/" style="color:#7a8aa0;text-decoration:none;padding:6px 14px;border-radius:4px;font-size:0.95rem">Simulator</a>
 <a href="/simulation.html" style="color:#7a8aa0;text-decoration:none;padding:6px 14px;border-radius:4px;font-size:0.95rem">Live Sim</a>
 <a href="/adult.html" style="color:#7a8aa0;text-decoration:none;padding:6px 14px;border-radius:4px;font-size:0.95rem">Control</a>
-<a href="/council-chat.html" style="color:#7a8aa0;text-decoration:none;padding:6px 14px;border-radius:4px;font-size:0.95rem">Council Chat</a>
+  <a href="/council-chat.html" style="color:#7a8aa0;text-decoration:none;padding:6px 14px;border-radius:4px;font-size:0.95rem">Council Chat</a>
+  <a href="/spectator.html?mode=institutions" style="color:#7a8aa0;text-decoration:none;padding:6px 14px;border-radius:4px;font-size:0.95rem">Institutions</a>
 <a href="/worldguide.html" style="color:#7a8aa0;text-decoration:none;padding:6px 14px;border-radius:4px;font-size:0.95rem">World Guide</a>
 <a href="/earth.html" style="color:#7a8aa0;text-decoration:none;padding:6px 14px;border-radius:4px;font-size:0.95rem">Earth</a>
 <a href="/spectator.html" style="color:#e8edf5;text-decoration:none;padding:6px 14px;border-radius:4px;font-size:0.95rem;background:#27384f;font-weight:700">Spectator</a>
@@ -172,6 +198,7 @@ p{margin:0 0 8px 0}
 
 <div class="tab-row" style="margin-bottom:12px">
   <button class="tab active" data-mode="both">Simple behavior view</button>
+  <button class="tab" data-mode="institutions">Institutions</button>
   <span class="spacer"></span>
   <button class="tab" data-mode="detail">⚙ Detailed mode</button>
 </div>
@@ -186,6 +213,17 @@ const REFRESH_MS = 30000;
 let timer = null;
 let lastData = null;
 let viewMode = 'both';
+
+(function(){
+  const p = new URLSearchParams(location.search);
+  if(p.get('mode')==='institutions') viewMode = 'institutions';
+  if(p.get('mode')==='detail') viewMode = 'detail';
+  if(viewMode==='institutions'){
+    document.querySelectorAll('[data-mode]').forEach(b=>{
+      b.classList.toggle('active', b.dataset.mode==='institutions');
+    });
+  }
+})();
 
 const CATEGORY_LABELS = {
   read_artifacts: "Reading memory/artifacts",
@@ -876,6 +914,7 @@ function render(){
   if(viewMode==='001') return renderSingle(npcs.find(n=>n.char_id==='char_001')||npcs[0]);
   if(viewMode==='306') return renderSingle(npcs.find(n=>n.char_id==='char_306')||npcs[1]||npcs[0]);
   if(viewMode==='detail') return renderDetail(lastData);
+  if(viewMode==='institutions') return renderInstitutions();
   return renderBoth(npcs);
 }
 
@@ -943,11 +982,121 @@ function updateSystemLine(data){
   $('system-line').innerHTML = `${esc(pieces.join('. '))}.<small>Page refreshed ${esc(new Date().toLocaleTimeString())}. Detailed raw logs are collapsed under Debug.</small>`;
 }
 
+let instData = null;
+
+async function loadInstitutions(){
+  try{
+    const [instRes, activeRes, doneRes] = await Promise.all([
+      fetch('/api/institutions'),
+      fetch('/api/institutions/workflows/active'),
+      fetch('/api/institutions/workflows/completed?limit=20')
+    ]);
+    const institutions = instRes.ok ? await instRes.json() : {institutions:[]};
+    const active = activeRes.ok ? await activeRes.json() : {workflows:[]};
+    const completed = doneRes.ok ? await doneRes.json() : {workflows:[],total:0};
+    instData = {institutions: institutions.institutions||[], active: active.workflows||[], completed: completed.workflows||[], completedTotal: completed.total||0};
+  }catch(e){
+    instData = {institutions:[],active:[],completed:[],completedTotal:0,error:e.message};
+  }
+}
+
+function renderInstRoleBadge(authority){
+  if(!authority) return '';
+  const colors = {
+    review_and_warn: '#f1c40f',
+    review_and_propose: '#2ecc71',
+    veto: '#e74c3c',
+    observe: '#5a6a80'
+  };
+  const c = colors[authority] || '#5a6a80';
+  return `<span style="color:${c};font-size:0.85rem;font-style:italic">${esc(authority.replace(/_/g,' '))}</span>`;
+}
+
+function renderInstitutionCard(inst){
+  const roles = inst.roles || [];
+  const members = inst.members || [];
+  const roleRows = roles.map(r => `
+    <div class="inst-role-row">
+      <div><span class="inst-role-title">${esc(r.title||'')}</span> ${renderInstRoleBadge(r.authority)}</div>
+      <div><span class="inst-role-holder">${esc(r.holder||'')}</span></div>
+    </div>
+  `).join('');
+
+  return `
+    <div class="inst-card">
+      <h3>${esc(inst.name||'Unnamed')}<span class="inst-kind">${esc(inst.kind||'')}</span></h3>
+      <div class="inst-mandate">${esc(inst.mandate||'No mandate defined.')}</div>
+      ${roles.length ? `<div class="inst-roles"><div class="behavior-label" style="margin-bottom:6px">Roles</div>${roleRows}</div>` : ''}
+      <div class="inst-kpis">
+        <div><span class="lbl">Members</span><span class="num">${members.length}</span></div>
+        <div><span class="lbl">Active</span><span class="num" style="color:#f1c40f">${inst.active_workflows||0}</span></div>
+        <div><span class="lbl">Completed</span><span class="num" style="color:#2ecc71">${inst.completed_workflows||0}</span></div>
+        <div><span class="lbl">Status</span><span class="num">${esc(inst.status||'?')}</span></div>
+        <div><span class="lbl">Created</span><span class="num" style="font-family:monospace;font-size:0.9rem">${esc((inst.created_at||'').slice(0,10))}</span></div>
+      </div>
+    </div>
+  `;
+}
+
+function renderWorkflowCard(wf, isActive){
+  const cls = isActive ? 'active' : 'completed';
+  const events = wf.events || [];
+  const eventRows = events.map(e => `
+    <div class="wf-event">
+      <span class="state">${esc(e.transition||e.state||'?')}</span>
+      <span class="actor">${esc(e.actor_id||e.triggered_by||'')}</span>
+      <span class="time">${esc((e.ts||e.timestamp||'').slice(11,19))}</span>
+    </div>
+  `).join('');
+  const startedAt = (wf.started_at||wf.created_at||'').slice(0,19).replace('T',' ');
+  const endedAt = wf.completed_at ? (wf.completed_at||'').slice(0,19).replace('T',' ') : '';
+
+  return `
+    <div class="wf-card ${cls}">
+      <div class="wf-proposal">${esc(wf.proposal_title||wf.title||wf.kind||'Untitled workflow')}</div>
+      <div class="wf-meta">
+        <span>ID: ${esc(wf.id||'?').slice(0,12)}…</span>
+        <span>Kind: ${esc(wf.kind||'?')}</span>
+        <span>State: <strong>${esc(wf.state||'?')}</strong></span>
+        <span>Started: ${esc(startedAt)}</span>
+        ${endedAt ? `<span>Ended: ${esc(endedAt)}</span>` : ''}
+        ${(wf.artifact_count||0) > 0 ? `<span>Artifacts: ${wf.artifact_count}</span>` : ''}
+      </div>
+      ${events.length ? `<div class="wf-events">${eventRows}</div>` : ''}
+    </div>
+  `;
+}
+
+function renderInstitutions(){
+  if(!instData) return '<div class="empty-card">Loading institutions…</div>';
+  if(instData.error) return `<div class="empty-card">Error: ${esc(instData.error)}</div>`;
+
+  const instCards = (instData.institutions||[]).map(renderInstitutionCard).join('');
+  const activeCards = (instData.active||[]).map(wf => renderWorkflowCard(wf, true)).join('');
+  const completedCards = (instData.completed||[]).map(wf => renderWorkflowCard(wf, false)).join('');
+
+  return `
+    <section class="comm-panel">
+      <h2>Institutions</h2>
+      ${instCards || '<div class="empty-card">No institutions seeded yet.</div>'}
+    </section>
+    <section class="comm-panel" style="margin-top:14px">
+      <h2>Active workflows <span style="color:#f1c40f;font-size:1.1rem">${instData.active.length}</span></h2>
+      ${activeCards || '<div class="empty-card">No active workflows right now.</div>'}
+    </section>
+    <section class="comm-panel" style="margin-top:14px">
+      <h2>Completed workflows <span style="color:#2ecc71;font-size:1.1rem">${instData.completedTotal}</span></h2>
+      ${completedCards || '<div class="empty-card">No completed workflows yet.</div>'}
+    </section>
+  `;
+}
+
 async function load(){
   try{
     const r = await fetch('/spectator/agency', {headers:{Accept:'application/json'}});
     if(!r.ok) throw new Error('HTTP '+r.status);
     lastData = await r.json();
+    if(viewMode === 'institutions') await loadInstitutions();
     $('content').innerHTML = render();
     updateStrip(lastData);
     updateSystemLine(lastData);
@@ -999,6 +1148,11 @@ document.querySelectorAll('[data-mode]').forEach(btn=>{
       timer = null;
       load();
       timer = setInterval(load, 15000);
+    } else if(viewMode==='institutions'){
+      if(timer) clearInterval(timer);
+      timer = null;
+      loadInstitutions().then(()=>{ $('content').innerHTML = renderInstitutions(); });
+      timer = setInterval(()=>{ loadInstitutions().then(()=>{ $('content').innerHTML = renderInstitutions(); }); }, 15000);
     } else {
       if(timer) clearInterval(timer);
       timer = null;
