@@ -51,6 +51,14 @@ Use curl for verification:
 curl -s -o /dev/null -w "%{http_code}" http://localhost:[PORT]/
 ```
 
+### Shell Discipline
+Federation sessions run in a PowerShell-first environment unless a bash-only script is explicitly required.
+
+- Do not assume Linux shell tools during normal work. Avoid `bash`, `find`, `grep`, `head`, and Unix-style flags in PowerShell sessions.
+- Prefer `Get-ChildItem`, `Select-String`, `Select-Object -First`, `Get-Content -Raw`, and `Test-Path`.
+- Use Git Bash only for explicit bash-only workflows such as `S:/federation/scripts/fed-state.sh`.
+- Broad exploration must avoid heavy or sensitive paths unless the task explicitly needs them: `.kilo`, `.opencode`, `.kilocode`, `.horizon`, `session`, `continuity-test-handoff`, `tmp`, `node_modules`, `.secrets`, `genesis-memory/*.db`, `docs/2FAuth.txt`, `docs/VPS.txt`, and large dumps/log bundles.
+
 ---
 
 ## THE RAMSINGH SYNTHESIS LOOP

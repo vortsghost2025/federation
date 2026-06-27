@@ -7,7 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Share+Tech+Mono&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="simulation.css">
+<link rel="stylesheet" href="simulation.css?v=2">
 
 </head>
 <body>
@@ -60,11 +60,23 @@
 <a href="adult.html">Control</a>
 <a href="worldguide.html">World Guide</a>
 <a href="earth.html">Earth</a>
+<a href="spectator.html">Spectator</a>
 <button class="help-btn" onclick="toggleHelp()" aria-label="How to read this page" title="How to read this page">?</button>
 <button class="rm-toggle-btn" id="rm-toggle" onclick="toggleReadableMode()" aria-label="Toggle readable mode" title="Toggle readable mode">Aa</button>
 </nav>
 </div>
 </header>
+
+<!-- FEDERATION STATUS BRIEF -->
+<div id="fed-brief">
+<div class="brief-row">
+<span class="brief-state-badge" id="brief-state-badge">INITIALIZING</span>
+<span class="brief-meta" id="brief-meta">Loading simulation...</span>
+</div>
+<div class="brief-headline" id="brief-headline">Connecting to Federation systems...</div>
+<div class="brief-developments" id="brief-developments"></div>
+<div class="brief-watch" id="brief-watch"></div>
+</div>
 
 <!-- SITUATION SUMMARY BAR -->
 <div id="situation">
@@ -297,12 +309,8 @@
 <div class="bottom-triggers" id="era-triggers"></div>
 <div class="bottom-pending" id="pending-items">What Is Unresolved: <strong>&#8212;</strong></div>
 </footer>
-</div>
 
-    <script src="fed-fetch.js"></script>
-    <script src="error-reporter.js"></script>
-    <script src="simulation.js"></script>
-
+<!-- FEDERATION INTELLIGENCE DRAWER -->
 <div class="ai-chat" id="ai-chat">
 <div class="ai-chat-label">Federation Intelligence</div>
 <div class="ai-chat-messages" id="ai-chat-messages"></div>
@@ -318,7 +326,14 @@
 <span class="ai-chat-suggestion" onclick="aiChatAsk(this.textContent)">What are the NPCs planning?</span>
 <span class="ai-chat-suggestion" onclick="aiChatAsk(this.textContent)">Which NPC should I watch?</span>
 </div>
-<a href="/spectator.html" class="btn">Open Spectator View</a>
+<a href="/spectator.html">Open Spectator View</a>
 </div>
+</div>
+
+    <script src="fed-fetch.js"></script>
+    <script src="error-reporter.js"></script>
+    <script src="simulation.js?v=2"></script>
+
+<div id="ai-chat-toggle" onclick="toggleChatDrawer()" aria-label="Toggle Federation Intelligence" role="button" tabindex="0">FI</div>
 </body>
 </html>

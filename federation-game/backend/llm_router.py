@@ -7,7 +7,7 @@ Supports Ollama, Cloudflare Workers AI, Together AI, NVIDIA NIM,
 Google Gemini, Grok/xAI, and OpenRouter — with automatic fallback.
 
 Design principles:
-- Multi-provider: Ollama(3B/7B) → Cloudflare → Together → NIM → Gemini → Grok → OpenRouter
+- Multi-provider: Ollama(3B/7B) → Cloudflare → Together → NIM → OpenRouter → Gemini → Grok
 - Key rotation for NIM (up to 8 keys, round-robin with least-recently-used)
 - Per-provider rate limit awareness (Redis-backed call tracking)
 - Per-provider circuit breaker (3 consecutive failures → 5 min cooldown)
@@ -18,7 +18,7 @@ Design principles:
 
 Fallback chain (route_call):
   Ollama(3B) → Cloudflare → Together → NIM primary → NIM fallback
-  → Gemini → Grok → OpenRouter → template fallback
+  → OpenRouter → Gemini → Grok → template fallback
 
 Redis keys:
 llm_call_log:{provider} — ZSET (score=timestamp) of recent calls
@@ -35,8 +35,9 @@ import os
 import random
 import threading
 import time
-import urllib.request
 import urllib.error
+import urllib.parse
+import urllib.request
 from typing import Any, Dict, List, Optional, Tuple
 
 import redis
@@ -194,6 +195,33 @@ GEMINI_BASE_URL = os.environ.get(
     "GEMINI_BASE_URL", "https://generativelanguage.googleapis.com/v1beta"
 )
 GEMINI_TIMEOUT = int(os.environ.get("GEMINI_TIMEOUT", "20"))
+GEMINI_ALLOWED_TASKS = frozenset(
+    t.strip()
+    for t in os.environ.get("GEMINI_ALLOWED_TASKS", "").split(",")
+    if t.strip()
+)
+GEMINI_MAX_CALLS_PER_DAY = int(os.environ.get("GEMINI_MAX_CALLS_PER_DAY", "0") or "0")
+GEMINI_MAX_CALLS_PER_MONTH = int(
+    os.environ.get("GEMINI_MAX_CALLS_PER_MONTH", "0") or "0"
+)
+GEMINI_MONTHLY_USD_CAP = float(os.environ.get("GEMINI_MONTHLY_USD_CAP", "0") or "0")
+GEMINI_NOTIFY_THRESHOLDS = tuple(
+    sorted(
+        {
+            float(x.strip())
+            for x in os.environ.get("GEMINI_NOTIFY_THRESHOLDS", "0.5,0.8,1.0").split(",")
+            if x.strip()
+        }
+    )
+)
+GEMINI_NOTIFY_INTERVAL_SECONDS = int(
+    os.environ.get("GEMINI_NOTIFY_INTERVAL_SECONDS", "3600") or "3600"
+)
+GEMINI_PRICE_PER_MTOKEN = {
+    "gemini-2.0-flash": {"input": 0.10, "output": 0.40},
+    "gemini-2.5-flash": {"input": 0.30, "output": 2.50},
+    "gemini-2.5-flash-lite": {"input": 0.10, "output": 0.40},
+}
 _gemini_available: Optional[bool] = None
 _gemini_last_check: float = 0.0
 GEMINI_CHECK_INTERVAL = 300.0
@@ -473,6 +501,244 @@ def _check_gemini_available() -> bool:
     return True
 
 
+def _build_gemini_payload(
+    messages: List[Dict],
+    max_tokens: int,
+    temperature: float,
+) -> Dict[str, Any]:
+    """Translate OpenAI-style messages into Gemini generateContent payload."""
+    system_parts: List[str] = []
+    contents: List[Dict[str, Any]] = []
+
+    for message in messages:
+        text = message.get("content", "")
+        if text is None:
+            continue
+        if not isinstance(text, str):
+            text = str(text)
+        text = text.strip()
+        if not text:
+            continue
+
+        role = str(message.get("role", "user") or "user").lower()
+        if role == "system":
+            system_parts.append(text)
+            continue
+
+        contents.append(
+            {
+                "role": "model" if role == "assistant" else "user",
+                "parts": [{"text": text}],
+            }
+        )
+
+    if not contents:
+        contents = [{"role": "user", "parts": [{"text": ""}]}]
+
+    payload: Dict[str, Any] = {
+        "contents": contents,
+        "generationConfig": {
+            "maxOutputTokens": max_tokens,
+            "temperature": temperature,
+        },
+    }
+    if system_parts:
+        payload["systemInstruction"] = {
+            "parts": [{"text": "\n\n".join(system_parts)}]
+        }
+    return payload
+
+
+def _extract_gemini_text(body: Dict[str, Any]) -> str:
+    """Extract text from Gemini generateContent responses."""
+    candidates = body.get("candidates") or []
+    if candidates:
+        content = candidates[0].get("content") or {}
+        parts = content.get("parts") or []
+        texts: List[str] = []
+        for part in parts:
+            text = part.get("text")
+            if text is None:
+                continue
+            texts.append(text if isinstance(text, str) else str(text))
+        if texts:
+            return "".join(texts).strip()
+
+    prompt_feedback = body.get("promptFeedback") or {}
+    block_reason = prompt_feedback.get("blockReason")
+    if block_reason:
+        return f"blocked: {block_reason}"
+    return ""
+
+
+def _normalize_gemini_model_name(model: str) -> str:
+    model = str(model or "")
+    return model[7:] if model.startswith("models/") else model
+
+
+def _extract_gemini_usage(body: Dict[str, Any]) -> Dict[str, int]:
+    usage = body.get("usageMetadata") or {}
+    input_tokens = int(usage.get("promptTokenCount") or 0)
+    output_tokens = int(usage.get("candidatesTokenCount") or 0)
+    total_tokens = int(usage.get("totalTokenCount") or (input_tokens + output_tokens))
+    return {
+        "input_tokens": input_tokens,
+        "output_tokens": output_tokens,
+        "total_tokens": total_tokens,
+    }
+
+
+def _estimate_gemini_usd(model: str, input_tokens: int, output_tokens: int) -> float:
+    pricing = GEMINI_PRICE_PER_MTOKEN.get(_normalize_gemini_model_name(model))
+    if not pricing:
+        return 0.0
+    return round(
+        (input_tokens / 1_000_000.0) * pricing["input"]
+        + (output_tokens / 1_000_000.0) * pricing["output"],
+        6,
+    )
+
+
+def _gemini_budget_keys(now: Optional[float] = None) -> Dict[str, str]:
+    now = now or time.time()
+    day = time.strftime("%Y-%m-%d", time.gmtime(now))
+    month = time.strftime("%Y-%m", time.gmtime(now))
+    return {
+        "day": day,
+        "month": month,
+        "daily_calls": f"llm_budget:gemini:daily:{day}:calls",
+        "monthly_calls": f"llm_budget:gemini:monthly:{month}:calls",
+        "monthly_input_tokens": f"llm_budget:gemini:monthly:{month}:input_tokens",
+        "monthly_output_tokens": f"llm_budget:gemini:monthly:{month}:output_tokens",
+        "monthly_total_tokens": f"llm_budget:gemini:monthly:{month}:total_tokens",
+        "monthly_usd": f"llm_budget:gemini:monthly:{month}:usd",
+    }
+
+
+def _send_budget_notification(title: str, body: str, dedupe_key: str = "") -> None:
+    notify_urls = os.environ.get("NOTIFICATION_URLS", "")
+    if not notify_urls:
+        return
+    try:
+        r = _get_redis()
+        if dedupe_key:
+            key = f"llm_budget:notify:{dedupe_key}"
+            if r.get(key):
+                return
+            r.set(key, "1", ex=GEMINI_NOTIFY_INTERVAL_SECONDS)
+    except Exception:
+        pass
+
+    try:
+        import apprise
+
+        apobj = apprise.Apprise()
+        for url in [u.strip() for u in notify_urls.split(",") if u.strip()]:
+            try:
+                apobj.add(url)
+            except Exception:
+                continue
+        apobj.notify(title=title, body=body)
+    except Exception as e:
+        logger.warning("Failed to send Gemini budget notification: %s", e)
+
+
+def _check_gemini_budget(task_class: str, model: str) -> Tuple[bool, str]:
+    if GEMINI_ALLOWED_TASKS and task_class not in GEMINI_ALLOWED_TASKS:
+        return False, f"Gemini disabled for task_class={task_class}"
+
+    try:
+        r = _get_redis()
+        keys = _gemini_budget_keys()
+        daily_calls = int(r.get(keys["daily_calls"]) or 0)
+        monthly_calls = int(r.get(keys["monthly_calls"]) or 0)
+        monthly_usd = float(r.get(keys["monthly_usd"]) or 0.0)
+    except Exception:
+        return True, ""
+
+    if GEMINI_MAX_CALLS_PER_DAY > 0 and daily_calls >= GEMINI_MAX_CALLS_PER_DAY:
+        _send_budget_notification(
+            "⚠️ Gemini daily call cap reached",
+            (
+                f"Task class: {task_class}\nModel: {_normalize_gemini_model_name(model)}\n"
+                f"Daily calls: {daily_calls}/{GEMINI_MAX_CALLS_PER_DAY}\n"
+                "Gemini fallback is blocked until the next UTC day."
+            ),
+            dedupe_key=f"gemini-daily-cap:{keys['day']}",
+        )
+        return False, f"Gemini daily call cap reached ({daily_calls}/{GEMINI_MAX_CALLS_PER_DAY})"
+
+    if GEMINI_MAX_CALLS_PER_MONTH > 0 and monthly_calls >= GEMINI_MAX_CALLS_PER_MONTH:
+        _send_budget_notification(
+            "⚠️ Gemini monthly call cap reached",
+            (
+                f"Task class: {task_class}\nModel: {_normalize_gemini_model_name(model)}\n"
+                f"Monthly calls: {monthly_calls}/{GEMINI_MAX_CALLS_PER_MONTH}\n"
+                "Gemini fallback is blocked until the next UTC month."
+            ),
+            dedupe_key=f"gemini-monthly-cap:{keys['month']}",
+        )
+        return False, f"Gemini monthly call cap reached ({monthly_calls}/{GEMINI_MAX_CALLS_PER_MONTH})"
+
+    if GEMINI_MONTHLY_USD_CAP > 0 and monthly_usd >= GEMINI_MONTHLY_USD_CAP:
+        _send_budget_notification(
+            "⚠️ Gemini monthly USD cap reached",
+            (
+                f"Task class: {task_class}\nModel: {_normalize_gemini_model_name(model)}\n"
+                f"Estimated spend: ${monthly_usd:.4f}/${GEMINI_MONTHLY_USD_CAP:.2f}\n"
+                "Gemini fallback is blocked until the next UTC month."
+            ),
+            dedupe_key=f"gemini-usd-cap:{keys['month']}",
+        )
+        return False, f"Gemini monthly USD cap reached (${monthly_usd:.4f}/${GEMINI_MONTHLY_USD_CAP:.2f})"
+
+    return True, ""
+
+
+def _record_gemini_usage(model: str, task_class: str, body: Dict[str, Any]) -> None:
+    usage = _extract_gemini_usage(body)
+    usd = _estimate_gemini_usd(model, usage["input_tokens"], usage["output_tokens"])
+
+    try:
+        r = _get_redis()
+        keys = _gemini_budget_keys()
+        pipe = r.pipeline()
+        pipe.incr(keys["daily_calls"])
+        pipe.expire(keys["daily_calls"], 86400 * 3)
+        pipe.incr(keys["monthly_calls"])
+        pipe.expire(keys["monthly_calls"], 86400 * 40)
+        pipe.incrby(keys["monthly_input_tokens"], usage["input_tokens"])
+        pipe.expire(keys["monthly_input_tokens"], 86400 * 40)
+        pipe.incrby(keys["monthly_output_tokens"], usage["output_tokens"])
+        pipe.expire(keys["monthly_output_tokens"], 86400 * 40)
+        pipe.incrby(keys["monthly_total_tokens"], usage["total_tokens"])
+        pipe.expire(keys["monthly_total_tokens"], 86400 * 40)
+        pipe.incrbyfloat(keys["monthly_usd"], usd)
+        pipe.expire(keys["monthly_usd"], 86400 * 40)
+        pipe.execute()
+
+        if GEMINI_MONTHLY_USD_CAP > 0:
+            monthly_usd = float(r.get(keys["monthly_usd"]) or 0.0)
+            for threshold in GEMINI_NOTIFY_THRESHOLDS:
+                if threshold <= 0:
+                    continue
+                threshold_value = GEMINI_MONTHLY_USD_CAP * threshold
+                if monthly_usd >= threshold_value:
+                    pct = int(round(threshold * 100))
+                    _send_budget_notification(
+                        f"⚠️ Gemini spend at {pct}% of cap",
+                        (
+                            f"Task class: {task_class or 'unknown'}\n"
+                            f"Model: {_normalize_gemini_model_name(model)}\n"
+                            f"Estimated monthly spend: ${monthly_usd:.4f}/${GEMINI_MONTHLY_USD_CAP:.2f}\n"
+                            f"This call used input={usage['input_tokens']} output={usage['output_tokens']} total={usage['total_tokens']} tokens."
+                        ),
+                        dedupe_key=f"gemini-threshold:{keys['month']}:{pct}",
+                    )
+    except Exception as e:
+        logger.debug("Failed to record Gemini usage: %s", e)
+
+
 # ── Grok/xAI ───────────────────────────────────────────────────────
 
 
@@ -590,24 +856,24 @@ TASK_MODELS = {
     "assistant": {
         "primary": {
             "provider": "nim",
-            "model": "meta/llama-3.3-70b-instruct",
-            "max_tokens": 300,
-            "temperature": 0.6,
-            "timeout": 25,
-        },
-        "fallback_nim": {
-            "provider": "nim",
             "model": "meta/llama-3.1-8b-instruct",
             "max_tokens": 300,
             "temperature": 0.6,
-            "timeout": 20,
+            "timeout": 10,
+        },
+        "fallback_nim": {
+            "provider": "nim",
+            "model": "nvidia/llama-3.1-nemotron-nano-8b-v1",
+            "max_tokens": 300,
+            "temperature": 0.6,
+            "timeout": 10,
         },
         "fallback_openrouter": {
             "provider": "openrouter",
-            "model": "meta-llama/llama-3.3-70b-instruct:free",
+            "model": "meta-llama/llama-3.2-3b-instruct:free",
             "max_tokens": 300,
             "temperature": 0.6,
-            "timeout": 30,
+            "timeout": 12,
         },
     },
     "npc_memory": {
@@ -840,12 +1106,13 @@ def _call_provider(
     messages: List[Dict],
     max_tokens: int = 200,
     temperature: float = 0.8,
-    timeout: int = 12,
+    timeout: int = 20,
+    task_class: str = "",
 ) -> Tuple[bool, str, float]:
     """Make a single API call to a provider. Returns (success, content, latency_ms).
 
     Args:
-        provider: "nim" or "openrouter"
+        provider: "nim", "gemini", or "openrouter"
         model: Model ID string
         messages: List of {"role": ..., "content": ...} dicts
         max_tokens: Max response tokens
@@ -855,14 +1122,14 @@ def _call_provider(
     Returns:
         Tuple of (success: bool, content: str, latency_ms: float)
     """
-    payload = json.dumps(
-        {
-            "model": model,
-            "messages": messages,
-            "max_tokens": max_tokens,
-            "temperature": temperature,
-        }
-    ).encode("utf-8")
+    global _gemini_calls, _gemini_failures
+
+    payload_dict: Dict[str, Any] = {
+        "model": model,
+        "messages": messages,
+        "max_tokens": max_tokens,
+        "temperature": temperature,
+    }
 
     if provider == "nim":
         key = _get_nim_key()
@@ -875,6 +1142,19 @@ def _call_provider(
             "Authorization": f"Bearer {key}",
         }
         url = NIM_BASE_URL
+
+    elif provider == "gemini":
+        if not GEMINI_API_KEY:
+            return False, "No Gemini API key configured", 0
+        if not _check_rate_limit("gemini"):
+            return False, "Gemini rate limit exceeded", 0
+        headers = {"Content-Type": "application/json"}
+        model_path = model if model.startswith("models/") else f"models/{model}"
+        url = (
+            f"{GEMINI_BASE_URL.rstrip('/')}/{urllib.parse.quote(model_path, safe='/')}:generateContent"
+            f"?key={urllib.parse.quote(GEMINI_API_KEY, safe='')}"
+        )
+        payload_dict = _build_gemini_payload(messages, max_tokens, temperature)
 
     elif provider == "openrouter":
         if not OPENROUTER_API_KEY:
@@ -892,26 +1172,32 @@ def _call_provider(
     else:
         return False, f"Unknown provider: {provider}", 0
 
+    payload = json.dumps(payload_dict).encode("utf-8")
     req = urllib.request.Request(url, data=payload, headers=headers, method="POST")
     start = time.time()
 
     try:
         with urllib.request.urlopen(req, timeout=timeout) as resp:
             body = json.loads(resp.read().decode("utf-8"))
-            # Defensive content extraction — NIM reasoning models may return
-            # null "content" with actual text in "reasoning_content"
-            raw_content = None
-            try:
-                choices = body.get("choices") or [{}]
-                message = choices[0].get("message") or {}
-                raw_content = message.get("content")
-                # If content is null/empty, try reasoning_content (NIM reasoning models)
-                if not raw_content:
-                    reasoning = message.get("reasoning_content")
-                    if reasoning and isinstance(reasoning, str):
-                        raw_content = reasoning
-            except (IndexError, KeyError, TypeError, AttributeError):
+            if provider == "gemini":
+                raw_content = _extract_gemini_text(body)
+                _gemini_calls += 1
+                _record_gemini_usage(model, task_class, body)
+            else:
+                # Defensive content extraction — NIM reasoning models may return
+                # null "content" with actual text in "reasoning_content"
                 raw_content = None
+                try:
+                    choices = body.get("choices") or [{}]
+                    message = choices[0].get("message") or {}
+                    raw_content = message.get("content")
+                    # If content is null/empty, try reasoning_content (NIM reasoning models)
+                    if not raw_content:
+                        reasoning = message.get("reasoning_content")
+                        if reasoning and isinstance(reasoning, str):
+                            raw_content = reasoning
+                except (IndexError, KeyError, TypeError, AttributeError):
+                    raw_content = None
             # Final safety: ensure content is always a string
             if raw_content is None:
                 raw_content = ""
@@ -923,12 +1209,15 @@ def _call_provider(
                 provider,
                 key if provider == "nim" else None,
                 model,
-                "",
+                task_class,
                 True,
                 latency_ms,
             )
             return True, content, latency_ms
     except urllib.error.HTTPError as e:
+        if provider == "gemini":
+            _gemini_calls += 1
+            _gemini_failures += 1
         latency_ms = (time.time() - start) * 1000
         err_body = ""
         try:
@@ -940,33 +1229,39 @@ def _call_provider(
             provider,
             key if provider == "nim" else None,
             model,
-            "",
+            task_class,
             False,
             latency_ms,
             error_msg,
         )
         return False, error_msg, latency_ms
     except urllib.error.URLError as e:
+        if provider == "gemini":
+            _gemini_calls += 1
+            _gemini_failures += 1
         latency_ms = (time.time() - start) * 1000
         error_msg = f"URL Error: {str(e.reason)[:200]}"
         _record_call(
             provider,
             key if provider == "nim" else None,
             model,
-            "",
+            task_class,
             False,
             latency_ms,
             error_msg,
         )
         return False, error_msg, latency_ms
     except Exception as e:
+        if provider == "gemini":
+            _gemini_calls += 1
+            _gemini_failures += 1
         latency_ms = (time.time() - start) * 1000
         error_msg = f"Exception: {str(e)[:200]}"
         _record_call(
             provider,
             key if provider == "nim" else None,
             model,
-            "",
+            task_class,
             False,
             latency_ms,
             error_msg,
@@ -983,11 +1278,13 @@ def route_call(
     user_prompt: str,
     max_tokens: Optional[int] = None,
     temperature: Optional[float] = None,
+    allow_ollama: bool = True,
+    allow_gemini: bool = True,
 ) -> Dict:
     """Route an LLM call through the multi-provider tiered system.
 
     Fallback chain (ALL priority modes):
-      NIM primary → NIM fallback → Ollama(3B) → OpenRouter free → template fallback
+      NIM primary → NIM fallback → Ollama(3B) → OpenRouter free → Gemini → template fallback
 
     Args:
         task_class: One of "leader", "specialist", "worker", "narrator"
@@ -995,6 +1292,8 @@ def route_call(
         user_prompt: User message
         max_tokens: Override default max_tokens for this task class
         temperature: Override default temperature
+        allow_ollama: Whether local Ollama may be used in the fallback chain
+        allow_gemini: Whether Gemini may be used as the last-resort fallback
 
     Returns:
     Dict with keys:
@@ -1042,6 +1341,7 @@ def route_call(
     # 2. NIM fallback model (from TASK_MODELS)
     # 3. Ollama local (3B via Tailscale)
     # 4. OpenRouter free (from TASK_MODELS)
+    # 5. Gemini fallback (global or task override; budget-guarded)
     nim_tiers = [
         ("primary", config.get("primary")),
         ("fallback_nim", config.get("fallback_nim")),
@@ -1108,7 +1408,7 @@ def route_call(
             )
 
     # ── Ollama local fallback ─────────────────────────────────────────
-    if _check_ollama_available() and not _is_circuit_open("ollama"):
+    if allow_ollama and _check_ollama_available() and not _is_circuit_open("ollama"):
         result["attempts"] += 1
         ok, content, latency = _call_ollama(messages, mt, temp)
         if ok and content:
@@ -1136,7 +1436,7 @@ def route_call(
             result["errors"].append(f"ollama/{OLLAMA_MODEL}: {content[:150]}")
             result["latency_ms"] += latency
 
-    # ── OpenRouter free fallback (last resort) ────────────────────────
+    # ── OpenRouter free fallback ───────────────────────────────────────
     or_config = config.get("fallback_openrouter")
     if or_config:
         provider = or_config["provider"]
@@ -1178,6 +1478,63 @@ def route_call(
                 result["errors"].append(f"{provider}/{model}: {content[:150]}")
                 result["latency_ms"] += latency
 
+    # ── Gemini fallback (budget-guarded last resort) ──────────────────
+    gemini_config = config.get("fallback_gemini") or {
+        "provider": "gemini",
+        "model": GEMINI_MODEL,
+        "max_tokens": mt,
+        "temperature": temp,
+        "timeout": GEMINI_TIMEOUT,
+    }
+    if allow_gemini and gemini_config and _check_gemini_available():
+        provider = gemini_config["provider"]
+        model = gemini_config["model"]
+        tier_mt = max_tokens if max_tokens is not None else gemini_config["max_tokens"]
+        tier_temp = (
+            temperature if temperature is not None else gemini_config["temperature"]
+        )
+        tier_timeout = gemini_config.get("timeout", GEMINI_TIMEOUT)
+
+        allowed, reason = _check_gemini_budget(task_class, model)
+        if not allowed:
+            result["errors"].append(reason)
+        elif not _is_circuit_open(provider):
+            result["attempts"] += 1
+            ok, content, latency = _call_provider(
+                provider,
+                model,
+                messages,
+                tier_mt,
+                tier_temp,
+                tier_timeout,
+                task_class=task_class,
+            )
+            _record_provider_result(provider, ok)
+            if ok and content:
+                result["success"] = True
+                result["content"] = content
+                result["provider"] = provider
+                result["model"] = model
+                result["latency_ms"] = latency
+                try:
+                    r = _get_redis()
+                    audit_entry = {
+                        "ts": time.time(),
+                        "provider": provider,
+                        "model": model,
+                        "task_class": task_class,
+                        "success": True,
+                        "latency_ms": round(latency, 1),
+                        "content_preview": content[:100],
+                    }
+                    r.zadd("llm_audit", {json.dumps(audit_entry): time.time()})
+                except Exception:
+                    pass
+                return result
+            else:
+                result["errors"].append(f"{provider}/{model}: {content[:150]}")
+                result["latency_ms"] += latency
+
     logger.error(
         "All LLM providers failed for task_class=%s: %s",
         task_class,
@@ -1192,48 +1549,21 @@ def route_assistant_call(
     max_tokens: Optional[int] = None,
     temperature: Optional[float] = None,
 ) -> Dict:
-    """Route the human-facing assistant through Ollama first, then assistant chain."""
-    narrator_config = TASK_MODELS.get("assistant", {}).get("primary", {})
-    mt = max_tokens if max_tokens is not None else narrator_config.get("max_tokens", 300)
-    temp = temperature if temperature is not None else narrator_config.get("temperature", 0.7)
-    messages = [
-        {"role": "system", "content": system_prompt},
-        {"role": "user", "content": user_prompt},
-    ]
-    errors = []
-    attempts = 0
-    latency_ms = 0
+    """Route the human-facing assistant through bounded cloud providers only.
 
-    if _check_ollama_available() and not _is_circuit_open("ollama"):
-        attempts += 1
-        ok, content, latency = _call_ollama(messages, mt, temp)
-        latency_ms += latency
-        if ok and content:
-            return {
-                "success": True,
-                "content": content,
-                "provider": "ollama",
-                "model": OLLAMA_MODEL,
-                "task_class": "assistant",
-                "latency_ms": latency_ms,
-                "attempts": attempts,
-                "errors": errors,
-            }
-        errors.append(f"ollama failed: {content[:150]}")
-    else:
-        errors.append("ollama unavailable or circuit breaker open")
-
-    fallback = route_call(
+    The live chat UI has its own timeout and should not burn time on the local
+    Ollama fallback path. Use the assistant task's fast NIM/OpenRouter chain and
+    avoid long last-resort providers that outlive the browser request.
+    """
+    return route_call(
         task_class="assistant",
         system_prompt=system_prompt,
         user_prompt=user_prompt,
         max_tokens=max_tokens,
         temperature=temperature,
+        allow_ollama=False,
+        allow_gemini=False,
     )
-    fallback["attempts"] = attempts + fallback.get("attempts", 0)
-    fallback["latency_ms"] = latency_ms + fallback.get("latency_ms", 0)
-    fallback["errors"] = errors + fallback.get("errors", [])
-    return fallback
 
 
 def route_call_batch(
@@ -1294,6 +1624,10 @@ def get_router_stats() -> Dict:
         "gemini_available": _check_gemini_available(),
         "gemini_calls": _gemini_calls,
         "gemini_failures": _gemini_failures,
+        "gemini_allowed_tasks": sorted(GEMINI_ALLOWED_TASKS),
+        "gemini_daily_call_cap": GEMINI_MAX_CALLS_PER_DAY,
+        "gemini_monthly_call_cap": GEMINI_MAX_CALLS_PER_MONTH,
+        "gemini_monthly_usd_cap": GEMINI_MONTHLY_USD_CAP,
         "grok_available": _check_grok_available(),
         "grok_calls": _grok_calls,
         "grok_failures": _grok_failures,
@@ -1336,5 +1670,25 @@ def get_router_stats() -> Dict:
             stats["recent_errors"][provider] = len(errors)
         except Exception:
             stats["recent_errors"][provider] = -1
+
+    try:
+        keys = _gemini_budget_keys()
+        stats["gemini_budget"] = {
+            "daily_calls": int(r.get(keys["daily_calls"]) or 0),
+            "monthly_calls": int(r.get(keys["monthly_calls"]) or 0),
+            "monthly_input_tokens": int(r.get(keys["monthly_input_tokens"]) or 0),
+            "monthly_output_tokens": int(r.get(keys["monthly_output_tokens"]) or 0),
+            "monthly_total_tokens": int(r.get(keys["monthly_total_tokens"]) or 0),
+            "monthly_usd_estimate": round(float(r.get(keys["monthly_usd"]) or 0.0), 6),
+        }
+    except Exception:
+        stats["gemini_budget"] = {
+            "daily_calls": -1,
+            "monthly_calls": -1,
+            "monthly_input_tokens": -1,
+            "monthly_output_tokens": -1,
+            "monthly_total_tokens": -1,
+            "monthly_usd_estimate": -1.0,
+        }
 
     return stats

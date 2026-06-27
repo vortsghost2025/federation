@@ -133,7 +133,7 @@ VALID_CATEGORIES = {
     "self_improve",
 }
 
-SIM_EFFECTS_TTL = 7 * 86400
+SIM_EFFECTS_TTL = 172800
 FACTION_METRIC_TTL = 86400
 NPC_FACTION_CONTEXT_TTL = 300
 TICK_LOG_TTL = 30 * 86400
@@ -848,7 +848,9 @@ def _apply_event_effect_to_world(r, effect, ts: float) -> Dict:
                 "delta": round(delta, 4),
                 "ts": int(ts),
             }
-            r.zadd(f"sim_effects:{int(ts)}", {json.dumps(effect_record): ts})
+            key = f"sim_effects:{int(ts)}"
+            r.zadd(key, {json.dumps(effect_record): ts})
+            r.expire(key, SIM_EFFECTS_TTL)
 
     except Exception as exc:
         result["error"] = str(exc)

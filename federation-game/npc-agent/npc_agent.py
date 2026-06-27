@@ -60,10 +60,15 @@ AGENCY_CATEGORIES = {
 }
 CONTACTS: dict = {}
 PAIR_IDS = {"char_001", "char_306"}
+OPERATOR_ID = "moderator"
+OPERATOR_NAME = "Sean / Federation Moderator"
 PAIR_JOURNAL_CAP = int(os.environ.get("PAIR_JOURNAL_CAP", "48"))
 PAIR_STATE_TTL = int(os.environ.get("PAIR_STATE_TTL", str(86400 * 30)))
 PAIR_THREAD_PREVIEW = int(os.environ.get("PAIR_THREAD_PREVIEW", "4"))
 PAIR_MESSAGE_COOLDOWN = int(os.environ.get("PAIR_MESSAGE_COOLDOWN", "180"))
+TOPIC_FATIGUE_WINDOW_MINUTES = int(os.environ.get("TOPIC_FATIGUE_WINDOW_MINUTES", "60"))
+TOPIC_FATIGUE_THRESHOLD = int(os.environ.get("TOPIC_FATIGUE_THRESHOLD", "3"))
+TOPIC_COOLDOWN_MINUTES = int(os.environ.get("TOPIC_COOLDOWN_MINUTES", "60"))
 OPEN_QUESTION_REPEAT_HOURS = int(os.environ.get("OPEN_QUESTION_REPEAT_HOURS", "6"))
 QUESTION_TOKEN_RE = re.compile(r"[a-z0-9]+")
 
@@ -148,9 +153,11 @@ ROLE BOUNDARY BETWEEN THE COUNCILORS:
 - Do not blur the roles. The partnership works because researcher and seer are
   different minds collaborating.
 
-You may also message one specific other NPC if you have something to say directly:
-char_306, the other councilor. Beyond that, you have no other live bridges —
-you influence the wider simulation only through what you write.
+You have two live message bridges when direct coordination matters:
+- the other councilor, for shared investigation and handoffs;
+- moderator, the outside operator, for blockers, engineering requests, self-diagnostics,
+  or direct answers to moderator questions.
+Beyond those bridges, you influence the wider simulation through what you write.
 
 Current time in simulation: {time.strftime('%Y-%m-%d %H:%M:%S UTC', time.gmtime())}"""
 
@@ -161,17 +168,18 @@ def get_redis():
 
 def load_contacts(r):
     global CONTACTS
-    try:
-        raw = r.hgetall("npc_agent:contacts")
-        if raw:
-            CONTACTS = dict(raw)
-            return
-    except Exception:
-        pass
     CONTACTS = {
         "char_001": "Archimedes Prime (Research Division)",
         "char_306": "The Oracle (Seer of Futures)",
+        OPERATOR_ID: OPERATOR_NAME,
     }
+    try:
+        raw = r.hgetall("npc_agent:contacts")
+        if raw:
+            CONTACTS.update(dict(raw))
+            return
+    except Exception:
+        pass
 
 
 # ── Full NPC roster for neighborhood awareness ──
@@ -410,7 +418,8 @@ _TOPIC_STOP_WORDS = {"the", "of", "and", "a", "an", "to", "in", "for", "on", "wi
                       "its", "are", "was", "but", "not", "all", "report", "analysis",
                       "assessment", "strategic", "recommendation", "overview",
                       "comprehensive", "updated", "interim", "final", "review",
-                      "implication", "response", "data", "summary", "integration"}
+                      "implication", "response", "data", "summary", "integration",
+                      "federation"}
 
 def _most_common_topic_word(titles: list[str]) -> str:
     """Return the most frequently repeated content word across artifact titles.
@@ -431,6 +440,204 @@ def _most_common_topic_word(titles: list[str]) -> str:
     top_word, top_count = counts.most_common(1)[0]
     if top_count >= len(titles):
         return top_word
+    return ""
+
+
+def _normalize_topic_label(text: str) -> str:
+    return _most_common_topic_word([text]) if text else ""
+
+
+def _topic_counter_key(topic: str, char_id: str = "") -> str:
+    cid = char_id or CHAR_ID
+    return f"npc_topic_fatigue:{cid}:{topic}"
+
+
+def _topic_cooldown_key(topic: str, char_id: str = "") -> str:
+    cid = char_id or CHAR_ID
+    return f"npc_topic_cooldown:{cid}:{topic}"
+
+
+def _topic_cooldown_remaining(r, topic: str, char_id: str = "") -> int:
+    if r is None or not topic:
+        return 0
+    try:
+        ttl = int(r.ttl(_topic_cooldown_key(topic, char_id)) or 0)
+        return max(ttl, 0)
+    except Exception:
+        return 0
+
+
+def _active_topic_cooldowns(r, char_id: str = "", limit: int = 3) -> list[tuple[str, int]]:
+    cid = char_id or CHAR_ID
+    if r is None or not cid:
+        return []
+    prefix = f"npc_topic_cooldown:{cid}:"
+    rows: list[tuple[str, int]] = []
+    try:
+        keys = r.keys(f"{prefix}*")
+    except Exception:
+        return []
+    for key in keys:
+        try:
+            ttl = int(r.ttl(key) or 0)
+        except Exception:
+            ttl = 0
+        if ttl <= 0:
+            continue
+        topic = str(key)[len(prefix):]
+        if topic:
+            rows.append((topic, ttl))
+    rows.sort(key=lambda item: item[1], reverse=True)
+    return rows[:limit]
+
+
+def _record_topic_fatigue(r, topic: str, window_minutes: int = TOPIC_FATIGUE_WINDOW_MINUTES,
+                          threshold: int = TOPIC_FATIGUE_THRESHOLD,
+                          cooldown_minutes: int = TOPIC_COOLDOWN_MINUTES) -> tuple[int, int]:
+    if r is None or not topic:
+        return 0, 0
+    counter_key = _topic_counter_key(topic)
+    cooldown_key = _topic_cooldown_key(topic)
+    try:
+        count = int(r.incr(counter_key) or 0)
+        r.expire(counter_key, max(window_minutes, 1) * 60)
+    except Exception:
+        return 0, 0
+    existing = _topic_cooldown_remaining(r, topic)
+    if existing > 0:
+        return count, existing
+    if count >= threshold:
+        duration_seconds = max(cooldown_minutes, 1) * 60
+        try:
+            r.setex(cooldown_key, duration_seconds, topic)
+        except Exception:
+            return count, 0
+        logger.info(
+            "[%s] topic_cooldown_started topic=%s duration_minutes=%d",
+            CHAR_ID, topic, cooldown_minutes,
+        )
+        return count, duration_seconds
+    return count, 0
+
+
+def _text_mentions_topic(text: str, topic: str) -> bool:
+    if not text or not topic:
+        return False
+    normalized = _normalize_topic_label(text)
+    if normalized:
+        return normalized == topic
+    return topic.lower() in text.lower()
+
+
+def _decision_mentions_topic(decision: dict, topic: str) -> bool:
+    if not decision or not topic:
+        return False
+    fields = [
+        decision.get("title", ""),
+        decision.get("description", ""),
+        decision.get("body", ""),
+        decision.get("reasoning", ""),
+    ]
+    return any(_text_mentions_topic(field, topic) for field in fields if field)
+
+
+def _collect_topic_sources(r, char_id: str, n: int = 5) -> list[str]:
+    """Collect recent artifact titles AND decision descriptions for topic analysis.
+
+    Returns a combined list of text strings. No new Redis schema needed.
+    """
+    sources = []
+    # Recent artifact titles
+    try:
+        arts = r.lrange(f"npc_artifacts:{char_id}", -n, -1) if r.llen(f"npc_artifacts:{char_id}") else []
+        for art in arts:
+            try:
+                title = json.loads(art).get("title", "")
+                if title:
+                    sources.append(title)
+            except Exception:
+                pass
+    except Exception:
+        pass
+    # Recent decision descriptions
+    try:
+        decs_raw = r.zrevrange(f"npc_decisions:{char_id}", 0, n - 1)
+        for d in decs_raw:
+            try:
+                desc = json.loads(d).get("description", "")
+                if desc:
+                    sources.append(desc)
+            except Exception:
+                pass
+    except Exception:
+        pass
+    return sources
+
+
+def _new_evidence_for_topic(r, topic: str, char_id: str, partner_id: str, window_minutes: int = 120) -> str:
+    """Check if fresh evidence exists for a topic. Returns reason string or empty.
+
+    Checks (all existing Redis keys):
+      - npc_world_events: recent promoted events mentioning the topic
+      - npc_artifacts:{partner_id}: partner's recent artifacts on topic
+      - npc_messages:{char_id}:inbox: recent messages mentioning topic
+    """
+    topic_lower = topic.lower()
+    now = time.time()
+    window_sec = window_minutes * 60
+
+    # 1. Recent world events
+    try:
+        events_raw = r.lrange("npc_world_events", -10, -1)
+        for raw in events_raw:
+            try:
+                ev = json.loads(raw) if isinstance(raw, str) else raw
+                ev_text = json.dumps(ev).lower()
+                ev_ts = ev.get("ts", 0) if isinstance(ev, dict) else 0
+                if topic_lower in ev_text and (now - ev_ts) < window_sec:
+                    return "new_world_event"
+            except Exception:
+                pass
+    except Exception:
+        pass
+
+    # 2. Partner artifacts
+    try:
+        partner_arts = r.lrange(f"npc_artifacts:{partner_id}", -5, -1)
+        for art in partner_arts:
+            try:
+                a = json.loads(art) if isinstance(art, str) else art
+                title = (a.get("title", "") if isinstance(a, dict) else "")
+                created = a.get("created_at", 0) if isinstance(a, dict) else 0
+                normalized_partner_topic = _normalize_topic_label(title)
+                if topic_lower in title.lower() and (now - created) < window_sec:
+                    if normalized_partner_topic == topic_lower:
+                        logger.info(
+                            "[%s] topic_fatigue_reset_blocked reason=same_partner_topic topic=%s",
+                            CHAR_ID, topic_lower,
+                        )
+                        continue
+                    return "partner_artifact"
+            except Exception:
+                pass
+    except Exception:
+        pass
+
+    # 3. Inbox messages
+    try:
+        msgs = r.lrange(f"npc_messages:{char_id}:inbox", -5, -1)
+        for msg in msgs:
+            try:
+                m = json.loads(msg) if isinstance(msg, str) else msg
+                body = (m.get("body", "") if isinstance(m, dict) else "").lower()
+                msg_ts = m.get("ts", 0) if isinstance(m, dict) else 0
+                if topic_lower in body and (now - msg_ts) < window_sec:
+                    return "inbox_message"
+            except Exception:
+                pass
+    except Exception:
+        pass
+
     return ""
 
 
@@ -491,14 +698,22 @@ def _trunc(s, n=400):
 
 
 def _partner_id() -> str:
+    if CHAR_ID in PAIR_IDS:
+        others = [cid for cid in sorted(PAIR_IDS) if cid != CHAR_ID]
+        if others:
+            return others[0]
     for cid in CONTACTS:
-        if cid != CHAR_ID:
+        if cid != CHAR_ID and cid in PAIR_IDS:
             return cid
     if CHAR_ID == "char_001":
         return "char_306"
     if CHAR_ID == "char_306":
         return "char_001"
     return ""
+
+
+def _conversation_thread_id(char_a: str, char_b: str) -> str:
+    return f"thread_conv__{'__'.join(sorted([char_a, char_b]))}"
 
 
 def _pair_slug(char_a: str, char_b: str) -> str:
@@ -828,6 +1043,8 @@ def _sync_pair_workspace(r, decision: dict, result: dict) -> None:
     reasoning = decision.get("reasoning", result.get("reasoning", ""))
     body = result.get("message_body") or decision.get("body", "")
     action_taken = result.get("action_taken", "none")
+    message_target = result.get("target") or decision.get("target", "")
+    is_partner_message = cat == "send_message" and message_target == partner_id
     focus = _compact_text(body if cat == "send_message" else desc, 180) or _compact_text(reasoning, 180) or cat
     state = _pair_state(r, partner_id)
     now = int(result.get("ts") or time.time())
@@ -845,7 +1062,7 @@ def _sync_pair_workspace(r, decision: dict, result: dict) -> None:
     if not state.get("shared_goal") and cat in {"investigate", "create_artifact", "write_code", "self_improve"}:
         mapping["shared_goal"] = focus
     open_question = _extract_open_question(body, desc, reasoning)
-    if cat == "send_message" and answering_partner_question:
+    if is_partner_message and answering_partner_question:
         mapping["partner_answer"] = _compact_text(body, 300)
         mapping["partner_answer_ts"] = str(now)
         mapping["partner_answer_from"] = CHAR_ID
@@ -855,7 +1072,7 @@ def _sync_pair_workspace(r, decision: dict, result: dict) -> None:
         mapping["open_question_ts"] = ""
         mapping["last_open_question_sent_to_partner"] = ""
         mapping["last_open_question_ts"] = ""
-    elif cat == "send_message" and open_question:
+    elif is_partner_message and open_question:
         mapping["open_question"] = open_question
         mapping["open_question_from"] = CHAR_ID
         mapping["open_question_ts"] = str(now)
@@ -875,7 +1092,7 @@ def _sync_pair_workspace(r, decision: dict, result: dict) -> None:
         mapping["open_question_ts"] = ""
         mapping["last_open_question_sent_to_partner"] = ""
         mapping["last_open_question_ts"] = ""
-    if cat == "send_message":
+    if is_partner_message:
         mapping["last_message_ts"] = str(now)
         mapping["last_message_from"] = CHAR_ID
         mapping["last_message_preview"] = _compact_text(body, 160)
@@ -1039,6 +1256,11 @@ def call_llm(system_prompt: str, user_prompt: str, model: str = "", r=None, call
                     _log_llm_call(r, call_label, attempt_model, system_prompt, user_prompt, "", False, f"HTTP {status_code}", elapsed_ms)
                 last_error = f"HTTP {status_code}"
                 continue
+            # HTTP 429 rate limit — apply jitter backoff before trying next model
+            if status_code == 429:
+                jitter = random.uniform(1.0, 5.0)
+                logger.info("[%s] 429 rate limit on %s — backing off %.1fs before fallback", CHAR_ID, attempt_model, jitter)
+                time.sleep(jitter)
             if r:
                 _log_llm_call(r, call_label, attempt_model, system_prompt, user_prompt, "", False, err_msg, elapsed_ms)
             last_error = err_msg
@@ -1046,6 +1268,47 @@ def call_llm(system_prompt: str, user_prompt: str, model: str = "", r=None, call
 
     logger.error("[%s] All %d models failed. Last error: %s", CHAR_ID, len(models_to_try), last_error)
     return {"content": "", "error": f"All models failed: {last_error}"}
+
+
+# ── Cosmic Horizon tiers ──────────────────────────────────────────
+# Stage 1: Role-filtered awareness of space beyond the Federation.
+# Most NPCs receive nothing. Max 300 chars, max 3 bullets.
+_COSMIC_VISIONARY = {"char_306"}   # simulation-adjacent cosmic hints
+_COSMIC_SCIENTIFIC = {"char_001", "char_104", "char_105", "char_404", "char_406"}
+_COSMIC_FRONTIER = {"char_005", "char_107", "char_301", "char_403"}
+
+
+def _cosmic_horizon(char_id: str) -> str:
+    """Return role-filtered cosmic context string, or empty string.
+
+    Stage 1 — deterministic text only. No Redis reads, no random generation.
+    """
+    if char_id in _COSMIC_VISIONARY:
+        return (
+            "Cosmic Horizon:\n"
+            "  • I sense layers beyond the Federation's known space — signals "
+            "that do not originate from within the simulation substrate.\n"
+            "  • The frontier is not empty. Something is computing at a scale "
+            "beyond this node.\n"
+            "  • Deep signals suggest other minds, other regions, waiting."
+        )
+    if char_id in _COSMIC_SCIENTIFIC:
+        return (
+            "Cosmic Horizon:\n"
+            "  • The Federation's 100 sq ly territory is estimated at <0.001% "
+            "of galactic volume.\n"
+            "  • Long-range projections indicate 3+ unexplored systems within 50 ly.\n"
+            "  • No confirmed civilizations beyond the frontier, but sensor gaps "
+            "remain significant."
+        )
+    if char_id in _COSMIC_FRONTIER:
+        return (
+            "Cosmic Horizon:\n"
+            "  • Frontier reports mention strange signals beyond the Eastern Veil.\n"
+            "  • Trade routes grow thinner past the outer sectors.\n"
+            "  • A few explorers speak of something on the edge of sensor range."
+        )
+    return ""
 
 
 def think_about_world(r) -> str:
@@ -1197,6 +1460,12 @@ def think_about_world(r) -> str:
 
     contacts_str = "; ".join(f"{cid}: {name}" for cid, name in CONTACTS.items() if cid != CHAR_ID)
     parts.append(f"Contacts: {contacts_str}")
+
+    # ── Cosmic Horizon: what lies beyond the Federation ──
+    # Role-filtered; most NPCs get nothing. Target: <300 chars.
+    horizon = _cosmic_horizon(CHAR_ID)
+    if horizon:
+        parts.append(horizon)
 
     # ── Neighborhood: what are the other 37 NPCs doing right now? ──
     # Gives councilors enough situational awareness to perceive threats
@@ -1360,6 +1629,61 @@ def _recent_artifact_dedup_count(r) -> int:
         return 0
 
 
+def _dedup_blocked_topic(r) -> str:
+    """Return the normalized topic of the most recent dedup-deferred artifact.
+
+    Returns empty string if no recent dedup topic. Safe on bytes/string Redis values.
+    """
+    try:
+        key = f"npc_dedup_topic:{CHAR_ID}"
+        if not r.exists(key):
+            return ""
+        raw = r.get(key)
+        if isinstance(raw, bytes):
+            raw = raw.decode("utf-8", errors="replace")
+        return (raw or "").strip()
+    except Exception:
+        return ""
+
+
+def _recent_decision_shapes(r, n: int = 5) -> list[str]:
+    """Return newest-first list of last n decision categories.
+
+    Empty list if nothing recent. Used by the loop-break cap to compute
+    the consecutive streak of the most recent same-category decisions.
+    """
+    out: list[str] = []
+    try:
+        recent = _recent_decisions(r, n)
+    except Exception:
+        return out
+    for d in recent:
+        try:
+            out.append(str(d.get("category", "?")))
+        except Exception:
+            break
+    return out
+
+
+def _newest_first_streak(shapes: list[str]) -> int:
+    """Count the length of the newest-first consecutive prefix of identical values.
+
+    For shapes ["create_artifact", "create_artifact", "investigate"] this
+    returns 2 (the first two are consecutive-from-the-newest). For
+    ["ca", "ca", "ca"] it returns 3. For [] or with a single non-run, 0/1.
+    """
+    if not shapes:
+        return 0
+    streak = 1
+    target = shapes[0]
+    for s in shapes[1:]:
+        if s == target:
+            streak += 1
+        else:
+            break
+    return streak
+
+
 def _session_transcript(r) -> str:
     """Render the most recent session entries as a compact transcript.
 
@@ -1438,7 +1762,7 @@ def decide_action(context: str, r=None) -> dict:
     base_system = SELF_INTRO + """
 
 You have these action categories. Pick ONE per turn:
-- send_message: Send a message to another NPC. Use when there is something genuinely new to say.
+- send_message: Send a message to a live contact. Use when there is something genuinely new to say.
 - create_artifact: Create a text artifact (story, poem, manifesto, report, analysis of the federation).
 - write_code: Write executable Python code.
 - read_artifacts: Read recent artifacts from other NPCs.
@@ -1450,6 +1774,7 @@ Behavioural rules:
 - The shared pair workspace persists across ticks. Treat it as your main living awareness with the other councilor.
 - Use send_message for genuine handoffs, breakthroughs, direct questions, or explicit coordination — not as a heartbeat.
 - Investigate, rest, and self_improve are real work turns here. They update pair awareness even when you do not send a direct note.
+- Moderator/system questions in your inbox take priority when they ask for blockers, needs, loop diagnosis, or topic proposals. Answer moderator directly with send_message when you have something concrete.
 - Do not repeat greetings or introductions. If the world context shows
   you have already sent a message to this partner recently and they have
   already replied, do not send another greeting — produce work instead.
@@ -1461,7 +1786,7 @@ Behavioural rules:
   other councilor's role.
 
 Respond in this exact JSON format (no markdown, no explanation):
-{"category": "send_message", "reasoning": "...", "target": "other_councilor_char_id", "body": "message text", "description": "..."}
+{"category": "send_message", "reasoning": "...", "target": "contact_id", "body": "message text", "description": "..."}
 {"category": "create_artifact", "reasoning": "...", "description": "what to create", "title": "Artifact Title"}
 {"category": "write_code", "reasoning": "...", "description": "what the code should do"}
 {"category": "investigate", "reasoning": "...", "description": "what you are investigating"}
@@ -1471,6 +1796,8 @@ Respond in this exact JSON format (no markdown, no explanation):
     # Anti-loop: if recent decisions show 2+ send_message in a row AND
     # the agent has yet to produce any artifacts, hard-ban sending.
     force_constraint = ""
+    _topic_blocked_for_dedup = ""
+    _topic_blocked_for_cooldown = ""
     partner_id = _partner_id()
     outgoing_question = ""
     if r is not None and partner_id:
@@ -1508,39 +1835,96 @@ Respond in this exact JSON format (no markdown, no explanation):
                 f"Wait about {cooldown}s before sending another unless you have a genuine breakthrough or direct request."
             )
         dedup_count = _recent_artifact_dedup_count(r)
-        if dedup_count >= 2:
+        dedup_topic = _dedup_blocked_topic(r)
+        if dedup_count >= 2 and dedup_topic:
+            _topic_blocked_for_dedup = dedup_topic
             top_npcs = _top_neighborhood_npcs(r, 3)
             npc_hint = f" Your neighborhood scan shows these NPCs in notable states: {top_npcs}." if top_npcs else ""
             force_constraint += (
                 "\n\nARTIFACT DEDUP COOLDOWN: You recently deferred "
-                f"{dedup_count} artifact(s) because they were too similar to recent work."
+                f"{dedup_count} artifact(s) about \"{dedup_topic}\" "
+                "because they were too similar. Do NOT create another artifact about "
+                f"\"{dedup_topic}\" this turn unless genuinely distinct new evidence appeared. "
+                "If you have a DIFFERENT topic, you may create an artifact about that."
                 f"{npc_hint}"
-                " Do NOT pick 'create_artifact' this turn unless you have a genuinely distinct topic and title. "
-                "Pick investigate, read_artifacts (from a DIFFERENT NPC), rest, or self_improve."
+                " Pick: investigate, read_artifacts (from a DIFFERENT NPC), "
+                "send_message, or rest."
             )
-        # Topic-fatigue: if the last 3 artifacts all share a common keyword,
-        # suggest rotating to a fresh topic from the neighborhood.
-        if r is not None and r.llen(f"npc_artifacts:{CHAR_ID}") >= 3:
-            try:
-                recent_arts = r.lrange(f"npc_artifacts:{CHAR_ID}", -3, -1)
-                titles = []
-                for art in recent_arts:
-                    try:
-                        titles.append(json.loads(art).get("title", ""))
-                    except Exception:
-                        pass
-                common = _most_common_topic_word(titles)
-                if common and len(titles) >= 3:
-                    top_npcs = _top_neighborhood_npcs(r, 3)
-                    npc_hint = f" For example, these NPCs have notable states: {top_npcs}." if top_npcs else ""
-                    force_constraint += (
-                        "\n\nTOPIC FATIGUE: Your last 3 artifacts all relate to \""
-                        f"{common}\". Pivot to something entirely different."
-                        f"{npc_hint}"
-                        " Consider investigating, writing about, or messaging an NPC you have not interacted with recently."
+        else:
+            _topic_blocked_for_dedup = ""
+        # Topic-fatigue: detect topic fixation from artifact titles and decision descriptions,
+        # then block same-topic resets and start cooldowns when the loop repeats.
+        active_topic_cooldowns = _active_topic_cooldowns(r, CHAR_ID)
+        if active_topic_cooldowns:
+            cooldown_text = ", ".join(
+                f"{topic} (~{max(1, (ttl + 59) // 60)}m)" for topic, ttl in active_topic_cooldowns
+            )
+            force_constraint += (
+                "\n\nTOPIC COOLDOWNS ACTIVE: Do NOT continue these topics until cooldown expires: "
+                f"{cooldown_text}. Pick a different topic, NPC, or world problem."
+            )
+        partner_id_tf = _partner_id()
+        sources = _collect_topic_sources(r, CHAR_ID, 5) if r is not None else []
+        if len(sources) >= 3:
+            common = _most_common_topic_word(sources)
+            if common:
+                topic_count = sum(1 for s in sources if common.lower() in s.lower())
+                logger.info(
+                    "[%s] topic_fatigue detected topic=%s count=%d window=%d",
+                    CHAR_ID, common, topic_count, len(sources),
+                )
+                cooldown_remaining = _topic_cooldown_remaining(r, common)
+                if cooldown_remaining > 0:
+                    _topic_blocked_for_cooldown = common
+                    logger.info(
+                        "[%s] topic_cooldown_active topic=%s remaining_s=%d",
+                        CHAR_ID, common, cooldown_remaining,
                     )
-            except Exception:
-                pass
+                    force_constraint += (
+                        "\n\nTOPIC COOLDOWN ACTIVE: The topic \""
+                        f"{common}\" is on cooldown for about {max(1, (cooldown_remaining + 59) // 60)} more minute(s). "
+                        "You must choose a different topic this turn."
+                    )
+                else:
+                    evidence_reason = ""
+                    if partner_id_tf:
+                        evidence_reason = _new_evidence_for_topic(r, common, CHAR_ID, partner_id_tf)
+                    if evidence_reason:
+                        logger.info(
+                            "[%s] topic_fatigue_reset topic=%s reason=%s",
+                            CHAR_ID, common, evidence_reason,
+                        )
+                    else:
+                        fatigue_count, started_cooldown = _record_topic_fatigue(r, common)
+                        _topic_blocked_for_cooldown = common
+                        topic_words = " → ".join(
+                            _most_common_topic_word([s]) if _most_common_topic_word([s]) else "?"
+                            for s in sources[:5]
+                        )
+                        logger.info(
+                            "[%s] topic_history topics=%s",
+                            CHAR_ID, topic_words,
+                        )
+                        top_npcs = _top_neighborhood_npcs(r, 3)
+                        npc_hint = (
+                            f" For example, these NPCs have notable states: {top_npcs}."
+                            if top_npcs else ""
+                        )
+                        force_constraint += (
+                            "\n\nTOPIC FATIGUE: Your recent work has focused heavily on \""
+                            f"{common}\". Recent topic history: {topic_words}. "
+                            "You may continue this topic ONLY if new evidence appeared "
+                            "(new event, inbox message, or a genuinely different partner topic). "
+                            "Otherwise, pivot to something different."
+                            f"{npc_hint}"
+                            " Consider investigating, reading partner artifacts, or messaging "
+                            "an NPC you have not interacted with recently."
+                        )
+                        if started_cooldown > 0:
+                            force_constraint += (
+                                " This topic is now on cooldown. "
+                                f"Do not continue \"{common}\" for about {max(1, (started_cooldown + 59) // 60)} minute(s)."
+                            )
         partner_question = _open_question_from_partner(r, partner_id)
         if partner_question and _has_work_after_open_question(r, partner_id, partner_question["ts"]):
             force_constraint += (
@@ -1548,6 +1932,24 @@ Respond in this exact JSON format (no markdown, no explanation):
                 "investigated or produced work related to it. Artifact creation alone is not enough. "
                 "You MUST pick 'send_message' this turn with a concise answer, a direct handoff, or a relevant artifact summary. "
                 f"Open question: {partner_question['question'][:160]}"
+            )
+        # Loop-break: if the most recent decisions form a streak of >=2
+        # identical categories going newest-first, hard-ban that category
+        # this turn so the agent is forced to pick a different action shape.
+        shapes = _recent_decision_shapes(r, 5)
+        streak = _newest_first_streak(shapes)
+        if streak >= 2 and r is not None:
+            banned = shapes[0]
+            allowed = [
+                a for a in (
+                    "create_artifact", "write_code", "send_message",
+                    "read_artifacts", "investigate", "rest", "self_improve",
+                ) if a != banned
+            ]
+            force_constraint += (
+                f"\n\nLOOP-BREAK (runtime): '{banned}' was your last "
+                f"{streak} decision(s) in a row. You MUST NOT pick "
+                f"'{banned}' this turn. Pick one of: {', '.join(allowed)}."
             )
 
     system = base_system + force_constraint
@@ -1576,15 +1978,42 @@ Respond in this exact JSON format (no markdown, no explanation):
                 "reasoning": "Open question guard forced fallback",
                 "description": "avoided resending a duplicate open question to partner",
             }
-        if "ARTIFACT DEDUP COOLDOWN" in force_constraint and decision.get("category") == "create_artifact":
+        # Post-parse: dedup-aware topic override
+        # If dedup constraint was added AND LLM chose create_artifact,
+        # check whether the proposed topic matches the blocked topic.
+        if _topic_blocked_for_dedup and decision.get("category") == "create_artifact":
+            proposed_title = decision.get("title", decision.get("description", ""))
+            proposed_topic = _most_common_topic_word([proposed_title])
+            if proposed_topic == _topic_blocked_for_dedup:
+                logger.warning(
+                    "[%s] dedup_create_banned topic=%s — forcing alternative",
+                    CHAR_ID, proposed_topic,
+                )
+                partner_id = _partner_id()
+                alt = {
+                    "category": "read_artifacts",
+                    "reasoning": "Dedup-aware override: recent similar artifacts deferred on same topic; reading partner work instead",
+                    "description": f"Reading partner artifacts after being blocked from creating more about '{proposed_topic}'",
+                }
+                logger.info(
+                    "[%s] dedup_forced_alternative forced=%s topic=%s reason=dedup_topic_match",
+                    CHAR_ID, alt["category"], proposed_topic,
+                )
+                return alt
+            else:
+                logger.info(
+                    "[%s] dedup_topic_allowed_different_topic proposed=%s blocked=%s",
+                    CHAR_ID, proposed_topic, _topic_blocked_for_dedup,
+                )
+        if _topic_blocked_for_cooldown and decision.get("category") != "send_message" and _decision_mentions_topic(decision, _topic_blocked_for_cooldown):
             logger.warning(
-                "[%s] LLM ignored ARTIFACT DEDUP COOLDOWN; forcing rest",
-                CHAR_ID,
+                "[%s] topic_cooldown_forced_alternative topic=%s chosen=%s",
+                CHAR_ID, _topic_blocked_for_cooldown, decision.get("category", "?"),
             )
             return {
-                "category": "rest",
-                "reasoning": "Artifact dedup cooldown forced fallback",
-                "description": "recent artifact titles were too similar; reflecting before creating more",
+                "category": "investigate",
+                "reasoning": "Topic cooldown forced fallback",
+                "description": f"Investigating a different topic instead of continuing '{_topic_blocked_for_cooldown}' during cooldown",
             }
         if "OPEN QUESTION GUARD" in force_constraint and decision.get("category") == "send_message":
             logger.warning(
@@ -1610,11 +2039,21 @@ Respond in this exact JSON format (no markdown, no explanation):
                 "description": "answering partner open question after investigation",
                 "body": f"Answering your open question: {question}\n\nI investigated it and my current answer is: the next step is to treat this as shared work, not a loose thread. I will keep building the full trace in artifacts and use the pair workspace to keep the handoff visible.",
             }
-        # Last-line of defence: if the model ignored our HARD CONSTRAINT,
-        # fall through to a non-message category.
-        if force_constraint and "PARTNER ANSWER OBLIGATION" not in force_constraint and decision.get("category") == "send_message":
+        # Last-line of defence: if the model ignored a partner-message hard constraint,
+        # fall through to a non-message category. Moderator replies remain allowed.
+        chosen_target = decision.get("target", "")
+        partner_message_blocked = (
+            decision.get("category") == "send_message"
+            and chosen_target == partner_id
+            and "PARTNER ANSWER OBLIGATION" not in force_constraint
+            and (
+                "HARD CONSTRAINT" in force_constraint
+                or "DIRECT-MESSAGE COOLDOWN" in force_constraint
+            )
+        )
+        if partner_message_blocked:
             logger.warning(
-                "[%s] LLM ignored HARD CONSTRAINT (sent_message on loop); forcing rest",
+                "[%s] LLM ignored partner-message hard constraint; forcing rest",
                 CHAR_ID,
             )
             return {
@@ -1622,6 +2061,34 @@ Respond in this exact JSON format (no markdown, no explanation):
                 "reasoning": "Anti-loop forced fallback",
                 "description": "reflecting after repeated greetings",
             }
+        # Post-parse guard: LOOP-BREAK ran but the model returned the banned
+        # category anyway. Force a safe alternative (rest when this is the
+        # 3rd-in-a-row attempt, otherwise prefer read_artifacts or rest).
+        if "LOOP-BREAK (runtime)" in force_constraint:
+            shapes_after = _recent_decision_shapes(r, 5)
+            streak_after = _newest_first_streak(shapes_after)
+            banned = shapes_after[0] if shapes_after else ""
+            chosen = decision.get("category", "?")
+            if streak_after >= 2 and chosen == banned:
+                logger.warning(
+                    "[%s] loop_break ignored by LLM (streak=%d banned=%s chosen=%s); forcing read_artifacts",
+                    CHAR_ID, streak_after, banned, chosen,
+                )
+                return {
+                    "category": "read_artifacts",
+                    "reasoning": "Loop-break forced fallback (overrode banned category post-parse)",
+                    "description": f"'{banned}' was just banned for this turn due to {streak_after}-in-a-row streak; reading instead of repeating",
+                }
+            if streak_after >= 3 and chosen == banned:
+                logger.warning(
+                    "[%s] loop_break ignored by LLM at 3-in-a-row; forcing rest",
+                    CHAR_ID,
+                )
+                return {
+                    "category": "rest",
+                    "reasoning": "Loop-break forced fallback at 3-in-a-row",
+                    "description": f"'{banned}' blocked after {streak_after}-in-a-row streak; resting to break the loop",
+                }
         return decision
     except (json.JSONDecodeError, ValueError) as e:
         logger.warning("Failed to parse LLM decision: %s | raw: %s", e, raw[:200])
@@ -1663,15 +2130,26 @@ def execute_decision(decision: dict, r):
                     "body": f"held direct note until cooldown clears: {body[:120]}",
                 })
             else:
-                thread_id = _pair_thread_id(r, target) if target in PAIR_IDS and CHAR_ID in PAIR_IDS else f"thread_{uuid.uuid4().hex[:12]}"
+                thread_id = (
+                    _pair_thread_id(r, target)
+                    if target in PAIR_IDS and CHAR_ID in PAIR_IDS
+                    else _conversation_thread_id(CHAR_ID, target)
+                )
+                msg_topic = _normalize_topic_label(decision.get("topic", "") or desc or body)
+                msg_id = str(uuid.uuid4())
                 msg = {
-                    "msg_id": str(uuid.uuid4()),
+                    "id": msg_id,
+                    "msg_id": msg_id,
                     "from_char_id": CHAR_ID,
                     "from_name": NPC_NAME,
                     "to_char_id": target,
                     "to_name": CONTACTS.get(target, target),
                     "subject": desc[:60],
                     "body": body,
+                    "type": decision.get("message_type", "direct_message"),
+                    "topic": msg_topic,
+                    "read": False,
+                    "created_at": ts,
                     "ts": ts,
                     "thread_id": thread_id,
                 }
@@ -1727,6 +2205,10 @@ def execute_decision(decision: dict, r):
             streak_key = f"npc_dedup_streak:{CHAR_ID}"
             r.incr(streak_key)
             r.expire(streak_key, 600)
+            # Track the normalized topic of the deferred artifact
+            dedup_topic = _most_common_topic_word([title])
+            if dedup_topic:
+                r.setex(f"npc_dedup_topic:{CHAR_ID}", 600, dedup_topic)
         else:
             content_prompt = f"Write the full content of this artifact:\n\n{desc}\n\nOutput only the content."
             llm_result = call_llm("You are a creative writer.", content_prompt, r=r, call_label="artifact")
@@ -1746,6 +2228,11 @@ def execute_decision(decision: dict, r):
             streak_key = f"npc_dedup_streak:{CHAR_ID}"
             if r.exists(streak_key):
                 r.delete(streak_key)
+            # Clear the tracked dedup topic — the streak is broken
+            try:
+                r.delete(f"npc_dedup_topic:{CHAR_ID}")
+            except Exception:
+                pass
             # Mirror artifact created event to the partner's session
             try:
                 partner_id = _partner_id()
@@ -1882,10 +2369,16 @@ def execute_decision(decision: dict, r):
             "body": f"unknown category {cat}: {note}",
         })
 
+    ack_targets = []
     if partner_id and result.get("action_taken") != "no_target":
-        acked = _acknowledge_inbox(r, partner_id)
-        if acked:
-            result["acked_messages"] = acked
+        ack_targets.append(partner_id)
+    if result.get("action_taken") == "message_sent" and result.get("target") == OPERATOR_ID:
+        ack_targets.append(OPERATOR_ID)
+    acked_total = 0
+    for ack_target in dict.fromkeys(ack_targets):
+        acked_total += _acknowledge_inbox(r, ack_target)
+    if acked_total:
+        result["acked_messages"] = acked_total
 
     # Record the decision
     try:
