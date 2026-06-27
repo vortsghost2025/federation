@@ -259,6 +259,44 @@ def check_npc_broadcasts():
     return events
 
 
+def run_councilor_sync():
+    """Populate councilor context and bridge outputs into shared Redis.
+
+    This keeps the two persistent councilor agents connected to the main
+    simulation without requiring ad hoc manual scripts on the VPS.
+    """
+    try:
+        from npc_world_snapshot import write_world_snapshot
+
+        snapshot = write_world_snapshot(r)
+        log.info(
+            " Councilor snapshot: %s sectors, %s factions, %s NPCs",
+            len(snapshot.get("sectors", [])),
+            len(snapshot.get("factions", [])),
+            len(snapshot.get("npcs", [])),
+        )
+    except ImportError:
+        log.warning(" Councilor snapshot module not available")
+    except Exception as e:
+        log.warning(f" Councilor snapshot failed: {e}")
+
+    try:
+        from councilor_bridge import run_bridge_tick
+
+        bridge_result = run_bridge_tick(r)
+        log.info(
+            " Councilor bridge: %s artifacts synced, %s messages routed",
+            bridge_result.get("artifacts_synced", 0),
+            bridge_result.get("messages_routed", 0),
+        )
+        if bridge_result.get("errors"):
+            log.warning(" Councilor bridge errors: %s", bridge_result["errors"])
+    except ImportError:
+        log.warning(" Councilor bridge module not available")
+    except Exception as e:
+        log.warning(f" Councilor bridge failed: {e}")
+
+
 # ── Faction display map for notifications ────────────────────
 _FACTION_NAMES = {
     "research_division": "Research Division",
@@ -715,6 +753,9 @@ def run_tick():
             log.warning(" Spatial tick module not available")
         except Exception as e:
             log.warning(f" Spatial tick failed: {e}")
+
+    # ── Councilor bridge + snapshot ─────────────────────
+    run_councilor_sync()
 
     # ── Auto-save ──────────────────────────────────────
     resp, err = _call_endpoint("/state/save", "Auto-save", 30, retries=0)
