@@ -408,7 +408,7 @@ def _promote_events_to_inbox(r, max_events: int = 5, max_chars: int = 120) -> li
             logger.info("[%s] event promotion: promoted '%s'", CHAR_ID, summary[:50])
             
             # Mark as promoted (24h TTL)
-            r.setex(dedup_key, 86400, "1")
+            r.set(dedup_key, "1", ex=86400)
         
         return promoted
     except Exception as e:
@@ -512,7 +512,7 @@ def _record_topic_fatigue(r, topic: str, window_minutes: int = TOPIC_FATIGUE_WIN
     if count >= threshold:
         duration_seconds = max(cooldown_minutes, 1) * 60
         try:
-            r.setex(cooldown_key, duration_seconds, topic)
+            r.set(cooldown_key, topic, ex=duration_seconds)
         except Exception:
             return count, 0
         logger.info(
@@ -2275,7 +2275,7 @@ def execute_decision(decision: dict, r):
             # Track the normalized topic of the deferred artifact
             dedup_topic = _most_common_topic_word([title])
             if dedup_topic:
-                r.setex(f"npc_dedup_topic:{CHAR_ID}", 600, dedup_topic)
+                r.set(f"npc_dedup_topic:{CHAR_ID}", dedup_topic, ex=600)
         else:
             content_prompt = f"Write the full content of this artifact:\n\n{desc}\n\nOutput only the content."
             llm_result = call_llm("You are a creative writer.", content_prompt, r=r, call_label="artifact")
@@ -2559,6 +2559,9 @@ def execute_decision(decision: dict, r):
 
     elif cat == "submit_to_institution":
         from datetime import datetime, timezone
+        import sys, os
+        sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "backend"))
+        from institutions import ensure_workflow, classify_artifact_kind, WORKFLOW_DEFAULTS
         artifact_title = decision.get("artifact_title", "")
         target_inst_name = decision.get("institution_name", "")
         now_iso = datetime.now(timezone.utc).isoformat()
@@ -2615,12 +2618,10 @@ def execute_decision(decision: dict, r):
                         "role_id": r.get(f"councilor:{CHAR_ID}:role") or "",
                         "role_title": "",
                     }
-                    art_kind = "proposal"
-                    raw_text = " ".join(str(matching_artifact.get(p, "")) for p in ("title", "content", "description")).lower()
-                    if any(t in raw_text for t in ("analysis", "report", "diagnostic", "forecast")):
-                        art_kind = "analysis"
+                    art_kind = classify_artifact_kind(matching_artifact)
+                    if art_kind not in ("proposal", "analysis"):
+                        art_kind = "proposal"
                     wf_type = "proposal_review" if art_kind == "proposal" else "analysis_review"
-                    workflow_id = f"workflow:{wf_type}:{matching_artifact['artifact_id']}"
                     existing_wf = r.get(f"workflow:source_artifact:{matching_artifact['artifact_id']}")
                     if existing_wf:
                         result["action_taken"] = "submit_already_in_review"
@@ -2632,35 +2633,7 @@ def execute_decision(decision: dict, r):
                             "body": f"artifact '{matching_artifact.get('title', '?')}' already has workflow {existing_wf}",
                         })
                     else:
-                        r.hset(workflow_id, mapping={
-                            "type": wf_type,
-                            "institution_id": target_inst_id,
-                            "role_id": role_ctx["role_id"],
-                            "source_artifact_id": matching_artifact["artifact_id"],
-                            "source_councilor_id": CHAR_ID,
-                            "artifact_kind": art_kind,
-                            "status": "submitted",
-                            "title": matching_artifact.get("title", "Untitled"),
-                            "created_at": now_iso,
-                            "updated_at": now_iso,
-                        })
-                        r.sadd("workflow:index", workflow_id)
-                        r.sadd("workflow:active", workflow_id)
-                        r.set(f"workflow:source_artifact:{matching_artifact['artifact_id']}", workflow_id)
-                        try:
-                            curr = int(r.get(f"{target_inst_id}:active_workflows") or 0)
-                            r.set(f"{target_inst_id}:active_workflows", str(curr + 1))
-                        except Exception:
-                            pass
-                        r.rpush(f"{workflow_id}:events", json.dumps({
-                            "timestamp": now_iso,
-                            "status": "submitted",
-                            "detail": f"{art_kind.capitalize()} submitted for institutional review by {NPC_NAME}.",
-                        }))
-                        matching_artifact["institution_id"] = target_inst_id
-                        matching_artifact["role_id"] = role_ctx["role_id"]
-                        matching_artifact["artifact_kind"] = art_kind
-                        matching_artifact["workflow_id"] = workflow_id
+                        workflow_id = ensure_workflow(r, CHAR_ID, matching_artifact, role_ctx, wf_type, now=now_iso)
                         r.hincrby(f"npc_stats:{CHAR_ID}", "artifacts_submitted_for_review", 1)
                         result["action_taken"] = "artifact_submitted"
                         result["workflow_id"] = workflow_id
