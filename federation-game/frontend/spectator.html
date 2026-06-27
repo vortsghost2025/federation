@@ -992,9 +992,9 @@ async function loadInstitutions(){
       fetch('/api/institutions/workflows/completed?limit=20')
     ]);
     const institutions = instRes.ok ? await instRes.json() : {institutions:[]};
-    const active = activeRes.ok ? await activeRes.json() : {workflows:[]};
-    const completed = doneRes.ok ? await doneRes.json() : {workflows:[],total:0};
-    instData = {institutions: institutions.institutions||[], active: active.workflows||[], completed: completed.workflows||[], completedTotal: completed.total||0};
+    const active = activeRes.ok ? await activeRes.json() : {active:[]};
+    const completed = doneRes.ok ? await doneRes.json() : {completed:[],total:0};
+    instData = {institutions: institutions.institutions||[], active: active.active||[], completed: completed.completed||[], completedTotal: completed.total||0};
   }catch(e){
     instData = {institutions:[],active:[],completed:[],completedTotal:0,error:e.message};
   }
