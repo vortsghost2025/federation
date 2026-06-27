@@ -43,9 +43,15 @@ ROLE_SEEDS = {
 }
 
 WORKFLOW_TRANSITIONS = {
-    "submitted": "under_review",
-    "under_review": "deliberating",
-    "deliberating": "ratified",
+    "proposal_review": {
+        "submitted": "under_review",
+        "under_review": "deliberating",
+        "deliberating": "ratified",
+    },
+    "analysis_review": {
+        "submitted": "peer_review",
+        "peer_review": "endorsed",
+    },
 }
 
 
@@ -159,6 +165,36 @@ def ensure_proposal_review_workflow(r, councilor_id, artifact, role_ctx, now=Non
     return workflow_id
 
 
+def ensure_analysis_review_workflow(r, councilor_id, artifact, role_ctx, now=None):
+    """Create one analysis_review workflow per source artifact id."""
+    timestamp = _now_iso(now)
+    artifact_id = artifact["artifact_id"]
+    workflow_lookup_key = f"workflow:source_artifact:{artifact_id}"
+    existing = r.get(workflow_lookup_key)
+    if existing:
+        return existing
+
+    workflow_id = f"workflow:analysis_review:{artifact_id}"
+    workflow_record = {
+        "type": "analysis_review",
+        "institution_id": role_ctx["institution_id"],
+        "role_id": role_ctx["role_id"],
+        "source_artifact_id": artifact_id,
+        "source_councilor_id": councilor_id,
+        "artifact_kind": "analysis",
+        "status": "submitted",
+        "created_at": timestamp,
+        "updated_at": timestamp,
+        "title": artifact.get("title", "Untitled Analysis"),
+    }
+    r.hset(workflow_id, mapping=workflow_record)
+    r.sadd("workflow:index", workflow_id)
+    r.sadd(ACTIVE_WORKFLOWS_KEY, workflow_id)
+    r.set(workflow_lookup_key, workflow_id)
+    _append_workflow_event(r, workflow_id, timestamp, "submitted", "Analysis entered institutional review.")
+    return workflow_id
+
+
 def annotate_artifact(r, councilor_id, artifact, now=None):
     """Attach institution metadata to a councilor artifact."""
     seed_institutions(r, now=now)
@@ -179,6 +215,10 @@ def annotate_artifact(r, councilor_id, artifact, now=None):
         artifact["workflow_id"] = ensure_proposal_review_workflow(
             r, councilor_id, artifact, role_ctx, now=now
         )
+    elif artifact["artifact_kind"] == "analysis":
+        artifact["workflow_id"] = ensure_analysis_review_workflow(
+            r, councilor_id, artifact, role_ctx, now=now
+        )
 
     return artifact
 
@@ -191,8 +231,10 @@ def run_institution_tick(r, now=None):
 
     for workflow_id in sorted(r.smembers(ACTIVE_WORKFLOWS_KEY)):
         record = r.hgetall(workflow_id)
+        wf_type = record.get("type", "proposal_review")
+        transitions = WORKFLOW_TRANSITIONS.get(wf_type, WORKFLOW_TRANSITIONS["proposal_review"])
         current_status = record.get("status")
-        next_status = WORKFLOW_TRANSITIONS.get(current_status)
+        next_status = transitions.get(current_status)
         if not next_status:
             continue
         r.hset(workflow_id, mapping={"status": next_status, "updated_at": timestamp})
@@ -204,7 +246,7 @@ def run_institution_tick(r, now=None):
             f"Workflow advanced from {current_status} to {next_status}.",
         )
         workflows_advanced += 1
-        if next_status == "ratified":
+        if next_status in ("ratified", "endorsed"):
             r.srem(ACTIVE_WORKFLOWS_KEY, workflow_id)
             r.sadd(COMPLETED_WORKFLOWS_KEY, workflow_id)
 
