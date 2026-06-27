@@ -116,6 +116,7 @@ p{margin:0 0 8px 0}
 .empty-card{padding:30px;background:#0e121c;border:1px solid #1a2430;border-radius:14px;color:#5a6a80;font-style:italic;font-size:1.1rem;text-align:center}
 .copy-msg{display:inline-block;color:#7be095;font-size:0.95rem;margin-left:10px;opacity:0;transition:opacity 0.3s}
 .copy-msg.show{opacity:1}
+.btn:disabled{opacity:0.4;cursor:default}
 
 /* ── Institutions panel ── */
 .inst-card{padding:22px 26px;background:#0e121c;border:1px solid #26384f;border-radius:18px;margin-bottom:16px;box-shadow:0 0 0 1px #00000044}
@@ -984,19 +985,25 @@ function updateSystemLine(data){
 
 let instData = null;
 
-async function loadInstitutions(){
+let instCompletedOffset = 0;
+const INST_PAGE_SIZE = 20;
+
+async function loadInstitutions(offset){
+  if(offset === undefined) offset = instCompletedOffset;
   try{
-    const [instRes, activeRes, doneRes] = await Promise.all([
+    const [instRes, activeRes, doneRes, healthRes] = await Promise.all([
       fetch('/api/institutions'),
       fetch('/api/institutions/workflows/active'),
-      fetch('/api/institutions/workflows/completed?limit=20')
+      fetch('/api/institutions/workflows/completed?limit='+INST_PAGE_SIZE+'&offset='+offset),
+      fetch('/api/institutions/health')
     ]);
     const institutions = instRes.ok ? await instRes.json() : {institutions:[]};
     const active = activeRes.ok ? await activeRes.json() : {active:[]};
-    const completed = doneRes.ok ? await doneRes.json() : {completed:[],total:0};
-    instData = {institutions: institutions.institutions||[], active: active.active||[], completed: completed.completed||[], completedTotal: completed.total||0};
+    const completed = doneRes.ok ? await doneRes.json() : {completed:[],total:0,offset:0,limit:INST_PAGE_SIZE};
+    const health = healthRes.ok ? await healthRes.json() : null;
+    instData = {institutions: institutions.institutions||[], active: active.active||[], completed: completed.completed||[], completedTotal: completed.total||0, completedOffset: completed.offset||0, health};
   }catch(e){
-    instData = {institutions:[],active:[],completed:[],completedTotal:0,error:e.message};
+    instData = {institutions:[],active:[],completed:[],completedTotal:0,completedOffset:0,error:e.message};
   }
 }
 
@@ -1067,15 +1074,67 @@ function renderWorkflowCard(wf, isActive){
   `;
 }
 
+function renderInstHealth(h){
+  if(!h) return '';
+  const dot = h.redis ? '<span class="icon icon-green"></span>' : '<span class="icon icon-red"></span>';
+  return `<div class="strip" style="margin-bottom:12px">
+    <div>${dot}<span class="lbl">Institutions</span><span class="num">${h.institutions||0}</span></div>
+    <div><span class="lbl">Roles</span><span class="num">${h.roles||0}</span></div>
+    <div><span class="lbl">Active</span><span class="num" style="color:#f1c40f">${h.active_workflows||0}</span></div>
+    <div><span class="lbl">Completed</span><span class="num" style="color:#2ecc71">${h.completed_workflows||0}</span></div>
+    <div><span class="lbl">Redis</span><span class="num" style="color:${h.redis?'#2ecc71':'#e74c3c'}">${h.redis?'OK':'DOWN'}</span></div>
+  </div>`;
+}
+
+function instPaginate(dir){
+  instCompletedOffset += dir * INST_PAGE_SIZE;
+  if(instCompletedOffset < 0) instCompletedOffset = 0;
+  loadInstitutions(instCompletedOffset).then(()=>{ $('content').innerHTML = renderInstitutions(); });
+}
+
+async function instTrigger(){
+  const cid = prompt('Councilor ID (e.g. char_001):');
+  if(!cid) return;
+  const aid = prompt('Artifact ID:') || 'manual_'+Date.now();
+  const title = prompt('Proposal title:') || 'Manual proposal';
+  try{
+    const r = await fetch('/api/institutions/workflows/trigger', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({councilor_id:cid,artifact_id:aid,title,artifact_kind:'proposal',body:'Triggered from spectator'})});
+    const j = await r.json();
+    alert(r.ok ? 'Triggered: '+JSON.stringify(j) : 'Error: '+JSON.stringify(j));
+    loadInstitutions(instCompletedOffset).then(()=>{ $('content').innerHTML = renderInstitutions(); });
+  }catch(e){alert('Error: '+e.message);}
+}
+
+async function instRebuildCounters(){
+  if(!confirm('Rebuild all institution counters?')) return;
+  try{
+    const r = await fetch('/api/institutions/rebuild-counters',{method:'POST'});
+    const j = await r.json();
+    alert('Result: '+JSON.stringify(j));
+    loadInstitutions(instCompletedOffset).then(()=>{ $('content').innerHTML = renderInstitutions(); });
+  }catch(e){alert('Error: '+e.message);}
+}
+
 function renderInstitutions(){
   if(!instData) return '<div class="empty-card">Loading institutions…</div>';
   if(instData.error) return `<div class="empty-card">Error: ${esc(instData.error)}</div>`;
 
+  const healthHtml = renderInstHealth(instData.health);
   const instCards = (instData.institutions||[]).map(renderInstitutionCard).join('');
   const activeCards = (instData.active||[]).map(wf => renderWorkflowCard(wf, true)).join('');
   const completedCards = (instData.completed||[]).map(wf => renderWorkflowCard(wf, false)).join('');
+  const off = instData.completedOffset || 0;
+  const total = instData.completedTotal || 0;
+  const hasPrev = off > 0;
+  const hasNext = (off + INST_PAGE_SIZE) < total;
+  const pageLabel = total > 0 ? `${off+1}–${Math.min(off+INST_PAGE_SIZE,total)} of ${total}` : '0';
 
   return `
+    ${healthHtml}
+    <div style="display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap">
+      <button class="btn" onclick="instTrigger()">Trigger Workflow</button>
+      <button class="btn" onclick="instRebuildCounters()">Rebuild Counters</button>
+    </div>
     <section class="comm-panel">
       <h2>Institutions</h2>
       ${instCards || '<div class="empty-card">No institutions seeded yet.</div>'}
@@ -1087,6 +1146,11 @@ function renderInstitutions(){
     <section class="comm-panel" style="margin-top:14px">
       <h2>Completed workflows <span style="color:#2ecc71;font-size:1.1rem">${instData.completedTotal}</span></h2>
       ${completedCards || '<div class="empty-card">No completed workflows yet.</div>'}
+      <div style="display:flex;gap:8px;align-items:center;margin-top:10px;padding:8px 12px;background:#0a0e16;border-radius:6px">
+        <button class="btn" ${hasPrev?'':'disabled'} onclick="instPaginate(-1)">Prev</button>
+        <span style="color:#8da3ba;font-size:1rem">${pageLabel}</span>
+        <button class="btn" ${hasNext?'':'disabled'} onclick="instPaginate(1)">Next</button>
+      </div>
     </section>
   `;
 }
@@ -1096,7 +1160,7 @@ async function load(){
     const r = await fetch('/spectator/agency', {headers:{Accept:'application/json'}});
     if(!r.ok) throw new Error('HTTP '+r.status);
     lastData = await r.json();
-    if(viewMode === 'institutions') await loadInstitutions();
+    if(viewMode === 'institutions') await loadInstitutions(instCompletedOffset);
     $('content').innerHTML = render();
     updateStrip(lastData);
     updateSystemLine(lastData);
@@ -1148,11 +1212,10 @@ document.querySelectorAll('[data-mode]').forEach(btn=>{
       timer = null;
       load();
       timer = setInterval(load, 15000);
-    } else if(viewMode==='institutions'){
-      if(timer) clearInterval(timer);
-      timer = null;
-      loadInstitutions().then(()=>{ $('content').innerHTML = renderInstitutions(); });
-      timer = setInterval(()=>{ loadInstitutions().then(()=>{ $('content').innerHTML = renderInstitutions(); }); }, 15000);
+    } else     if(viewMode==='institutions'){
+      instCompletedOffset = 0;
+      loadInstitutions(0).then(()=>{ $('content').innerHTML = renderInstitutions(); });
+      timer = setInterval(()=>{ loadInstitutions(instCompletedOffset).then(()=>{ $('content').innerHTML = renderInstitutions(); }); }, 15000);
     } else {
       if(timer) clearInterval(timer);
       timer = null;
@@ -1185,10 +1248,21 @@ $('copy-btn').onclick = ()=>{
   });
 };
 
-$('refresh-btn').onclick = load;
+$('refresh-btn').onclick = ()=>{
+  if(viewMode==='institutions'){
+    loadInstitutions(instCompletedOffset).then(()=>{ $('content').innerHTML = renderInstitutions(); });
+  } else {
+    load();
+  }
+};
 
-load();
-timer = setInterval(load, REFRESH_MS);
+if(viewMode==='institutions'){
+  loadInstitutions(0).then(()=>{ $('content').innerHTML = renderInstitutions(); });
+  timer = setInterval(()=>{ loadInstitutions(instCompletedOffset).then(()=>{ $('content').innerHTML = renderInstitutions(); }); }, 15000);
+} else {
+  load();
+  timer = setInterval(load, REFRESH_MS);
+}
 </script>
 </body>
 </html>
