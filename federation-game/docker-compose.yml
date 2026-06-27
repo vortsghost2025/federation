@@ -122,49 +122,15 @@ services:
       - .env
     environment:
       - TICK_INTERVAL=600
-    volumes:
-      - /docker/federation-game/backend:/app:ro
-    healthcheck:
-      test:
-        - CMD
-        - python3
-        - -c
-        - "import os; open('/proc/1/cmdline').read()"
-      interval: 30s
-      timeout: 5s
-      retries: 3
-      start_period: 10s
     depends_on:
       - redis
+      - postgres
     networks:
       - fed-net
-    deploy:
-      resources:
-        limits:
-          cpus: "0.50"
-          memory: 256M
-
-  postgres:
-    image: postgres:15-alpine
-    restart: unless-stopped
     env_file:
       - .env
     volumes:
-      - postgres_data:/var/lib/postgresql/data
-    healthcheck:
-      test:
-        - CMD-SHELL
-        - pg_isready -U federation
-      interval: 10s
-      timeout: 5s
-      retries: 5
-      start_period: 10s
-    networks:
-      - fed-net
-    deploy:
-      resources:
-        limits:
-          memory: 256M
+      - /docker/federation-game/backend:/app:ro
 
   redis:
     image: redis:7-alpine
@@ -178,12 +144,10 @@ services:
       timeout: 5s
       retries: 3
       start_period: 5s
+    volumes:
+      - redis_data:/data
     networks:
       - fed-net
-    deploy:
-      resources:
-        limits:
-          memory: 256M
 
   adminer:
     image: adminer:latest
@@ -398,7 +362,8 @@ networks:
     driver: bridge
 
 volumes:
-  artifacts_data:
   postgres_data:
   prometheus_data:
   grafana_data:
+  artifacts_data:
+  redis_data:

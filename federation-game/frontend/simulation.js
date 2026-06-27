@@ -174,6 +174,96 @@ lastTickTime = Date.now();
 
 function updateTimeSince(){if(!lastTickTime)return;var elapsed=(Date.now()-lastTickTime)/1000;var el=document.getElementById('time-since');if(el)el.textContent=formatTime(elapsed)}
 
+/* ═══ FEDERATION STATUS BRIEF ═══ */
+function updateFedBrief() {
+  var status = lastData.status;
+  if (!status) return;
+  var ws = status.world_state || status.worldState || status;
+  var metrics = {};
+  var mKeys = ['tension','resources','threat','stability','morale','anomaly'];
+  for (var i=0;i<mKeys.length;i++) { var k=mKeys[i], af=METRIC_FIELD_MAP[k]||k; metrics[k] = ws[af]!=null ? ws[af] : (ws[k]!=null ? ws[k] : 50); }
+
+  var moraleInv = 100 - (metrics.morale||0);
+  var stabilityInv = 100 - (metrics.stability||0);
+  var anomalyVal = metrics.anomaly||0;
+  var degScore = Math.max(sevScore('morale',metrics.morale), sevScore('stability',metrics.stability), sevScore('anomaly',metrics.anomaly));
+  var thScore = Math.max(sevScore('threat',metrics.threat), sevScore('tension',metrics.tension));
+  var overallScore = Math.max(degScore, thScore);
+
+  var cascade = status.cascade_summary || {};
+  var temp = cascade.temperature!=null ? cascade.temperature : (cascade.cascade_temperature!=null ? cascade.cascade_temperature : 0);
+  var cascadePct = temp>1.5 ? temp : (temp*100);
+
+  var badge = document.getElementById('brief-state-badge');
+  if (badge) {
+    var labels = {critical:'CRITICAL',severe:'SEVERE',high:'HIGH',elevated:'ELEVATED',nominal:'NOMINAL'};
+    var sevCls = splitSevCls(overallScore);
+    badge.textContent = labels[sevCls] || 'NOMINAL';
+    badge.className = 'brief-state-badge state-'+(overallScore>=4||sevCls==='critical'?'critical':(overallScore>=2||sevCls==='severe'||sevCls==='high'?'unstable':'stable'));
+  }
+
+  var meta = document.getElementById('brief-meta');
+  if (meta) {
+    var tick = status.tick_count || ws.tick_count || '\u2014';
+    var metaText = 'Tick '+tick;
+    if (status.last_tick_timestamp) metaText += ' \u00b7 '+formatFedDateShort(status.last_tick_timestamp);
+    meta.textContent = metaText;
+  }
+
+  var headline = document.getElementById('brief-headline');
+  if (headline) {
+    var parts = [];
+    if (metrics.resources>75) parts.push('resource-rich'); else if (metrics.resources<25) parts.push('resource-scarce');
+    if (metrics.stability>75) parts.push('socially stable'); else if (metrics.stability<30) parts.push('socially unstable');
+    if (metrics.morale>75) parts.push('high morale'); else if (metrics.morale<25) parts.push('morale collapsing');
+    if (metrics.tension>70) parts.push('high tension'); else if (metrics.tension<25) parts.push('peaceful');
+    if (metrics.threat>70) parts.push('under threat');
+    if (metrics.anomaly>70) parts.push('anomaly activity elevated');
+    if (cascadePct>80) parts.push('cascade chains spreading'); else if (cascadePct<30) parts.push('experiencing calm events');
+    var recentEvents = status.recent_events || [];
+    var topEvent = null;
+    for (var ei=recentEvents.length-1;ei>=0;ei--) { var ev=recentEvents[ei]; if(ev&&ev.event_type&&ev.event_type!=='routine'){topEvent=ev;break} }
+    if (!topEvent && recentEvents.length>0) topEvent = recentEvents[recentEvents.length-1];
+    headline.textContent = topEvent && topEvent.description ? topEvent.description : (parts.length ? 'The Federation is '+parts.join(', ')+'.' : 'The Federation is in a balanced state.');
+  }
+
+  var devEl = document.getElementById('brief-developments');
+  if (devEl) {
+    var allEvents = (status.recent_events||[]).slice();
+    var evts = lastData.events;
+    if (evts) {
+      if (Array.isArray(evts)) allEvents = allEvents.concat(evts);
+      else { if(evts.world_events) allEvents=allEvents.concat(evts.world_events.slice(-5)); if(evts.cascade_events) allEvents=allEvents.concat(evts.cascade_events.slice(-3)) }
+    }
+    var devHtml='',shown=0,seen={};
+    for (var ei=allEvents.length-1;ei>=0&&shown<3;ei--) {
+      var ev=allEvents[ei]; if(!ev) continue;
+      var desc=ev.description||ev.text||ev.summary||'';
+      if(!desc||seen[desc]) continue; seen[desc]=true;
+      devHtml += '<span class="brief-dev-item">'+esc(desc.substring(0,100))+'</span>'; shown++;
+    }
+    devEl.innerHTML = devHtml;
+  }
+
+  var watchEl = document.getElementById('brief-watch');
+  if (watchEl) {
+    var watchItems=[];
+    if (metrics.morale<40) watchItems.push('Morale '+Math.round(metrics.morale));
+    if (metrics.stability<40) watchItems.push('Stability '+Math.round(metrics.stability));
+    if (metrics.threat>60) watchItems.push('Threat '+Math.round(metrics.threat));
+    if (metrics.tension>60) watchItems.push('Tension '+Math.round(metrics.tension));
+    if (metrics.anomaly>60) watchItems.push('Anomaly '+Math.round(metrics.anomaly));
+    if (cascadePct>70) watchItems.push('Cascade '+Math.round(cascadePct)+'%');
+    if (watchItems.length===0) {
+      watchEl.innerHTML = '<span class="brief-watch-item" style="color:var(--green);border-color:rgba(76,175,80,0.3)">All systems nominal</span>';
+    } else {
+      var wHtml='';
+      for (var wi=0;wi<Math.min(watchItems.length,3);wi++) wHtml += '<span class="brief-watch-item">\u25cf '+watchItems[wi]+'</span>';
+      watchEl.innerHTML = wHtml;
+    }
+  }
+}
+
 /* ═══ SITUATION SUMMARY ═══ */
 function updateSituation(status) {
 if (!status) return;
@@ -675,7 +765,9 @@ function renderHumanBriefing() {
   var latestLog = lastData.npcRealityLogs && lastData.npcRealityLogs.length ? lastData.npcRealityLogs.slice().sort(function(a,b){return (b.score||0)-(a.score||0)})[0] : null;
   if (latestLog) {
     var s = summarizeNpcLog(latestLog);
-    changed.textContent = latestLog.actor + ': ' + s.summary;
+    var actor = latestLog.actor;
+    if (/^char_\d{3}$/.test(actor)) { var nm=npcNameMap(); actor = nm[actor] || actor; }
+    changed.textContent = actor + ': ' + s.summary;
   } else {
     changed.textContent = 'Waiting for the next NPC decision, conversation, or cognition trace.';
   }
@@ -1350,11 +1442,13 @@ if(!data||!data.quest_log)return;
 renderQuestHealth(data);
 var log=document.getElementById('quest-log');
 var entries=data.quest_log;if(!Array.isArray(entries))return;
+var nameMap=npcNameMap();
 /* Build narrative entries grouped by event type */
 var narrativeMap={active:[],completed:[],abandoned:[]};
 for(var i=0;i<entries.length;i++){
 var e=entries[i];var evt=String(e.event||'').toLowerCase();
-var narr={char:e.char_id||'Unknown',quest:e.quest_id||'',reason:e.reason||'',ts:e.timestamp||'',tType:''};
+var charName=nameMap[e.char_id]||e.char_id||'Unknown';
+var narr={char:charName,rawChar:e.char_id,quest:e.quest_id||'',reason:e.reason||'',ts:e.timestamp||'',tType:''};
 if(evt.indexOf('accept')!==-1||evt.indexOf('start')!==-1){narr.tType='active';narrativeMap.active.push(narr)}
 else if(evt.indexOf('complet')!==-1){narr.tType='completed';narrativeMap.completed.push(narr)}
 else if(evt.indexOf('abandon')!==-1||evt.indexOf('fail')!==-1){narr.tType='abandoned';narrativeMap.abandoned.push(narr)}
@@ -1416,8 +1510,10 @@ expandedQuestNpc=charId;
 detailArea.innerHTML='<div class="loading-pulse" style="color:var(--dim);padding:8px">Loading quest detail...</div>';
 var data=await apiFetch('/simulation/npc-quests/'+encodeURIComponent(charId),10000);
 if(!data){detailArea.innerHTML='<div style="color:var(--red);padding:8px">Failed to load quest detail</div>';return}
+var nameMap=npcNameMap();
+var displayName=nameMap[charId]||charId;
 var html='<div class="quest-detail">';
-html+='<div class="quest-detail-title">'+esc(charId)+' \u2014 Quest Status</div>';
+html+='<div class="quest-detail-title">'+esc(displayName)+' \u2014 Quest Status</div>';
 html+='<div class="quest-stats">';
 html+='<div class="quest-stat"><span class="quest-stat-val" style="color:var(--green)">'+(data.completed_count||0)+'</span><span class="quest-stat-label">Completed</span></div>';
 html+='<div class="quest-stat"><span class="quest-stat-val" style="color:var(--red)">'+(data.failed_count||0)+'</span><span class="quest-stat-label">Failed</span></div>';
@@ -2195,7 +2291,7 @@ var results=await Promise.all([apiFetch('/simulation/status',8000),apiFetch('/si
 var status=results[0],factions=results[1],events=results[2];
 var anyOk=status||factions||events;
 if(!anyOk){fetchErrorCount++;if(fetchErrorCount>=3)showSignalLost(true)}else{fetchErrorCount=0;showSignalLost(false);if(status)lastData.status=status;if(factions)lastData.factions=factions;if(events)lastData.events=events}
-if(lastData.status){updateTopBanner(lastData.status);updateSituation(lastData.status)}renderQuickStatus();renderReadableSummary();renderSituationRoom();renderHumanBriefing();
+if(lastData.status){updateTopBanner(lastData.status);updateSituation(lastData.status);updateFedBrief()}renderQuickStatus();renderReadableSummary();renderSituationRoom();renderHumanBriefing();
 if(lastData.factions)renderFactions(lastData.factions);
 if(lastData.events)renderEvents(lastData.events);
 if(lastData.status)renderBottom(lastData.status);
@@ -2489,7 +2585,7 @@ async function aiChatSend() {
 
   try {
     var ctl = new AbortController();
-    var timer = setTimeout(function(){ ctl.abort() }, 15000);
+    var timer = setTimeout(function(){ ctl.abort() }, 45000);
     var r = await fetch("/map/assistant", {
       method: "POST",
       headers: {"Content-Type": "application/json", "Accept": "application/json"},
@@ -2526,6 +2622,15 @@ async function aiChatSend() {
   aiChatBusy = false;
   if (btn) btn.disabled = false;
   aiChatRender();
+}
+
+// Toggle chat drawer
+function toggleChatDrawer() {
+  var chat = document.getElementById("ai-chat");
+  var btn = document.getElementById("ai-chat-toggle");
+  if (!chat || !btn) return;
+  var isOpen = chat.classList.toggle("open");
+  btn.classList.toggle("open", isOpen);
 }
 
 // Enter key to send
