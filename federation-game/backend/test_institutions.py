@@ -1,4 +1,4 @@
-"""Tests for institution seeding and proposal workflow behavior."""
+"""Tests for institution seeding, workflow behavior, counters, and overrides."""
 
 import fnmatch
 import json
@@ -181,3 +181,140 @@ def test_run_institution_tick_advances_workflow_without_duplication():
     assert tick_one["workflows_advanced"] == 1
     assert tick_two["workflows_advanced"] == 1
     assert tick_three["workflows_advanced"] == 1
+
+
+def test_analysis_review_workflow_completes_in_two_ticks():
+    fake = FakeRedis()
+
+    artifact = {
+        "artifact_id": "artifact-analysis-001",
+        "title": "Analysis: Sector 7 Resonance Diagnostic",
+        "body": "Diagnostic brief on sector 7 anomaly patterns.",
+    }
+
+    annotated = institutions.annotate_artifact(fake, "char_306", artifact, now="2026-06-27T20:00:00Z")
+    workflow_id = annotated["workflow_id"]
+
+    assert annotated["artifact_kind"] == "analysis"
+    assert workflow_id.startswith("workflow:analysis_review:")
+
+    workflow = fake.hgetall(workflow_id)
+    assert workflow["type"] == "analysis_review"
+    assert workflow["status"] == "submitted"
+
+    tick_one = institutions.run_institution_tick(fake, now="2026-06-27T20:01:00Z")
+    tick_two = institutions.run_institution_tick(fake, now="2026-06-27T20:02:00Z")
+    tick_three = institutions.run_institution_tick(fake, now="2026-06-27T20:03:00Z")
+
+    workflow = fake.hgetall(workflow_id)
+    events = [json.loads(item) for item in fake.lrange(f"{workflow_id}:events", 0, -1)]
+
+    assert workflow["status"] == "endorsed"
+    assert [event["status"] for event in events] == [
+        "submitted",
+        "peer_review",
+        "endorsed",
+    ]
+    assert tick_one["workflows_advanced"] == 1
+    assert tick_two["workflows_advanced"] == 1
+    assert tick_three["workflows_advanced"] == 0
+
+    assert workflow_id not in fake.smembers("workflow:active")
+    assert workflow_id in fake.smembers("workflow:completed")
+
+
+def test_ensure_workflow_rejects_unknown_type():
+    fake = FakeRedis()
+    institutions.seed_institutions(fake, now="2026-06-27T20:10:00Z")
+    role_ctx = institutions.get_councilor_role_context(fake, "char_001")
+
+    artifact = {"artifact_id": "artifact-bad-001", "title": "Test"}
+    try:
+        institutions.ensure_workflow(fake, "char_001", artifact, role_ctx, "nonexistent_type")
+        assert False, "Should have raised ValueError"
+    except ValueError as exc:
+        assert "nonexistent_type" in str(exc)
+
+
+def test_override_workflow_status():
+    fake = FakeRedis()
+
+    artifact = {
+        "artifact_id": "artifact-override-001",
+        "title": "Proposal: Override Test",
+        "body": "Test override.",
+    }
+    annotated = institutions.annotate_artifact(fake, "char_001", artifact, now="2026-06-27T20:20:00Z")
+    workflow_id = annotated["workflow_id"]
+
+    assert workflow_id in fake.smembers("workflow:active")
+
+    result = institutions.override_workflow_status(fake, workflow_id, "ratified", now="2026-06-27T20:21:00Z")
+    assert result is True
+
+    workflow = fake.hgetall(workflow_id)
+    assert workflow["status"] == "ratified"
+    assert workflow_id not in fake.smembers("workflow:active")
+    assert workflow_id in fake.smembers("workflow:completed")
+
+
+def test_counters_are_incremented_on_workflow_creation_and_completion():
+    fake = FakeRedis()
+    inst_id = "institution:research_division_council"
+
+    artifact = {
+        "artifact_id": "artifact-counter-001",
+        "title": "Proposal: Counter Test",
+        "body": "Test counters.",
+    }
+
+    institutions.annotate_artifact(fake, "char_001", artifact, now="2026-06-27T20:30:00Z")
+    active_count = int(fake.get(f"{inst_id}:active_workflows") or 0)
+    assert active_count == 1
+
+    institutions.run_institution_tick(fake, now="2026-06-27T20:31:00Z")
+    institutions.run_institution_tick(fake, now="2026-06-27T20:32:00Z")
+    institutions.run_institution_tick(fake, now="2026-06-27T20:33:00Z")
+
+    active_count = int(fake.get(f"{inst_id}:active_workflows") or 0)
+    completed_count = int(fake.get(f"{inst_id}:completed_workflows") or 0)
+    assert active_count == 0
+    assert completed_count == 1
+
+
+def test_rebuild_inst_counters():
+    fake = FakeRedis()
+    inst_id = "institution:research_division_council"
+
+    artifact = {
+        "artifact_id": "artifact-rebuild-001",
+        "title": "Proposal: Rebuild Counter Test",
+        "body": "Test rebuild.",
+    }
+
+    institutions.annotate_artifact(fake, "char_001", artifact, now="2026-06-27T20:40:00Z")
+
+    fake.strings[f"{inst_id}:active_workflows"] = "99"
+    fake.strings[f"{inst_id}:completed_workflows"] = "99"
+
+    institutions._rebuild_inst_counters(fake)
+
+    active_count = int(fake.get(f"{inst_id}:active_workflows") or 0)
+    completed_count = int(fake.get(f"{inst_id}:completed_workflows") or 0)
+    assert active_count == 1
+    assert completed_count == 0
+
+
+def test_set_institution_status():
+    fake = FakeRedis()
+    institutions.seed_institutions(fake, now="2026-06-27T20:50:00Z")
+    inst_id = "institution:research_division_council"
+
+    result = institutions.set_institution_status(fake, inst_id, "suspended")
+    assert result is True
+
+    rec = fake.hgetall(inst_id)
+    assert rec["status"] == "suspended"
+
+    result = institutions.set_institution_status(fake, "institution:nonexistent", "active")
+    assert result is False
