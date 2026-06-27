@@ -1,0 +1,30 @@
+# `.gitattributes` — enforce LF line endings on source files
+# across Windows + Linux development. Avoids the giant line-
+# ending noise diffs in PRs and commits.
+
+# Python — clear case, never CRLF
+*.py text eol=lf
+
+# YAML, TOML, shell, docker files — also LF
+*.yml text eol=lf
+*.yaml text eol=lf
+*.toml text eol=lf
+*.sh text eol=lf
+*.bash text eol=lf
+Dockerfile text eol=lf
+docker-compose*.yml text eol=lf
+*.env text eol=lf
+*.env.template text eol=lf
+
+# Markdown / config — LF
+*.md text eol=lf
+*.json text eol=lf
+*.toml text eol=lf
+
+# HTML/CSS/JS — LF
+*.html text eol=lf
+*.css text eol=lf
+*.js text eol=lf
+
+# Anything not matched — default to LF too, to keep repo uniform
+* text=auto eol=lf
