@@ -205,3 +205,20 @@ Untitled.txt
 # These are timestamp snapshots of edit-time backups — never commit.
 *.backup-*
 *.bak.[0-9]*
+
+# Session continuation artifacts (local only)
+CONTINUATION_TASK.md
+
+# AI session dump files (local only)
+docs/SYNTHESIS_REPORT_*.md
+docs/re-establishingederationont.txt
+docs/Understood*
+
+# Photos/screenshots scratch (local only)
+photos/
+
+# Local tooling scratch (local only)
+tools/
+
+# NPC agent workspace scratch (local only)
+federation-game/WORKSPACE/
