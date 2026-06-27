@@ -60,7 +60,7 @@ p{margin:0 0 8px 0}
 .muted{color:#8798ad}
 .timeline{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px}
 .glyph{border:1px solid #22344c;border-radius:999px;background:#101827;color:#e8edf5;padding:8px 11px;min-width:44px;text-align:center;font-size:1.15rem;cursor:pointer}
-.glyph.blue{background:#112033;border-color:#29527e}.glyph.green{background:#112a20;border-color:#28704b}.glyph.amber{background:#2d2410;border-color:#9a7222}.glyph.red{background:#351719;border-color:#aa3a42}
+.glyph.blue{background:#112033;border-color:#29527e}.glyph.green{background:#112a20;border-color:#28704b}.glyph.amber{background:#2d2410;border-color:#9a7222}.glyph.red{background:#351719;border-color:#aa3a42}.glyph.purple{background:#251035;border-color:#7e29b0}
 .tick-detail{display:none;margin-top:10px;padding:12px 14px;background:#0a0e16;border-left:4px solid #7aa7ff;border-radius:8px;color:#d6e2f0;font-size:1.05rem}
 .tick-detail.show{display:block}
 .comm-panel,.timeline-panel{padding:20px 24px;background:#0e121c;border:1px solid #26384f;border-radius:18px;margin-bottom:16px}
@@ -241,7 +241,10 @@ const CATEGORY_LABELS = {
   advance_goal: "Pursuing a goal",
   confront_rival: "Engaging a rival",
   help_ally: "Helping an ally",
-  seek_resources: "Seeking resources",
+   seek_resources: "Seeking resources",
+   create_institution: "Founding a new institution",
+   propose_role: "Proposing a new institutional role",
+   submit_to_institution: "Submitting artifact for review",
 };
 
 const CATEGORY_GLYPH = {
@@ -259,8 +262,11 @@ const CATEGORY_GLYPH = {
   advance_goal: "🎯",
   confront_rival: "⚔",
   help_ally: "🛡",
-  seek_resources: "⛏",
-  unknown: "•",
+   seek_resources: "⛏",
+   create_institution: "🏛",
+   propose_role: "⚜",
+   submit_to_institution: "📋",
+   unknown: "•",
 };
 
 const CATEGORY_COLOR = {
@@ -277,7 +283,10 @@ const CATEGORY_COLOR = {
   explore: "amber",
   advance_goal: "amber",
   confront_rival: "amber",
-  seek_resources: "amber",
+   seek_resources: "amber",
+   create_institution: "purple",
+   propose_role: "purple",
+   submit_to_institution: "green",
 };
 
 /* helpers */
@@ -312,8 +321,11 @@ function categoryFromAction(action){
   if(/artifact_(created|deferred)|created artifact|published artifact/.test(s)) return 'create_artifact';
   if(/message_(sent|deferred)|sent message|direct note|answering partner/.test(s)) return 'send_message';
   if(/read.*artifact|artifact_read|read_artifacts/.test(s)) return 'read_artifacts';
-  if(/investigation|investigat/.test(s)) return 'investigate';
-  if(/code_(executed|failed)|wrote code|write_code/.test(s)) return 'write_code';
+   if(/investigation|investigat/.test(s)) return 'investigate';
+   if(/institution_created|institution_founded|create_institution/.test(s)) return 'create_institution';
+   if(/role_proposed|propose_role/.test(s)) return 'propose_role';
+   if(/artifact_submitted|submit_to_institution|submitted.*review/.test(s)) return 'submit_to_institution';
+   if(/code_(executed|failed)|wrote code|write_code/.test(s)) return 'write_code';
   if(/self_improvement|self_improve/.test(s)) return 'self_improve';
   if(/reflection|rest/.test(s)) return 'rest';
   if(/error|failed|fail/.test(s)) return 'error';
@@ -345,8 +357,11 @@ function inferCategoryFromLog(log){
   if(/Created artifact/i.test(response)) return 'create_artifact';
   if(/Sent message|message_sent/i.test(response)) return 'send_message';
   if(/Read artifacts|artifact_read/i.test(response)) return 'read_artifacts';
-  if(/investigat/i.test(response)) return 'investigate';
-  if(/self[-_ ]?improv/i.test(response)) return 'self_improve';
+   if(/investigat/i.test(response)) return 'investigate';
+   if(/institution_(created|founded)|create_institution|Proposed new institution/i.test(response)) return 'create_institution';
+   if(/role_proposed|propose_role|Proposed role/i.test(response)) return 'propose_role';
+   if(/artifact_submitted|submit_to_institution|submitted.*review/i.test(response)) return 'submit_to_institution';
+   if(/self[-_ ]?improv/i.test(response)) return 'self_improve';
   if(!log.success || /error|fail|timeout/i.test(response)) return 'error';
   return 'unknown';
 }
@@ -426,6 +441,9 @@ function deriveBehaviorSignal(decisions){
     explore: ['curious'],
     help_ally: ['cooperative'],
     seek_resources: ['practical'],
+    create_institution: ['foundational','governance-oriented'],
+    propose_role: ['structural','governance-oriented'],
+    submit_to_institution: ['formal','institutional'],
   };
   const labels = {};
   for(const cat in counts){(weights[cat]||[]).forEach(l => { labels[l] = (labels[l]||0)+counts[cat]; });}
@@ -451,6 +469,9 @@ function behaviorStateSentence(npc){
   }
   if(d.category === 'send_message') return `${name} is communicating with another NPC and building the relationship thread.`;
   if(d.category === 'react_to_events') return `${name} is responding to recent world events.`;
+  if(d.category === 'create_institution') return `${name} is founding a new institution — a governance milestone.`;
+  if(d.category === 'propose_role') return `${name} is proposing a new role within an institution.`;
+  if(d.category === 'submit_to_institution') return `${name} is submitting an artifact for institutional review.`;
   return `${name} is ${doing}.`;
 }
 
@@ -1123,6 +1144,10 @@ function renderInstitutions(){
   const instCards = (instData.institutions||[]).map(renderInstitutionCard).join('');
   const activeCards = (instData.active||[]).map(wf => renderWorkflowCard(wf, true)).join('');
   const completedCards = (instData.completed||[]).map(wf => renderWorkflowCard(wf, false)).join('');
+  const autonomyActive = (instData.active||[]).filter(wf => /proposal_review|analysis_review/.test(wf.type||wf.wf_type||''));
+  const autonomyHtml = autonomyActive.length
+    ? autonomyActive.map(wf => `<div class="r-item"><span class="val-purple">🏛</span> <span class="r-action">${esc(wf.title||wf.type||'workflow')}</span> <span class="muted">${esc(wf.status||'active')} · ${esc(wf.source_councilor_id||'?')}</span></div>`).join('')
+    : '<div class="muted" style="padding:4px 0">No autonomy workflows in progress yet.</div>';
   const off = instData.completedOffset || 0;
   const total = instData.completedTotal || 0;
   const hasPrev = off > 0;
@@ -1142,6 +1167,10 @@ function renderInstitutions(){
     <section class="comm-panel" style="margin-top:14px">
       <h2>Active workflows <span style="color:#f1c40f;font-size:1.1rem">${instData.active.length}</span></h2>
       ${activeCards || '<div class="empty-card">No active workflows right now.</div>'}
+    </section>
+    <section class="comm-panel" style="margin-top:14px">
+      <h2>Councilor autonomy <span style="color:#7e29b0;font-size:1.1rem">${autonomyActive.length}</span></h2>
+      ${autonomyHtml}
     </section>
     <section class="comm-panel" style="margin-top:14px">
       <h2>Completed workflows <span style="color:#2ecc71;font-size:1.1rem">${instData.completedTotal}</span></h2>

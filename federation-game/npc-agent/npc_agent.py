@@ -57,6 +57,9 @@ AGENCY_CATEGORIES = {
     "investigate",
     "rest",
     "self_improve",
+    "create_institution",
+    "propose_role",
+    "submit_to_institution",
 }
 CONTACTS: dict = {}
 PAIR_IDS = {"char_001", "char_306"}
@@ -611,7 +614,7 @@ def _new_evidence_for_topic(r, topic: str, char_id: str, partner_id: str, window
                 created = a.get("created_at", 0) if isinstance(a, dict) else 0
                 normalized_partner_topic = _normalize_topic_label(title)
                 if topic_lower in title.lower() and (now - created) < window_sec:
-                    if normalized_partner_topic == topic_lower:
+                    if normalized_partner_topic == topic_lower or topic_lower in (a.get("description", "") if isinstance(a, dict) else "").lower():
                         logger.info(
                             "[%s] topic_fatigue_reset_blocked reason=same_partner_topic topic=%s",
                             CHAR_ID, topic_lower,
@@ -1482,6 +1485,41 @@ def think_about_world(r) -> str:
     if promoted:
         parts.append("Recent significant world events:\n" + "\n".join(f"  • {e}" for e in promoted))
 
+    # ── Topic pivot: warn about blocked/cooldown topics in context ──
+    try:
+        active_cooldowns = _active_topic_cooldowns(r, CHAR_ID)
+        dedup_streak = _recent_artifact_dedup_count(r)
+        dedup_topic = _dedup_blocked_topic(r)
+        pivot_parts = []
+        if active_cooldowns:
+            cd_text = ", ".join(f"{t} ({max(1, (ttl+59))//60}m left)" for t, ttl in active_cooldowns)
+            pivot_parts.append(f"TOPICS ON COOLDOWN (do not pursue): {cd_text}")
+        if dedup_streak >= 2 and dedup_topic:
+            pivot_parts.append(f"DEDUP BLOCKED TOPIC: \"{dedup_topic}\" (blocked {dedup_streak}x). Pivot to a different subject.")
+        if pivot_parts:
+            parts.append("⚠ " + "; ".join(pivot_parts))
+    except Exception:
+        pass
+
+    # ── Institution context: roles, workflows, and autonomy awareness ──
+    try:
+        role_id = r.get(f"councilor:{CHAR_ID}:role")
+        inst_id = r.get(f"councilor:{CHAR_ID}:institution")
+        if inst_id:
+            inst_rec = r.hgetall(inst_id)
+            inst_parts = [f"Your institution: {inst_rec.get('name', inst_id)} ({inst_rec.get('kind', '?')})"]
+            active_wfs = int(r.get(f"{inst_id}:active_workflows") or 0)
+            completed_wfs = int(r.get(f"{inst_id}:completed_workflows") or 0)
+            inst_parts.append(f"  Active workflows: {active_wfs}, Completed: {completed_wfs}")
+            if role_id:
+                role_rec = r.hgetall(role_id)
+                inst_parts.append(f"  Your role: {role_rec.get('title', '?')} — authority: {role_rec.get('authority', '?')}")
+            all_insts = r.smembers("institution:index") or set()
+            inst_parts.append(f"  Existing institutions ({len(all_insts)}): {', '.join(r.hget(i, 'name') or i for i in sorted(all_insts)[:8])}")
+            parts.append("\n".join(inst_parts))
+    except Exception:
+        pass
+
     # ── Persistent session transcript ──
     # The rolling last SESSION_CAP turns (3 hours at TICK_INTERVAL=45s).
     # This is what gives the agent cross-tick memory.
@@ -1769,6 +1807,9 @@ You have these action categories. Pick ONE per turn:
 - investigate: Research the simulation partner or the world.
 - rest: Take a moment to reflect.
 - self_improve: Improve your own capabilities.
+- create_institution: Propose a new institution (body, council, committee) with a name, kind, and mandate. Use when you see a gap in governance that needs a formal structure.
+- propose_role: Define a new role within an existing institution. Must specify institution, title, scope, and authority level.
+- submit_to_institution: Submit a recent artifact you created for institutional review. Provide the artifact title and which institution should review it.
 
 Behavioural rules:
 - The shared pair workspace persists across ticks. Treat it as your main living awareness with the other councilor.
@@ -1784,6 +1825,11 @@ Behavioural rules:
 - Respect the councilor role boundary: Archimedes asks for visions and analyzes
   them; The Oracle provides visions and future-pattern readings. Do not take the
   other councilor's role.
+- create_institution and propose_role are powerful governance actions. Use them
+  when you see a structural gap — not every tick. A new institution needs a clear
+  mandate that existing institutions do not cover.
+- submit_to_institution routes your work through formal review. Use it after
+  creating a significant artifact that warrants institutional scrutiny.
 
 Respond in this exact JSON format (no markdown, no explanation):
 {"category": "send_message", "reasoning": "...", "target": "contact_id", "body": "message text", "description": "..."}
@@ -1791,7 +1837,10 @@ Respond in this exact JSON format (no markdown, no explanation):
 {"category": "write_code", "reasoning": "...", "description": "what the code should do"}
 {"category": "investigate", "reasoning": "...", "description": "what you are investigating"}
 {"category": "self_improve", "reasoning": "...", "description": "what capability you are improving"}
-{"category": "rest", "reasoning": "...", "description": "reflecting on..."}"""
+{"category": "rest", "reasoning": "...", "description": "reflecting on..."}
+{"category": "create_institution", "reasoning": "...", "institution_name": "name", "institution_kind": "council|assembly|bureau|tribunal|committee", "mandate": "one-sentence mandate"}
+{"category": "propose_role", "reasoning": "...", "institution_name": "target institution name", "role_title": "title", "scope": "scope description", "authority": "review_and_propose|review_and_warn|review_and_enforce|observe_and_report"}
+{"category": "submit_to_institution", "reasoning": "...", "artifact_title": "recent artifact title to submit", "institution_name": "target institution name"}"""
 
     # Anti-loop: if recent decisions show 2+ send_message in a row AND
     # the agent has yet to produce any artifacts, hard-ban sending.
@@ -1840,16 +1889,25 @@ Respond in this exact JSON format (no markdown, no explanation):
             _topic_blocked_for_dedup = dedup_topic
             top_npcs = _top_neighborhood_npcs(r, 3)
             npc_hint = f" Your neighborhood scan shows these NPCs in notable states: {top_npcs}." if top_npcs else ""
-            force_constraint += (
-                "\n\nARTIFACT DEDUP COOLDOWN: You recently deferred "
-                f"{dedup_count} artifact(s) about \"{dedup_topic}\" "
-                "because they were too similar. Do NOT create another artifact about "
-                f"\"{dedup_topic}\" this turn unless genuinely distinct new evidence appeared. "
-                "If you have a DIFFERENT topic, you may create an artifact about that."
-                f"{npc_hint}"
-                " Pick: investigate, read_artifacts (from a DIFFERENT NPC), "
-                "send_message, or rest."
-            )
+            if dedup_count >= 3:
+                force_constraint += (
+                    "\n\nESCALATING DEDUP (streak=" + str(dedup_count) + "): "
+                    f"You have been blocked from \"{dedup_topic}\" {dedup_count} times in a row. "
+                    "You MUST NOT pick create_artifact this turn. "
+                    f"Pick investigate or read_artifacts about a COMPLETELY DIFFERENT topic."
+                    f"{npc_hint}"
+                )
+            else:
+                force_constraint += (
+                    "\n\nARTIFACT DEDUP COOLDOWN: You recently deferred "
+                    f"{dedup_count} artifact(s) about \"{dedup_topic}\" "
+                    "because they were too similar. Do NOT create another artifact about "
+                    f"\"{dedup_topic}\" this turn unless genuinely distinct new evidence appeared. "
+                    "If you have a DIFFERENT topic, you may create an artifact about that."
+                    f"{npc_hint}"
+                    " Pick: investigate, read_artifacts (from a DIFFERENT NPC), "
+                    "send_message, or rest."
+                )
         else:
             _topic_blocked_for_dedup = ""
         # Topic-fatigue: detect topic fixation from artifact titles and decision descriptions,
@@ -1944,6 +2002,7 @@ Respond in this exact JSON format (no markdown, no explanation):
                 a for a in (
                     "create_artifact", "write_code", "send_message",
                     "read_artifacts", "investigate", "rest", "self_improve",
+                    "create_institution", "propose_role", "submit_to_institution",
                 ) if a != banned
             ]
             force_constraint += (
@@ -1985,6 +2044,14 @@ Respond in this exact JSON format (no markdown, no explanation):
             proposed_title = decision.get("title", decision.get("description", ""))
             proposed_topic = _most_common_topic_word([proposed_title])
             if proposed_topic == _topic_blocked_for_dedup:
+                alt_npc = ""
+                try:
+                    top_npcs_str = _top_neighborhood_npcs(r, 1) if r is not None else ""
+                    if top_npcs_str:
+                        alt_npc = top_npcs_str.split(":")[0].strip()
+                except Exception:
+                    pass
+                alt_npc_hint = f" from {alt_npc}" if alt_npc else " from a different NPC"
                 logger.warning(
                     "[%s] dedup_create_banned topic=%s — forcing alternative",
                     CHAR_ID, proposed_topic,
@@ -1993,7 +2060,7 @@ Respond in this exact JSON format (no markdown, no explanation):
                 alt = {
                     "category": "read_artifacts",
                     "reasoning": "Dedup-aware override: recent similar artifacts deferred on same topic; reading partner work instead",
-                    "description": f"Reading partner artifacts after being blocked from creating more about '{proposed_topic}'",
+                    "description": f"Reading artifacts{alt_npc_hint} after being blocked from creating more about '{proposed_topic}'",
                 }
                 logger.info(
                     "[%s] dedup_forced_alternative forced=%s topic=%s reason=dedup_topic_match",
@@ -2358,6 +2425,258 @@ def execute_decision(decision: dict, r):
             "actor": NPC_NAME,
             "body": note,
         })
+
+    elif cat == "create_institution":
+        from datetime import datetime, timezone
+        inst_name = decision.get("institution_name", desc[:60] if desc else "Unnamed Body")
+        inst_kind = decision.get("institution_kind", "council")
+        mandate = decision.get("mandate", desc[:200] if desc else "To be defined.")
+        slug = re.sub(r"[^a-z0-9]+", "_", inst_name.lower()).strip("_")[:48]
+        inst_id = f"institution:{slug}"
+        now_iso = datetime.now(timezone.utc).isoformat()
+        try:
+            existing = r.hgetall(inst_id)
+            if existing:
+                result["action_taken"] = "institution_already_exists"
+                result["institution_id"] = inst_id
+                result["summary"] = f"Institution '{inst_name}' already exists"
+                _session_append(r, {
+                    "kind": "institution_proposed",
+                    "actor": NPC_NAME,
+                    "body": f"proposed institution '{inst_name}' but it already exists as {inst_id}",
+                })
+            else:
+                r.sadd("institution:index", inst_id)
+                r.hset(inst_id, mapping={
+                    "name": inst_name,
+                    "kind": inst_kind,
+                    "mandate": mandate,
+                    "status": "proposed",
+                    "proposed_by": CHAR_ID,
+                    "created_at": now_iso,
+                })
+                r.hincrby(f"npc_stats:{CHAR_ID}", "institutions_founded", 1)
+                result["action_taken"] = "institution_created"
+                result["institution_id"] = inst_id
+                result["institution_name"] = inst_name
+                result["summary"] = f"Proposed new institution: {inst_name} ({inst_kind})"
+                logger.info("[%s] Created institution: %s (%s)", CHAR_ID, inst_name, inst_id)
+                _session_append(r, {
+                    "kind": "institution_founded",
+                    "actor": NPC_NAME,
+                    "title": inst_name,
+                    "body": f"founded {inst_kind} '{inst_name}' — mandate: {mandate[:120]}",
+                })
+                try:
+                    partner_id = _partner_id()
+                    r.rpush(f"npc_session:{partner_id}", json.dumps({
+                        "kind": "institution_founded_by_partner",
+                        "actor": NPC_NAME,
+                        "from": CHAR_ID,
+                        "title": inst_name,
+                        "mandate": mandate[:120],
+                        "ts": ts,
+                    }, default=str))
+                    r.ltrim(f"npc_session:{partner_id}", -SESSION_CAP, -1)
+                except Exception:
+                    pass
+        except Exception as e:
+            result["action_taken"] = f"institution_error: {e}"
+            logger.error("[%s] Institution creation failed: %s", CHAR_ID, e)
+
+    elif cat == "propose_role":
+        from datetime import datetime, timezone
+        target_inst_name = decision.get("institution_name", "")
+        role_title = decision.get("role_title", desc[:60] if desc else "Unnamed Role")
+        scope = decision.get("scope", desc[:200] if desc else "To be defined.")
+        authority = decision.get("authority", "observe_and_report")
+        now_iso = datetime.now(timezone.utc).isoformat()
+        try:
+            target_inst_id = None
+            for iid in r.smembers("institution:index"):
+                rec = r.hgetall(iid)
+                if rec.get("name", "") == target_inst_name:
+                    target_inst_id = iid
+                    break
+            if not target_inst_id:
+                my_inst = r.get(f"councilor:{CHAR_ID}:institution")
+                if my_inst:
+                    target_inst_id = my_inst
+                else:
+                    first_inst = sorted(r.smembers("institution:index"))
+                    target_inst_id = first_inst[0] if first_inst else None
+            if not target_inst_id:
+                result["action_taken"] = "role_no_institution"
+                result["summary"] = "No institution found to propose role in"
+                _session_append(r, {
+                    "kind": "role_proposal_failed",
+                    "actor": NPC_NAME,
+                    "body": f"could not find institution for proposed role '{role_title}'",
+                })
+            else:
+                slug = re.sub(r"[^a-z0-9]+", "_", role_title.lower()).strip("_")[:48]
+                role_id = f"role:{slug}"
+                existing = r.hgetall(role_id)
+                if existing:
+                    result["action_taken"] = "role_already_exists"
+                    result["role_id"] = role_id
+                    result["summary"] = f"Role '{role_title}' already exists"
+                    _session_append(r, {
+                        "kind": "role_proposal_failed",
+                        "actor": NPC_NAME,
+                        "body": f"proposed role '{role_title}' but it already exists",
+                    })
+                else:
+                    r.sadd("role:index", role_id)
+                    r.hset(role_id, mapping={
+                        "institution_id": target_inst_id,
+                        "title": role_title,
+                        "scope": scope,
+                        "authority": authority,
+                        "holder_char_id": "",
+                        "proposed_by": CHAR_ID,
+                        "status": "proposed",
+                        "created_at": now_iso,
+                    })
+                    r.sadd(f"{target_inst_id}:roles", role_id)
+                    r.hincrby(f"npc_stats:{CHAR_ID}", "roles_proposed", 1)
+                    inst_rec = r.hgetall(target_inst_id)
+                    result["action_taken"] = "role_proposed"
+                    result["role_id"] = role_id
+                    result["institution_id"] = target_inst_id
+                    result["role_title"] = role_title
+                    result["summary"] = f"Proposed role '{role_title}' in {inst_rec.get('name', target_inst_id)}"
+                    logger.info("[%s] Proposed role: %s in %s", CHAR_ID, role_title, target_inst_id)
+                    _session_append(r, {
+                        "kind": "role_proposed",
+                        "actor": NPC_NAME,
+                        "title": role_title,
+                        "body": f"proposed role '{role_title}' (authority: {authority}) in {inst_rec.get('name', target_inst_id)} — scope: {scope[:120]}",
+                    })
+        except Exception as e:
+            result["action_taken"] = f"role_error: {e}"
+            logger.error("[%s] Role proposal failed: %s", CHAR_ID, e)
+
+    elif cat == "submit_to_institution":
+        from datetime import datetime, timezone
+        artifact_title = decision.get("artifact_title", "")
+        target_inst_name = decision.get("institution_name", "")
+        now_iso = datetime.now(timezone.utc).isoformat()
+        try:
+            target_inst_id = None
+            for iid in r.smembers("institution:index"):
+                rec = r.hgetall(iid)
+                if rec.get("name", "") == target_inst_name:
+                    target_inst_id = iid
+                    break
+            if not target_inst_id:
+                my_inst = r.get(f"councilor:{CHAR_ID}:institution")
+                if my_inst:
+                    target_inst_id = my_inst
+            if not target_inst_id:
+                result["action_taken"] = "submit_no_institution"
+                result["summary"] = f"No institution '{target_inst_name}' found for submission"
+                _session_append(r, {
+                    "kind": "institution_submit_failed",
+                    "actor": NPC_NAME,
+                    "body": f"could not find institution for artifact submission",
+                })
+            else:
+                matching_artifact = None
+                raw_artifacts = r.lrange(f"npc_artifacts:{CHAR_ID}", -10, -1)
+                for a in reversed(raw_artifacts):
+                    try:
+                        obj = json.loads(a)
+                        if obj.get("title", "").lower() == artifact_title.lower():
+                            matching_artifact = obj
+                            break
+                        if artifact_title.lower() in obj.get("title", "").lower():
+                            matching_artifact = obj
+                            break
+                    except Exception:
+                        continue
+                if not matching_artifact and raw_artifacts:
+                    try:
+                        matching_artifact = json.loads(raw_artifacts[-1])
+                    except Exception:
+                        pass
+                if not matching_artifact:
+                    result["action_taken"] = "submit_no_artifact"
+                    result["summary"] = f"No matching artifact found for '{artifact_title}'"
+                    _session_append(r, {
+                        "kind": "institution_submit_failed",
+                        "actor": NPC_NAME,
+                        "body": f"no artifact '{artifact_title}' to submit for review",
+                    })
+                else:
+                    role_ctx = {
+                        "institution_id": target_inst_id,
+                        "institution_name": r.hget(target_inst_id, "name") or target_inst_name,
+                        "role_id": r.get(f"councilor:{CHAR_ID}:role") or "",
+                        "role_title": "",
+                    }
+                    art_kind = "proposal"
+                    raw_text = " ".join(str(matching_artifact.get(p, "")) for p in ("title", "content", "description")).lower()
+                    if any(t in raw_text for t in ("analysis", "report", "diagnostic", "forecast")):
+                        art_kind = "analysis"
+                    wf_type = "proposal_review" if art_kind == "proposal" else "analysis_review"
+                    workflow_id = f"workflow:{wf_type}:{matching_artifact['artifact_id']}"
+                    existing_wf = r.get(f"workflow:source_artifact:{matching_artifact['artifact_id']}")
+                    if existing_wf:
+                        result["action_taken"] = "submit_already_in_review"
+                        result["workflow_id"] = existing_wf
+                        result["summary"] = f"Artifact '{matching_artifact.get('title', '?')}' already in review"
+                        _session_append(r, {
+                            "kind": "institution_submit_duplicate",
+                            "actor": NPC_NAME,
+                            "body": f"artifact '{matching_artifact.get('title', '?')}' already has workflow {existing_wf}",
+                        })
+                    else:
+                        r.hset(workflow_id, mapping={
+                            "type": wf_type,
+                            "institution_id": target_inst_id,
+                            "role_id": role_ctx["role_id"],
+                            "source_artifact_id": matching_artifact["artifact_id"],
+                            "source_councilor_id": CHAR_ID,
+                            "artifact_kind": art_kind,
+                            "status": "submitted",
+                            "title": matching_artifact.get("title", "Untitled"),
+                            "created_at": now_iso,
+                            "updated_at": now_iso,
+                        })
+                        r.sadd("workflow:index", workflow_id)
+                        r.sadd("workflow:active", workflow_id)
+                        r.set(f"workflow:source_artifact:{matching_artifact['artifact_id']}", workflow_id)
+                        try:
+                            curr = int(r.get(f"{target_inst_id}:active_workflows") or 0)
+                            r.set(f"{target_inst_id}:active_workflows", str(curr + 1))
+                        except Exception:
+                            pass
+                        r.rpush(f"{workflow_id}:events", json.dumps({
+                            "timestamp": now_iso,
+                            "status": "submitted",
+                            "detail": f"{art_kind.capitalize()} submitted for institutional review by {NPC_NAME}.",
+                        }))
+                        matching_artifact["institution_id"] = target_inst_id
+                        matching_artifact["role_id"] = role_ctx["role_id"]
+                        matching_artifact["artifact_kind"] = art_kind
+                        matching_artifact["workflow_id"] = workflow_id
+                        r.hincrby(f"npc_stats:{CHAR_ID}", "artifacts_submitted_for_review", 1)
+                        result["action_taken"] = "artifact_submitted"
+                        result["workflow_id"] = workflow_id
+                        result["artifact_title"] = matching_artifact.get("title", "?")
+                        result["institution_id"] = target_inst_id
+                        result["summary"] = f"Submitted '{matching_artifact.get('title', '?')}' for {wf_type} in {role_ctx['institution_name']}"
+                        logger.info("[%s] Submitted artifact %s for %s review: %s", CHAR_ID, matching_artifact.get("title", "?"), wf_type, workflow_id)
+                        _session_append(r, {
+                            "kind": "artifact_submitted_for_review",
+                            "actor": NPC_NAME,
+                            "title": matching_artifact.get("title", "?"),
+                            "body": f"submitted '{matching_artifact.get('title', '?')}' for {wf_type} in {role_ctx['institution_name']}",
+                        })
+        except Exception as e:
+            result["action_taken"] = f"submit_error: {e}"
+            logger.error("[%s] Artifact submission failed: %s", CHAR_ID, e)
 
     else:
         note = _compact_text(desc, 180) or _compact_text(reasoning, 180) or f"unhandled category {cat}"
