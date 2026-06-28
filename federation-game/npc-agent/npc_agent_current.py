@@ -36,6 +36,17 @@ TICK_INTERVAL = int(os.environ.get("TICK_INTERVAL", "30"))
 PRIMARY_MODEL = os.environ.get("PRIMARY_MODEL", "meta/llama-3.3-70b-instruct")
 FALLBACK_MODEL_1 = os.environ.get("FALLBACK_MODEL_1", "") or None
 FALLBACK_MODEL_2 = os.environ.get("FALLBACK_MODEL_2", "") or None
+OPENROUTER_API_KEY = os.environ.get("OPENROUTER_API_KEY", "")
+OR_FREE_POOL = [
+    "nvidia/nemotron-3-ultra-550b-a55b:free",
+    "nvidia/nemotron-3-super-120b-a12b:free",
+    "meta-llama/llama-3.3-70b-instruct:free",
+    "qwen/qwen3-next-80b-a3b-instruct:free",
+    "nousresearch/hermes-3-llama-3.1-405b:free",
+    "google/gemma-4-31b-it:free",
+    "nvidia/nemotron-3-nano-30b-a3b:free",
+]
+_or_pool_idx = 0
 MODEL_EXTRA_BODY = os.environ.get("MODEL_EXTRA_BODY", "")
 MODEL_ENABLE_THINKING = os.environ.get("MODEL_ENABLE_THINKING", "").lower() in ("1", "true", "yes")
 MODEL_REASONING_BUDGET = int(os.environ.get("MODEL_REASONING_BUDGET", "0") or "0")
@@ -50,6 +61,7 @@ SESSION_CAP = int(os.environ.get("SESSION_CAP", "24"))
 SESSION_TRANSCRIPT_CHARS = int(os.environ.get("SESSION_TRANSCRIPT_CHARS", "1800"))
 
 NVIDIA_BASE = "https://integrate.api.nvidia.com/v1"
+OR_BASE = "https://openrouter.ai/api/v1/chat/completions"
 
 AGENCY_CATEGORIES = {
     "create_artifact",
@@ -1181,21 +1193,78 @@ def _api_key_for_model(model_name: str) -> str:
     return NVIDIA_API_KEY
 
 
-def call_llm(system_prompt: str, user_prompt: str, model: str = "", r=None, call_label: str = "") -> dict:
-    if not NVIDIA_API_KEY:
-        return {"content": "", "error": "No NVIDIA_API_KEY set"}
+def _call_openrouter_free(system_prompt: str, user_prompt: str, r=None, call_label: str = "") -> dict:
+    global _or_pool_idx
+    if not OPENROUTER_API_KEY or not OR_FREE_POOL:
+        return {"content": "", "error": "No OPENROUTER_API_KEY or pool empty"}
+    start = time.monotonic()
+    tried = 0
+    while tried < len(OR_FREE_POOL):
+        model = OR_FREE_POOL[_or_pool_idx % len(OR_FREE_POOL)]
+        _or_pool_idx += 1
+        tried += 1
+        try:
+            body = {
+                "model": model,
+                "messages": [
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_prompt},
+                ],
+                "temperature": 0.7,
+                "max_tokens": MAX_OUTPUT_TOKENS,
+            }
+            with httpx.Client(timeout=REQUEST_TIMEOUT) as client:
+                resp = client.post(
+                    OR_BASE,
+                    headers={
+                        "Authorization": f"Bearer {OPENROUTER_API_KEY}",
+                        "Content-Type": "application/json",
+                        "HTTP-Referer": "https://federation.game",
+                    },
+                    json=body,
+                )
+                resp.raise_for_status()
+                data = resp.json()
+                content = data["choices"][0]["message"]["content"].strip()
+                elapsed_ms = int((time.monotonic() - start) * 1000)
+                logger.info("[%s] OR free OK — model: %s (%dms)", CHAR_ID, model, elapsed_ms)
+                if r:
+                    _log_llm_call(r, call_label, model, system_prompt, user_prompt, content, True, "", elapsed_ms)
+                return {"content": content, "model": model, "provider": "openrouter_free"}
+        except Exception as e:
+            elapsed_ms = int((time.monotonic() - start) * 1000)
+            status = getattr(e, "response", None)
+            status_code = getattr(status, "status_code", 0) if status else 0
+            err_msg = str(e)[:200]
+            logger.warning("[%s] OR free %s failed (HTTP %s, %dms): %s", CHAR_ID, model, status_code, elapsed_ms, err_msg)
+            if status_code in (400, 401, 403, 404):
+                continue
+            if status_code == 429:
+                time.sleep(random.uniform(1.0, 3.0))
+            if r:
+                _log_llm_call(r, call_label, model, system_prompt, user_prompt, "", False, err_msg, elapsed_ms)
+    logger.error("[%s] All %d OR free models failed", CHAR_ID, len(OR_FREE_POOL))
+    return {"content": "", "error": "All OR free models failed"}
 
+
+def call_llm(system_prompt: str, user_prompt: str, model: str = "", r=None, call_label: str = "") -> dict:
     models_to_try = []
-    if model:
-        models_to_try.append(model)
-    if PRIMARY_MODEL:
-        models_to_try.append(PRIMARY_MODEL)
-    if FALLBACK_MODEL_1:
-        models_to_try.append(FALLBACK_MODEL_1)
-    if FALLBACK_MODEL_2:
-        models_to_try.append(FALLBACK_MODEL_2)
+    if NVIDIA_API_KEY:
+        if model:
+            models_to_try.append(model)
+        if PRIMARY_MODEL:
+            models_to_try.append(PRIMARY_MODEL)
+        if FALLBACK_MODEL_1:
+            models_to_try.append(FALLBACK_MODEL_1)
+        if FALLBACK_MODEL_2:
+            models_to_try.append(FALLBACK_MODEL_2)
+    elif not OPENROUTER_API_KEY:
+        return {"content": "", "error": "No NVIDIA_API_KEY or OPENROUTER_API_KEY set"}
+    if not models_to_try and OPENROUTER_API_KEY:
+        logger.info("[%s] No NIM models configured, going straight to OR free pool", CHAR_ID)
+        return _call_openrouter_free(system_prompt, user_prompt, r, call_label)
     if not models_to_try:
-        models_to_try = ["meta/llama-3.3-70b-instruct"]
+        return {"content": "", "error": "No models configured"}
 
     # Use longer timeout for artifact/code generation calls
     timeout = ARTIFACT_TIMEOUT if call_label in ("artifact", "code") else REQUEST_TIMEOUT
@@ -1286,8 +1355,12 @@ def call_llm(system_prompt: str, user_prompt: str, model: str = "", r=None, call
             last_error = err_msg
             continue
 
-    logger.error("[%s] All %d models failed. Last error: %s", CHAR_ID, len(models_to_try), last_error)
-    return {"content": "", "error": f"All models failed: {last_error}"}
+    logger.warning("[%s] All %d NIM models failed, trying OpenRouter free pool. Last error: %s", CHAR_ID, len(models_to_try), last_error)
+    or_result = _call_openrouter_free(system_prompt, user_prompt, r, call_label)
+    if or_result.get("content"):
+        return or_result
+    logger.error("[%s] All NIM + OR free models failed. Last NIM: %s | OR: %s", CHAR_ID, last_error, or_result.get("error", ""))
+    return {"content": "", "error": f"All models failed. NIM: {last_error}; OR: {or_result.get('error', '')}"}
 
 
 # ── Fourth-Wall Filter ──────────────────────────────────────────────
