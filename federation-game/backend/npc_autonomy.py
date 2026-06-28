@@ -2394,8 +2394,10 @@ def _get_institution_context():
 LOW_VALUE_CATEGORIES = frozenset({"rest", "wander", "noop"})
 
 
-def _reflect_on_missing_context(npc_id, recent_decisions, inst_ctx, world_ctx):
+def _reflect_on_missing_context(npc_id, recent_decisions, inst_ctx, world_ctx, fulfilled_need_types=None):
     """Return a suggested need record or None if the NPC seems well-resourced."""
+    if fulfilled_need_types is None:
+        fulfilled_need_types = set()
     if not recent_decisions:
         return None
     low_count = 0
@@ -2410,51 +2412,70 @@ def _reflect_on_missing_context(npc_id, recent_decisions, inst_ctx, world_ctx):
     has_active_inst = any(i.get("status") == "active" and i.get("active_workflows", 0) > 0 for i in institutions)
     is_member = any(npc_id in i.get("members", []) for i in institutions)
     if has_active_inst and not is_member:
-        return {
-            "need_type": "institution_support",
-            "priority": "high",
-            "description": "Active institution workflows exist but I have no membership or visibility into them.",
-            "why_needed": "Over half my recent actions were low-value (rest/wander) — lacking institutional coordination context.",
-            "suggested_capability": "institution_membership_or_observer_feed",
-        }
+        need_type = "institution_support"
+        if need_type in fulfilled_need_types:
+            pass
+        else:
+            return {
+                "need_type": need_type,
+                "priority": "high",
+                "description": "Active institution workflows exist but I have no membership or visibility into them.",
+                "why_needed": "Over half my recent actions were low-value (rest/wander) — lacking institutional coordination context.",
+                "suggested_capability": "institution_membership_or_observer_feed",
+            }
     if has_active_inst and is_member:
         active_wfs = sum(i.get("active_workflows", 0) for i in institutions if npc_id in i.get("members", []))
         if active_wfs >= 3:
-            return {
-                "need_type": "workflow_visibility",
-                "priority": "high",
-                "description": f"My institution has {active_wfs} active workflows but I cannot see their progress or blockers.",
-                "why_needed": "I keep resting because I lack workflow status to act on.",
-                "suggested_capability": "npc_decision_summary_feed",
-            }
+            need_type = "workflow_visibility"
+            if need_type in fulfilled_need_types:
+                pass
+            else:
+                return {
+                    "need_type": need_type,
+                    "priority": "high",
+                    "description": f"My institution has {active_wfs} active workflows but I cannot see their progress or blockers.",
+                    "why_needed": "I keep resting because I lack workflow status to act on.",
+                    "suggested_capability": "npc_decision_summary_feed",
+                }
         if active_wfs == 0:
-            return {
-                "need_type": "coordination_help",
-                "priority": "medium",
-                "description": "I am an institution member but no workflows are active despite world events.",
-                "why_needed": "Low action rate suggests I need better triggers to initiate institutional processes.",
-                "suggested_capability": "institution_trigger_context",
-            }
+            need_type = "coordination_help"
+            if need_type in fulfilled_need_types:
+                pass
+            else:
+                return {
+                    "need_type": need_type,
+                    "priority": "medium",
+                    "description": "I am an institution member but no workflows are active despite world events.",
+                    "why_needed": "Low action rate suggests I need better triggers to initiate institutional processes.",
+                    "suggested_capability": "institution_trigger_context",
+                }
     world_stable = all(
         world_ctx.get(k, 50) in range(30, 70)
         for k in ("stability", "morale", "resource_abundance")
         if k in world_ctx
     )
     if world_stable and low_ratio > 0.6:
+        need_type = "world_state_gap"
+        if need_type in fulfilled_need_types:
+            pass
+        else:
+            return {
+                "need_type": need_type,
+                "priority": "medium",
+                "description": "World state appears stable but I lack granular context to find productive actions.",
+                "why_needed": "Stable world + high rest rate = missing decision-driving information.",
+                "suggested_capability": "sector_or_faction_detail_feed",
+            }
+    need_type = "information_access"
+    if need_type not in fulfilled_need_types:
         return {
-            "need_type": "world_state_gap",
+            "need_type": need_type,
             "priority": "medium",
-            "description": "World state appears stable but I lack granular context to find productive actions.",
-            "why_needed": "Stable world + high rest rate = missing decision-driving information.",
-            "suggested_capability": "sector_or_faction_detail_feed",
+            "description": "I am under-acting relative to my role — I need better context about what is happening.",
+            "why_needed": f"{low_count}/{len(recent_decisions[-10:])} recent actions were low-value.",
+            "suggested_capability": "general_context_enrichment",
         }
-    return {
-        "need_type": "information_access",
-        "priority": "medium",
-        "description": "I am under-acting relative to my role — I need better context about what is happening.",
-        "why_needed": f"{low_count}/{len(recent_decisions[-10:])} recent actions were low-value.",
-        "suggested_capability": "general_context_enrichment",
-    }
+    return None
 
 
 MOOD_DECISION_BIAS = {
@@ -2559,6 +2580,7 @@ def _score_decision_option(
     has_active_quests=False,
     inst_ctx=None,
     need_reflection=None,
+    fulfilled_need_types=None,
 ):
     score = 1.0
     mood_biases = MOOD_DECISION_BIAS.get(mood, {})
@@ -2625,7 +2647,7 @@ def _score_decision_option(
     return max(0.1, score)
 
 
-def evaluate_decision_options(char_id, char_name, archetype, affiliation, mood=""):
+def evaluate_decision_options(char_id, char_name, archetype, affiliation, mood="", fulfilled_need_types=None):
     mood = mood or get_mood(char_id)
     active_goals = get_goals(char_id, status=GOAL_STATUS_ACTIVE)
     has_active_goals = len(active_goals) > 0
@@ -2669,7 +2691,8 @@ def evaluate_decision_options(char_id, char_name, archetype, affiliation, mood="
         _world_raw = _nr.get("world_state")
         _world_ctx = json.loads(_world_raw) if _world_raw else {}
         need_reflection = _reflect_on_missing_context(
-            char_id, _recent_decisions, inst_ctx, _world_ctx
+            char_id, _recent_decisions, inst_ctx, _world_ctx,
+            fulfilled_need_types=fulfilled_need_types,
         )
     except Exception:
         pass
@@ -2689,6 +2712,7 @@ def evaluate_decision_options(char_id, char_name, archetype, affiliation, mood="
             has_active_quests=has_active_quests,
             inst_ctx=inst_ctx,
             need_reflection=need_reflection,
+            fulfilled_need_types=fulfilled_need_types,
         )
         reasons = []
         mood_biases = MOOD_DECISION_BIAS.get(mood, {})
@@ -2721,6 +2745,17 @@ def evaluate_decision_options(char_id, char_name, archetype, affiliation, mood="
                         reasons.append(inst["name"] + " busy")
         if cat == "request_capability" and need_reflection:
             reasons.append("missing: " + need_reflection.get("need_type", "context"))
+        if cat == "request_capability" and fulfilled_need_types:
+            nr_type = need_reflection.get("need_type", "") if need_reflection else ""
+            if nr_type in fulfilled_need_types:
+                score *= 0.1
+                reasons.append("already_fulfilled: " + nr_type)
+            else:
+                for ft in fulfilled_need_types:
+                    if ft in ("information_access", "world_state_gap", "context_enrichment"):
+                        score *= 0.5
+                        reasons.append("recent_fulfillment")
+                        break
         options.append({"category": cat, "score": round(score, 2), "reasons": reasons})
 
     options.sort(key=lambda x: x["score"], reverse=True)
@@ -2731,6 +2766,7 @@ def make_decision(char_id, char_name, archetype, affiliation, mood=""):
     r = _get_redis()
     notifications = consume_system_notifications(r, char_id)
     notification_context = ""
+    fulfilled_need_types = set()
     if notifications:
         parts = []
         for n in notifications:
@@ -2738,10 +2774,13 @@ def make_decision(char_id, char_name, archetype, affiliation, mood=""):
                 f"[System Notice: Your request for {n.get('need_type','')} has been "
                 f"{n.get('resolution','').replace('closed_','')}. {n.get('message','')}]"
             )
+            if n.get("resolution", "").startswith("closed_fulfilled"):
+                fulfilled_need_types.add(n.get("need_type", ""))
         notification_context = " ".join(parts)
 
     options, need_reflection = evaluate_decision_options(
-        char_id, char_name, archetype, affiliation, mood
+        char_id, char_name, archetype, affiliation, mood,
+        fulfilled_need_types=fulfilled_need_types,
     )
     if not options:
         return None
@@ -3065,9 +3104,11 @@ def get_relevant_events_for_npc(char_id, affiliation, limit=5):
 
 # --- COUNCILOR DECREES: Bounded world-state write access ---
 
-DECREES_ALLOWED_NPCS = os.environ.get(
-    "EXTERNAL_AGENT_NPCS", "char_001,char_306"
-).split(",")
+DECREES_ALLOWED_NPCS = [
+    x.strip()
+    for x in os.environ.get("EXTERNAL_AGENT_NPCS", "char_001,char_306").split(",")
+    if x.strip()
+]
 
 DECREES_ALLOWED_METRICS = [
     "stability",
