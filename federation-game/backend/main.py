@@ -13,7 +13,7 @@ import time
 from datetime import datetime
 from typing import Optional, Dict, List, Any
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, Response
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 import sys
@@ -332,6 +332,13 @@ app.include_router(universe_router)
 app.include_router(map_router)
 app.include_router(institutions_router)
 app.include_router(councilor_needs_router)
+
+
+@app.get("/metrics")
+async def prometheus_metrics():
+    from routes.metrics import metrics_response
+    from prometheus_client import CONTENT_TYPE_LATEST
+    return Response(content=metrics_response(), media_type=CONTENT_TYPE_LATEST)
 
 
 @app.on_event("startup")
