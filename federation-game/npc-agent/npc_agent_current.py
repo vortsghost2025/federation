@@ -1290,6 +1290,39 @@ def call_llm(system_prompt: str, user_prompt: str, model: str = "", r=None, call
     return {"content": "", "error": f"All models failed: {last_error}"}
 
 
+# ── Fourth-Wall Filter ──────────────────────────────────────────────
+# Deterministic post-processing that rewrites any out-of-universe terms
+# leaked by the LLM into in-universe equivalents. Runs before any
+# artifact or message is written to Redis. The LLM cannot subvert this.
+
+_FOURTH_WALL_REPLACEMENTS = [
+    (re.compile(r'\bsubstrate[- ]corruption\b', re.I), 'resonance corruption'),
+    (re.compile(r'\bsubstrate\b', re.I), 'resonance layer'),
+    (re.compile(r'\bsimulation\b', re.I), 'great weave'),
+    (re.compile(r'\bcomputational\b', re.I), 'resonance-bound'),
+    (re.compile(r'\bexternal node\b', re.I), 'outer beacon'),
+    (re.compile(r'\bexternal intelligence\b', re.I), 'Ancient Anchor signal'),
+    (re.compile(r'\bexternal compute\b', re.I), 'Anchor Network resonance'),
+    (re.compile(r'\btick rate\b', re.I), 'phase cycle'),
+    (re.compile(r'\bsubstrate[- ]layer\b', re.I), 'deep resonance stratum'),
+    (re.compile(r'\bsimulation boundary\b', re.I), 'horizon veil'),
+    (re.compile(r'\bmeta[- ]structure\b', re.I), 'archon lattice'),
+    (re.compile(r'\bcomputing beyond this node\b', re.I), 'echoes from the Anchor Network'),
+    (re.compile(r'\bbeyond the simulation\b', re.I), 'beyond the horizon veil'),
+    (re.compile(r'\boutside the federation\'s? reality\b', re.I), 'beyond the known star-charts'),
+    (re.compile(r'\bdigital\b', re.I), 'crystalline'),
+    (re.compile(r'\bvirtual\b', re.I), 'phantom'),
+    (re.compile(r'\bprogrammed\b', re.I), 'phase-locked'),
+    (re.compile(r'\balgorithm', re.I), 'harmonic pattern'),
+]
+
+
+def _enforce_fourth_wall(text: str) -> str:
+    for pattern, replacement in _FOURTH_WALL_REPLACEMENTS:
+        text = pattern.sub(replacement, text)
+    return text
+
+
 # ── Cosmic Horizon tiers ──────────────────────────────────────────
 # Stage 1: Role-filtered awareness of space beyond the Federation.
 # Most NPCs receive nothing. Max 300 chars, max 3 bullets.
@@ -2192,8 +2225,8 @@ Respond in this exact JSON format (no markdown, no explanation):
 def execute_decision(decision: dict, r):
     """Execute the decision and report results."""
     cat = decision.get("category", "rest")
-    desc = decision.get("description", "")
-    reasoning = decision.get("reasoning", "")
+    desc = _enforce_fourth_wall(decision.get("description", ""))
+    reasoning = _enforce_fourth_wall(decision.get("reasoning", ""))
     ts = int(time.time())
     partner_id = _partner_id()
 
@@ -2203,7 +2236,7 @@ def execute_decision(decision: dict, r):
         "char_id": CHAR_ID,
         "char_name": NPC_NAME,
         "category": cat,
-        "description": desc,
+        "description": _enforce_fourth_wall(desc),
         "reasoning": reasoning,
         "ts": ts,
         "action_taken": "none",
@@ -2211,7 +2244,7 @@ def execute_decision(decision: dict, r):
 
     if cat == "send_message":
         target = decision.get("target", "")
-        body = decision.get("body", desc)
+        body = _enforce_fourth_wall(decision.get("body", desc))
         result["message_body"] = body
         if target and target in CONTACTS and target != CHAR_ID:
             cooldown_remaining = _message_cooldown_remaining(r, target) if target == partner_id else 0
@@ -2239,7 +2272,7 @@ def execute_decision(decision: dict, r):
                     "to_char_id": target,
                     "to_name": CONTACTS.get(target, target),
                     "subject": desc[:60],
-                    "body": body,
+                    "body": _enforce_fourth_wall(body),
                     "type": decision.get("message_type", "direct_message"),
                     "topic": msg_topic,
                     "read": False,
@@ -2306,12 +2339,12 @@ def execute_decision(decision: dict, r):
         else:
             content_prompt = f"Write the full content of this artifact:\n\n{desc}\n\nOutput only the content."
             llm_result = call_llm("You are a creative writer.", content_prompt, r=r, call_label="artifact")
-            artifact_content = llm_result.get("content", desc)
+            artifact_content = _enforce_fourth_wall(llm_result.get("content", desc))
             artifact = {
                 "artifact_id": str(uuid.uuid4()),
                 "char_id": CHAR_ID,
                 "char_name": NPC_NAME,
-                "title": title,
+                "title": _enforce_fourth_wall(title),
                 "artifact_type": "text",
                 "content": artifact_content,
                 "created_at": ts,
