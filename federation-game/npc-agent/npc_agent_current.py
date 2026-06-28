@@ -62,6 +62,7 @@ AGENCY_CATEGORIES = {
     "create_institution",
     "propose_role",
     "submit_to_institution",
+    "request_capability",
 }
 CONTACTS: dict = {}
 PAIR_IDS = {"char_001", "char_306"}
@@ -1826,6 +1827,7 @@ You have these action categories. Pick ONE per turn:
 - create_institution: Propose a new institution (body, council, committee) with a name, kind, and mandate. Use when you see a gap in governance that needs a formal structure.
 - propose_role: Define a new role within an existing institution. Must specify institution, title, scope, and authority level.
 - submit_to_institution: Submit a recent artifact you created for institutional review. Provide the artifact title and which institution should review it.
+- request_capability: Report a missing capability or context that is limiting your effectiveness. You may ONLY request structured needs — never shell access, admin powers, or system changes. Allowed need types: information_access, memory_access, coordination_help, institution_support, workflow_visibility, decision_feedback, world_state_gap. Use this when you find yourself repeatedly resting or unable to act because you lack information.
 
 Behavioural rules:
 - The shared pair workspace persists across ticks. Treat it as your main living awareness with the other councilor.
@@ -1856,7 +1858,8 @@ Respond in this exact JSON format (no markdown, no explanation):
 {"category": "rest", "reasoning": "...", "description": "reflecting on..."}
 {"category": "create_institution", "reasoning": "...", "institution_name": "name", "institution_kind": "council|assembly|bureau|tribunal|committee", "mandate": "one-sentence mandate"}
 {"category": "propose_role", "reasoning": "...", "institution_name": "target institution name", "role_title": "title", "scope": "scope description", "authority": "review_and_propose|review_and_warn|review_and_enforce|observe_and_report"}
-{"category": "submit_to_institution", "reasoning": "...", "artifact_title": "recent artifact title to submit", "institution_name": "target institution name"}"""
+{"category": "submit_to_institution", "reasoning": "...", "artifact_title": "recent artifact title to submit", "institution_name": "target institution name"}
+{"category": "request_capability", "reasoning": "...", "need_type": "information_access|memory_access|coordination_help|institution_support|workflow_visibility|decision_feedback|world_state_gap", "priority": "high|medium|low", "description": "what you need", "why_needed": "why it matters", "suggested_capability": "short name for the capability"}"""
 
     # Anti-loop: if recent decisions show 2+ send_message in a row AND
     # the agent has yet to produce any artifacts, hard-ban sending.
@@ -2019,6 +2022,7 @@ Respond in this exact JSON format (no markdown, no explanation):
                     "create_artifact", "write_code", "send_message",
                     "read_artifacts", "investigate", "rest", "self_improve",
                     "create_institution", "propose_role", "submit_to_institution",
+                    "request_capability",
                 ) if a != banned
             ]
             force_constraint += (
@@ -2666,6 +2670,40 @@ def execute_decision(decision: dict, r):
         except Exception as e:
             result["action_taken"] = f"submit_error: {e}"
             logger.error("[%s] Artifact submission failed: %s", CHAR_ID, e)
+
+    elif cat == "request_capability":
+        import sys, os as _os
+        sys.path.insert(0, _os.path.join(_os.path.dirname(__file__), "..", "backend"))
+        from npc_autonomy import file_npc_need
+        need_type = decision.get("need_type", "information_access")
+        priority = decision.get("priority", "medium")
+        need_desc = decision.get("description", desc[:200] if desc else "Missing context limiting effectiveness.")
+        why_needed = decision.get("why_needed", reasoning[:200] if reasoning else "Repeated low-value actions suggest context gap.")
+        suggested = decision.get("suggested_capability", "general_context_enrichment")
+        related_inst = r.get(f"councilor:{CHAR_ID}:institution") or ""
+        try:
+            need_result = file_npc_need(
+                r, CHAR_ID, NPC_NAME, need_type, priority,
+                need_desc, why_needed, suggested, related_inst,
+            )
+            if need_result.get("ok"):
+                result["action_taken"] = "capability_need_filed"
+                result["need_id"] = need_result["need_id"]
+                result["need_type"] = need_type
+                result["summary"] = f"Filed need: {need_type} — {need_desc[:80]}"
+                logger.info("[%s] Filed capability need: %s (%s)", CHAR_ID, need_type, need_result["need_id"])
+                _session_append(r, {
+                    "kind": "capability_need_filed",
+                    "actor": NPC_NAME,
+                    "body": f"requested {need_type}: {need_desc[:120]}",
+                })
+            else:
+                result["action_taken"] = f"capability_need_rejected:{need_result.get('error', 'unknown')}"
+                result["summary"] = f"Need rejected: {need_result.get('error', 'unknown')}"
+                logger.info("[%s] Need rejected: %s", CHAR_ID, need_result.get("error"))
+        except Exception as e:
+            result["action_taken"] = f"capability_need_error: {e}"
+            logger.error("[%s] Capability need filing failed: %s", CHAR_ID, e)
 
     else:
         note = _compact_text(desc, 180) or _compact_text(reasoning, 180) or f"unhandled category {cat}"
