@@ -152,17 +152,16 @@ function updateLinkHealth() {
 
 // Wrapping fetch helper with health tracking
 async function trackedFetch(key, url, opts) {
-  try {
-    const resp = await fetch(url, opts);
-    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-    const data = await resp.json();
+  var fedOpts = Object.assign({}, opts, { timeout: 10000, retries: 2, retryDelay: 2000 });
+  var data = await fedFetch(key, url, fedOpts);
+  if (data !== null) {
     recordFetchOk(key);
     updateLinkHealth();
     return data;
-  } catch(e) {
-    recordFetchFail(key);
-    throw e;
   }
+  recordFetchFail(key);
+  updateLinkHealth();
+  return null;
 }
 
 const METRIC_LABELS = {
@@ -649,8 +648,12 @@ async function openNpcModal(charId) {
   modal.classList.add('open');
 
   try {
-    const resp = await fetch(`${API}/npcs/${charId}`);
-    const npc = await resp.json();
+    const npc = await trackedFetch('npc-' + charId, `${API}/npcs/${charId}`);
+
+    if (!npc) {
+      body.innerHTML = `<div style="color:var(--red);text-align:center;padding:20px">SCAN FAILED — ${charId}</div>`;
+      return;
+    }
 
     const affilColor = FACTION_COLORS[npc.affiliation] || '#607080';
     const affilName = npc.affiliation ? (FACTION_SHORT[npc.affiliation] || npc.affiliation.replace(/_/g,' ')) : 'UNAFFILIATED';
@@ -775,86 +778,77 @@ if (e.key === 'm' || e.key === 'M') {
 
 // ============ API CALLS ============
 async function fetchState() {
-  try {
-    gameState = await trackedFetch('state', `${API}/state`);
-    updateTopRibbon(gameState);
-    updateLeftConsole(gameState);
-    updateRightConsole(gameState);
-    const alertLevel = computeAlertState(gameState, currentEvent);
-    setAlertState(alertLevel);
-  } catch(e) { /* stale data persists, badge shown */ }
+  gameState = await trackedFetch('state', `${API}/state`);
+  if (!gameState) return;
+  updateTopRibbon(gameState);
+  updateLeftConsole(gameState);
+  updateRightConsole(gameState);
+  const alertLevel = computeAlertState(gameState, currentEvent);
+  setAlertState(alertLevel);
 }
 
 async function fetchEvent() {
-  try {
-    const data = await trackedFetch('event', `${API}/event`);
-    currentEvent = data;
-    currentChoiceToken = data.choice_token || null;
-    loadEvent(data);
-  } catch(e) {
-    addComms('EVENT LINK UNSTABLE');
-  }
+  const data = await trackedFetch('event', `${API}/event`);
+  if (!data) { addComms('EVENT LINK UNSTABLE'); return; }
+  currentEvent = data;
+  currentChoiceToken = data.choice_token || null;
+  loadEvent(data);
 }
 
 async function fetchConsciousness() {
-  try {
-    consciousness = await trackedFetch('consciousness', `${API}/consciousness`);
-    updateConsciousness(consciousness);
-  } catch(e) { /* consciousness panel keeps stale data */ }
+  consciousness = await trackedFetch('consciousness', `${API}/consciousness`);
+  if (consciousness) updateConsciousness(consciousness);
 }
 
 async function fetchRivals() {
-  try {
-    const data = await trackedFetch('rivals', `${API}/rivals`);
-    rivalsData = data;
-    updateRivals(data);
-    if (gameState) {
-      const alertLevel = computeAlertState(gameState, currentEvent);
-      setAlertState(alertLevel);
-    }
-  } catch(e) { /* rival panel keeps stale data */ }
+  const data = await trackedFetch('rivals', `${API}/rivals`);
+  if (!data) return;
+  rivalsData = data;
+  updateRivals(data);
+  if (gameState) {
+    const alertLevel = computeAlertState(gameState, currentEvent);
+    setAlertState(alertLevel);
+  }
 }
 
 async function fetchFactions() {
-  try {
-    const data = await trackedFetch('factions', `${API}/factions`);
-    factionsData = data.factions || {};
-    try { drawFactionRadar(factionsData); } catch(drawErr) { /* canvas error, non-fatal */ }
-  } catch(e) { /* faction radar keeps stale data */ }
+  const data = await trackedFetch('factions', `${API}/factions`);
+  if (!data) return;
+  factionsData = data.factions || {};
+  try { drawFactionRadar(factionsData); } catch(drawErr) { /* canvas error, non-fatal */ }
 }
 
 async function fetchMapEvents() {
-  try {
-    const data = await trackedFetch('map', `${API}/map/data`);
-    updateEventsFeed(data);
-  } catch(e) { /* events feed keeps stale data */ }
+  const data = await trackedFetch('map', `${API}/map/data`);
+  if (data) updateEventsFeed(data);
 }
 
 async function fetchDecisionLog() {
-  try {
-    decisionLog = await trackedFetch('log', `${API}/log`);
-    updateTimeline(decisionLog, timelineData);
-  } catch(e) { /* timeline keeps stale data */ }
+  decisionLog = await trackedFetch('log', `${API}/log`);
+  if (decisionLog) updateTimeline(decisionLog, timelineData);
 }
 
 async function fetchTimeline() {
-  try {
-    timelineData = await trackedFetch('timeline', `${API}/timeline`);
-    // Re-render timeline with era data if available
-    if (decisionLog.length > 0 && timelineData) {
-      updateTimeline(decisionLog, timelineData);
-    }
-  } catch(e) { /* non-critical */ }
+  timelineData = await trackedFetch('timeline', `${API}/timeline`);
+  if (decisionLog.length > 0 && timelineData) {
+    updateTimeline(decisionLog, timelineData);
+  }
 }
 
 async function makeChoice(choiceId) {
   if (!currentEvent) return;
-  // Disable buttons immediately
-  document.querySelectorAll('.cmd-btn').forEach(b => b.disabled = true);
+  const btns = document.querySelectorAll('.cmd-btn');
+  btns.forEach(b => { b.dataset.origText = b.textContent; b.textContent = 'EXECUTING…'; b.disabled = true; });
   playChoiceSound();
 
   try {
     const data = await trackedFetch('choose', `${API}/choose/${choiceId}?choice_token=${currentChoiceToken || ''}`, { method: 'POST' });
+
+    if (!data) {
+      addComms('COMMAND LINK FAILURE');
+      btns.forEach(b => { b.textContent = b.dataset.origText; b.disabled = false; });
+      return;
+    }
 
     if (data.error && !data.outcome) {
       if (String(data.error).includes('choice token')) {
@@ -886,15 +880,16 @@ async function makeChoice(choiceId) {
     fetchDecisionLog();
     fetchFactions();
   } catch(e) {
-    addComms('COMMAND LINK FAILURE — RETRYING');
-    // Re-enable buttons so user can try again
+    addComms('COMMAND LINK FAILURE');
     document.querySelectorAll('.cmd-btn').forEach(b => b.disabled = false);
   }
 }
 
 async function resetGame() {
+  var resetBtn = document.querySelector('[onclick="resetGame()"]') || document.getElementById('btn-reset');
+  var restore = btnSpinner(resetBtn, 'RESETTING…');
   try {
-    await fetch(`${API}/reset`, { method: 'POST' });
+    await fedFetch('reset', `${API}/reset`, { method: 'POST', timeout: 10000 });
     // Clear all fetch health on reset (fresh game)
     for (const k of Object.keys(fetchHealth)) {
       fetchHealth[k].ok = true;
@@ -907,9 +902,8 @@ async function resetGame() {
     document.getElementById('vs-gameover').style.display = 'none';
     fetchState().then(() => { fetchEvent(); fetchRivals(); fetchConsciousness(); fetchFactions(); fetchDecisionLog(); fetchTimeline(); });
   } catch(e) { addComms('RESET LINK FAILURE'); }
+  finally { restore(); }
 }
-
-// ============ UI UPDATES ============
 function updateTopRibbon(s) {
   document.getElementById('top-era').textContent = (s.governance_status || '--').toUpperCase().substring(0, 18);
   const year = 2387 + (s.turn || 0);

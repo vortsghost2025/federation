@@ -100,6 +100,7 @@
   </div>
 </div>
 <div id="loading"><div class="spinner"></div>Initializing 3D starmap...</div>
+<script src="/fed-fetch.js"></script>
 <script type="importmap">
 { "imports": { "three": "https://unpkg.com/three@0.152.0/build/three.module.js", "three/addons/": "https://unpkg.com/three@0.152.0/examples/jsm/" } }
 </script>
@@ -301,9 +302,8 @@ function addGalaxyElements(){
 }
 async function loadData(){
   try{
-    const resp=await fetch('/map/data');
-    if(!resp.ok)throw new Error(`HTTP ${resp.status}`);
-    data=await resp.json();
+    data=await fedFetch('starmap3d', '/map/data');
+    if(!data){throw new Error('request failed');}
     if(!data.factions)data.factions={};
     if(!data.faction_territories)data.faction_territories=[];
     if(!data.faction_relations)data.faction_relations=[];

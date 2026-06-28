@@ -87,6 +87,7 @@
     <tbody id="logs-body"><tr><td colspan="4" class="loading">Loading logs...</td></tr></tbody>
   </table>
 
+<script src="/fed-fetch.js"></script>
 <script>
 let allLogs = [];
 let currentLogs = [];
@@ -97,7 +98,7 @@ let turnAnalysis = { fleet: [], alerts: [] };
 let turnDetailCache = {};
 
 function apiFetch(url) {
-  return fetch(url).then(r => r.json()).catch(e => { console.error(e); return null; });
+  return fedFetch('nlog', url).catch(e => { console.error(e); return null; });
 }
 
 function npcId(log) {

@@ -9,22 +9,18 @@ let isMuted = localStorage.getItem('federation-muted') === 'true';
 const fetchHealth = { ok: 0, fail: 0, lastOk: 0, lastFail: 0 };
 
 async function apiFetch(path, opts = {}) {
-  try {
-    const r = await fetch(API + path, { ...opts, headers: { 'Accept': 'application/json', ...(opts.headers || {}) } });
-    if (!r.ok) throw new Error(r.status);
-    const ct = r.headers.get('content-type') || '';
-    if (ct.includes('text/html')) {
-      throw new Error('Server returned HTML instead of JSON (endpoint may be misconfigured)');
-    }
+  var fedOpts = Object.assign({}, opts, { timeout: 8000, retries: 2, retryDelay: 2000 });
+  fedOpts.headers = Object.assign({ 'Accept': 'application/json' }, opts.headers || {});
+  var data = await fedFetch('earth' + path, API + path, fedOpts);
+  if (data !== null) {
     fetchHealth.ok++;
     fetchHealth.lastOk = Date.now();
-    return await r.json();
-  } catch (e) {
+  } else {
     fetchHealth.fail++;
     fetchHealth.lastFail = Date.now();
     updateLinkHealth();
-    return null;
   }
+  return data;
 }
 
 function updateLinkHealth() {
@@ -374,54 +370,47 @@ function addComms(msg) {
 
 // ── Action Handlers ──
 async function processPoliticalTurn() {
+  var btn = document.querySelector('[onclick="processPoliticalTurn()"]');
+  var restore = btnSpinner(btn, 'Processing…');
   playTone(600, 0.15, 0.05);
-  showToast('Processing political year...');
-  const data = await apiFetch('/political/process-turn', { method: 'POST' });
-  if (data) {
-    showToast('Political year processed');
-    addComms('Political year processed');
-    fetchPolitical(); fetchState();
-  } else {
-    showToast('Political process failed');
-  }
+  try {
+    const data = await apiFetch('/political/process-turn', { method: 'POST' });
+    if (data) { addComms('Political year processed'); fetchPolitical(); fetchState(); }
+    else { showToast('Political process failed', 'warn'); }
+  } finally { restore(); }
 }
 
 async function advanceHistoryArc() {
+  var btn = document.querySelector('[onclick="advanceHistoryArc()"]');
+  var restore = btnSpinner(btn, 'Advancing…');
   playTone(500, 0.15, 0.05);
-  showToast('Advancing timeline...');
-  const data = await apiFetch('/history-arc/advance', { method: 'POST' });
-  if (data) {
-    showToast('Timeline advanced');
-    addComms('Timeline advanced');
-    fetchHistoryArc(); fetchState();
-  } else {
-    showToast('Timeline advance failed');
-  }
+  try {
+    const data = await apiFetch('/history-arc/advance', { method: 'POST' });
+    if (data) { addComms('Timeline advanced'); fetchHistoryArc(); fetchState(); }
+    else { showToast('Timeline advance failed', 'warn'); }
+  } finally { restore(); }
 }
 
 async function saveState() {
+  var btn = document.querySelector('[onclick="saveState()"]');
+  var restore = btnSpinner(btn, 'Saving…');
   playTone(700, 0.1, 0.05);
-  showToast('Saving snapshot...');
-  const data = await apiFetch('/state/save', { method: 'POST' });
-  if (data && data.status === 'saved') {
-    showToast('State saved');
-    addComms('State snapshot saved');
-  } else {
-    showToast('Save failed');
-  }
+  try {
+    const data = await apiFetch('/state/save', { method: 'POST' });
+    if (data && data.status === 'saved') { addComms('State snapshot saved'); }
+    else { showToast('Save failed', 'warn'); }
+  } finally { restore(); }
 }
 
 async function loadState() {
+  var btn = document.querySelector('[onclick="loadState()"]');
+  var restore = btnSpinner(btn, 'Loading…');
   playTone(400, 0.1, 0.05);
-  showToast('Loading state...');
-  const data = await apiFetch('/state/load');
-  if (data) {
-    showToast('State loaded');
-    addComms('State restored from snapshot');
-    fetchState(); fetchWorldState(); fetchHistoryArc(); fetchConsciousness();
-  } else {
-    showToast('Load failed');
-  }
+  try {
+    const data = await apiFetch('/state/load');
+    if (data) { addComms('State restored from snapshot'); fetchState(); fetchWorldState(); fetchHistoryArc(); fetchConsciousness(); }
+    else { showToast('Load failed', 'warn'); }
+  } finally { restore(); }
 }
 
 // ── Main Init ──

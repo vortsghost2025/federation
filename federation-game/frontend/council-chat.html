@@ -162,6 +162,7 @@
   </div>
 </div>
 
+<script src="/fed-fetch.js"></script>
 <script>
 const AGENTS = ['char_001','char_306'];
 const AGENT_LABELS = {char_001:'Archimedes Prime', char_306:'The Oracle'};
@@ -170,7 +171,7 @@ function $(id){ return document.getElementById(id); }
 function escapeHtml(value){ return String(value ?? '').replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch])); }
 function fmtTs(ts){ if(!ts) return '—'; try{ return new Date((String(ts).length <= 10 ? Number(ts)*1000 : Number(ts))).toLocaleString(); }catch{ return String(ts); } }
 function status(msg, isError=false){ const el = $('status'); el.textContent = msg; el.className = 'status' + (isError ? ' error' : ''); }
-async function fetchJson(url, options){ const r = await fetch(url.replace('/api/', '/'), Object.assign({headers:{'Content-Type':'application/json','Accept':'application/json'}}, options||{})); if(!r.ok){ throw new Error(`${url} → HTTP ${r.status}`); } return r.json(); }
+async function fetchJson(url, options){ var opts = Object.assign({headers:{'Content-Type':'application/json','Accept':'application/json'}}, options||{}); var data = await fedFetch('cc', url.replace('/api/', '/'), opts); if(data === null) throw new Error(url + ' → request failed'); return data; }
 function messageClass(msg){
   const from = msg.from_char_id || '';
   if(from === 'moderator') return 'msg operator';
@@ -248,14 +249,15 @@ async function postJson(url, payload){
   return fetchJson(url, {method:'POST', body: JSON.stringify(payload)});
 }
 
-async function sendCustom(){
+ async function sendCustom(){
   const target = $('target').value;
   const type = $('type').value;
   const topic = $('topic').value.trim();
   const body = $('body').value.trim();
   if(!body){ status('Message body is required.', true); return; }
+  var btn = document.querySelector('[onclick="sendCustom()"]');
+  var restore = btnSpinner(btn, 'Sending…');
   try{
-    status('Sending…');
     if(target === 'both'){
       await postJson('/api/agents/broadcast', {agent_ids: AGENTS, type, topic, body});
     }else if(type === 'self_diagnostic'){
@@ -268,23 +270,26 @@ async function sendCustom(){
   }catch(err){
     console.error(err);
     status(err.message || String(err), true);
-  }
+  } finally { restore(); }
 }
 
 async function askNeeds(){
+  var btn = document.querySelector('[onclick="askNeeds()"]');
+  var restore = btnSpinner(btn, 'Asking…');
   try{
-    status('Requesting self-diagnostics from both agents…');
     await Promise.all(AGENTS.map(agentId => postJson(`/api/agents/${agentId}/self-diagnostic`, {
       topic:'self_diagnostic',
       body:'What information, tools, UI, memory, or protocol changes would make your work better right now? Reply directly to moderator with concrete engineering requests only.'
     })));
     await loadAll();
   }catch(err){ status(err.message || String(err), true); }
+  finally { restore(); }
 }
 
 async function askLooping(){
+  var btn = document.querySelector('[onclick="askLooping()"]');
+  var restore = btnSpinner(btn, 'Checking…');
   try{
-    status('Asking both agents about looping…');
     await postJson('/api/agents/broadcast', {
       agent_ids: AGENTS,
       type:'user_question',
@@ -293,11 +298,13 @@ async function askLooping(){
     });
     await loadAll();
   }catch(err){ status(err.message || String(err), true); }
+  finally { restore(); }
 }
 
 async function askTopics(){
+  var btn = document.querySelector('[onclick="askTopics()"]');
+  var restore = btnSpinner(btn, 'Proposing…');
   try{
-    status('Asking for new topic proposals…');
     await postJson('/api/agents/broadcast', {
       agent_ids: AGENTS,
       type:'user_question',
@@ -306,11 +313,13 @@ async function askTopics(){
     });
     await loadAll();
   }catch(err){ status(err.message || String(err), true); }
+  finally { restore(); }
 }
 
 async function pauseCorruption(){
+  var btn = document.querySelector('[onclick="pauseCorruption()"]');
+  var restore = btnSpinner(btn, 'Pausing…');
   try{
-    status('Applying corruption cooldown…');
     await postJson('/api/agents/broadcast', {
       agent_ids: AGENTS,
       type:'system_notice',
@@ -321,6 +330,7 @@ async function pauseCorruption(){
     });
     await loadAll();
   }catch(err){ status(err.message || String(err), true); }
+  finally { restore(); }
 }
 
 loadAll();
