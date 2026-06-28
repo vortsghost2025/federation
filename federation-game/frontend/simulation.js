@@ -540,19 +540,9 @@ async function apiFetch(endpoint, timeoutMs) {
 }
 
 async function quietJsonFetch(endpoint, timeoutMs) {
-  var controller = new AbortController();
-  var timer = setTimeout(function(){controller.abort()}, timeoutMs || 8000);
-  try {
-    var resp = await fetch(endpoint, {signal: controller.signal});
-    clearTimeout(timer);
-    if (!resp.ok) return {ok:false,status:resp.status,data:null};
-    var ct = resp.headers.get('content-type') || '';
-    if (ct.indexOf('text/html') !== -1) return {ok:false,status:0,data:null};
-    return {ok:true,status:resp.status,data:await resp.json()};
-  } catch(e) {
-    clearTimeout(timer);
-    return {ok:false,status:0,data:null,error:e};
-  }
+  var data = await fedFetch('qfetch', endpoint, { timeout: timeoutMs || 8000, retries: 1, retryDelay: 2000 });
+  if (data !== null) return {ok:true, status:200, data:data};
+  return {ok:false, status:0, data:null};
 }
 
 function normalizeNpcList(data) {
@@ -2577,29 +2567,29 @@ async function aiChatSend() {
   input.value = "";
   aiChatBusy = true;
   var btn = document.getElementById("ai-chat-send");
-  if (btn) btn.disabled = true;
+  var restoreBtn = btnSpinner(btn, "Thinking…");
 
   aiChatHistory.push({role: "user", text: question});
   aiChatHistory.push({role: "thinking"});
   aiChatRender();
 
   try {
-    var ctl = new AbortController();
-    var timer = setTimeout(function(){ ctl.abort() }, 45000);
-    var r = await fetch("/map/assistant", {
-      method: "POST",
-      headers: {"Content-Type": "application/json", "Accept": "application/json"},
+    var data = await fedFetch('assistant', '/map/assistant', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json', 'Accept': 'application/json'},
       body: JSON.stringify({question: question}),
-      signal: ctl.signal
+      timeout: 45000,
+      retries: 0,
     });
-    clearTimeout(timer);
-    if (!r.ok) throw new Error("HTTP " + r.status);
-    var data = await r.json();
 
-    // Remove the "thinking" entry
     aiChatHistory = aiChatHistory.filter(function(m){ return m.role !== "thinking"; });
 
-    if (data.status === "ok") {
+    if (!data) {
+      aiChatHistory.push({
+        role: "error",
+        text: "Connection failed. The simulation may be offline."
+      });
+    } else if (data.status === "ok") {
       aiChatHistory.push({
         role: "assistant",
         text: data.answer || "No answer returned.",
@@ -2611,17 +2601,11 @@ async function aiChatSend() {
         text: data.answer || "The intelligence systems are offline."
       });
     }
-  } catch (e) {
-    aiChatHistory = aiChatHistory.filter(function(m){ return m.role !== "thinking"; });
-    aiChatHistory.push({
-      role: "error",
-      text: "Connection failed. The simulation may be offline."
-    });
+  } finally {
+    aiChatBusy = false;
+    restoreBtn();
+    aiChatRender();
   }
-
-  aiChatBusy = false;
-  if (btn) btn.disabled = false;
-  aiChatRender();
 }
 
 // Toggle chat drawer

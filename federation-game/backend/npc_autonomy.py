@@ -3351,12 +3351,12 @@ def get_decree_history(char_id=None, limit=20):
 
 
 DECREE_THRESHOLDS = {
-    "stability": {"low": 30, "high": 85, "low_delta": 3, "high_delta": -2},
-    "morale": {"low": 25, "high": 80, "low_delta": 3, "high_delta": -2},
-    "resource_abundance": {"low": 30, "high": 90, "low_delta": 4, "high_delta": -2},
-    "tension_level": {"low": 15, "high": 75, "low_delta": -2, "high_delta": -4},
-    "threat_level": {"low": 10, "high": 70, "low_delta": -1, "high_delta": -4},
-    "anomaly_activity": {"low": 5, "high": 80, "low_delta": -1, "high_delta": -3},
+    "stability": {"low": 50, "high": 85, "low_delta": 5, "high_delta": -2},
+    "morale": {"low": 40, "high": 80, "low_delta": 4, "high_delta": -2},
+    "resource_abundance": {"low": 35, "high": 90, "low_delta": 5, "high_delta": -2},
+    "tension_level": {"low": 15, "high": 65, "low_delta": -2, "high_delta": -4},
+    "threat_level": {"low": 10, "high": 60, "low_delta": -1, "high_delta": -4},
+    "anomaly_activity": {"low": 5, "high": 70, "low_delta": -1, "high_delta": -3},
 }
 
 COUNCILOR_NAMES = {"char_001": "Elara", "char_306": "Kael"}

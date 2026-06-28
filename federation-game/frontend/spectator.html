@@ -208,6 +208,8 @@ p{margin:0 0 8px 0}
 
 </div>
 
+<script src="fed-fetch.js"></script>
+<script src="error-reporter.js"></script>
 <script>
 const $ = id => document.getElementById(id);
 const REFRESH_MS = 30000;
@@ -1013,15 +1015,15 @@ async function loadInstitutions(offset){
   if(offset === undefined) offset = instCompletedOffset;
   try{
     const [instRes, activeRes, doneRes, healthRes] = await Promise.all([
-      fetch('/api/institutions'),
-      fetch('/api/institutions/workflows/active'),
-      fetch('/api/institutions/workflows/completed?limit='+INST_PAGE_SIZE+'&offset='+offset),
-      fetch('/api/institutions/health')
+      fedFetch('inst', '/api/institutions'),
+      fedFetch('active', '/api/institutions/workflows/active'),
+      fedFetch('done', '/api/institutions/workflows/completed?limit='+INST_PAGE_SIZE+'&offset='+offset),
+      fedFetch('health', '/api/institutions/health')
     ]);
-    const institutions = instRes.ok ? await instRes.json() : {institutions:[]};
-    const active = activeRes.ok ? await activeRes.json() : {active:[]};
-    const completed = doneRes.ok ? await doneRes.json() : {completed:[],total:0,offset:0,limit:INST_PAGE_SIZE};
-    const health = healthRes.ok ? await healthRes.json() : null;
+    const institutions = instRes || {institutions:[]};
+    const active = activeRes || {active:[]};
+    const completed = doneRes || {completed:[],total:0,offset:0,limit:INST_PAGE_SIZE};
+    const health = healthRes;
     instData = {institutions: institutions.institutions||[], active: active.active||[], completed: completed.completed||[], completedTotal: completed.total||0, completedOffset: completed.offset||0, health};
   }catch(e){
     instData = {institutions:[],active:[],completed:[],completedTotal:0,completedOffset:0,error:e.message};
@@ -1113,27 +1115,29 @@ function instPaginate(dir){
   loadInstitutions(instCompletedOffset).then(()=>{ $('content').innerHTML = renderInstitutions(); });
 }
 
-async function instTrigger(){
+ async function instTrigger(){
+  var btn = document.querySelector('[onclick="instTrigger()"]');
+  var restore = btnSpinner(btn, 'Triggering…');
   const cid = prompt('Councilor ID (e.g. char_001):');
-  if(!cid) return;
+  if(!cid){ restore(); return; }
   const aid = prompt('Artifact ID:') || 'manual_'+Date.now();
   const title = prompt('Proposal title:') || 'Manual proposal';
-  try{
-    const r = await fetch('/api/institutions/workflows/trigger', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({councilor_id:cid,artifact_id:aid,title,artifact_kind:'proposal',body:'Triggered from spectator'})});
-    const j = await r.json();
-    alert(r.ok ? 'Triggered: '+JSON.stringify(j) : 'Error: '+JSON.stringify(j));
+  try {
+    const j = await fedFetch('trigger', '/api/institutions/workflows/trigger', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({councilor_id:cid,artifact_id:aid,title,artifact_kind:'proposal',body:'Triggered from spectator'})});
+    alert(j ? 'Triggered: '+JSON.stringify(j) : 'Error: request failed');
     loadInstitutions(instCompletedOffset).then(()=>{ $('content').innerHTML = renderInstitutions(); });
-  }catch(e){alert('Error: '+e.message);}
+  } finally { restore(); }
 }
 
 async function instRebuildCounters(){
   if(!confirm('Rebuild all institution counters?')) return;
-  try{
-    const r = await fetch('/api/institutions/rebuild-counters',{method:'POST'});
-    const j = await r.json();
-    alert('Result: '+JSON.stringify(j));
+  var btn = document.querySelector('[onclick="instRebuildCounters()"]');
+  var restore = btnSpinner(btn, 'Rebuilding…');
+  try {
+    const j = await fedFetch('rebuild', '/api/institutions/rebuild-counters', {method:'POST'});
+    alert(j ? 'Result: '+JSON.stringify(j) : 'Error: request failed');
     loadInstitutions(instCompletedOffset).then(()=>{ $('content').innerHTML = renderInstitutions(); });
-  }catch(e){alert('Error: '+e.message);}
+  } finally { restore(); }
 }
 
 function renderInstitutions(){
@@ -1185,22 +1189,20 @@ function renderInstitutions(){
 }
 
 async function load(){
-  try{
-    const r = await fetch('/spectator/agency', {headers:{Accept:'application/json'}});
-    if(!r.ok) throw new Error('HTTP '+r.status);
-    lastData = await r.json();
-    if(viewMode === 'institutions') await loadInstitutions(instCompletedOffset);
-    $('content').innerHTML = render();
-    updateStrip(lastData);
-    updateSystemLine(lastData);
-    $('live-text').textContent = 'live';
-    $('live-pill').querySelector('.icon').className = 'icon icon-green';
-    wireExpandToggles();
-  } catch(e){
-    $('content').innerHTML = '<div class="empty-card">Error: '+esc(e.message)+'</div>';
+  lastData = await fedFetch('agency', '/spectator/agency', {headers:{Accept:'application/json'}});
+  if(!lastData){
+    $('content').innerHTML = '<div class="empty-card">Error: connection failed</div>';
     $('live-text').textContent='error';
     $('live-pill').querySelector('.icon').className='icon icon-red';
+    return;
   }
+  if(viewMode === 'institutions') await loadInstitutions(instCompletedOffset);
+  $('content').innerHTML = render();
+  updateStrip(lastData);
+  updateSystemLine(lastData);
+  $('live-text').textContent = 'live';
+  $('live-pill').querySelector('.icon').className = 'icon icon-green';
+  wireExpandToggles();
 }
 
 function wireExpandToggles(){

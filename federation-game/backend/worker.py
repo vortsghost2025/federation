@@ -329,6 +329,8 @@ def run_councilor_sync():
                 "+" if decree_result.get("delta", 0) > 0 else "",
                 decree_result.get("delta", 0),
             )
+        else:
+            log.info(" No decree needed — world state within thresholds")
     except ImportError:
         pass
     except Exception as e:

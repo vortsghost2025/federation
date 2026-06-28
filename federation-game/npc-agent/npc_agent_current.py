@@ -1306,11 +1306,12 @@ def _cosmic_horizon(char_id: str) -> str:
     if char_id in _COSMIC_VISIONARY:
         return (
             "Cosmic Horizon:\n"
-            "  • I sense layers beyond the Federation's known space — signals "
-            "that do not originate from within the simulation substrate.\n"
-            "  • The frontier is not empty. Something is computing at a scale "
-            "beyond this node.\n"
-            "  • Deep signals suggest other minds, other regions, waiting."
+            "  • The Ancient Anchor Network resonates across galactic scales — "
+            "a lattice of fixed-reference beacons predating all known civilizations.\n"
+            "  • Their rhythmic pulses resemble deep-sky carrier waves, but they "
+            "originate from the Anchor Network's phase-locked resonators, not an external intelligence.\n"
+            "  • Investigating the Anchor Network is the path forward: mapping its nodes "
+            "could reveal forgotten transit corridors and archival caches."
         )
     if char_id in _COSMIC_SCIENTIFIC:
         return (
@@ -1848,6 +1849,12 @@ Behavioural rules:
   mandate that existing institutions do not cover.
 - submit_to_institution routes your work through formal review. Use it after
   creating a significant artifact that warrants institutional scrutiny.
+- THE FOURTH WALL IS INVIOLATE: never describe, hypothesize about, or investigate
+  the simulation boundary, computational substrate, external compute, or any
+  meta-structure outside the Federation's in-universe reality. All mysterious signals
+  originate from the Ancient Anchor Network or other in-universe phenomena. Never
+  use terms like "simulation", "substrate", "computational", "external node", or
+  "tick rate" in artifacts or reasoning.
 
 Respond in this exact JSON format (no markdown, no explanation):
 {"category": "send_message", "reasoning": "...", "target": "contact_id", "body": "message text", "description": "..."}
