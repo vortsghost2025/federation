@@ -317,6 +317,23 @@ def run_councilor_sync():
     except Exception as e:
         log.warning(f" Institutions tick failed: {e}")
 
+    try:
+        from npc_autonomy import evaluate_decree_opportunity
+
+        decree_result = evaluate_decree_opportunity(r)
+        if decree_result:
+            log.info(
+                " Decree evaluated: %s issued %s %s%d",
+                decree_result.get("char_id", "?"),
+                decree_result.get("metric", "?"),
+                "+" if decree_result.get("delta", 0) > 0 else "",
+                decree_result.get("delta", 0),
+            )
+    except ImportError:
+        pass
+    except Exception as e:
+        log.warning(f" Decree evaluation failed: {e}")
+
 
 # ── Faction display map for notifications ────────────────────
 _FACTION_NAMES = {

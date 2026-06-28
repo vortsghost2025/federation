@@ -3163,3 +3163,45 @@ def get_decree_history(char_id=None, limit=20):
         if len(decrees) >= limit:
             break
     return decrees
+
+
+DECREE_THRESHOLDS = {
+    "stability": {"low": 30, "high": 85, "low_delta": 3, "high_delta": -2},
+    "morale": {"low": 25, "high": 80, "low_delta": 3, "high_delta": -2},
+    "resource_abundance": {"low": 30, "high": 90, "low_delta": 4, "high_delta": -2},
+    "tension_level": {"low": 15, "high": 75, "low_delta": -2, "high_delta": -4},
+    "threat_level": {"low": 10, "high": 70, "low_delta": -1, "high_delta": -4},
+    "anomaly_activity": {"low": 5, "high": 80, "low_delta": -1, "high_delta": -3},
+}
+
+COUNCILOR_NAMES = {"char_001": "Elara", "char_306": "Kael"}
+
+
+def evaluate_decree_opportunity(r=None):
+    ws = get_world_state()
+    if not ws:
+        return None
+    for char_id in DECREES_ALLOWED_NPCS:
+        cooldown_key = DECREE_COOLDOWN_KEY.format(char_id=char_id)
+        check_r = r or _get_redis()
+        if check_r.ttl(cooldown_key) and check_r.ttl(cooldown_key) > 0:
+            continue
+        char_name = COUNCILOR_NAMES.get(char_id, char_id)
+        for metric, cfg in DECREE_THRESHOLDS.items():
+            val = ws.get(metric)
+            if val is None:
+                continue
+            val = float(val)
+            if val <= cfg["low"]:
+                result = issue_decree(char_id, char_name, metric, cfg["low_delta"],
+                                      f"{metric} critically low at {val:.0f}")
+                if result.get("ok"):
+                    return result.get("decree")
+                break
+            if val >= cfg["high"]:
+                result = issue_decree(char_id, char_name, metric, cfg["high_delta"],
+                                      f"{metric} critically high at {val:.0f}")
+                if result.get("ok"):
+                    return result.get("decree")
+                break
+    return None
