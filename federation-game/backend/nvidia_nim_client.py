@@ -203,17 +203,48 @@ OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1/chat/completions"
 OPENROUTER_TIMEOUT = int(os.environ.get("OPENROUTER_TIMEOUT", "25"))
 _openrouter_key_index: int = 0
 
-# OpenRouter free models per priority class
+# OpenRouter free model pools per priority class (lists, not single models)
 OPENROUTER_MODELS = {
-    "local": "meta-llama/llama-3.3-70b-instruct:free",
-    "cloud": "meta-llama/llama-3.3-70b-instruct:free",
-    "heavy": "meta-llama/llama-3.3-70b-instruct:free",
+    "local": [
+        "meta-llama/llama-3.3-70b-instruct:free",
+        "nvidia/nemotron-3-super-120b-a12b:free",
+        "nvidia/nemotron-nano-9b-v2:free",
+        "nvidia/nemotron-3-nano-30b-a3b:free",
+        "google/gemma-4-26b-a4b-it:free",
+    ],
+    "cloud": [
+        "meta-llama/llama-3.3-70b-instruct:free",
+        "nvidia/nemotron-3-ultra-550b-a55b:free",
+        "nousresearch/hermes-3-llama-3.1-405b:free",
+        "qwen/qwen3-next-80b-a3b-instruct:free",
+        "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free",
+    ],
+    "heavy": [
+        "meta-llama/llama-3.3-70b-instruct:free",
+        "nvidia/nemotron-3-super-120b-a12b:free",
+        "nvidia/nemotron-3-ultra-550b-a55b:free",
+        "nousresearch/hermes-3-llama-3.1-405b:free",
+        "qwen/qwen3-next-80b-a3b-instruct:free",
+    ],
 }
 OPENROUTER_PAID_MODELS = {
     "local": "meta-llama/llama-3.3-70b-instruct",
     "cloud": "meta-llama/llama-3.3-70b-instruct",
     "heavy": "meta-llama/llama-3.3-70b-instruct",
 }
+
+# Round-robin index for OR free pool rotation
+_or_nim_pool_idx = 0
+
+def _get_or_free_model_nim(priority: str) -> str:
+    """Round-robin select next free model for nvidia_nim_client fallback."""
+    global _or_nim_pool_idx
+    pool = OPENROUTER_MODELS.get(priority, OPENROUTER_MODELS["local"])
+    if isinstance(pool, list):
+        model = pool[_or_nim_pool_idx % len(pool)]
+        _or_nim_pool_idx += 1
+        return model
+    return pool if isinstance(pool, str) else "meta-llama/llama-3.3-70b-instruct:free"
 
 
 # ---------------------------------------------------------------------------
@@ -612,7 +643,7 @@ class NimClient:
         if not key:
             return None
 
-        model = OPENROUTER_MODELS.get(priority, "meta-llama/llama-3.3-70b-instruct:free")
+        model = _get_or_free_model_nim(priority)
 
         try:
             from openai import AsyncOpenAI

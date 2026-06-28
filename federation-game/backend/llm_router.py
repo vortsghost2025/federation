@@ -768,9 +768,65 @@ def _check_grok_available() -> bool:
     return True
 
 
-# ── Model Selection per Task Class ──────────────────────────────────
-# Each task class has a primary model on NIM, a fallback on NIM,
-# and a secondary fallback on OpenRouter.
+# ── OpenRouter Free Model Pool ─────────────────────────────────────
+
+# Instead of a single model per task class, we maintain a pool of free `:free` models.
+# The router tries each model in the pool until one succeeds.
+# Circuit breaker is per-model (key: llm_circuit_breaker:or_free:{model_id})
+# to avoid one bad model blocking the entire free tier.
+
+# Tier 1: High-context, high-quality (leader, narrator, npc_memory)
+OR_FREE_POOL_LARGE = [
+    "meta-llama/llama-3.3-70b-instruct:free",
+    "nvidia/nemotron-3-super-120b-a12b:free",
+    "nvidia/nemotron-3-ultra-550b-a55b:free",
+    "nousresearch/hermes-3-llama-3.1-405b:free",
+    "qwen/qwen3-next-80b-a3b-instruct:free",
+    "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free",
+    "google/gemma-4-31b-it:free",
+]
+
+# Tier 2: Mid-context, balanced (specialist, assistant)
+OR_FREE_POOL_MID = [
+    "meta-llama/llama-3.3-70b-instruct:free",
+    "nvidia/nemotron-3-super-120b-a12b:free",
+    "google/gemma-4-26b-a4b-it:free",
+    "nvidia/nemotron-3-nano-30b-a3b:free",
+    "nvidia/nemotron-nano-9b-v2:free",
+    "openai/gpt-oss-120b:free",
+    "cohere/north-mini-code:free",
+]
+
+# Tier 3: Low-context, fast/cheap (worker)
+OR_FREE_POOL_SMALL = [
+    "meta-llama/llama-3.2-3b-instruct:free",
+    "nvidia/nemotron-nano-9b-v2:free",
+    "liquid/lfm-2.5-1.2b-instruct:free",
+    "nvidia/nemotron-3-nano-30b-a3b:free",
+    "cognitivecomputations/dolphin-mistral-24b-venice-edition:free",
+]
+
+_or_free_pool_index = 0
+
+def _get_or_free_model(pool: list) -> str:
+    """Round-robin select next model from pool, skipping circuit-open models."""
+    global _or_free_pool_index
+    if not pool:
+        return ""
+    tried = 0
+    while tried < len(pool):
+        model = pool[_or_free_pool_index % len(pool)]
+        _or_free_pool_index += 1
+        # Check per-model circuit breaker
+        cb_key = f"or_free_model:{model}"
+        if not _is_circuit_open(cb_key):
+            return model
+        tried += 1
+    # All models circuit-open — return first anyway (will fail, then template)
+    return pool[0]
+
+
+# ── Task-class config ──────────────────────────────────────────────
 
 TASK_MODELS = {
     "leader": {
@@ -790,7 +846,7 @@ TASK_MODELS = {
         },
         "fallback_openrouter": {
             "provider": "openrouter",
-            "model": "meta-llama/llama-3.3-70b-instruct:free",
+            "models": OR_FREE_POOL_LARGE,
             "max_tokens": 300,
             "temperature": 0.85,
             "timeout": 30,
@@ -820,7 +876,7 @@ TASK_MODELS = {
         },
         "fallback_openrouter": {
             "provider": "openrouter",
-            "model": "meta-llama/llama-3.2-3b-instruct:free",
+            "models": OR_FREE_POOL_MID,
             "max_tokens": 200,
             "temperature": 0.8,
             "timeout": 30,
@@ -850,7 +906,7 @@ TASK_MODELS = {
         },
         "fallback_openrouter": {
             "provider": "openrouter",
-            "model": "meta-llama/llama-3.2-3b-instruct:free",
+            "models": OR_FREE_POOL_SMALL,
             "max_tokens": 100,
             "temperature": 0.7,
             "timeout": 15,
@@ -880,7 +936,7 @@ TASK_MODELS = {
         },
         "fallback_openrouter": {
             "provider": "openrouter",
-            "model": "meta-llama/llama-3.3-70b-instruct:free",
+            "models": OR_FREE_POOL_LARGE,
             "max_tokens": 500,
             "temperature": 0.9,
             "timeout": 30,
@@ -910,7 +966,7 @@ TASK_MODELS = {
         },
         "fallback_openrouter": {
             "provider": "openrouter",
-            "model": "meta-llama/llama-3.2-3b-instruct:free",
+            "models": OR_FREE_POOL_MID,
             "max_tokens": 300,
             "temperature": 0.6,
             "timeout": 12,
@@ -940,7 +996,7 @@ TASK_MODELS = {
         },
         "fallback_openrouter": {
             "provider": "openrouter",
-            "model": "meta-llama/llama-3.3-70b-instruct:free",
+            "models": OR_FREE_POOL_LARGE,
             "max_tokens": 400,
             "temperature": 0.8,
             "timeout": 30,
@@ -1491,22 +1547,42 @@ def route_call(
             result["errors"].append(f"ollama/{OLLAMA_MODEL}: {content[:150]}")
             result["latency_ms"] += latency
 
-    # ── OpenRouter free fallback ───────────────────────────────────────
+    # ── OpenRouter free fallback (pool rotation) ─────────────────────
     or_config = config.get("fallback_openrouter")
     if or_config:
         provider = or_config["provider"]
-        model = or_config["model"]
         tier_mt = max_tokens if max_tokens is not None else or_config["max_tokens"]
         tier_temp = (
             temperature if temperature is not None else or_config["temperature"]
         )
         tier_timeout = or_config.get("timeout", 25)
+        pool = or_config.get("models", [])
+        # Legacy: if config still has single "model" key, use a 1-element pool
+        if not pool and or_config.get("model"):
+            pool = [or_config["model"]]
 
-        if not _is_circuit_open(provider):
+        # Try up to 3 models from the pool (skip circuit-open ones)
+        max_or_tries = min(3, len(pool))
+        or_tries = 0
+        while or_tries < max_or_tries and pool:
+            model = _get_or_free_model(pool)
+            or_tries += 1
+            cb_key = f"or_free_model:{model}"
+
+            if _is_circuit_open(cb_key):
+                continue
+
+            # Also check overall openrouter circuit (rate limit, key issues)
+            if _is_circuit_open(provider):
+                break
+
             result["attempts"] += 1
             ok, content, latency = _call_provider(
                 provider, model, messages, tier_mt, tier_temp, tier_timeout
             )
+            # Record per-model circuit breaker
+            _record_provider_result(cb_key, ok)
+            # Also record at provider level for rate-limit tracking
             _record_provider_result(provider, ok)
             if ok and content:
                 result["success"] = True
@@ -1730,6 +1806,11 @@ def get_router_stats() -> Dict:
         "grok_calls": _grok_calls,
         "grok_failures": _grok_failures,
         "task_classes": list(TASK_MODELS.keys()),
+        "or_free_pools": {
+            "large": OR_FREE_POOL_LARGE,
+            "mid": OR_FREE_POOL_MID,
+            "small": OR_FREE_POOL_SMALL,
+        },
         "recent_calls": {},
         "recent_errors": {},
     }
