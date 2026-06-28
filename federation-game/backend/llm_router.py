@@ -237,6 +237,7 @@ GEMINI_PRICE_PER_MTOKEN = {
 _gemini_available: Optional[bool] = None
 _gemini_last_check: float = 0.0
 GEMINI_CHECK_INTERVAL = 300.0
+GEMINI_DEPLETED_COOLDOWN = 3600.0
 _gemini_calls = 0
 _gemini_failures = 0
 
@@ -496,14 +497,44 @@ def _check_together_available() -> bool:
 # ── Google Gemini ──────────────────────────────────────────────────
 
 
+def _mark_gemini_depleted():
+    global _gemini_available, _gemini_last_check
+    _gemini_available = False
+    _gemini_last_check = time.time()
+    try:
+        r = _get_redis()
+        r.set("llm:gemini_depleted_until", str(_gemini_last_check + GEMINI_DEPLETED_COOLDOWN), ex=int(GEMINI_DEPLETED_COOLDOWN) + 60)
+    except Exception:
+        pass
+
+
 def _check_gemini_available() -> bool:
     global _gemini_available, _gemini_last_check
     now = time.time()
     if (
         _gemini_available is not None
+        and not _gemini_available
+        and (now - _gemini_last_check) < GEMINI_DEPLETED_COOLDOWN
+    ):
+        return False
+    try:
+        r = _get_redis()
+        depleted_until = r.get("llm:gemini_depleted_until")
+        if depleted_until:
+            if now < float(depleted_until):
+                _gemini_available = False
+                _gemini_last_check = now
+                return False
+            else:
+                r.delete("llm:gemini_depleted_until")
+    except Exception:
+        pass
+    if (
+        _gemini_available is not None
+        and _gemini_available
         and (now - _gemini_last_check) < GEMINI_CHECK_INTERVAL
     ):
-        return _gemini_available
+        return True
     if not GEMINI_API_KEY:
         _gemini_available = False
         _gemini_last_check = now
@@ -1329,6 +1360,8 @@ def _call_provider(
         if provider == "gemini":
             _gemini_calls += 1
             _gemini_failures += 1
+            if e.code == 429:
+                _mark_gemini_depleted()
         latency_ms = (time.time() - start) * 1000
         err_body = ""
         try:
