@@ -2,7 +2,6 @@ services:
   reverse-proxy:
     image: traefik:latest
     command:
-      - --api.insecure=true
       - --providers.docker=true
       - --providers.docker.exposedbydefault=false
       - --entrypoints.web.address=:80
@@ -13,7 +12,6 @@ services:
     ports:
       - 80:80
       - 443:443
-      - 8080:8080
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
       - ./letsencrypt:/letsencrypt
@@ -127,10 +125,33 @@ services:
       - postgres
     networks:
       - fed-net
-    env_file:
-      - .env
     volumes:
       - /docker/federation-game/backend:/app:ro
+
+  postgres:
+    image: postgres:15-alpine
+    restart: unless-stopped
+    environment:
+      - POSTGRES_USER=federation
+      - POSTGRES_PASSWORD=federation_pwd
+      - POSTGRES_DB=federation_game
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - pg_isready -U federation -d federation_game
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks:
+      - fed-net
+    deploy:
+      resources:
+        limits:
+          cpus: "0.50"
+          memory: 256M
 
   redis:
     image: redis:7-alpine
@@ -189,7 +210,7 @@ services:
       - GF_AUTH_ANONYMOUS_ENABLED=true
       - GF_AUTH_ANONYMOUS_ORG_ROLE=Viewer
       - GF_SECURITY_ADMIN_USER=admin
-      - GF_SECURITY_ADMIN_PASSWORD=federation2025
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:-changeme}
       - GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH=/var/lib/grafana/dashboards/federation-overview.json
       - GF_USERS_DEFAULT_THEME=dark
       - GF_SERVER_ROOT_URL=https://federation-game.deliberatefederation.cloud/grafana
