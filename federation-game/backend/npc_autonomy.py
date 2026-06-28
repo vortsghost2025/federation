@@ -2581,6 +2581,7 @@ def _score_decision_option(
     inst_ctx=None,
     need_reflection=None,
     fulfilled_need_types=None,
+    affiliation=None,
 ):
     score = 1.0
     mood_biases = MOOD_DECISION_BIAS.get(mood, {})
@@ -2610,6 +2611,28 @@ def _score_decision_option(
                 score *= _bias_val
     except Exception:
         pass  # bias is optional — never break decision scoring
+
+    # Apply decree directive bias (councilor intent influences faction-aligned NPCs)
+    try:
+        _dir_r = _get_redis()
+        _dir_raw = _dir_r.get(DIRECTIVE_KEY)
+        if _dir_raw and affiliation:
+            _dir_data = json.loads(_dir_raw)
+            _dir_metric = _dir_data.get("metric", "")
+            _dir_faction = _dir_data.get("issuer_faction", "")
+            _dir_bias_map = DECREE_DIRECTIVE_BIAS.get(_dir_metric, {})
+            if _dir_faction and _dir_bias_map:
+                if affiliation == _dir_faction:
+                    _dir_cat_biases = _dir_bias_map.get("same_faction", {})
+                elif _is_allied_faction(affiliation, _dir_faction):
+                    _dir_cat_biases = _dir_bias_map.get("allied_faction", {})
+                else:
+                    _dir_cat_biases = _dir_bias_map.get("other_faction", {})
+                _dir_mult = _dir_cat_biases.get(category, 1.0)
+                if _dir_mult != 1.0:
+                    score *= _dir_mult
+    except Exception:
+        pass  # directive bias is optional — never break decision scoring
 
     # Quest-aware bias: NPCs with active quests strongly prefer advance_goal
     if has_active_quests and category == "advance_goal":
@@ -2713,6 +2736,7 @@ def evaluate_decision_options(char_id, char_name, archetype, affiliation, mood="
             inst_ctx=inst_ctx,
             need_reflection=need_reflection,
             fulfilled_need_types=fulfilled_need_types,
+            affiliation=affiliation,
         )
         reasons = []
         mood_biases = MOOD_DECISION_BIAS.get(mood, {})
@@ -3126,6 +3150,76 @@ DECREE_COOLDOWN_KEY = "councilor:decrees:cooldown:{char_id}"
 DECREE_MAX_HISTORY = 200
 DECREE_HISTORY_TTL = 86400 * 30
 
+DIRECTIVE_KEY = "councilor:directive:active"
+DIRECTIVE_TTL = 600
+
+DECREE_DIRECTIVE_BIAS = {
+    "stability": {
+        "same_faction": {"help_ally": 1.35, "advance_goal": 1.25, "socialize": 1.15, "confront_rival": 0.65, "rest": 0.75},
+        "allied_faction": {"help_ally": 1.2, "socialize": 1.1, "confront_rival": 0.8},
+        "other_faction": {"confront_rival": 0.9},
+    },
+    "morale": {
+        "same_faction": {"socialize": 1.4, "help_ally": 1.25, "advance_goal": 1.1, "rest": 0.65, "self_improve": 0.85},
+        "allied_faction": {"socialize": 1.2, "help_ally": 1.15, "rest": 0.8},
+        "other_faction": {},
+    },
+    "resource_abundance": {
+        "same_faction": {"seek_resources": 1.45, "advance_goal": 1.15, "rest": 0.7, "socialize": 0.85},
+        "allied_faction": {"seek_resources": 1.25, "advance_goal": 1.1},
+        "other_faction": {"seek_resources": 1.1},
+    },
+    "tension_level": {
+        "same_faction": {"socialize": 1.4, "help_ally": 1.25, "confront_rival": 0.55, "investigate": 0.85},
+        "allied_faction": {"socialize": 1.2, "confront_rival": 0.7},
+        "other_faction": {"investigate": 1.15, "confront_rival": 1.1},
+    },
+    "threat_level": {
+        "same_faction": {"self_improve": 1.35, "help_ally": 1.25, "seek_resources": 1.15, "explore": 0.6, "socialize": 0.85},
+        "allied_faction": {"self_improve": 1.2, "help_ally": 1.15},
+        "other_faction": {"investigate": 1.15},
+    },
+    "anomaly_activity": {
+        "same_faction": {"investigate": 1.4, "explore": 1.25, "rest": 0.75, "seek_resources": 0.85},
+        "allied_faction": {"investigate": 1.2, "explore": 1.15, "rest": 0.85},
+        "other_faction": {"investigate": 1.1},
+    },
+}
+
+
+COUNCILOR_AFFILIATIONS = {
+    "char_001": "research_division",
+    "char_306": "none",
+}
+
+FACTION_ALLIANCES = {
+    "research_division": ["exploration_initiative"],
+    "exploration_initiative": ["research_division"],
+    "military_command": ["preservation_society"],
+    "preservation_society": ["military_command"],
+    "diplomatic_corps": ["cultural_ministry", "economic_council"],
+    "cultural_ministry": ["diplomatic_corps", "consciousness_collective"],
+    "economic_council": ["diplomatic_corps"],
+    "consciousness_collective": ["cultural_ministry"],
+}
+
+
+def _is_allied_faction(npc_faction, issuer_faction):
+    if not npc_faction or not issuer_faction:
+        return False
+    return npc_faction in FACTION_ALLIANCES.get(issuer_faction, [])
+
+
+def _write_decree_directive(r, char_id, metric):
+    issuer_faction = COUNCILOR_AFFILIATIONS.get(char_id, "")
+    directive_data = json.dumps({
+        "metric": metric,
+        "issuer": char_id,
+        "issuer_faction": issuer_faction,
+        "ts": int(time.time()),
+    })
+    r.set(DIRECTIVE_KEY, directive_data, ex=DIRECTIVE_TTL)
+
 
 def issue_decree(char_id, char_name, metric, delta, reasoning=""):
     if char_id not in DECREES_ALLOWED_NPCS:
@@ -3161,6 +3255,7 @@ def issue_decree(char_id, char_name, metric, delta, reasoning=""):
     r.hset(WORLD_STATE_KEY, metric, str(int(round(new_val))))
     r.set("world_state_updated", str(int(time.time())), ex=WORLD_STATE_TTL)
     r.setex(cooldown_key, DECREE_COOLDOWN_SECONDS, "1")
+    _write_decree_directive(r, char_id, metric)
     decree_record = {
         "decree_id": f"dcr_{char_id}_{int(time.time())}",
         "char_id": char_id,
