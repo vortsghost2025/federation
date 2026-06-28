@@ -1,7 +1,7 @@
 # FEDERATION PROJECT CONTEXT
 
 **Reference:** S:\GLOBAL_GOVERNANCE.md (universal laws)
-**Last updated:** 2026-06-08
+**Last updated:** 2026-06-28
 **Scope:** Federation project only
 
 ---
@@ -63,38 +63,7 @@ Federation sessions run in a PowerShell-first environment unless a bash-only scr
 
 ## THE RAMSINGH SYNTHESIS LOOP
 
-Federation-specific escalation workflow for complex problems:
-
-**STEP 1 - AGENT GENERATES BRIEF**
-Stuck agent produces PROJECT SUMMARY BRIEF
-
-**STEP 2 - PARALLEL EVALUATION**
-Brief goes to lmarena battle mode:
-- Model A: Claude (latest)
-- Model B: GPT (latest)
-Both answer simultaneously
-
-**STEP 3 - SYNTHESIS REQUEST**
-Both answers go to Claude single model:
-"Here is a problem and two solutions. Take the best of both. Add your own insight. Give me one superior answer."
-
-**STEP 4 - PARALLEL REFINEMENT**
-Synthesized answer goes back to battle mode
-Both models refine and implement
-Two implementation approaches produced
-
-**STEP 5 - FINAL RESOLUTION**
-Both implementations go to Claude single model
-Final answer produced
-Saved as 3 documents:
-- Solution_A.txt
-- Solution_B.txt
-- Final_Synthesis.txt
-
-**STEP 6 - EXECUTION**
-File paths handed to coding agent
-Agent implements from documents
-Agent tests, fixes, reports in plain language
+For complex problems, see `docs/ramsingh-synthesis-loop.md` for the 6-step escalation workflow (agent brief → parallel eval → synthesis → refinement → resolution → execution).
 
 ---
 
@@ -112,6 +81,8 @@ Or for a full VPS probe (slower, ~5s extra):
 ```
 bash S:/federation/scripts/fed-state.sh --vps
 ```
+
+**After compaction:** read `.horizon/ARCHITECTURE_STATE.md` first — it has pinned function signatures, Redis key map, wiring, and deploy rules. One 2KB file replaces re-reading 200KB of backend Python.
 
 `fed-state.sh` returns:
 - HEAD commit + last 5 commits
@@ -135,11 +106,9 @@ user before making changes. Don't propose fixes to files you haven't read.
 
 | File | Purpose |
 |------|---------|
-| **FEDERATION_INDEX.md** | **READ THIS FIRST** — 2-second lookup for VPS, maps, LLM routing, deploy commands, known issues, agent roles |
-| BOOTSTRAP.md | Entry point for Federation |
-| COVENANT.md | Values specific to consciousness simulation |
-| GOVERNANCE.md | Rules specific to Federation architecture |
-| .horizon/HORIZON_STATUS.md | Current state — read after compaction before doing anything |
+| **FEDERATION_INDEX.md** | **READ THIS FIRST** — VPS, maps, LLM routing, deploy commands, known issues |
+| **.horizon/ARCHITECTURE_STATE.md** | **POST-COMPACTION** — function signatures, Redis keys, wiring map, deploy rules (read instead of 200KB Python) |
+| .horizon/HORIZON_STATUS.md | What's been done — read after compaction |
 | .horizon/AGENT_OWNERSHIP.md | Who owns which files — check before modifying code |
 | .horizon/DECISIONS.md | Key decisions log — check before changing architecture |
 
@@ -167,6 +136,23 @@ Files at `/docker/federation-game/` are deployed via `scp`. There is no `.git` o
 
 "Working. Here is what you see:"
 That is how every result begins. No exceptions.
+
+---
+
+## CONTEXT ENGINEERING RULES
+
+### Anchor Tokens
+When starting a deep technical response (editing backend, debugging VPS, modifying scoring), recite the 3 most critical state anchors first. Example:
+> `ANCHOR: _record_outcome L374 | npc:{id}:workflow_outcomes | npc_autonomy.py ae3475ac`
+
+This refreshes critical state in active attention — costs nothing, prevents amnesia.
+
+### Delta Logging
+After every atomic code change, append a structured entry to `.horizon/DELTA_LOG.md`:
+```
+UPDATE file.py:function_name(Lstart:Lend) -> what changed
+```
+Not narrative. Machine-readable. Post-compaction, read DELTA_LOG to replay what happened.
 
 ---
 

@@ -42,6 +42,7 @@ from faction_dynamics import (
     compute_faction_stances,
     store_faction_dynamics,
 )
+from institutions import get_npc_outcome_history
 from npc_activity_logger import log_npc_activity
 from npc_event_log import log_decision_event, log_from_broadcast_event
 import logging
@@ -70,6 +71,7 @@ ALLOWED_NEED_TYPES = frozenset({
     "workflow_visibility",
     "decision_feedback",
     "world_state_gap",
+    "pivot_strategy",
 })
 
 FORBIDDEN_NEED_TYPES = frozenset({
@@ -2391,15 +2393,35 @@ def _get_institution_context():
         return {"institutions": [], "active_workflow_count": 0}
 
 
+def _get_npc_outcome_ctx(npc_id):
+    try:
+        _r = _get_redis()
+        return get_npc_outcome_history(_r, npc_id)
+    except Exception:
+        return {"approved": 0, "rejected": 0, "total": 0, "consecutive_rejections": 0, "recent_rejected_types": set(), "recent": []}
+
+
 LOW_VALUE_CATEGORIES = frozenset({"rest", "wander", "noop"})
 
 
-def _reflect_on_missing_context(npc_id, recent_decisions, inst_ctx, world_ctx, fulfilled_need_types=None):
+def _reflect_on_missing_context(npc_id, recent_decisions, inst_ctx, world_ctx, fulfilled_need_types=None, outcome_ctx=None):
     """Return a suggested need record or None if the NPC seems well-resourced."""
     if fulfilled_need_types is None:
         fulfilled_need_types = set()
     if not recent_decisions:
         return None
+    # P3: pivot strategy — if NPC has consecutive rejections, suggest pivoting before low-value pattern emerges
+    if outcome_ctx and outcome_ctx.get("consecutive_rejections", 0) >= 2:
+        rej_types = ", ".join(outcome_ctx.get("recent_rejected_types", set())[:3]) or "workflow"
+        need_type = "pivot_strategy"
+        if need_type not in fulfilled_need_types:
+            return {
+                "need_type": need_type,
+                "priority": "high",
+                "description": f"My recent {outcome_ctx['consecutive_rejections']} proposals were rejected ({rej_types}). I should coordinate with allies before proposing again.",
+                "why_needed": "Repeated rejections indicate my approach needs adjustment — I need strategic context for a different approach.",
+                "suggested_capability": "coalition_or_ally_review_before_proposal",
+            }
     low_count = 0
     for dec in recent_decisions[-10:]:
         cat = dec.get("category", "")
@@ -2582,6 +2604,7 @@ def _score_decision_option(
     need_reflection=None,
     fulfilled_need_types=None,
     affiliation=None,
+    outcome_ctx=None,
 ):
     score = 1.0
     mood_biases = MOOD_DECISION_BIAS.get(mood, {})
@@ -2666,6 +2689,19 @@ def _score_decision_option(
         else:
             score *= 0.05
 
+    # P3: Outcome-memory bias — past workflow outcomes shape future decisions
+    if outcome_ctx and outcome_ctx.get("total", 0) > 0:
+        cons_rej = outcome_ctx.get("consecutive_rejections", 0)
+        if cons_rej >= 2:
+            if category == "advance_goal":
+                score *= max(0.4, 1.0 - cons_rej * 0.15)
+            if category in ("help_ally", "socialize"):
+                score *= 1.0 + min(cons_rej * 0.15, 0.6)
+        approved_count = outcome_ctx.get("approved", 0)
+        if approved_count >= 2 and cons_rej == 0:
+            if category == "advance_goal":
+                score *= 1.0 + min(approved_count * 0.05, 0.3)
+
     score += random.uniform(-0.1, 0.1)
     return max(0.1, score)
 
@@ -2701,6 +2737,8 @@ def evaluate_decision_options(char_id, char_name, archetype, affiliation, mood="
 
     inst_ctx = _get_institution_context()
 
+    outcome_ctx = _get_npc_outcome_ctx(char_id)
+
     need_reflection = None
     try:
         _nr = _get_redis()
@@ -2716,6 +2754,7 @@ def evaluate_decision_options(char_id, char_name, archetype, affiliation, mood="
         need_reflection = _reflect_on_missing_context(
             char_id, _recent_decisions, inst_ctx, _world_ctx,
             fulfilled_need_types=fulfilled_need_types,
+            outcome_ctx=outcome_ctx,
         )
     except Exception:
         pass
@@ -2737,6 +2776,7 @@ def evaluate_decision_options(char_id, char_name, archetype, affiliation, mood="
             need_reflection=need_reflection,
             fulfilled_need_types=fulfilled_need_types,
             affiliation=affiliation,
+            outcome_ctx=outcome_ctx,
         )
         reasons = []
         mood_biases = MOOD_DECISION_BIAS.get(mood, {})
@@ -2780,6 +2820,15 @@ def evaluate_decision_options(char_id, char_name, archetype, affiliation, mood="
                         score *= 0.5
                         reasons.append("recent_fulfillment")
                         break
+        # P3: outcome-memory reason labels
+        if outcome_ctx and outcome_ctx.get("total", 0) > 0:
+            cons_rej = outcome_ctx.get("consecutive_rejections", 0)
+            if cons_rej >= 2 and cat == "advance_goal":
+                reasons.append(f"rejection_cautious({cons_rej})")
+            if cons_rej >= 2 and cat in ("help_ally", "socialize"):
+                reasons.append("pivoting_to_collaborate")
+            if outcome_ctx.get("approved", 0) >= 2 and cons_rej == 0 and cat == "advance_goal":
+                reasons.append("approval_confidence")
         options.append({"category": cat, "score": round(score, 2), "reasons": reasons})
 
     options.sort(key=lambda x: x["score"], reverse=True)
