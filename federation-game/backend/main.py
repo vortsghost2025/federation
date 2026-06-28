@@ -81,6 +81,7 @@ from routes.error_reports import router as error_reports_router
 from routes.npc_logs import router as npc_logs_router
 from routes.agents import router as agents_router
 from routes.institutions import router as institutions_router
+from routes.councilor_needs import router as councilor_needs_router
 from routes.universe import router as universe_router
 from map_endpoints import router as map_router
 from data.events import EVENTS
@@ -330,6 +331,7 @@ app.include_router(agents_router)
 app.include_router(universe_router)
 app.include_router(map_router)
 app.include_router(institutions_router)
+app.include_router(councilor_needs_router)
 
 
 @app.on_event("startup")
