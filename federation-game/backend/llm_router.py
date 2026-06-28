@@ -79,7 +79,8 @@ NIM_RATE_LIMIT_WINDOW = 60  # seconds
 OPENROUTER_API_KEY = os.environ.get("OPENROUTER_API_KEY", "")
 OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1/chat/completions"
 _OR_KEY_1 = os.environ.get("OPENROUTER_API_KEY_1", "")
-OPENROUTER_KEYS = [k for k in [OPENROUTER_API_KEY, _OR_KEY_1] if k]
+_OR_KEY_2 = os.environ.get("OPENROUTER_API_KEY_2", "")
+OPENROUTER_KEYS = [k for k in [OPENROUTER_API_KEY, _OR_KEY_1, _OR_KEY_2] if k]
 _or_key_index = 0
 
 def _get_openrouter_key() -> str:
