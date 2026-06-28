@@ -1,45 +1,42 @@
 # Horizon Status — Living Document
-**Last Updated:** 2026-06-24 20:20
-**Updated By:** Kilo (mimo-v2.5-free)
+**Last Updated:** 2026-06-28 14:10
+**Updated By:** GLM-5.1 (z-ai)
 
 ## Current State
 
 | Item | Value |
 |------|-------|
-| HEAD commit | a760cce |
-| VPS health | All containers up (frontend 19h, backend 19h, worker 16min, NPC agents 19h) |
+| HEAD commit | 005fc9f |
+| VPS health | All containers up |
 | Production URL | https://federation-game.deliberatefederation.cloud/ |
-| SSH alias | `ssh hostinger` or `ssh federation-vps` (public IP 187.77.3.56) |
-| Dirty tree | 38 modified, 42 untracked |
+| SSH alias | `ssh federation-vps` |
+| Dirty tree | 2 modified (P3 work — institutions.py, npc_autonomy.py) |
 | Race condition | FIXED end-to-end — backend + frontend both use choice_token |
 | Spatial mode | DEPLOYED — sticky flag live on production |
 | Starmap 3D | DEPLOYED — cosmic scale-of-reality visual pass live on VPS |
+| P3 Outcome Memory | DEPLOYED + VERIFIED LIVE — 35/35 tests pass |
 
-## Completed This Session
+## Completed 2026-06-27 to 2026-06-28 (P0-P4 + Agency + Decrees + P3)
 
-- [x] Race condition fix (event tokens) — backend deployed, verified
-- [x] state.py refactor (3-file split) — deployed
-- [x] Alembic migrations — deployed
-- [x] docker-compose.yml indentation — validated, deployed
-- [x] Stability recovery mechanic — deployed
-- [x] Frontend self-recovery (stale choice_token) — deployed
-- [x] Starmap tab fix — deployed
-- [x] SSH config cleanup — done locally (Wave AI)
-- [x] Root cleanup (~50 debug scripts) — done
-- [x] Continuity handoff docs — committed (994ba2e)
-- [x] Race fix dead code cleanup (core.py line 679) — done locally (Wave AI)
-- [x] .horizon/ system created — HORIZON_STATUS, PROTOCOL, DECISIONS, AGENT_OWNERSHIP
-- [x] P001 — Bridge system — completed, committed (1c04c40)
-- [x] P002 — Frontend choice_token integration — completed, committed (b66d9e1), deployed to VPS
-- [x] P003 — Spatial mode sticky flag — completed, committed (b66d9e1), deployed to VPS
-- [x] Kilo duplicate skill cleanup — quarantined .kilocode/skills, warnings dropped 648→326
-- [x] P004 — Frontend Error Hardening via fed-fetch.js — completed, deployed to VPS
-- [x] P005 — Dead Code Cleanup + Redis/DB Timeout Fixes — completed, deployed to VPS
-- [x] P006 — Full Redis Timeout Hardening — completed, deployed to VPS
-- [x] P007 — Leader cognition retry loop fix (timeout+cooldown) — committed (4b592da), deployed to VPS, verified live
-- [x] P008 — Tracked scratch-file cleanup — committed (538a6dc), 29 files removed, .gitignore hardened
-- [x] P009 — Session-startup probe (fed-state.sh + AGENTS hook) — committed (eef00e3), future agents auto-load fed-state on session start
-- [x] P010 — Recover deployed chat-NPC improvements — committed (8265504); npc_autonomy.py rewrite + npc_event_log.py added back to git. The 26 remaining dirty-tree files are unchanged and still need individual review.
+- [x] P0 — need_reflection propagation bug fix — COMMITTED + DEPLOYED LIVE
+- [x] Councilor Decrees v0 — 3 endpoints, rule-based evaluation — COMMITTED + DEPLOYED LIVE
+- [x] DECREES_ALLOWED_NPCS whitespace strip fix — COMMITTED + DEPLOYED
+- [x] P0 Bridge bug fix — fulfilled needs suppress repeat request_capability — COMMITTED + DEPLOYED
+- [x] P1 Smoke test — PASSED
+- [x] P2 Directive system — decree-based world-state bias — DEPLOYED LIVE (22/22 directive tests pass)
+- [x] P4 Traefik security — API disabled, Grafana pw via env var, postgres restored — COMMITTED + DEPLOYED
+- [x] Councilor topic loop fix — four-prong fix (dedup + override + partner + pivot)
+- [x] 3 autonomy actions — create_institution, propose_role, submit_to_institution — DEPLOYED
+- [x] Needs queue + enhancements A/B/C — DEPLOYED + VERIFIED LIVE
+- [x] Prometheus/Grafana metrics — DEPLOYED + VERIFIED (commit 943accc)
+- [x] OpenRouter free pool rotation — 3 keys, 3 tier pools, round-robin + per-model CB — COMMITTED
+- [x] Gemini depleted cooldown — Redis-backed 1hr silence — COMMITTED
+- [x] Ollama 404 fix — OLLAMA_BASE_URL must include /v1
+- [x] P3 Workflow Outcome Memory — FULLY DEPLOYED + VERIFIED LIVE
+  - institutions.py + npc_autonomy.py md5s verified on all 4 containers
+  - 35/35 test_needs_queue.py tests pass (13 new P3 tests)
+  - Live scoring verified: 3 rejections → advance_goal suppressed 42%; 3 approvals → boosted 15%
+- [x] .horizon/ARCHITECTURE_STATE.md — compressed backend state for post-compaction recovery
 
 ## Completed 2026-06-24 (Starmap 3D Visual Pass)
 
@@ -67,32 +64,25 @@
 | (none) | P009 Session-startup probe (fed-state.sh + AGENTS hook) | ✅ Yes |
 | a760cce | Starmap 3D cosmic scale-of-reality visual pass | ✅ Yes (frontend baked into container) |
 
-## Dirty Tree Summary (2026-06-24)
+## Dirty Tree Summary (2026-06-28)
 
-- **38 modified files** — mostly backend/frontend changes from starmap + NPC work
-- **42 untracked files** — includes screenshots, session scratch, debug scripts, archived docs
-- **Stash:** `b6250c9` exists (may contain additional uncommitted work)
-- **Local ahead of remote** by several commits (starmap 3D work)
+- **2 modified files** — institutions.py + npc_autonomy.py (P3 outcome memory, committed but not yet pushed)
+- **0 untracked files**
 
 ## In Progress
 
-- **P011 — NPC Agency system** — code complete, needs VPS deploy
-  - Artifact registry + inter-NPC messaging + sandbox executor + cognition upgrade
-  - Commit: `27a2921` (tag: `p011-npc-agency`)
-  - See `docs/NPC_AGENCY_LOG.md` for full build log
+- (none)
 
 ## Blocked
 
-- (none)
+- OpenRouter paid models fail with HTTP 402 — ALL 3 keys have no credits for paid models
+- Gemini fails with HTTP 429 "Prepayment credits depleted" — silenced 1hr via Redis key
 
 ## Next Steps (Prioritized)
 
-1. **Deploy P011 to VPS** — build sandbox image, `docker compose up -d`, restart backend+worker
-2. **Clean dirty tree** — categorize 38 modified + 42 untracked files, commit starmap work, gitignore temp files
-3. **Examine stash `b6250c9`** — may contain additional uncommitted work
-4. **VPS git deploy script** — automate `git pull → cp → docker restart` pattern
-5. **Frontend hardening** — error handling, loading states, offline resilience
-6. **Update starmap3d.html Traefik routing** — add to router list if needed
+1. **Context window optimization** — ARCHITECTURE_STATE.md built; consider opencode config to trim 500+ skill list
+2. **Push P3 changes** — institutions.py + npc_autonomy.py committed locally, need git push
+3. **Frontend hardening** — error handling, loading states, offline resilience
 
 ## Agent File Ownership
 

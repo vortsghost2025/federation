@@ -12,6 +12,10 @@ ACTIVE_WORKFLOWS_KEY = "workflow:active"
 COMPLETED_WORKFLOWS_KEY = "workflow:completed"
 WORKFLOW_INDEX_KEY = "workflow:index"
 
+NPC_OUTCOME_HISTORY_KEY = "npc:{npc_id}:workflow_outcomes"
+NPC_RECENT_OUTCOMES_KEY = "npc:{npc_id}:recent_outcomes"
+MAX_RECENT_OUTCOMES = 20
+
 INSTITUTION_SEEDS = {
     "institution:research_division_council": {
         "name": "Research Division Council",
@@ -58,7 +62,7 @@ WORKFLOW_TRANSITIONS = {
     },
 }
 
-TERMINAL_STATES = frozenset({"ratified", "endorsed"})
+TERMINAL_STATES = frozenset({"ratified", "endorsed", "approved", "rejected"})
 
 VALID_WORKFLOW_TYPES = set(WORKFLOW_TRANSITIONS)
 
@@ -295,6 +299,7 @@ def advance_workflow(r, workflow_id, now=None):
         r.sadd(COMPLETED_WORKFLOWS_KEY, workflow_id)
         _decrement_inst_counter(r, institution_id, "active_workflows")
         _increment_inst_counter(r, institution_id, "completed_workflows")
+        _record_outcome(r, workflow_id, record, next_status)
 
     return True, next_status
 
@@ -326,6 +331,7 @@ def override_workflow_status(r, workflow_id, new_status, now=None):
         r.sadd(COMPLETED_WORKFLOWS_KEY, workflow_id)
         _decrement_inst_counter(r, institution_id, "active_workflows")
         _increment_inst_counter(r, institution_id, "completed_workflows")
+        _record_outcome(r, workflow_id, record, new_status)
     elif not is_terminal and not was_active:
         r.srem(COMPLETED_WORKFLOWS_KEY, workflow_id)
         r.sadd(ACTIVE_WORKFLOWS_KEY, workflow_id)
@@ -362,4 +368,53 @@ def run_institution_tick(r, now=None):
         "workflows_advanced": workflows_advanced,
         "active_workflows": len(r.smembers(ACTIVE_WORKFLOWS_KEY)),
         "completed_workflows": len(r.smembers(COMPLETED_WORKFLOWS_KEY)),
+    }
+
+
+def _record_outcome(r, workflow_id, record, new_status):
+    if new_status not in TERMINAL_STATES:
+        return
+    source_npc = record.get("source_councilor_id", "")
+    if not source_npc:
+        return
+    wf_type = record.get("type", "")
+    outcome = "approved" if new_status in ("ratified", "endorsed", "approved") else "rejected"
+    hist_key = NPC_OUTCOME_HISTORY_KEY.format(npc_id=source_npc)
+    r.hincrby(hist_key, outcome, 1)
+    recent_key = NPC_RECENT_OUTCOMES_KEY.format(npc_id=source_npc)
+    entry = json.dumps({"workflow_id": workflow_id, "type": wf_type, "outcome": outcome, "ts": _now_iso()})
+    r.lpush(recent_key, entry)
+    r.ltrim(recent_key, 0, MAX_RECENT_OUTCOMES - 1)
+
+
+def get_npc_outcome_history(r, npc_id):
+    hist_key = NPC_OUTCOME_HISTORY_KEY.format(npc_id=npc_id)
+    raw = r.hgetall(hist_key)
+    approved = int(raw.get("approved", 0))
+    rejected = int(raw.get("rejected", 0))
+    total = approved + rejected
+    recent_key = NPC_RECENT_OUTCOMES_KEY.format(npc_id=npc_id)
+    recent_raw = r.lrange(recent_key, 0, -1)
+    recent = []
+    for item in recent_raw:
+        try:
+            recent.append(json.loads(item))
+        except (json.JSONDecodeError, TypeError):
+            pass
+    consecutive_rejections = 0
+    for entry in recent:
+        if entry.get("outcome") == "rejected":
+            consecutive_rejections += 1
+        else:
+            break
+    recent_rejected_types = set(
+        e.get("type", "") for e in recent[:5] if e.get("outcome") == "rejected"
+    )
+    return {
+        "approved": approved,
+        "rejected": rejected,
+        "total": total,
+        "consecutive_rejections": consecutive_rejections,
+        "recent_rejected_types": recent_rejected_types,
+        "recent": recent[:10],
     }
