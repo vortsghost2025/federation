@@ -2724,7 +2724,7 @@ def evaluate_decision_options(char_id, char_name, archetype, affiliation, mood="
         options.append({"category": cat, "score": round(score, 2), "reasons": reasons})
 
     options.sort(key=lambda x: x["score"], reverse=True)
-    return options
+    return options, need_reflection
 
 
 def make_decision(char_id, char_name, archetype, affiliation, mood=""):
@@ -2740,7 +2740,7 @@ def make_decision(char_id, char_name, archetype, affiliation, mood=""):
             )
         notification_context = " ".join(parts)
 
-    options = evaluate_decision_options(
+    options, need_reflection = evaluate_decision_options(
         char_id, char_name, archetype, affiliation, mood
     )
     if not options:
@@ -3061,3 +3061,105 @@ def get_broadcast_events(char_id=None, affiliation=None, limit=10):
 
 def get_relevant_events_for_npc(char_id, affiliation, limit=5):
     return get_broadcast_events(char_id=char_id, affiliation=affiliation, limit=limit)
+
+
+# --- COUNCILOR DECREES: Bounded world-state write access ---
+
+DECREES_ALLOWED_NPCS = os.environ.get(
+    "EXTERNAL_AGENT_NPCS", "char_001,char_306"
+).split(",")
+
+DECREES_ALLOWED_METRICS = [
+    "stability",
+    "morale",
+    "resource_abundance",
+    "tension_level",
+    "threat_level",
+    "anomaly_activity",
+]
+
+DECREE_MAX_DELTA = 5
+DECREE_COOLDOWN_SECONDS = 3600
+DECREE_HISTORY_KEY = "councilor:decrees:history"
+DECREE_COOLDOWN_KEY = "councilor:decrees:cooldown:{char_id}"
+DECREE_MAX_HISTORY = 200
+DECREE_HISTORY_TTL = 86400 * 30
+
+
+def issue_decree(char_id, char_name, metric, delta, reasoning=""):
+    if char_id not in DECREES_ALLOWED_NPCS:
+        return {"ok": False, "error": f"{char_id} is not authorized to issue decrees"}
+    if metric not in DECREES_ALLOWED_METRICS:
+        return {"ok": False, "error": f"metric '{metric}' is not decreable"}
+    if delta == 0:
+        return {"ok": False, "error": "delta must be non-zero"}
+    if abs(delta) > DECREE_MAX_DELTA:
+        return {
+            "ok": False,
+            "error": f"delta {delta} exceeds max ±{DECREE_MAX_DELTA}",
+        }
+    if metric not in WORLD_CONDITIONS:
+        return {"ok": False, "error": f"unknown metric: {metric}"}
+    r = _get_redis()
+    cooldown_key = DECREE_COOLDOWN_KEY.format(char_id=char_id)
+    ttl = r.ttl(cooldown_key)
+    if ttl and ttl > 0:
+        return {
+            "ok": False,
+            "error": f"cooldown active for {ttl}s",
+            "cooldown_remaining": ttl,
+        }
+    current = get_world_condition(metric)
+    if current is None:
+        return {"ok": False, "error": f"could not read current value for {metric}"}
+    config = WORLD_CONDITIONS[metric]
+    new_val = max(config["min"], min(config["max"], current + delta))
+    actual_delta = new_val - current
+    if actual_delta == 0:
+        return {"ok": False, "error": "change would have no effect (value clamped)"}
+    r.hset(WORLD_STATE_KEY, metric, str(int(round(new_val))))
+    r.set("world_state_updated", str(int(time.time())), ex=WORLD_STATE_TTL)
+    r.setex(cooldown_key, DECREE_COOLDOWN_SECONDS, "1")
+    decree_record = {
+        "decree_id": f"dcr_{char_id}_{int(time.time())}",
+        "char_id": char_id,
+        "char_name": char_name,
+        "metric": metric,
+        "previous_value": current,
+        "new_value": int(round(new_val)),
+        "delta": actual_delta,
+        "reasoning": reasoning,
+        "ts": int(time.time()),
+    }
+    r.zadd(DECREE_HISTORY_KEY, {json.dumps(decree_record): decree_record["ts"]})
+    r.zremrangebyrank(DECREE_HISTORY_KEY, 0, -(DECREE_MAX_HISTORY + 1))
+    r.expire(DECREE_HISTORY_KEY, DECREE_HISTORY_TTL)
+    event_desc = (
+        f"{char_name} issued a decree: {metric} {current}\u2192{int(round(new_val))}"
+        f" ({'+' if actual_delta > 0 else ''}{actual_delta})"
+    )
+    if reasoning:
+        event_desc += f" \u2014 {reasoning[:120]}"
+    try:
+        from federation_game_events import add_event
+        add_event("decree_issued", event_desc, significance=0.9)
+    except Exception:
+        pass
+    return {"ok": True, "decree": decree_record}
+
+
+def get_decree_history(char_id=None, limit=20):
+    r = _get_redis()
+    raw = r.zrevrange(DECREE_HISTORY_KEY, 0, limit * 2 - 1)
+    decrees = []
+    for item in raw:
+        try:
+            rec = json.loads(item)
+        except (json.JSONDecodeError, TypeError):
+            continue
+        if char_id and rec.get("char_id") != char_id:
+            continue
+        decrees.append(rec)
+        if len(decrees) >= limit:
+            break
+    return decrees
