@@ -3359,7 +3359,7 @@ DECREE_THRESHOLDS = {
     "anomaly_activity": {"low": 5, "high": 70, "low_delta": -1, "high_delta": -3},
 }
 
-COUNCILOR_NAMES = {"char_001": "Elara", "char_306": "Kael"}
+COUNCILOR_NAMES = {"char_001": "Archimedes Prime", "char_306": "The Oracle"}
 
 
 def evaluate_decree_opportunity(r=None):
