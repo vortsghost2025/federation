@@ -7,7 +7,7 @@ from typing import Optional
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, Field
 
-from npc_autonomy_current import (
+from npc_autonomy import (
     file_npc_need,
     get_open_needs,
     consume_system_notifications,

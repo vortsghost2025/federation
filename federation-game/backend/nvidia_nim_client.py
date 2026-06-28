@@ -209,6 +209,11 @@ OPENROUTER_MODELS = {
     "cloud": "meta-llama/llama-3.3-70b-instruct:free",
     "heavy": "meta-llama/llama-3.3-70b-instruct:free",
 }
+OPENROUTER_PAID_MODELS = {
+    "local": "meta-llama/llama-3.3-70b-instruct",
+    "cloud": "meta-llama/llama-3.3-70b-instruct",
+    "heavy": "meta-llama/llama-3.3-70b-instruct",
+}
 
 
 # ---------------------------------------------------------------------------
@@ -657,6 +662,69 @@ class NimClient:
             logger.warning("OpenRouter: error: %s", str(exc)[:100])
         return None
 
+    async def _call_openrouter_paid(
+        self,
+        system_prompt: str,
+        user_prompt: str,
+        max_tokens: int = 80,
+        temperature: float = 0.8,
+        priority: str = "local",
+    ) -> Optional[str]:
+        """Call OpenRouter paid models (requires credits). Returns content string or None."""
+        key = self._get_openrouter_key()
+        if not key:
+            return None
+
+        model = OPENROUTER_PAID_MODELS.get(priority, "meta-llama/llama-3.3-70b-instruct")
+
+        try:
+            from openai import AsyncOpenAI
+
+            or_client = AsyncOpenAI(
+                base_url="https://openrouter.ai/api/v1",
+                api_key=key,
+                timeout=httpx.Timeout(float(OPENROUTER_TIMEOUT), connect=5.0),
+                max_retries=1,
+            )
+            resp = await asyncio.wait_for(
+                or_client.chat.completions.create(
+                    model=model,
+                    messages=[
+                        {"role": "system", "content": system_prompt},
+                        {"role": "user", "content": user_prompt},
+                    ],
+                    max_tokens=min(max_tokens, 512),
+                    temperature=temperature,
+                    stream=False,
+                    extra_headers={
+                        "HTTP-Referer": "https://federation-game.deliberatefederation.cloud",
+                        "X-Title": "Federation Game LLM Router",
+                    },
+                ),
+                timeout=float(OPENROUTER_TIMEOUT) + 5.0,
+            )
+            content = resp.choices[0].message.content
+            if content:
+                content = content.strip().strip('"').strip("'")
+                if len(content) > 500:
+                    content = content[:500]
+                self._openrouter_calls += 1
+                logger.info(
+                    "OpenRouter paid: model=%s chars=%d success=True",
+                    model,
+                    len(content),
+                )
+                return content
+            self._openrouter_failures += 1
+            return None
+        except asyncio.TimeoutError:
+            self._openrouter_failures += 1
+            logger.warning("OpenRouter paid: timed out (%ds)", OPENROUTER_TIMEOUT)
+        except Exception as exc:
+            self._openrouter_failures += 1
+            logger.warning("OpenRouter paid: error: %s", str(exc)[:100])
+        return None
+
     # ------------------------------------------------------------------
     # Tier 2: NIM cloud -- quality, rate-limited
     # ------------------------------------------------------------------
@@ -808,6 +876,13 @@ class NimClient:
 
         # Tier 3: OpenRouter free -- last resort
         result = await self._call_openrouter(
+            system_prompt, user_prompt, max_tokens, temperature, priority=priority
+        )
+        if result is not None:
+            return result
+
+        # Tier 3.5: OpenRouter paid (requires credits)
+        result = await self._call_openrouter_paid(
             system_prompt, user_prompt, max_tokens, temperature, priority=priority
         )
         return result

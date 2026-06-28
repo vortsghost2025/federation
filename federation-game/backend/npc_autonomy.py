@@ -20,6 +20,8 @@ npc_world_events - ZSET (score=timestamp) of global events
 npc_mood:{char_id} - STRING current mood state
 npc_last_active:{char_id} - STRING timestamp of last activity
 npc_decisions:{char_id} - ZSET (score=timestamp) of recent decisions
+npc:needs - LIST of structured need records (councilor capability requests)
+npc:needs:{npc_id}:last - STRING timestamp of last need filed (dedup throttle)
 """
 
 import os
@@ -31,6 +33,7 @@ import urllib.request
 import urllib.error
 import concurrent.futures
 import threading
+from datetime import datetime, timezone
 from typing import Dict, List, Optional, Any
 
 import redis
@@ -58,6 +61,104 @@ EXTERNAL_AGENT_NPCS = {
     for cid in os.environ.get("EXTERNAL_AGENT_NPCS", "char_001,char_306").split(",")
     if cid.strip()
 }
+
+ALLOWED_NEED_TYPES = frozenset({
+    "information_access",
+    "memory_access",
+    "coordination_help",
+    "institution_support",
+    "workflow_visibility",
+    "decision_feedback",
+    "world_state_gap",
+})
+
+FORBIDDEN_NEED_TYPES = frozenset({
+    "shell_access",
+    "server_access",
+    "delete_access",
+    "billing_access",
+    "provider_key_access",
+    "admin_access",
+    "unrestricted_tool_access",
+})
+
+NPC_NEEDS_KEY = "npc:needs"
+NPC_NEEDS_MAX = 100
+NPC_NEEDS_THROTTLE_SECONDS = 600
+
+
+def file_npc_need(r, npc_id, npc_name, need_type, priority, description,
+                  why_needed, suggested_capability, related_institution_id="",
+                  context_snapshot=None):
+    if need_type in FORBIDDEN_NEED_TYPES:
+        return {"ok": False, "error": "forbidden_need_type", "need_type": need_type}
+    if need_type not in ALLOWED_NEED_TYPES:
+        return {"ok": False, "error": "unknown_need_type", "need_type": need_type}
+    now = time.time()
+    last_ts = r.get(f"npc:needs:{npc_id}:last")
+    if last_ts:
+        try:
+            if now - float(last_ts) < NPC_NEEDS_THROTTLE_SECONDS:
+                return {"ok": False, "error": "throttled", "seconds_remaining": int(NPC_NEEDS_THROTTLE_SECONDS - (now - float(last_ts)))}
+        except (ValueError, TypeError):
+            pass
+    queue_len = r.llen(NPC_NEEDS_KEY)
+    if queue_len >= NPC_NEEDS_MAX:
+        r.lpop(NPC_NEEDS_KEY)
+    need_id = hashlib.md5(f"{npc_id}:{need_type}:{description[:80]}:{now}".encode()).hexdigest()[:12]
+    record = {
+        "need_id": need_id,
+        "npc_id": npc_id,
+        "npc_name": npc_name,
+        "need_type": need_type,
+        "priority": priority,
+        "description": description,
+        "why_needed": why_needed,
+        "suggested_capability": suggested_capability,
+        "related_institution_id": related_institution_id,
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        "status": "open",
+    }
+    if context_snapshot:
+        record["context_snapshot"] = context_snapshot
+    for existing_raw in r.lrange(NPC_NEEDS_KEY, 0, -1):
+        try:
+            existing = json.loads(existing_raw)
+            if (existing.get("npc_id") == npc_id and
+                existing.get("need_type") == need_type and
+                existing.get("status") == "open"):
+                return {"ok": False, "error": "duplicate_open", "existing_need_id": existing.get("need_id")}
+        except (json.JSONDecodeError, TypeError):
+            continue
+    r.rpush(NPC_NEEDS_KEY, json.dumps(record))
+    r.set(f"npc:needs:{npc_id}:last", str(now))
+    return {"ok": True, "need_id": need_id}
+
+
+def get_open_needs(r, npc_id=None):
+    needs = []
+    for raw in r.lrange(NPC_NEEDS_KEY, 0, -1):
+        try:
+            record = json.loads(raw)
+            if record.get("status") == "open":
+                if npc_id is None or record.get("npc_id") == npc_id:
+                    needs.append(record)
+        except (json.JSONDecodeError, TypeError):
+            continue
+    return needs
+
+
+def consume_system_notifications(r, npc_id):
+    notifications = []
+    key = f"npc:system_notifications:{npc_id}"
+    for raw in r.lrange(key, 0, -1):
+        try:
+            notifications.append(json.loads(raw))
+        except (json.JSONDecodeError, TypeError):
+            continue
+    r.delete(key)
+    return notifications
+
 
 # LLM priority: NVIDIA NIM (free, fast) -> OpenRouter (free, fallback)
 LLM_USE_NIM = True  # Toggle NIM integration
@@ -2257,7 +2358,104 @@ DECISION_CATEGORIES = [
     "confront_rival",
     "help_ally",
     "explore",
+    "request_capability",
 ]
+
+
+def _get_institution_context():
+    try:
+        _r = _get_redis()
+        inst_ids = _r.smembers("institution:index")
+        if not inst_ids:
+            return {"institutions": [], "active_workflow_count": 0}
+        institutions = []
+        total_active = 0
+        for iid in inst_ids:
+            data = _r.hgetall(iid)
+            name = data.get("name", "")
+            kind = data.get("kind", "")
+            status = data.get("status", "")
+            active_count = int(_r.get(f"{iid}:active_workflows") or 0)
+            total_active += active_count
+            members = _r.smembers(f"{iid}:members") or set()
+            institutions.append({
+                "id": iid,
+                "name": name,
+                "kind": kind,
+                "status": status,
+                "active_workflows": active_count,
+                "members": list(members),
+            })
+        return {"institutions": institutions, "active_workflow_count": total_active}
+    except Exception:
+        return {"institutions": [], "active_workflow_count": 0}
+
+
+LOW_VALUE_CATEGORIES = frozenset({"rest", "wander", "noop"})
+
+
+def _reflect_on_missing_context(npc_id, recent_decisions, inst_ctx, world_ctx):
+    """Return a suggested need record or None if the NPC seems well-resourced."""
+    if not recent_decisions:
+        return None
+    low_count = 0
+    for dec in recent_decisions[-10:]:
+        cat = dec.get("category", "")
+        if cat in LOW_VALUE_CATEGORIES:
+            low_count += 1
+    low_ratio = low_count / max(len(recent_decisions[-10:]), 1)
+    if low_ratio < 0.5:
+        return None
+    institutions = inst_ctx.get("institutions", []) if inst_ctx else []
+    has_active_inst = any(i.get("status") == "active" and i.get("active_workflows", 0) > 0 for i in institutions)
+    is_member = any(npc_id in i.get("members", []) for i in institutions)
+    if has_active_inst and not is_member:
+        return {
+            "need_type": "institution_support",
+            "priority": "high",
+            "description": "Active institution workflows exist but I have no membership or visibility into them.",
+            "why_needed": "Over half my recent actions were low-value (rest/wander) — lacking institutional coordination context.",
+            "suggested_capability": "institution_membership_or_observer_feed",
+        }
+    if has_active_inst and is_member:
+        active_wfs = sum(i.get("active_workflows", 0) for i in institutions if npc_id in i.get("members", []))
+        if active_wfs >= 3:
+            return {
+                "need_type": "workflow_visibility",
+                "priority": "high",
+                "description": f"My institution has {active_wfs} active workflows but I cannot see their progress or blockers.",
+                "why_needed": "I keep resting because I lack workflow status to act on.",
+                "suggested_capability": "npc_decision_summary_feed",
+            }
+        if active_wfs == 0:
+            return {
+                "need_type": "coordination_help",
+                "priority": "medium",
+                "description": "I am an institution member but no workflows are active despite world events.",
+                "why_needed": "Low action rate suggests I need better triggers to initiate institutional processes.",
+                "suggested_capability": "institution_trigger_context",
+            }
+    world_stable = all(
+        world_ctx.get(k, 50) in range(30, 70)
+        for k in ("stability", "morale", "resource_abundance")
+        if k in world_ctx
+    )
+    if world_stable and low_ratio > 0.6:
+        return {
+            "need_type": "world_state_gap",
+            "priority": "medium",
+            "description": "World state appears stable but I lack granular context to find productive actions.",
+            "why_needed": "Stable world + high rest rate = missing decision-driving information.",
+            "suggested_capability": "sector_or_faction_detail_feed",
+        }
+    return {
+        "need_type": "information_access",
+        "priority": "medium",
+        "description": "I am under-acting relative to my role — I need better context about what is happening.",
+        "why_needed": f"{low_count}/{len(recent_decisions[-10:])} recent actions were low-value.",
+        "suggested_capability": "general_context_enrichment",
+    }
+
 
 MOOD_DECISION_BIAS = {
     "contemplative": {"advance_goal": 1.5, "rest": 1.3, "self_improve": 1.2},
@@ -2341,6 +2539,7 @@ DECISION_DESCRIPTIONS = {
     "confront_rival": "decided to confront an adversary",
     "help_ally": "decided to aid a companion",
     "explore": "decided to explore new territory",
+    "request_capability": "requested missing capability or context",
 }
 
 MAX_DECISIONS = 10
@@ -2358,6 +2557,8 @@ def _score_decision_option(
     recent_event_count,
     broadcast_event_count=0,
     has_active_quests=False,
+    inst_ctx=None,
+    need_reflection=None,
 ):
     score = 1.0
     mood_biases = MOOD_DECISION_BIAS.get(mood, {})
@@ -2396,6 +2597,30 @@ def _score_decision_option(
         score = 0.5
 
     score *= _world_state_decision_modifier(category)
+
+    # Institution-aware bias: active institutions with workflows pull
+    # faction-aligned NPCs toward advance_goal and help_ally
+    if inst_ctx and inst_ctx.get("institutions"):
+        for inst in inst_ctx["institutions"]:
+            if inst.get("status") != "active":
+                continue
+            if inst.get("active_workflows", 0) > 0:
+                if category == "advance_goal":
+                    score *= 1.15
+                if category == "help_ally" and char_id in inst.get("members", []):
+                    score *= 1.3
+                if category == "react_to_events" and inst.get("active_workflows", 0) >= 3:
+                    score *= 1.1
+
+    # Need-reflection: if NPC has recent low-value decision pattern,
+    # boost request_capability so the NPC files a need instead of
+    # repeatedly resting or wandering
+    if category == "request_capability":
+        if need_reflection:
+            score *= 2.5
+        else:
+            score *= 0.05
+
     score += random.uniform(-0.1, 0.1)
     return max(0.1, score)
 
@@ -2429,6 +2654,26 @@ def evaluate_decision_options(char_id, char_name, archetype, affiliation, mood="
     except Exception:
         pass  # quest check is optional — never break decision evaluation
 
+    inst_ctx = _get_institution_context()
+
+    need_reflection = None
+    try:
+        _nr = _get_redis()
+        _recent_raw = _nr.lrange(f"npc_decisions:{char_id}", 0, 9)
+        _recent_decisions = []
+        for _rd in _recent_raw:
+            try:
+                _recent_decisions.append(json.loads(_rd))
+            except (json.JSONDecodeError, TypeError):
+                pass
+        _world_raw = _nr.get("world_state")
+        _world_ctx = json.loads(_world_raw) if _world_raw else {}
+        need_reflection = _reflect_on_missing_context(
+            char_id, _recent_decisions, inst_ctx, _world_ctx
+        )
+    except Exception:
+        pass
+
     options = []
     for cat in DECISION_CATEGORIES:
         score = _score_decision_option(
@@ -2442,6 +2687,8 @@ def evaluate_decision_options(char_id, char_name, archetype, affiliation, mood="
             recent_event_count,
             broadcast_event_count,
             has_active_quests=has_active_quests,
+            inst_ctx=inst_ctx,
+            need_reflection=need_reflection,
         )
         reasons = []
         mood_biases = MOOD_DECISION_BIAS.get(mood, {})
@@ -2463,6 +2710,17 @@ def evaluate_decision_options(char_id, char_name, archetype, affiliation, mood="
             reasons.append("rival: " + rival)
         if cat == "react_to_events" and recent_event_count > 0:
             reasons.append(str(recent_event_count) + " recent events")
+        if inst_ctx and inst_ctx.get("institutions"):
+            for inst in inst_ctx["institutions"]:
+                if inst.get("status") != "active":
+                    continue
+                if inst.get("active_workflows", 0) > 0:
+                    if cat == "advance_goal" and char_id in inst.get("members", []):
+                        reasons.append(inst["name"] + " duty")
+                    if cat == "react_to_events" and inst.get("active_workflows", 0) >= 3:
+                        reasons.append(inst["name"] + " busy")
+        if cat == "request_capability" and need_reflection:
+            reasons.append("missing: " + need_reflection.get("need_type", "context"))
         options.append({"category": cat, "score": round(score, 2), "reasons": reasons})
 
     options.sort(key=lambda x: x["score"], reverse=True)
@@ -2470,6 +2728,18 @@ def evaluate_decision_options(char_id, char_name, archetype, affiliation, mood="
 
 
 def make_decision(char_id, char_name, archetype, affiliation, mood=""):
+    r = _get_redis()
+    notifications = consume_system_notifications(r, char_id)
+    notification_context = ""
+    if notifications:
+        parts = []
+        for n in notifications:
+            parts.append(
+                f"[System Notice: Your request for {n.get('need_type','')} has been "
+                f"{n.get('resolution','').replace('closed_','')}. {n.get('message','')}]"
+            )
+        notification_context = " ".join(parts)
+
     options = evaluate_decision_options(
         char_id, char_name, archetype, affiliation, mood
     )
@@ -2613,6 +2883,47 @@ def make_decision(char_id, char_name, archetype, affiliation, mood=""):
                 char_name + " set out to explore uncharted territory"
             )
 
+    elif category == "request_capability":
+        need_type = "information_access"
+        need_desc = "Context gap limiting effective action"
+        if need_reflection:
+            need_type = need_reflection.get("need_type", "information_access")
+            need_desc = need_reflection.get("description", need_desc)
+        r = _get_redis()
+        related_inst = ""
+        try:
+            related_inst = r.get(f"councilor:{char_id}:institution") or ""
+        except Exception:
+            pass
+        _snap_decisions = []
+        try:
+            for _sd in r.lrange(f"npc_decisions:{char_id}", 0, 2):
+                try:
+                    _snap_decisions.append(json.loads(_sd))
+                except (json.JSONDecodeError, TypeError):
+                    pass
+        except Exception:
+            pass
+        need_result = file_npc_need(
+            r, char_id, char_name, need_type, "medium",
+            need_desc, reasoning, "context_enrichment", related_inst,
+            context_snapshot={
+                "world_state": get_world_state(),
+                "recent_decisions": _snap_decisions,
+                "trigger": need_reflection or {},
+            },
+        )
+        action_result = {
+            "char_id": char_id,
+            "char_name": char_name,
+            "action_type": "request_capability",
+            "description": f"{char_name} filed a capability need: {need_type}",
+            "need_filed": need_result.get("ok", False),
+            "need_id": need_result.get("need_id", ""),
+            "mood": mood or "reflective",
+            "ts": int(time.time()),
+        }
+
     decision = {
         "char_id": char_id,
         "char_name": char_name,
@@ -2624,6 +2935,8 @@ def make_decision(char_id, char_name, archetype, affiliation, mood=""):
         "mood": mood or get_mood(char_id),
         "ts": int(time.time()),
     }
+    if notification_context:
+        decision["system_notifications"] = notification_context
     # Attach target_faction for confront_rival decisions
     if category == "confront_rival":
         decision["target_faction"] = target_faction or affiliation or "unknown"

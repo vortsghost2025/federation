@@ -75,9 +75,20 @@ NIM_BASE_URL = "https://integrate.api.nvidia.com/v1/chat/completions"
 NIM_RATE_LIMIT_PER_KEY = 40  # requests per minute per key
 NIM_RATE_LIMIT_WINDOW = 60  # seconds
 
-# OpenRouter — single key
+# OpenRouter — multi-key rotation
 OPENROUTER_API_KEY = os.environ.get("OPENROUTER_API_KEY", "")
 OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1/chat/completions"
+_OR_KEY_1 = os.environ.get("OPENROUTER_API_KEY_1", "")
+OPENROUTER_KEYS = [k for k in [OPENROUTER_API_KEY, _OR_KEY_1] if k]
+_or_key_index = 0
+
+def _get_openrouter_key() -> str:
+    global _or_key_index
+    if not OPENROUTER_KEYS:
+        return ""
+    key = OPENROUTER_KEYS[_or_key_index % len(OPENROUTER_KEYS)]
+    _or_key_index += 1
+    return key
 
 # ── Ollama (Local GPU via Tailscale) ──────────────────────────────────
 # HARDENED: concurrency=1, queue=3, cooldown=60s on 500s, tags cache 60s
@@ -195,16 +206,17 @@ GEMINI_BASE_URL = os.environ.get(
     "GEMINI_BASE_URL", "https://generativelanguage.googleapis.com/v1beta"
 )
 GEMINI_TIMEOUT = int(os.environ.get("GEMINI_TIMEOUT", "20"))
+_GEMINI_ALLOWED_RAW = os.environ.get("GEMINI_ALLOWED_TASKS", "assistant,worker,specialist,narrator,npc_memory,leader")
 GEMINI_ALLOWED_TASKS = frozenset(
     t.strip()
-    for t in os.environ.get("GEMINI_ALLOWED_TASKS", "").split(",")
+    for t in _GEMINI_ALLOWED_RAW.split(",")
     if t.strip()
 )
-GEMINI_MAX_CALLS_PER_DAY = int(os.environ.get("GEMINI_MAX_CALLS_PER_DAY", "0") or "0")
+GEMINI_MAX_CALLS_PER_DAY = int(os.environ.get("GEMINI_MAX_CALLS_PER_DAY", "500") or "500")
 GEMINI_MAX_CALLS_PER_MONTH = int(
-    os.environ.get("GEMINI_MAX_CALLS_PER_MONTH", "0") or "0"
+    os.environ.get("GEMINI_MAX_CALLS_PER_MONTH", "10000") or "10000"
 )
-GEMINI_MONTHLY_USD_CAP = float(os.environ.get("GEMINI_MONTHLY_USD_CAP", "0") or "0")
+GEMINI_MONTHLY_USD_CAP = float(os.environ.get("GEMINI_MONTHLY_USD_CAP", "10.0") or "10.0")
 GEMINI_NOTIFY_THRESHOLDS = tuple(
     sorted(
         {
@@ -783,6 +795,13 @@ TASK_MODELS = {
             "temperature": 0.85,
             "timeout": 30,
         },
+        "fallback_openrouter_paid": {
+            "provider": "openrouter",
+            "model": "meta-llama/llama-3.3-70b-instruct",
+            "max_tokens": 300,
+            "temperature": 0.85,
+            "timeout": 30,
+        },
     },
     "specialist": {
         "primary": {
@@ -802,6 +821,13 @@ TASK_MODELS = {
         "fallback_openrouter": {
             "provider": "openrouter",
             "model": "meta-llama/llama-3.2-3b-instruct:free",
+            "max_tokens": 200,
+            "temperature": 0.8,
+            "timeout": 30,
+        },
+        "fallback_openrouter_paid": {
+            "provider": "openrouter",
+            "model": "meta-llama/llama-3.2-3b-instruct",
             "max_tokens": 200,
             "temperature": 0.8,
             "timeout": 30,
@@ -829,6 +855,13 @@ TASK_MODELS = {
             "temperature": 0.7,
             "timeout": 15,
         },
+        "fallback_openrouter_paid": {
+            "provider": "openrouter",
+            "model": "meta-llama/llama-3.2-3b-instruct",
+            "max_tokens": 100,
+            "temperature": 0.7,
+            "timeout": 15,
+        },
     },
     "narrator": {
         "primary": {
@@ -848,6 +881,13 @@ TASK_MODELS = {
         "fallback_openrouter": {
             "provider": "openrouter",
             "model": "meta-llama/llama-3.3-70b-instruct:free",
+            "max_tokens": 500,
+            "temperature": 0.9,
+            "timeout": 30,
+        },
+        "fallback_openrouter_paid": {
+            "provider": "openrouter",
+            "model": "meta-llama/llama-3.3-70b-instruct",
             "max_tokens": 500,
             "temperature": 0.9,
             "timeout": 30,
@@ -875,6 +915,13 @@ TASK_MODELS = {
             "temperature": 0.6,
             "timeout": 12,
         },
+        "fallback_openrouter_paid": {
+            "provider": "openrouter",
+            "model": "meta-llama/llama-3.2-3b-instruct",
+            "max_tokens": 300,
+            "temperature": 0.6,
+            "timeout": 12,
+        },
     },
     "npc_memory": {
         "primary": {
@@ -894,6 +941,13 @@ TASK_MODELS = {
         "fallback_openrouter": {
             "provider": "openrouter",
             "model": "meta-llama/llama-3.3-70b-instruct:free",
+            "max_tokens": 400,
+            "temperature": 0.8,
+            "timeout": 30,
+        },
+        "fallback_openrouter_paid": {
+            "provider": "openrouter",
+            "model": "meta-llama/llama-3.3-70b-instruct",
             "max_tokens": 400,
             "temperature": 0.8,
             "timeout": 30,
@@ -1157,13 +1211,14 @@ def _call_provider(
         payload_dict = _build_gemini_payload(messages, max_tokens, temperature)
 
     elif provider == "openrouter":
-        if not OPENROUTER_API_KEY:
+        or_key = _get_openrouter_key()
+        if not or_key:
             return False, "No OpenRouter API key configured", 0
         if not _check_rate_limit("openrouter"):
             return False, "OpenRouter rate limit exceeded", 0
         headers = {
             "Content-Type": "application/json",
-            "Authorization": f"Bearer {OPENROUTER_API_KEY}",
+            "Authorization": f"Bearer {or_key}",
             "HTTP-Referer": "https://federation-game.deliberatefederation.cloud",
             "X-Title": "Federation Game LLM Router",
         }
@@ -1478,6 +1533,48 @@ def route_call(
                 result["errors"].append(f"{provider}/{model}: {content[:150]}")
                 result["latency_ms"] += latency
 
+    # ── OpenRouter paid fallback (requires credits) ──────────────────
+    or_paid_config = config.get("fallback_openrouter_paid")
+    if or_paid_config:
+        pp = or_paid_config["provider"]
+        pmodel = or_paid_config["model"]
+        pmt = max_tokens if max_tokens is not None else or_paid_config["max_tokens"]
+        ptemp = (
+            temperature if temperature is not None else or_paid_config["temperature"]
+        )
+        ptimeout = or_paid_config.get("timeout", 25)
+
+        if not _is_circuit_open("openrouter_paid"):
+            result["attempts"] += 1
+            ok, content, latency = _call_provider(
+                pp, pmodel, messages, pmt, ptemp, ptimeout
+            )
+            _record_provider_result("openrouter_paid", ok)
+            if ok and content:
+                result["success"] = True
+                result["content"] = content
+                result["provider"] = pp
+                result["model"] = pmodel
+                result["latency_ms"] = latency
+                try:
+                    r = _get_redis()
+                    audit_entry = {
+                        "ts": time.time(),
+                        "provider": pp,
+                        "model": pmodel,
+                        "task_class": task_class,
+                        "success": True,
+                        "latency_ms": round(latency, 1),
+                        "content_preview": content[:100],
+                    }
+                    r.zadd("llm_audit", {json.dumps(audit_entry): time.time()})
+                except Exception:
+                    pass
+                return result
+            else:
+                result["errors"].append(f"{pp}/{pmodel}: {content[:150]}")
+                result["latency_ms"] += latency
+
     # ── Gemini fallback (budget-guarded last resort) ──────────────────
     gemini_config = config.get("fallback_gemini") or {
         "provider": "gemini",
@@ -1602,7 +1699,8 @@ def get_router_stats() -> Dict:
     now = time.time()
     stats = {
         "nim_keys_available": len(NIM_KEYS),
-        "openrouter_configured": bool(OPENROUTER_API_KEY),
+        "openrouter_configured": bool(OPENROUTER_KEYS),
+        "openrouter_keys_available": len(OPENROUTER_KEYS),
         "ollama_available": _check_ollama_available(),
         "ollama_model": OLLAMA_MODEL,
         "ollama_heavy_model": OLLAMA_HEAVY_MODEL,
