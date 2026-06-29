@@ -14,12 +14,13 @@
 
 ## CURRENT STATE (read this first after compaction)
 
-**Last updated:** 2026-06-29T08:20:00Z
-**Phase:** Phase 1 in progress — [1.2] npc_redis_helpers.py deployed and verified live
+**Last updated:** 2026-06-29T16:45:00Z
+**Phase:** Phase 1 in progress — [1.3] npc_llm_client.py extracted and deployed live
 
 ### What's safe to touch right now
-- `npc-agent/npc_agent.py` — 2356 lines (down from 2968); imports from `npc_redis_helpers` + `fourth_wall`
-- `npc-agent/npc_redis_helpers.py` — **NEW** 653 lines; all Redis CRUD helpers, session log, thread, question similarity, pair workspace, LLM logging
+- `npc-agent/npc_agent.py` — 2148 lines (down from 2356); imports from `npc_redis_helpers` + `fourth_wall` + `npc_llm_client`
+- `npc-agent/npc_llm_client.py` — **NEW** 216 lines; call_llm, _api_key_for_model, _call_openrouter_free, all LLM constants (OR_FREE_POOL, MODEL_ENABLE_THINKING, etc.)
+- `npc-agent/npc_redis_helpers.py` — 653 lines; all Redis CRUD helpers, session log, thread, question similarity, pair workspace, LLM logging
 - `npc-agent/fourth_wall.py` — standalone, 18 fourth-wall regex rules, deployed live
 - `backend/npc_autonomy.py` — fully functional, deployed, verified
 - `scripts/Deploy-VpsFile.ps1` — new, verified
@@ -35,8 +36,10 @@
 
 ### Current deployed hashes (VPS)
 ```
-npc-agent/npc_agent.py: ec8be1832f2be246a7f04dac9477ea21 (2356 lines, imports from submodules)
-npc-agent/npc_redis_helpers.py: 69493966ae0dc045de166f8f5e02fd8d (NEW — 653 lines)
+npc-agent/npc_agent.py: 3bb68be10e908d6036d9b5704e52a9fe (2148 lines, imports from 3 submodules)
+npc-agent/npc_llm_client.py: 9648adae8fd4f932d7dac7f424f0558f (NEW — 216 lines)
+npc-agent/npc_redis_helpers.py: 69493966ae0dc045de166f8f5e02fd8d (653 lines)
+npc-agent/fourth_wall.py: c9426f31 (deployed, verified)
 backend/npc_autonomy.py: ae3475ac (stale — needs re-hash after P0 decree work)
 ```
 
@@ -83,7 +86,7 @@ Steps (each is a single commit + deploy + verify):
 - [1.0] Create empty module files with imports + exports, verify no breakage
 - [1.1] Extract `fourth_wall.py` — smallest, zero dependencies
 - [1.2] Extract `npc_redis_helpers.py` — depends on nothing but redis
-- [1.3] Extract `npc_llm_client.py` — depends on redis helpers
+- [1.3] Extract `npc_llm_client.py` — depends on redis helpers **— DONE, deployed live**
 - [1.4] Extract `npc_context.py` — depends on redis helpers + fourth_wall
 - [1.5] Extract `npc_decisions.py` — depends on context + llm client
 - [1.6] Extract `npc_actions.py` — depends on decisions + redis helpers + fourth_wall
@@ -212,3 +215,34 @@ VERIFIED:
 - md5 CONTAINER 306: MATCHES both files
 - No ModuleNotFoundError after restart (errors were from old container pre-deploy)
 - Both agents running their normal tick cycles
+
+### 2026-06-29T16:45:00Z — [1.3] Extract npc_llm_client.py from npc_agent.py
+STATUS: DONE — deployed and verified live on both containers
+FILES:
+- NEW: `npc-agent/npc_llm_client.py` (216 lines) — LLM routing, fallback chain, OR free pool
+- MODIFIED: `npc-agent/npc_agent.py` (2356 → 2148 lines, -208 lines) — imports added for npc_llm_client
+FUNCTIONS EXTRACTED:
+- call_llm(system_prompt, user_prompt, model, r, call_label) -> dict
+- _api_key_for_model(model, char_id) -> str|None
+- _call_openrouter_free(messages, model, char_id) -> dict
+CONSTANTS EXTRACTED:
+- OR_FREE_POOL, _or_pool_idx, MODEL_ENABLE_THINKING, MODEL_REASONING_BUDGET
+- REQUEST_TIMEOUT, ARTIFACT_TIMEOUT, MAX_TOTAL_BUDGET_MS, MAX_OUTPUT_TOKENS
+- NVIDIA_BASE, OR_BASE
+DEAD CODE REMOVED:
+- _FOURTH_WALL_REPLACEMENTS dict (lines 1371-1390, shadowed by fourth_wall import)
+- def _enforce_fourth_wall (lines 1393-1396, shadowed by fourth_wall import)
+BUG FIX:
+- extract script accidentally stripped `from fourth_wall import` line during content slicing
+- detected via post-extraction import check; manually re-added both fourth_wall + npc_llm_client imports
+DEPLOYED:
+- scp npc_llm_client.py + npc_agent.py to VPS /docker/federation-game/npc-agent/
+- Deploy-VpsFile.ps1 uploaded npc_agent.py (md5 match confirmed)
+- `docker restart federation-game-npc-agent-001-1 federation-game-npc-agent-306-1`
+VERIFIED:
+- md5 HOST: `3bb68be1` (npc_agent.py), `9648adae` (npc_llm_client.py)
+- md5 CONTAINER 001: MATCHES both files
+- md5 CONTAINER 306: MATCHES both files
+- Both containers restarted, cognition loop running, LLM calls succeeding
+- char_001: llama-3.3-nemotron-super-49b returning 200 OK
+- char_306: nemotron-3-super-120b returning 200 OK (occasional JSON parse fallback to rest)
