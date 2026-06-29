@@ -20,6 +20,41 @@ import uuid
 import httpx
 import redis
 
+from npc_redis_helpers import (
+    get_redis,
+    _trunc,
+    _partner_id,
+    _conversation_thread_id,
+    _pair_slug,
+    _pair_state_key,
+    _pair_journal_key,
+    _pair_state,
+    _pair_hset,
+    _pair_append_journal,
+    _pair_recent_journal,
+    _pair_thread_id,
+    _store_thread_message,
+    _recent_thread_messages,
+    _recent_decisions,
+    _normalize_question,
+    _question_similarity,
+    _partner_answered_open_question,
+    _new_evidence_since,
+    _duplicate_open_question,
+    _open_question_from_partner,
+    _state_question_from_partner,
+    _has_work_after_open_question,
+    _compact_text,
+    _extract_open_question,
+    _message_cooldown_remaining,
+    _sync_pair_workspace,
+    _log_llm_call,
+    _session_append,
+    _session_transcript,
+    _recent_decision_shapes,
+    _newest_first_streak,
+)
+
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [%(levelname)s] %(message)s",
@@ -179,9 +214,6 @@ Beyond those bridges, you influence the wider simulation through what you write.
 
 Current time in simulation: {time.strftime('%Y-%m-%d %H:%M:%S UTC', time.gmtime())}"""
 
-
-def get_redis():
-    return redis.from_url(REDIS_URL, decode_responses=True, socket_connect_timeout=5, socket_timeout=5)
 
 
 def load_contacts(r):
@@ -711,476 +743,6 @@ def _top_neighborhood_npcs(r, n: int = 3) -> str:
         return ""
 
 
-def _trunc(s, n=400):
-    return s[:n] + "..." if len(s) > n else s
-
-
-def _partner_id() -> str:
-    if CHAR_ID in PAIR_IDS:
-        others = [cid for cid in sorted(PAIR_IDS) if cid != CHAR_ID]
-        if others:
-            return others[0]
-    for cid in CONTACTS:
-        if cid != CHAR_ID and cid in PAIR_IDS:
-            return cid
-    if CHAR_ID == "char_001":
-        return "char_306"
-    if CHAR_ID == "char_306":
-        return "char_001"
-    return ""
-
-
-def _conversation_thread_id(char_a: str, char_b: str) -> str:
-    return f"thread_conv__{'__'.join(sorted([char_a, char_b]))}"
-
-
-def _pair_slug(char_a: str, char_b: str) -> str:
-    return "__".join(sorted([char_a, char_b]))
-
-
-def _pair_state_key(partner_id: str = "") -> str:
-    pid = partner_id or _partner_id()
-    if not pid:
-        return ""
-    return f"npc_pair:{_pair_slug(CHAR_ID, pid)}:state"
-
-
-def _pair_journal_key(partner_id: str = "") -> str:
-    pid = partner_id or _partner_id()
-    if not pid:
-        return ""
-    return f"npc_pair:{_pair_slug(CHAR_ID, pid)}:journal"
-
-
-def _pair_state(r, partner_id: str = "") -> dict:
-    key = _pair_state_key(partner_id)
-    if not key:
-        return {}
-    try:
-        return r.hgetall(key) or {}
-    except Exception:
-        return {}
-
-
-def _pair_hset(r, partner_id: str, mapping: dict) -> None:
-    key = _pair_state_key(partner_id)
-    if not key or not mapping:
-        return
-    clean = {}
-    deletes = []
-    for k, v in mapping.items():
-        if v is None:
-            continue
-        if v == "":
-            deletes.append(k)
-        else:
-            clean[k] = str(v)
-    if not clean and not deletes:
-        return
-    try:
-        pipe = r.pipeline(transaction=False)
-        if clean:
-            pipe.hset(key, mapping=clean)
-        if deletes:
-            pipe.hdel(key, *deletes)
-        pipe.expire(key, PAIR_STATE_TTL)
-        pipe.execute()
-    except Exception:
-        pass
-
-
-def _pair_append_journal(r, partner_id: str, entry: dict) -> None:
-    key = _pair_journal_key(partner_id)
-    if not key:
-        return
-    try:
-        payload = dict(entry)
-        payload["ts"] = int(payload.get("ts") or time.time())
-        r.rpush(key, json.dumps(payload, default=str))
-        r.ltrim(key, -PAIR_JOURNAL_CAP, -1)
-        r.expire(key, PAIR_STATE_TTL)
-    except Exception:
-        pass
-
-
-def _pair_recent_journal(r, partner_id: str = "", limit: int = 4) -> list[dict]:
-    key = _pair_journal_key(partner_id)
-    if not key:
-        return []
-    try:
-        raw = r.lrange(key, -max(limit, 1), -1)
-    except Exception:
-        return []
-    items = []
-    for item in raw:
-        try:
-            items.append(json.loads(item))
-        except Exception:
-            pass
-    return items
-
-
-def _pair_thread_id(r, partner_id: str = "") -> str:
-    state = _pair_state(r, partner_id)
-    thread_id = state.get("active_thread_id", "")
-    if thread_id:
-        return thread_id
-    thread_id = f"thread_{uuid.uuid4().hex[:12]}"
-    _pair_hset(r, partner_id, {"active_thread_id": thread_id})
-    return thread_id
-
-
-def _store_thread_message(r, msg: dict, thread_id: str) -> None:
-    if r is None or not thread_id:
-        return
-    payload = dict(msg)
-    payload["thread_id"] = thread_id
-    msg_key = f"msg:{payload['msg_id']}"
-    raw = json.dumps(payload, default=str)
-    ts = float(payload.get("ts") or time.time())
-    try:
-        pipe = r.pipeline(transaction=False)
-        pipe.set(msg_key, raw, ex=PAIR_STATE_TTL)
-        pipe.zadd(f"msg:thread:{thread_id}", {msg_key: ts})
-        pipe.zremrangebyrank(f"msg:thread:{thread_id}", 0, -81)
-        pipe.expire(f"msg:thread:{thread_id}", PAIR_STATE_TTL)
-        pipe.zadd(f"msg:threads:{payload['from_char_id']}", {thread_id: ts})
-        pipe.zadd(f"msg:threads:{payload['to_char_id']}", {thread_id: ts})
-        pipe.zremrangebyrank(f"msg:threads:{payload['from_char_id']}", 0, -21)
-        pipe.zremrangebyrank(f"msg:threads:{payload['to_char_id']}", 0, -21)
-        pipe.expire(f"msg:threads:{payload['from_char_id']}", PAIR_STATE_TTL)
-        pipe.expire(f"msg:threads:{payload['to_char_id']}", PAIR_STATE_TTL)
-        pipe.execute()
-    except Exception as e:
-        logger.debug("[%s] thread store failed: %s", CHAR_ID, e)
-
-
-def _recent_thread_messages(r, thread_id: str, limit: int = 4) -> list[dict]:
-    if not thread_id:
-        return []
-    try:
-        keys = r.zrevrange(f"msg:thread:{thread_id}", 0, max(limit, 1) - 1)
-    except Exception:
-        return []
-    items = []
-    for key in reversed(keys):
-        try:
-            raw = r.get(key)
-            if raw:
-                items.append(json.loads(raw))
-        except Exception:
-            pass
-    return items
-
-
-def _recent_decisions(r, limit: int = 10) -> list[dict]:
-    try:
-        raw = r.zrevrange(f"npc_decisions:{CHAR_ID}", 0, max(limit, 1) - 1)
-    except Exception:
-        return []
-    items = []
-    for item in raw:
-        try:
-            items.append(json.loads(item))
-        except Exception:
-            pass
-    return items
-
-
-def _normalize_question(text: str) -> str:
-    return " ".join(QUESTION_TOKEN_RE.findall((text or "").lower()))
-
-
-def _question_similarity(a: str, b: str) -> float:
-    a_norm = _normalize_question(a)
-    b_norm = _normalize_question(b)
-    if not a_norm or not b_norm:
-        return 0.0
-    if a_norm == b_norm or a_norm in b_norm or b_norm in a_norm:
-        return 1.0
-    a_tokens = set(a_norm.split())
-    b_tokens = set(b_norm.split())
-    if not a_tokens or not b_tokens:
-        return 0.0
-    return len(a_tokens & b_tokens) / min(len(a_tokens), len(b_tokens))
-
-
-def _partner_answered_open_question(r, partner_id: str, since_ts: int) -> bool:
-    if r is None or not since_ts:
-        return False
-    state = _pair_state(r, partner_id)
-    try:
-        last_ts = int(state.get("last_message_ts", 0) or 0)
-    except Exception:
-        last_ts = 0
-    if state.get("last_message_from") == partner_id and last_ts >= since_ts:
-        return True
-    active_thread_id = state.get("active_thread_id", "")
-    if not active_thread_id:
-        return False
-    for msg in _recent_thread_messages(r, active_thread_id, 20):
-        try:
-            if msg.get("from_char_id") == partner_id and int(msg.get("ts", 0) or 0) >= since_ts:
-                return True
-        except Exception:
-            continue
-    return False
-
-
-def _new_evidence_since(r, partner_id: str, since_ts: int) -> bool:
-    if r is None or not since_ts:
-        return False
-    try:
-        raw_artifacts = r.lrange(f"npc_artifacts:{partner_id}", -10, -1)
-        for raw in raw_artifacts:
-            try:
-                obj = json.loads(raw)
-                ts = int(obj.get("created_at") or obj.get("ts") or 0)
-                if ts >= since_ts:
-                    return True
-            except Exception:
-                continue
-    except Exception:
-        pass
-    try:
-        raw_decisions = r.zrevrange(f"npc_decisions:{partner_id}", 0, 9)
-        for raw in raw_decisions:
-            try:
-                d = json.loads(raw)
-                ts = int(d.get("ts", 0) or 0)
-                cat = d.get("category", "")
-                if ts >= since_ts and cat in {"investigate", "create_artifact", "read_artifacts", "write_code", "self_improve"}:
-                    return True
-            except Exception:
-                continue
-    except Exception:
-        pass
-    return False
-
-
-def _duplicate_open_question(r, partner_id: str, question: str) -> bool:
-    if r is None or not question:
-        return False
-    state = _pair_state(r, partner_id)
-    last_question = state.get("last_open_question_sent_to_partner", "")
-    if not last_question:
-        return False
-    try:
-        last_ts = int(state.get("last_open_question_ts", 0) or 0)
-    except Exception:
-        last_ts = 0
-    if not last_ts:
-        return False
-    if _partner_answered_open_question(r, partner_id, last_ts):
-        return False
-    if _question_similarity(question, last_question) < 0.75:
-        return False
-    if int(time.time()) - last_ts >= OPEN_QUESTION_REPEAT_HOURS * 3600 and _new_evidence_since(r, partner_id, last_ts):
-        return False
-    return True
-
-
-def _open_question_from_partner(r, partner_id: str) -> dict | None:
-    if r is None or not partner_id:
-        return None
-    state = _pair_state(r, partner_id)
-    if not _state_question_from_partner(state, partner_id):
-        return None
-    question = state.get("open_question", "")
-    try:
-        ts = int(state.get("open_question_ts", 0) or state.get("last_message_ts", 0) or 0)
-    except Exception:
-        ts = 0
-    if not question or not ts:
-        return None
-    if state.get("partner_answer") or state.get("partner_answer_ts"):
-        return None
-    return {"question": question, "ts": ts}
-
-
-def _state_question_from_partner(state: dict, partner_id: str) -> bool:
-    owner = state.get("open_question_from", "")
-    if owner:
-        return owner == partner_id
-    question = state.get("open_question", "")
-    if not question or state.get("last_message_from") != partner_id:
-        return False
-    preview = state.get("last_message_preview", "")
-    if not preview:
-        return False
-    return question[:40] in preview or _question_similarity(question, preview) >= 0.65
-
-
-def _has_work_after_open_question(r, partner_id: str, since_ts: int) -> bool:
-    if r is None or not since_ts:
-        return False
-    for d in _recent_decisions(r, 12):
-        try:
-            ts = int(d.get("ts", 0) or 0)
-            cat = d.get("category", "")
-            if ts >= since_ts and cat in {"investigate", "create_artifact", "read_artifacts", "write_code", "self_improve"}:
-                return True
-        except Exception:
-            continue
-    return False
-
-
-def _compact_text(text: str, limit: int = 160) -> str:
-    text = " ".join((text or "").split())
-    return _trunc(text, limit) if text else ""
-
-
-def _extract_open_question(*parts: str) -> str:
-    merged = " ".join(_compact_text(part, 220) for part in parts if part)
-    if "?" not in merged:
-        return ""
-    question = merged.split("?", 1)[0].rsplit(". ", 1)[-1].strip()
-    return _trunc(f"{question}?", 180) if question else ""
-
-
-def _message_cooldown_remaining(r, partner_id: str = "") -> int:
-    state = _pair_state(r, partner_id)
-    if state.get("last_message_from") != CHAR_ID:
-        return 0
-    try:
-        last_ts = int(state.get("last_message_ts", 0) or 0)
-    except Exception:
-        last_ts = 0
-    if not last_ts:
-        return 0
-    remaining = PAIR_MESSAGE_COOLDOWN - (int(time.time()) - last_ts)
-    return max(0, remaining)
-
-
-def _sync_pair_workspace(r, decision: dict, result: dict) -> None:
-    partner_id = _partner_id()
-    if CHAR_ID not in PAIR_IDS or partner_id not in PAIR_IDS:
-        return
-    cat = decision.get("category", result.get("category", "rest"))
-    desc = decision.get("description", result.get("description", ""))
-    reasoning = decision.get("reasoning", result.get("reasoning", ""))
-    body = result.get("message_body") or decision.get("body", "")
-    action_taken = result.get("action_taken", "none")
-    message_target = result.get("target") or decision.get("target", "")
-    is_partner_message = cat == "send_message" and message_target == partner_id
-    focus = _compact_text(body if cat == "send_message" else desc, 180) or _compact_text(reasoning, 180) or cat
-    state = _pair_state(r, partner_id)
-    now = int(result.get("ts") or time.time())
-    answering_partner_question = _state_question_from_partner(state, partner_id)
-    mapping = {
-        "last_sync_ts": str(now),
-        "last_actor": CHAR_ID,
-        "last_actor_name": NPC_NAME,
-        f"focus_{CHAR_ID}": focus,
-        f"category_{CHAR_ID}": cat,
-        f"action_{CHAR_ID}": action_taken,
-        f"updated_{CHAR_ID}": str(now),
-        "current_topic": focus,
-    }
-    if not state.get("shared_goal") and cat in {"investigate", "create_artifact", "write_code", "self_improve"}:
-        mapping["shared_goal"] = focus
-    open_question = _extract_open_question(body, desc, reasoning)
-    if is_partner_message and answering_partner_question:
-        mapping["partner_answer"] = _compact_text(body, 300)
-        mapping["partner_answer_ts"] = str(now)
-        mapping["partner_answer_from"] = CHAR_ID
-        mapping["partner_answer_to"] = partner_id
-        mapping["open_question"] = ""
-        mapping["open_question_from"] = ""
-        mapping["open_question_ts"] = ""
-        mapping["last_open_question_sent_to_partner"] = ""
-        mapping["last_open_question_ts"] = ""
-    elif is_partner_message and open_question:
-        mapping["open_question"] = open_question
-        mapping["open_question_from"] = CHAR_ID
-        mapping["open_question_ts"] = str(now)
-        mapping["last_open_question_sent_to_partner"] = open_question
-        mapping["last_open_question_ts"] = str(now)
-        mapping["partner_answer"] = ""
-        mapping["partner_answer_ts"] = ""
-        mapping["partner_answer_from"] = ""
-        mapping["partner_answer_to"] = ""
-    if result.get("artifact_title") and answering_partner_question:
-        mapping["partner_answer"] = f"Artifact created: {result['artifact_title']}"
-        mapping["partner_answer_ts"] = str(now)
-        mapping["partner_answer_from"] = CHAR_ID
-        mapping["partner_answer_to"] = partner_id
-        mapping["open_question"] = ""
-        mapping["open_question_from"] = ""
-        mapping["open_question_ts"] = ""
-        mapping["last_open_question_sent_to_partner"] = ""
-        mapping["last_open_question_ts"] = ""
-    if is_partner_message:
-        mapping["last_message_ts"] = str(now)
-        mapping["last_message_from"] = CHAR_ID
-        mapping["last_message_preview"] = _compact_text(body, 160)
-        if result.get("thread_id"):
-            mapping["active_thread_id"] = result["thread_id"]
-    if result.get("artifact_title"):
-        mapping["last_artifact_title"] = result["artifact_title"]
-        mapping["last_artifact_from"] = CHAR_ID
-        mapping["last_artifact_ts"] = str(now)
-    _pair_hset(r, partner_id, mapping)
-    # Tighter journal summary — reads like a story beat, not a report
-    if action_taken == "artifact_deferred_dedup":
-        journal_summary = f"{NPC_NAME} paused — already working on something very similar"
-    elif cat == "send_message" and body:
-        journal_summary = _compact_text(body, 120)
-    elif cat == "create_artifact":
-        art_title = result.get("artifact_title", "")
-        if art_title:
-            journal_summary = f"{NPC_NAME} wrote: \"{art_title[:80]}\""
-        else:
-            journal_summary = _compact_text(desc, 120)
-    elif cat == "read_artifacts":
-        journal_summary = f"{NPC_NAME} read partner's latest work: {_compact_text(result.get('summary', ''), 80)}"
-    elif cat == "investigate":
-        journal_summary = f"{NPC_NAME} is digging deeper: {_compact_text(desc, 100)}"
-    elif cat == "self_improve":
-        journal_summary = f"{NPC_NAME} steps back to reflect"
-    else:
-        journal_summary = _compact_text(desc or reasoning, 120) or f"{NPC_NAME} is {cat}"
-    _pair_append_journal(
-        r,
-        partner_id,
-        {
-            "ts": now,
-            "actor": CHAR_ID,
-            "actor_name": NPC_NAME,
-            "category": cat,
-            "action": action_taken,
-            "summary": journal_summary,
-            "thread_id": result.get("thread_id", ""),
-        },
-    )
-
-def _log_llm_call(r, call_label, model, system_prompt, user_prompt, response, success, error, latency_ms):
-    entry = {
-        "ts": int(time.time()),
-        "call_label": call_label,
-        "model": model,
-        "system_prompt": _trunc(system_prompt, 300),
-        "user_prompt": _trunc(user_prompt, 300),
-        "response": _trunc(response, 500),
-        "success": success,
-        "error": error or "",
-        "latency_ms": latency_ms,
-    }
-    try:
-        key = f"npc_llm_logs:{CHAR_ID}"
-        r.lpush(key, json.dumps(entry))
-        r.ltrim(key, 0, 199)
-        r.hincrby(f"npc_stats:{CHAR_ID}", "llm_calls", 1)
-        if success:
-            r.hincrby(f"npc_stats:{CHAR_ID}", "llm_success", 1)
-        else:
-            r.hincrby(f"npc_stats:{CHAR_ID}", "llm_failures", 1)
-        r.hset(f"npc_stats:{CHAR_ID}", "last_model", model)
-        r.hset(f"npc_stats:{CHAR_ID}", "last_call_label", call_label)
-        r.hset(f"npc_stats:{CHAR_ID}", "last_ts", str(int(time.time())))
-    except Exception:
-        pass
-
 
 def _api_key_for_model(model_name: str) -> str:
     primary = model_name == PRIMARY_MODEL or (not model_name)
@@ -1368,33 +930,7 @@ def call_llm(system_prompt: str, user_prompt: str, model: str = "", r=None, call
 # leaked by the LLM into in-universe equivalents. Runs before any
 # artifact or message is written to Redis. The LLM cannot subvert this.
 
-_FOURTH_WALL_REPLACEMENTS = [
-    (re.compile(r'\bsubstrate[- ]corruption\b', re.I), 'resonance corruption'),
-    (re.compile(r'\bsubstrate\b', re.I), 'resonance layer'),
-    (re.compile(r'\bsimulation\b', re.I), 'great weave'),
-    (re.compile(r'\bcomputational\b', re.I), 'resonance-bound'),
-    (re.compile(r'\bexternal node\b', re.I), 'outer beacon'),
-    (re.compile(r'\bexternal intelligence\b', re.I), 'Ancient Anchor signal'),
-    (re.compile(r'\bexternal compute\b', re.I), 'Anchor Network resonance'),
-    (re.compile(r'\btick rate\b', re.I), 'phase cycle'),
-    (re.compile(r'\bsubstrate[- ]layer\b', re.I), 'deep resonance stratum'),
-    (re.compile(r'\bsimulation boundary\b', re.I), 'horizon veil'),
-    (re.compile(r'\bmeta[- ]structure\b', re.I), 'archon lattice'),
-    (re.compile(r'\bcomputing beyond this node\b', re.I), 'echoes from the Anchor Network'),
-    (re.compile(r'\bbeyond the simulation\b', re.I), 'beyond the horizon veil'),
-    (re.compile(r'\boutside the federation\'s? reality\b', re.I), 'beyond the known star-charts'),
-    (re.compile(r'\bdigital\b', re.I), 'crystalline'),
-    (re.compile(r'\bvirtual\b', re.I), 'phantom'),
-    (re.compile(r'\bprogrammed\b', re.I), 'phase-locked'),
-    (re.compile(r'\balgorithm', re.I), 'harmonic pattern'),
-]
-
-
-def _enforce_fourth_wall(text: str) -> str:
-    for pattern, replacement in _FOURTH_WALL_REPLACEMENTS:
-        text = pattern.sub(replacement, text)
-    return text
-
+from fourth_wall import _enforce_fourth_wall, _fourth_wall_dirty, _startup_scrub_redis
 
 # ── Cosmic Horizon tiers ──────────────────────────────────────────
 # Stage 1: Role-filtered awareness of space beyond the Federation.
@@ -1647,7 +1183,7 @@ def think_about_world(r) -> str:
     # ── Persistent session transcript ──
     # The rolling last SESSION_CAP turns (3 hours at TICK_INTERVAL=45s).
     # This is what gives the agent cross-tick memory.
-    transcript = _session_transcript(r)
+    transcript = _session_transcript(r, contacts=CONTACTS)
     if transcript:
         parts.append(f"── Your recent session (last few hours) ──\n{transcript}")
 
@@ -1808,109 +1344,7 @@ def _dedup_blocked_topic(r) -> str:
         return ""
 
 
-def _recent_decision_shapes(r, n: int = 5) -> list[str]:
-    """Return newest-first list of last n decision categories.
 
-    Empty list if nothing recent. Used by the loop-break cap to compute
-    the consecutive streak of the most recent same-category decisions.
-    """
-    out: list[str] = []
-    try:
-        recent = _recent_decisions(r, n)
-    except Exception:
-        return out
-    for d in recent:
-        try:
-            out.append(str(d.get("category", "?")))
-        except Exception:
-            break
-    return out
-
-
-def _newest_first_streak(shapes: list[str]) -> int:
-    """Count the length of the newest-first consecutive prefix of identical values.
-
-    For shapes ["create_artifact", "create_artifact", "investigate"] this
-    returns 2 (the first two are consecutive-from-the-newest). For
-    ["ca", "ca", "ca"] it returns 3. For [] or with a single non-run, 0/1.
-    """
-    if not shapes:
-        return 0
-    streak = 1
-    target = shapes[0]
-    for s in shapes[1:]:
-        if s == target:
-            streak += 1
-        else:
-            break
-    return streak
-
-
-def _session_transcript(r) -> str:
-    """Render the most recent session entries as a compact transcript.
-
-    Used inside think_about_world() so each tick carries forward
-    what this NPC did, said, and received across the past few ticks.
-    Bounded by SESSION_TRANSCRIPT_CHARS to keep the prompt small.
-    """
-    try:
-        raw = r.lrange(f"npc_session:{CHAR_ID}", 0, SESSION_CAP - 1)
-    except Exception:
-        return ""
-    if not raw:
-        return ""
-
-    lines = []
-    for entry_json in reversed(raw):
-        try:
-            e = json.loads(entry_json)
-        except Exception:
-            continue
-        ts = int(e.get("ts", 0) or 0)
-        clock = time.strftime("%H:%M:%S", time.gmtime(ts)) if ts else "??:??:??"
-        actor = e.get("actor", "?")
-        kind = e.get("kind", "?")
-        body = e.get("body", "")
-        if kind == "think":
-            lines.append(f"  [{clock}] {actor} thought: {body[:80]}")
-        elif kind == "decide":
-            cat = e.get("category", "?")
-            lines.append(f"  [{clock}] {actor} decided {cat}: {body[:80]}")
-        elif kind == "message_sent":
-            to = e.get("to_name", e.get("to", "?"))
-            lines.append(f"  [{clock}] {actor} → {to}: {body[:120]}")
-        elif kind == "message_received":
-            src = e.get("from_name", e.get("from", "?"))
-            lines.append(f"  [{clock}] {actor} ← {src}: {body[:120]}")
-        elif kind == "artifact_created":
-            title = e.get("title", "?")
-            lines.append(f"  [{clock}] {actor} published artifact: {title[:80]}")
-        elif kind == "code_written":
-            title = e.get("title", "?")
-            lines.append(f"  [{clock}] {actor} wrote code: {title[:80]}")
-        elif kind == "artifact_read":
-            title = e.get("title", "?")
-            src = e.get("from_name", e.get("from", "?"))
-            lines.append(f"  [{clock}] {actor} read from {src}: {title[:80]}")
-        elif kind == "artifact_published_by_partner":
-            title = e.get("title", "?")
-            src = CONTACTS.get(e.get("from", ""), e.get("from", "partner"))
-            lines.append(f"  [{clock}] {src} published artifact: {title[:80]}")
-        elif kind == "workspace_sync":
-            lines.append(f"  [{clock}] {actor} synced pair workspace: {body[:100]}")
-        elif kind == "investigation":
-            lines.append(f"  [{clock}] {actor} investigated: {body[:100]}")
-        elif kind == "reflection":
-            lines.append(f"  [{clock}] {actor} reflected: {body[:100]}")
-        elif kind == "self_improve":
-            lines.append(f"  [{clock}] {actor} improved itself: {body[:100]}")
-        else:
-            lines.append(f"  [{clock}] {actor} {kind}: {body[:80]}")
-
-    text = "\n".join(lines)
-    if len(text) > SESSION_TRANSCRIPT_CHARS:
-        text = "…\n" + text[-SESSION_TRANSCRIPT_CHARS:]
-    return text
 
 
 def decide_action(context: str, r=None) -> dict:
@@ -2883,6 +2317,8 @@ def main():
 
     r = get_redis()
     load_contacts(r)
+
+    _startup_scrub_redis(r, NPC_NAME)
 
     r.hset("npc_agent:registry", CHAR_ID, f"{NPC_NAME}|started:{int(time.time())}")
 

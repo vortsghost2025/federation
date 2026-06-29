@@ -85,6 +85,9 @@ services:
   frontend:
     build: /docker/federation-game/frontend
     restart: unless-stopped
+    volumes:
+      - /docker/federation-game/public_html:/usr/share/nginx/html:ro
+      - /docker/federation-game/frontend/nginx-default.conf:/etc/nginx/conf.d/default.conf:ro
     labels:
       - traefik.enable=true
       - "traefik.http.routers.federation-game.rule=Host(`federation-game.deliberatefederation.cloud`)"
@@ -318,13 +321,16 @@ services:
       - NPC_NAME=Archimedes Prime
       - NVIDIA_API_KEY=${NVIDIA_API_KEY_CHAR_001_TEST}
       - REDIS_URL=redis://redis:6379/0
-      - PRIMARY_MODEL=minimaxai/minimax-m3
-      - FALLBACK_MODEL_1=nvidia/nemotron-3-super-120b-a12b
+      - PRIMARY_MODEL=nvidia/llama-3.3-nemotron-super-49b-v1
+      - FALLBACK_MODEL_1=nvidia/nemotron-3-nano-30b-a3b
       - FALLBACK_MODEL_2=meta/llama-3.3-70b-instruct
+      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY_1}
       - REQUEST_TIMEOUT=45
       - MAX_OUTPUT_TOKENS=1024
       - MAX_TOTAL_BUDGET_MS=120000
       - TICK_INTERVAL=45
+    volumes:
+      - /docker/federation-game/npc-agent:/app:ro
     depends_on:
       - redis
     networks:
@@ -343,13 +349,16 @@ services:
       - NPC_NAME=The Oracle
       - NVIDIA_API_KEY=${NVIDIA_API_KEY_CHAR_306:-KEY_REDACTED_set_in_env}
       - REDIS_URL=redis://redis:6379/0
-      - PRIMARY_MODEL=meta/llama-3.3-70b-instruct
-      - FALLBACK_MODEL_1=nvidia/nemotron-3-super-120b-a12b
+      - PRIMARY_MODEL=nvidia/nemotron-3-super-120b-a12b
+      - FALLBACK_MODEL_1=nvidia/nemotron-3-nano-30b-a3b
       - FALLBACK_MODEL_2=meta/llama-3.1-70b-instruct
+      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY_1}
       - REQUEST_TIMEOUT=45
       - MAX_OUTPUT_TOKENS=1024
       - MAX_TOTAL_BUDGET_MS=120000
       - TICK_INTERVAL=45
+    volumes:
+      - /docker/federation-game/npc-agent:/app:ro
     depends_on:
       - redis
     networks:
