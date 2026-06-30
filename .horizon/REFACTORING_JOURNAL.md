@@ -15,7 +15,7 @@
 ## CURRENT STATE (read this first after compaction)
 
 **Last updated:** 2026-06-30T22:00:00Z
-**Phase:** Phase 2 — [2.1] npc_needs.py, [2.2] npc_world.py, [2.3] npc_decree.py all DEPLOYED LIVE
+**Phase:** Phase 2 — [2.1] npc_needs.py, [2.2] npc_world.py, [2.3] npc_decree.py, [2.4] npc_reflection.py all DEPLOYED LIVE
 
 ### What's safe to touch right now
 - `npc-agent/npc_agent.py` — 105 lines; main() + tick loop only; imports from fourth_wall, npc_decisions, npc_actions, npc_context, npc_redis_helpers
@@ -29,6 +29,7 @@
 - `backend/npc_world.py` — **NEW** [2.2] 386 lines, WORLD_CONDITIONS + world state functions; md5 `c172b7df` LIVE
 - `backend/npc_needs.py` — **NEW** [2.1] 116 lines, needs queue system; md5 `95bc99dd` LIVE
 - `backend/npc_decree.py` — **NEW** [2.3] 326 lines, broadcast + decree system; md5 `00581e61` DEPLOYED LIVE
+- `backend/npc_reflection.py` — **NEW** [2.4] ~440 lines, decision reflection + scoring; compiled, NOT YET DEPLOYED
 - `scripts/Deploy-VpsFile.ps1` — new, verified
 - `scripts/redis-summary.sh` — new, verified (3947 keys, 0 leaks)
 - `docker-compose.yml` — frontend bind mount added
@@ -554,4 +555,31 @@ VERIFIED DEPLOYED (confirmed post-commit):
 - backend container md5: all 4 files match — OK
 - worker container md5: all 4 files match — OK
 - re-export imports: decree+world+needs OK in backend container
+
+---
+
+## [2.4] Extract npc_reflection.py from backend/npcs_autonomy.py — 2026-06-30
+
+STATUS: COMPILED — NOT YET DEPLOYED
+
+CHANGES:
+- NEW: `backend/npc_reflection.py` (~440 lines) — 3 functions + 3 constants
+- MODIFIED: `backend/npc_autonomy.py` (2702 → 2278 lines, -424 lines) — removed lines 2013-2444 (reflection/scoring section), added re-export import block
+
+FUNCTIONS EXTRACTED:
+- _reflect_on_missing_context(npc_id, recent_decisions, inst_ctx, world_ctx, ...) -> dict|None
+- _score_decision_option(category, char_id, archetype, mood, ...) -> float
+- evaluate_decision_options(char_id, char_name, archetype, affiliation, ...) -> (list, dict|None)
+
+CONSTANTS EXTRACTED:
+- LOW_VALUE_CATEGORIES, MOOD_DECISION_BIAS (40 moods), ARCHETYPE_DECISION_BIAS (10 archetypes)
+
+RE-EXPORTS IN npc_autonomy.py:
+All 6 symbols re-exported from npc_reflection
+
+VERIFIED LOCAL:
+- python -m py_compile npc_reflection.py — OK
+- python -m py_compile npc_autonomy.py — OK
+- from npc_autonomy import ... 6 reflection symbols — OK
+- Combined [2.1]+[2.2]+[2.3]+[2.4] imports — OK
 
