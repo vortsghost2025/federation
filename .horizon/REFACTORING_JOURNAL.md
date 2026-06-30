@@ -412,3 +412,41 @@ VERIFIED:
 **PHASE 1 COMPLETE**: npc_agent.py went from 2,970 lines (monolith) → 7 focused modules totaling ~2,822 lines across:
 - npc_agent.py (105) + npc_actions.py (604) + npc_decisions.py (674) + npc_context.py (~400) + npc_llm_client.py (216) + npc_redis_helpers.py (653) + fourth_wall.py (~60) + institutions.py (14KB external)
 
+---
+
+## [2.1] Extract npc_needs.py from backend/npc_autonomy.py — 2026-06-30
+
+STATUS: DONE
+
+STEP: Phase 2 first extraction — needs queue system (councilor capability requests)
+
+ANCHOR: file_npc_need L92:137 | npc:needs | npc_autonomy.py 3c9e8e56
+
+CHANGES:
+- NEW: `backend/npc_needs.py` (116 lines) — 3 functions + 6 constants extracted
+- MODIFIED: `backend/npc_autonomy.py` (3392 → ~3270 lines) — removed lines 66-163 (constants + 3 function bodies); added `from npc_needs import ...` re-export block
+
+FUNCTIONS EXTRACTED TO npc_needs.py:
+- file_npc_need(r, npc_id, npc_name, need_type, priority, description, why_needed, suggested_capability, related_institution_id, context_snapshot) -> dict
+- get_open_needs(r, npc_id=None) -> list
+- consume_system_notifications(r, npc_id) -> list
+
+CONSTANTS EXTRACTED TO npc_needs.py:
+- ALLOWED_NEED_TYPES, FORBIDDEN_NEED_TYPES, NPC_NEEDS_KEY, NPC_NEEDS_MAX, NPC_NEEDS_THROTTLE_SECONDS, REDIS_URL
+
+RE-EXPORTS IN npc_autonomy.py:
+- `from npc_needs import (file_npc_need, get_open_needs, consume_system_notifications, ALLOWED_NEED_TYPES, FORBIDDEN_NEED_TYPES, NPC_NEEDS_KEY, NPC_NEEDS_MAX, NPC_NEEDS_THROTTLE_SECONDS)`
+- All existing `from npc_autonomy import X` call sites continue to work unchanged
+
+DEPLOYED:
+- scp npc_needs.py + npc_autonomy.py to VPS /docker/federation-game/backend/
+- docker restart federation-game-backend-1, federation-game-worker-1
+
+VERIFIED:
+- md5 HOST: `95bc99ddf39f315faee24f14e2c98fb3` (npc_needs.py), `3c9e8e562fb7961f7bd2a4c2aef0a835` (npc_autonomy.py)
+- md5 BACKEND CONTAINER: MATCHES both files
+- md5 WORKER CONTAINER: MATCHES both files
+- `from npc_needs import ...` OK in backend container
+- `from npc_autonomy import file_npc_need, get_open_needs, ALLOWED_NEED_TYPES` OK in backend + worker
+- Backend healthz: {"status":"ok"}
+
