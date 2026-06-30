@@ -658,3 +658,29 @@ DEPLOYED LIVE:
 - Runtime logs: no errors, simulation ticks healthy
 - Kodee/Hostinger: no crash/restart after deploy
 
+# [5] — 2026-06-30 — npc_actions.py (action generation templates)
+
+EXTRACTED FROM npc_autonomy.py:
+- ACTION_TEMPLATES (was ~line 193) — 10 archetype × 4 templates
+- FILL_VALUES (was ~line 256) — 16 placeholder categories
+- generate_action (was ~line 326)
+- get_recent_actions (was ~line 361)
+- get_world_events (was ~line 374)
+
+DEPENDENCIES:
+- generate_action: _get_redis, MAX_ACTIONS, MAX_WORLD_EVENTS, THOUGHT_TTL (lazy from npc_autonomy)
+- FILL_VALUES still referenced by generate_npc_interaction in npc_autonomy (re-exported)
+
+npc_autonomy.py: 1683 → 1497 lines (-186)
+
+VERIFIED LOCAL:
+- python -m py_compile npc_actions.py — OK
+- python -m py_compile npc_autonomy.py — OK
+- Combined [2.1]+[2.2]+[2.3]+[2.4]+[3]+[4]+[5] imports — OK (20+ symbols)
+
+DEPLOYED LIVE:
+- SCP to VPS: npc_actions.py + npc_autonomy.py
+- Containers restarted: backend, worker
+- md5 match host/backend: actions=e5a7a48a, autonomy=b3b7a679
+- docker exec import test: OK
+
