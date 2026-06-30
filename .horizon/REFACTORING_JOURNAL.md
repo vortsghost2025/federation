@@ -15,7 +15,7 @@
 ## CURRENT STATE (read this first after compaction)
 
 **Last updated:** 2026-06-30T22:00:00Z
-**Phase:** Phase 2 in progress — [2.1] npc_needs.py deployed; [2.2] npc_world.py DEPLOYED LIVE
+**Phase:** Phase 2 in progress — [2.1] npc_needs.py deployed; [2.2] npc_world.py deployed; [2.3] npc_decree.py LOCAL_COMPILES, not yet deployed
 
 ### What's safe to touch right now
 - `npc-agent/npc_agent.py` — 105 lines; main() + tick loop only; imports from fourth_wall, npc_decisions, npc_actions, npc_context, npc_redis_helpers
@@ -28,6 +28,7 @@
 - `backend/npc_autonomy.py` — fully functional, deployed, verified (re-exports from npc_world, npc_needs); md5 `33f680cc`
 - `backend/npc_world.py` — **NEW** [2.2] 386 lines, WORLD_CONDITIONS + world state functions; md5 `c172b7df` LIVE
 - `backend/npc_needs.py` — **NEW** [2.1] 116 lines, needs queue system; md5 `95bc99dd` LIVE
+- `backend/npc_decree.py` — **NEW** [2.3] 326 lines, broadcast + decree system; compiled, NOT YET DEPLOYED
 - `scripts/Deploy-VpsFile.ps1` — new, verified
 - `scripts/redis-summary.sh` — new, verified (3947 keys, 0 leaks)
 - `docker-compose.yml` — frontend bind mount added
@@ -106,14 +107,14 @@ Planned module structure:
 backend/
   npc_autonomy.py       # main entry + decision loop + scoring + mood/opinion (~2000 lines)
   npc_needs.py           # needs queue, notifications, fulfilled types (~120 lines) — DONE
-  npc_world.py           # WORLD_CONDITIONS + world state functions (~390 lines) — DONE, NOT YET LIVE
+  npc_world.py           # WORLD_CONDITIONS + world state functions (~390 lines) — DONE, LIVE
   npc_decree.py          # decree evaluation, directive writing, broadcast (~300 lines) — NOT YET EXTRACTED
   npc_reflection.py      # _reflect_on_missing_context, scoring, biases (~400 lines) — NOT YET EXTRACTED
 ```
 
 Steps (each is a single commit + deploy + verify):
 - [2.1] Extract `npc_needs.py` — **DONE, deployed**
-- [2.2] Extract `npc_world.py` — **LOCAL_COMPILES, not yet deployed**
+- [2.2] Extract `npc_world.py` — **DONE, deployed live**
 - [2.3] Extract `npc_decree.py` — NOT YET
 - [2.4] Extract `npc_reflection.py` — NOT YET
 - [2.5] Verify full worker tick cycle works on VPS
@@ -507,4 +508,44 @@ VERIFIED:
 - `from npc_world import get_world_state` — OK in container
 - `from npc_autonomy import get_world_state, get_world_condition, ...` — all 8 symbols OK in container
 - `from npc_autonomy import file_npc_need, get_open_needs, consume_system_notifications` — [2.1] re-exports still OK
+
+---
+
+## [2.3] Extract npc_decree.py from backend/npc_autonomy.py — 2026-06-30
+
+STATUS: LOCAL_COMPILES — NOT YET DEPLOYED
+
+ANCHOR: get_decision_log L2658 | broadcast_decision_event L2696 | npc_autonomy.py 33f680cc
+
+CHANGES:
+- NEW: `backend/npc_decree.py` (326 lines) — 9 functions + 18 constants extracted
+- MODIFIED: `backend/npc_autonomy.py` (2959 → 2701 lines, -258 lines) — removed lines 2671-2972 (entire broadcast + decree section); added re-export import block (29 lines); removed unused `log_from_broadcast_event` import
+
+FUNCTIONS EXTRACTED:
+- get_decision_log(char_id, limit=5) -> list
+- broadcast_decision_event(decision, affiliation="independent") -> dict|None
+- get_broadcast_events(char_id=None, affiliation=None, limit=10) -> list
+- get_relevant_events_for_npc(char_id, affiliation, limit=5) -> list
+- _is_allied_faction(npc_faction, issuer_faction) -> bool
+- _write_decree_directive(r, char_id, metric) -> None
+- issue_decree(char_id, char_name, metric, delta, reasoning="") -> dict
+- get_decree_history(char_id=None, limit=20) -> list
+- evaluate_decree_opportunity(r=None) -> dict|None
+
+CONSTANTS EXTRACTED:
+- DECISION_EVENT_MAP, MAX_BROADCAST_EVENTS, BROADCAST_TTL,
+  DECREES_ALLOWED_NPCS, DECREES_ALLOWED_METRICS, DECREE_MAX_DELTA,
+  DECREE_COOLDOWN_SECONDS, DECREE_HISTORY_KEY, DECREE_COOLDOWN_KEY,
+  DECREE_MAX_HISTORY, DECREE_HISTORY_TTL, DIRECTIVE_KEY, DIRECTIVE_TTL,
+  DECREE_DIRECTIVE_BIAS, COUNCILOR_AFFILIATIONS, FACTION_ALLIANCES,
+  DECREE_THRESHOLDS, COUNCILOR_NAMES
+
+RE-EXPORTS IN npc_autonomy.py:
+All 19+ decree/broadcast symbols re-exported from npc_decree
+
+VERIFIED LOCAL:
+- python -m py_compile npc_decree.py — OK
+- python -m py_compile npc_autonomy.py — OK
+- from npc_autonomy import ... 19 decree symbols — OK
+- Combined [2.1]+[2.2]+[2.3] imports — OK
 
