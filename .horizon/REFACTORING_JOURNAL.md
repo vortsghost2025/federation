@@ -14,12 +14,14 @@
 
 ## CURRENT STATE (read this first after compaction)
 
-**Last updated:** 2026-06-29T16:45:00Z
-**Phase:** Phase 1 in progress — [1.3] npc_llm_client.py extracted and deployed live
+**Last updated:** 2026-06-30T08:20:00Z
+**Phase:** Phase 1 in progress — [1.5] npc_decisions.py extracted and deployed live; npc_agent.py reconstructed
 
 ### What's safe to touch right now
-- `npc-agent/npc_agent.py` — 2148 lines (down from 2356); imports from `npc_redis_helpers` + `fourth_wall` + `npc_llm_client`
-- `npc-agent/npc_llm_client.py` — **NEW** 216 lines; call_llm, _api_key_for_model, _call_openrouter_free, all LLM constants (OR_FREE_POOL, MODEL_ENABLE_THINKING, etc.)
+- `npc-agent/npc_agent.py` — 708 lines; imports from 4 submodules (redis_helpers, llm_client, context, decisions); only: constants, load_contacts, execute_decision, update_mood, main
+- `npc-agent/npc_decisions.py` — **NEW** 674 lines; decide_action(), SELF_INTRO, AGENCY_CATEGORIES, 5 helper functions; imports from fourth_wall, llm_client, redis_helpers (50 symbols), context (19 symbols)
+- `npc-agent/npc_context.py` — deployed, 19 functions + 9 constants
+- `npc-agent/npc_llm_client.py` — 216 lines; call_llm, _api_key_for_model, _call_openrouter_free, all LLM constants
 - `npc-agent/npc_redis_helpers.py` — 653 lines; all Redis CRUD helpers, session log, thread, question similarity, pair workspace, LLM logging
 - `npc-agent/fourth_wall.py` — standalone, 18 fourth-wall regex rules, deployed live
 - `backend/npc_autonomy.py` — fully functional, deployed, verified
@@ -36,8 +38,10 @@
 
 ### Current deployed hashes (VPS)
 ```
-npc-agent/npc_agent.py: 3bb68be10e908d6036d9b5704e52a9fe (2148 lines, imports from 3 submodules)
-npc-agent/npc_llm_client.py: 9648adae8fd4f932d7dac7f424f0558f (NEW — 216 lines)
+npc-agent/npc_agent.py: 641d6cde55ad690d407ad9b5e0a1f874 (708 lines, imports from 4 submodules)
+npc-agent/npc_decisions.py: d625c3efc67cb4ff20a1ce44ba2aa405 (674 lines, NEW)
+npc-agent/npc_context.py: 37937901 (deployed, verified)
+npc-agent/npc_llm_client.py: 9648adae8fd4f932d7dac7f424f0558f (216 lines)
 npc-agent/npc_redis_helpers.py: 69493966ae0dc045de166f8f5e02fd8d (653 lines)
 npc-agent/fourth_wall.py: c9426f31 (deployed, verified)
 backend/npc_autonomy.py: ae3475ac (stale — needs re-hash after P0 decree work)
@@ -87,8 +91,8 @@ Steps (each is a single commit + deploy + verify):
 - [1.1] Extract `fourth_wall.py` — smallest, zero dependencies
 - [1.2] Extract `npc_redis_helpers.py` — depends on nothing but redis
 - [1.3] Extract `npc_llm_client.py` — depends on redis helpers **— DONE, deployed live**
-- [1.4] Extract `npc_context.py` — depends on redis helpers + fourth_wall
-- [1.5] Extract `npc_decisions.py` — depends on context + llm client
+- [1.4] Extract `npc_context.py` — depends on redis helpers + fourth_wall **— DONE, deployed live**
+- [1.5] Extract `npc_decisions.py` — depends on context + llm client **— DONE, deployed live (3 bug fixes applied)**
 - [1.6] Extract `npc_actions.py` — depends on decisions + redis helpers + fourth_wall
 - [1.7] Verify full tick cycle works on VPS, all functions resolve
 
@@ -303,4 +307,55 @@ VERIFIED:
 - md5 CONTAINER 306: MATCHES both files
 - Both containers stable, cognition loop running, LLM calls succeeding
 - char_001: Decision `create_artifact` succeeded on llama-3.3-nemotron-super-49b
+
+---
+
+### [1.5] 2026-06-30T08:20Z — Extract npc_decisions.py + reconstruct npc_agent.py
+
+STATUS: **DONE**, deployed live, verified
+
+FILES:
+- NEW: `npc-agent/npc_decisions.py` (674 lines) — decide_action(), SELF_INTRO, AGENCY_CATEGORIES, _consecutive_send_streak, _artifact_count, _send_count, _is_repetitive_artifact, _acknowledge_inbox
+- MODIFIED: `npc-agent/npc_agent.py` (1353 → 708 lines, -645 lines) — removed entire mangled middle (old lines 84-591), rewrote clean from scratch; only: imports, constants (incl. restored SESSION_CAP), load_contacts, execute_decision, update_mood, main
+
+FUNCTIONS EXTRACTED:
+- decide_action(context, r=None) -> dict
+- _consecutive_send_streak(r, char_id) -> int
+- _artifact_count(r, char_id) -> int
+- _send_count(r, char_id) -> int
+- _is_repetitive_artifact(r, decision, char_id) -> bool
+- _acknowledge_inbox(r, partner_id=None) -> int
+
+CONSTANTS EXTRACTED:
+- SELF_INTRO (f-string system prompt)
+- AGENCY_CATEGORIES, PAIR_MESSAGE_COOLDOWN, OPEN_QUESTION_REPEAT_HOURS, QUESTION_TOKEN_RE
+
+BUGS FIXED DURING DEPLOY:
+1. `_duplicate_open_question(r, CHAR_ID)` — wrong arity; signature is `(r, partner_id, question, char_id="")`. Replaced with direct _pair_state lookup + _partner_answered_open_question check
+2. `UnboundLocalError: existing_outgoing` — variable only set inside conditional; initialized to `""` before the block
+3. `_state_question_from_partner(r, partner_id)` — passed Redis pipeline `r` instead of dict `state`; fixed to pass `_ps2` from _pair_state()
+4. `_has_work_after_open_question(r, CHAR_ID)` — wrong arity; signature is `(r, partner_id, since_ts, char_id="")`; fixed to `(r, partner_id, _since_ts, CHAR_ID)`
+5. `raw[:200]` TypeError — `raw` is dict from call_llm, not string; fixed to `str(raw)[:200]`
+6. Removed unused import `_duplicate_open_question` from npc_decisions.py
+
+DESIGN DECISIONS:
+- npc_decisions.py imports 50 symbols from npc_redis_helpers (avoiding re-import loops)
+- `_acknowledge_inbox` lives in npc_decisions.py because `decide_action` is the primary caller; `execute_decision` in npc_agent.py imports it back
+- Constants moved to npc_decisions: AGENCY_CATEGORIES, PAIR_MESSAGE_COOLDOWN, OPEN_QUESTION_REPEAT_HOURS, QUESTION_TOKEN_RE (only used by decide_action)
+- Constants kept in npc_agent: CHAR_ID, NPC_NAME, CONTACTS, PAIR_IDS, OPERATOR_ID, OPERATOR_NAME, PAIR_JOURNAL_CAP, PAIR_STATE_TTL, SESSION_CAP
+- `httpx` import removed from npc_agent.py (only call_llm uses it, now in npc_llm_client.py)
+- `re` and `uuid` kept in npc_agent.py (used by execute_decision for slugification and message IDs)
+
+DEPLOYED:
+- scp npc_decisions.py + npc_agent.py to VPS /docker/federation-game/npc-agent/
+- Cleared __pycache__ for npc_decisions in both containers
+- docker restart federation-game-npc-agent-001-1 federation-game-npc-agent-306-1
+
+VERIFIED:
+- md5 HOST: `641d6cde` (npc_agent.py), `d625c3ef` (npc_decisions.py)
+- md5 CONTAINER 001: MATCHES both files
+- md5 CONTAINER 306: MATCHES both files
+- Both containers stable, cognition loop running
+- char_001: `create_artifact` succeeded on llama-3.3-nemotron-super-49b
+- char_306: LLM call succeeded on nemotron-3-super-120b; fallback to `rest` on parse error (graceful, no crash)
 - char_306: 429 on nemotron-3-super-120b (expected), fell back to nemotron-3-nano-30b, Decision `investigate` succeeded
