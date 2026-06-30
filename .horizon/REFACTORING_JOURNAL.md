@@ -14,13 +14,14 @@
 
 ## CURRENT STATE (read this first after compaction)
 
-**Last updated:** 2026-06-30T08:20:00Z
-**Phase:** Phase 1 in progress — [1.5] npc_decisions.py extracted and deployed live; npc_agent.py reconstructed
+**Last updated:** 2026-06-30T09:45:00Z
+**Phase:** Phase 1 complete — [1.6] npc_actions.py extracted and deployed live; npc_agent.py down to 105 lines
 
 ### What's safe to touch right now
-- `npc-agent/npc_agent.py` — 708 lines; imports from 4 submodules (redis_helpers, llm_client, context, decisions); only: constants, load_contacts, execute_decision, update_mood, main
-- `npc-agent/npc_decisions.py` — **NEW** 674 lines; decide_action(), SELF_INTRO, AGENCY_CATEGORIES, 5 helper functions; imports from fourth_wall, llm_client, redis_helpers (50 symbols), context (19 symbols)
-- `npc-agent/npc_context.py` — deployed, 19 functions + 9 constants
+- `npc-agent/npc_agent.py` — 105 lines; main() + tick loop only; imports from fourth_wall, npc_decisions, npc_actions, npc_context, npc_redis_helpers
+- `npc-agent/npc_actions.py` — **NEW** 604 lines; execute_decision(decision, r, contacts) + update_mood(r); all action handlers (create_artifact, send_message, rest, investigate, submit_to_institution, request_capability, acknowledge)
+- `npc-agent/npc_decisions.py` — 674 lines; decide_action(), SELF_INTRO, AGENCY_CATEGORIES, 5 helper functions
+- `npc-agent/npc_context.py` — ~400 lines; 19 functions + 9 constants
 - `npc-agent/npc_llm_client.py` — 216 lines; call_llm, _api_key_for_model, _call_openrouter_free, all LLM constants
 - `npc-agent/npc_redis_helpers.py` — 653 lines; all Redis CRUD helpers, session log, thread, question similarity, pair workspace, LLM logging
 - `npc-agent/fourth_wall.py` — standalone, 18 fourth-wall regex rules, deployed live
@@ -38,8 +39,9 @@
 
 ### Current deployed hashes (VPS)
 ```
-npc-agent/npc_agent.py: 641d6cde55ad690d407ad9b5e0a1f874 (708 lines, imports from 4 submodules)
-npc-agent/npc_decisions.py: d625c3efc67cb4ff20a1ce44ba2aa405 (674 lines, NEW)
+npc-agent/npc_agent.py: 97ec233d4dc67cd91d5b1bc47337dc13 (105 lines, main+tick only)
+npc-agent/npc_actions.py: 039b6d0ef3d2d776630c562704e7190c (604 lines, NEW)
+npc-agent/npc_decisions.py: d625c3efc67cb4ff20a1ce44ba2aa405 (674 lines)
 npc-agent/npc_context.py: 37937901 (deployed, verified)
 npc-agent/npc_llm_client.py: 9648adae8fd4f932d7dac7f424f0558f (216 lines)
 npc-agent/npc_redis_helpers.py: 69493966ae0dc045de166f8f5e02fd8d (653 lines)
@@ -93,8 +95,8 @@ Steps (each is a single commit + deploy + verify):
 - [1.3] Extract `npc_llm_client.py` — depends on redis helpers **— DONE, deployed live**
 - [1.4] Extract `npc_context.py` — depends on redis helpers + fourth_wall **— DONE, deployed live**
 - [1.5] Extract `npc_decisions.py` — depends on context + llm client **— DONE, deployed live (3 bug fixes applied)**
-- [1.6] Extract `npc_actions.py` — depends on decisions + redis helpers + fourth_wall
-- [1.7] Verify full tick cycle works on VPS, all functions resolve
+- [1.6] Extract `npc_actions.py` — depends on decisions + redis helpers + fourth_wall **— DONE, deployed live**
+- [1.7] Verify full tick cycle works on VPS, all functions resolve **— DONE, both containers verified**
 
 ### Phase 2: Break `npc_autonomy.py` (3,392 lines → ~5 modules)
 Planned module structure:
@@ -359,3 +361,54 @@ VERIFIED:
 - char_001: `create_artifact` succeeded on llama-3.3-nemotron-super-49b
 - char_306: LLM call succeeded on nemotron-3-super-120b; fallback to `rest` on parse error (graceful, no crash)
 - char_306: 429 on nemotron-3-super-120b (expected), fell back to nemotron-3-nano-30b, Decision `investigate` succeeded
+
+---
+
+### [1.6] 2026-06-30T09:45Z — Extract npc_actions.py + final npc_agent.py reconstruction
+
+STATUS: **DONE**, deployed live, verified
+
+FILES:
+- NEW: `npc-agent/npc_actions.py` (604 lines) — execute_decision + update_mood + all action handlers
+- MODIFIED: `npc-agent/npc_agent.py` (708 → 105 lines, -603 lines) — execute_decision + update_mood bodies removed; imports from npc_actions; main loop passes CONTACTS to execute_decision
+
+FUNCTIONS EXTRACTED TO npc_actions.py:
+- execute_decision(decision, r, contacts) -> None
+- update_mood(r, char_id="") -> None
+
+ACTION HANDLERS (inside execute_decision):
+- create_artifact: LLM content gen, Redis store, fourth-wall scrub, session log
+- send_message: pair message with cooldown, thread store, session log
+- rest: mood set, session log
+- investigate: LLM context query, Redis store, session log
+- submit_to_institution: sys.path insert for backend/institutions.py
+- request_capability: sys.path insert for backend/npc_autonomy.py
+- acknowledge: imports _acknowledge_inbox from npc_decisions
+
+CONSTANTS IN npc_actions.py (duplicated from npc_agent, same env-var pattern):
+- CHAR_ID, NPC_NAME, OPERATOR_ID, SESSION_CAP, PAIR_IDS
+
+DESIGN DECISIONS:
+- `execute_decision` takes `contacts` as explicit param (same pattern as `decide_action(context, r)`)
+- `update_mood` goes to npc_actions.py — it's an action, not a decision function
+- npc_actions.py defines its own CHAR_ID/NPC_NAME/etc from env vars (same pattern as other submodules)
+- execute_decision directly imports _acknowledge_inbox, _is_repetitive_artifact from npc_decisions (no re-import through npc_agent)
+- `submit_to_institution` and `request_capability` branches retain sys.path.insert for backend/ access
+- npc_agent.py main loop now: think → decide → execute(passing CONTACTS) → update_mood
+
+DEPLOYED:
+- scp npc_actions.py + npc_agent.py to VPS /docker/federation-game/npc-agent/
+- Cleared __pycache__ for npc_actions + npc_agent in both containers
+- docker restart federation-game-npc-agent-001-1, federation-game-npc-agent-306-1
+
+VERIFIED:
+- md5 HOST: `97ec233d` (npc_agent.py), `039b6d0e` (npc_actions.py)
+- md5 CONTAINER 001: MATCHES both files
+- md5 CONTAINER 306: MATCHES both files
+- Both containers stable, cognition loop running
+- char_001: full tick succeeded — decide_action → create_artifact → execute_decision (LLM 200 OK on llama-3.3-nemotron-super-49b, 72s artifact generation)
+- char_306: full tick succeeded — decide_action → create_artifact → execute_decision (LLM 200 OK on nemotron-3-super-120b)
+
+**PHASE 1 COMPLETE**: npc_agent.py went from 2,970 lines (monolith) → 7 focused modules totaling ~2,822 lines across:
+- npc_agent.py (105) + npc_actions.py (604) + npc_decisions.py (674) + npc_context.py (~400) + npc_llm_client.py (216) + npc_redis_helpers.py (653) + fourth_wall.py (~60) + institutions.py (14KB external)
+
