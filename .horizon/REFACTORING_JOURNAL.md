@@ -15,7 +15,7 @@
 ## CURRENT STATE (read this first after compaction)
 
 **Last updated:** 2026-06-30T22:00:00Z
-**Phase:** Phase 2 in progress — [2.1] npc_needs.py deployed; [2.2] npc_world.py deployed; [2.3] npc_decree.py LOCAL_COMPILES, not yet deployed
+**Phase:** Phase 2 — [2.1] npc_needs.py, [2.2] npc_world.py, [2.3] npc_decree.py all DEPLOYED LIVE
 
 ### What's safe to touch right now
 - `npc-agent/npc_agent.py` — 105 lines; main() + tick loop only; imports from fourth_wall, npc_decisions, npc_actions, npc_context, npc_redis_helpers
@@ -28,7 +28,7 @@
 - `backend/npc_autonomy.py` — fully functional, deployed, verified (re-exports from npc_world, npc_needs); md5 `33f680cc`
 - `backend/npc_world.py` — **NEW** [2.2] 386 lines, WORLD_CONDITIONS + world state functions; md5 `c172b7df` LIVE
 - `backend/npc_needs.py` — **NEW** [2.1] 116 lines, needs queue system; md5 `95bc99dd` LIVE
-- `backend/npc_decree.py` — **NEW** [2.3] 326 lines, broadcast + decree system; compiled, NOT YET DEPLOYED
+- `backend/npc_decree.py` — **NEW** [2.3] 326 lines, broadcast + decree system; md5 `00581e61` DEPLOYED LIVE
 - `scripts/Deploy-VpsFile.ps1` — new, verified
 - `scripts/redis-summary.sh` — new, verified (3947 keys, 0 leaks)
 - `docker-compose.yml` — frontend bind mount added
@@ -513,7 +513,7 @@ VERIFIED:
 
 ## [2.3] Extract npc_decree.py from backend/npc_autonomy.py — 2026-06-30
 
-STATUS: LOCAL_COMPILES — NOT YET DEPLOYED
+STATUS: DEPLOYED LIVE — host/backend/worker all md5 `00581e61`
 
 ANCHOR: get_decision_log L2658 | broadcast_decision_event L2696 | npc_autonomy.py 33f680cc
 
@@ -548,4 +548,10 @@ VERIFIED LOCAL:
 - python -m py_compile npc_autonomy.py — OK
 - from npc_autonomy import ... 19 decree symbols — OK
 - Combined [2.1]+[2.2]+[2.3] imports — OK
+
+VERIFIED DEPLOYED (confirmed post-commit):
+- host md5: npc_autonomy=1193499c, npc_needs=95bc99dd, npc_world=c172b7df, npc_decree=00581e61
+- backend container md5: all 4 files match — OK
+- worker container md5: all 4 files match — OK
+- re-export imports: decree+world+needs OK in backend container
 
