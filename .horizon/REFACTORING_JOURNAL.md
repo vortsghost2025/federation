@@ -715,3 +715,40 @@ DEPLOYED LIVE:
 - docker exec import test: OK
 - Runtime: healthy, relationship evolution active (863 pairs)
 
+# [7] — 2026-06-30 — npc_goals.py (goals + goal-driven actions)
+
+NOTE: npc_goals.py already existed on disk (pre-created extraction target).
+This step wired its re-export and removed the duplicated code from npc_autonomy.py.
+
+EXTRACTED FROM npc_autonomy.py:
+- GOAL_TYPES, GOAL_STATUS_ACTIVE/COMPLETED/ABANDONED
+- MAX_GOALS_PER_NPC, GOAL_TTL, GOAL_PROGRESS_PER_ACTION, GOAL_PROGRESS_VARIANCE
+- GOAL_ACTION_TEMPLATES (28 category × ~2 templates each)
+- generate_goal, _get_goals_raw, get_goals, advance_goal, set_goal_status
+- generate_goal_driven_action
+
+DEPENDENCIES:
+- _get_redis, FILL_VALUES: lazy imports
+- generate_action: lazy from npc_actions (fallback when no active goals)
+- MAX_ACTIONS, MAX_WORLD_EVENTS, THOUGHT_TTL: lazy from npc_autonomy
+
+npc_autonomy.py: 1288 → 854 lines (-434)
+
+REMAINING SECTIONS:
+- Parallel NPC processing (~283 lines)
+- Player absence detection (~19 lines)
+- Decision engine / make_decision (~311 lines)
+- Broadcasting (~2 lines placeholder)
+
+VERIFIED LOCAL:
+- python -m py_compile npc_goals.py — OK (pre-existing, 372 lines)
+- python -m py_compile npc_autonomy.py — OK
+- [2.1]+...+[7] combined import: 30+ symbols — OK
+
+DEPLOYED LIVE:
+- SCP to VPS: npc_autonomy.py + npc_goals.py
+- Containers restarted: backend, worker
+- md5 match host/backend: goals=4dcd1a00, autonomy=47f3adf6
+- docker exec import test: OK
+- Runtime: healthy, 37 NPCs processed in 3.3s
+
