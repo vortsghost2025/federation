@@ -15,7 +15,7 @@
 ## CURRENT STATE (read this first after compaction)
 
 **Last updated:** 2026-06-30T22:00:00Z
-**Phase:** Phase 2 — [2.1] npc_needs.py, [2.2] npc_world.py, [2.3] npc_decree.py, [2.4] npc_reflection.py all DEPLOYED LIVE
+**Phase:** Phase 2 complete, Phase 3 in progress — [2.1–2.4] deployed live, [3] npc_thoughts.py LOCAL_COMPILES not yet deployed
 
 ### What's safe to touch right now
 - `npc-agent/npc_agent.py` — 105 lines; main() + tick loop only; imports from fourth_wall, npc_decisions, npc_actions, npc_context, npc_redis_helpers
@@ -29,7 +29,8 @@
 - `backend/npc_world.py` — **NEW** [2.2] 386 lines, WORLD_CONDITIONS + world state functions; md5 `c172b7df` LIVE
 - `backend/npc_needs.py` — **NEW** [2.1] 116 lines, needs queue system; md5 `95bc99dd` LIVE
 - `backend/npc_decree.py` — **NEW** [2.3] 326 lines, broadcast + decree system; md5 `00581e61` DEPLOYED LIVE
-- `backend/npc_reflection.py` — **NEW** [2.4] ~440 lines, decision reflection + scoring; compiled, NOT YET DEPLOYED
+- `backend/npc_reflection.py` — **NEW** [2.4] ~440 lines, decision reflection + scoring; DEPLOYED LIVE
+- `backend/npc_thoughts.py` — **NEW** [3] ~430 lines, LLM calls + thought generation + prompt filtering; compiled, NOT YET DEPLOYED
 - `scripts/Deploy-VpsFile.ps1` — new, verified
 - `scripts/redis-summary.sh` — new, verified (3947 keys, 0 leaks)
 - `docker-compose.yml` — frontend bind mount added
@@ -560,7 +561,7 @@ VERIFIED DEPLOYED (confirmed post-commit):
 
 ## [2.4] Extract npc_reflection.py from backend/npcs_autonomy.py — 2026-06-30
 
-STATUS: COMPILED — NOT YET DEPLOYED
+STATUS: DEPLOYED LIVE
 
 CHANGES:
 - NEW: `backend/npc_reflection.py` (~440 lines) — 3 functions + 3 constants
@@ -582,4 +583,38 @@ VERIFIED LOCAL:
 - python -m py_compile npc_autonomy.py — OK
 - from npc_autonomy import ... 6 reflection symbols — OK
 - Combined [2.1]+[2.2]+[2.3]+[2.4] imports — OK
+
+---
+
+## [3] Extract npc_thoughts.py from backend/npc_autonomy.py — 2026-06-30
+
+STATUS: COMPILED — NOT YET DEPLOYED
+
+CHANGES:
+- NEW: `backend/npc_thoughts.py` (~430 lines) — 7 functions + 10 constants
+- MODIFIED: `backend/npc_autonomy.py` (2278 → 1819 lines, -459 lines) — removed lines 128-607 (LLM + thought section), added re-export import block
+
+FUNCTIONS EXTRACTED:
+- _compute_thought_cache_key(char_id, archetype, mood, significance, ...) -> str
+- _get_world_events_bucket() -> str
+- get_thought_cache_stats() -> Dict[str, int]
+- _clean_llm_output(text) -> str
+- _is_leaked_prompt(text) -> bool
+- _call_llm(system_prompt, user_prompt, ...) -> str
+- generate_thought(char_id, char_name, archetype, affiliation, ...) -> Optional[Dict]
+
+CONSTANTS EXTRACTED:
+- SIGNIFICANCE_PRIORITY (11 categories), LOW_SIGNIFICANCE_CUTOFF,
+  MEDIUM_SIG_LLM_PROBABILITY (0.5), MAX_THOUGHTS (10), THOUGHT_TTL (7d),
+  THOUGHT_CACHE_TTL (900s), THOUGHT_CACHE_PREFIX, _cache_stats, _cache_stats_lock,
+  LLM_USE_NIM
+
+RE-EXPORTS IN npc_autonomy.py:
+All 17 symbols re-exported from npc_thoughts (many shared with remaining code)
+
+VERIFIED LOCAL:
+- python -m py_compile npc_thoughts.py — OK
+- python -m py_compile npc_autonomy.py — OK
+- from npc_autonomy import ... 17 thought symbols — OK
+- Combined [2.1]+[2.2]+[2.3]+[2.4]+[3] imports — OK
 
