@@ -684,3 +684,34 @@ DEPLOYED LIVE:
 - md5 match host/backend: actions=e5a7a48a, autonomy=b3b7a679
 - docker exec import test: OK
 
+# [6] — 2026-06-30 — npc_interactions.py (NPC relationships + dialogue interactions)
+
+EXTRACTED FROM npc_autonomy.py:
+- update_npc_relationship
+- get_npc_relationships
+- NPC_INTERACTION_TYPES (11 interaction types with weights)
+- INTERACTION_DELTAS (relationship score impact per type)
+- _generate_dialogue (LLM-based dialogue generation with budget check)
+- generate_npc_interaction (weighted random + LLM dialogue + template fallback)
+- get_relationship_summary (allies/rivals by score threshold)
+
+DEPENDENCIES:
+- log_npc_activity: direct import from npc_activity_logger
+- _get_redis, THOUGHT_TTL, _call_llm, _check_tick_llm_budget: lazy from npc_autonomy
+- FILL_VALUES: lazy from npc_actions
+- MAX_WORLD_EVENTS: lazy from npc_autonomy
+
+npc_autonomy.py: 1497 → 1288 lines (-209)
+
+VERIFIED LOCAL:
+- python -m py_compile npc_interactions.py — OK
+- python -m py_compile npc_autonomy.py — OK
+- [2.1]+...+[6] combined import: 30+ symbols — OK
+
+DEPLOYED LIVE:
+- SCP to VPS: npc_interactions.py + npc_autonomy.py
+- Containers restarted: backend, worker
+- md5 match host/backend: interactions=386b414c, autonomy=9e2e9689
+- docker exec import test: OK
+- Runtime: healthy, relationship evolution active (863 pairs)
+
