@@ -246,3 +246,61 @@ VERIFIED:
 - Both containers restarted, cognition loop running, LLM calls succeeding
 - char_001: llama-3.3-nemotron-super-49b returning 200 OK
 - char_306: nemotron-3-super-120b returning 200 OK (occasional JSON parse fallback to rest)
+
+---
+
+## [1.4] Extract npc_context.py — Context Building + Topic Fatigue
+
+`2026-06-30T00:20:00Z` STATUS: DONE — deployed and verified live on both containers
+
+FILES:
+- NEW: `npc-agent/npc_context.py` (~400 lines) — 19 public functions + 9 constants
+- MODIFIED: `npc-agent/npc_agent.py` (2148 → 1353 lines, -795 lines) — imports from npc_context, all extracted bodies removed
+
+FUNCTIONS EXTRACTED (leading underscore dropped):
+- neighborhood_snapshot(r, char_id) -> str
+- hash_event(text, source) -> str
+- promote_events_to_inbox(r, events, char_id) -> int
+- most_common_topic_word(topics) -> str|None
+- normalize_topic_label(label) -> str
+- topic_counter_key(char_id, topic) -> str
+- topic_cooldown_key(char_id, topic) -> str
+- topic_cooldown_remaining(r, char_id, topic) -> int
+- active_topic_cooldowns(r, char_id) -> list[tuple]
+- record_topic_fatigue(r, topic, char_id) -> None
+- text_mentions_topic(text, topic) -> bool
+- decision_mentions_topic(decision, topic) -> bool
+- collect_topic_sources(decision, char_id) -> list[str]
+- new_evidence_for_topic(r, topic, char_id) -> bool
+- top_neighborhood_npcs(r, char_id, limit) -> list[str]
+- cosmic_horizon(r, char_id) -> str
+- think_about_world(r, contacts, char_id) -> str
+- recent_artifact_dedup_count(r, char_id) -> int  (re-exported from npc_redis_helpers)
+- dedup_blocked_topic(r, char_id) -> str  (re-exported from npc_redis_helpers)
+
+CONSTANTS EXTRACTED:
+- PAIR_THREAD_PREVIEW, TOPIC_FATIGUE_WINDOW_MINUTES, TOPIC_FATIGUE_THRESHOLD
+- TOPIC_COOLDOWN_MINUTES, _STATUS_WEIGHT, _ALERT_MOODS, _NPC_ROSTER, _EVENT_KEYWORDS
+- _TOPIC_STOP_WORDS, _COSMIC_VISIONARY, _COSMIC_SCIENTIFIC, _COSMIC_FRONTIER
+
+DESIGN DECISIONS:
+- `char_id` param on all functions (defaults to os.environ.get("CHAR_ID"))
+- Lazy `_rh()` helper inside npc_context.py for npc_redis_helpers imports (avoids circular import)
+- `think_about_world` receives `contacts` as explicit param (avoids needing CONTACTS global from npc_agent.py)
+
+BUGS FIXED DURING DEPLOY:
+1. Stale import `from npc_llm_client import call_llm, LLM_MODELS, LLM_SESSIONS, LLM_PROMPT_PREFIX, LLM_PROMPT_SUFFIX` — LLM_MODELS/SESSIONS/PREFIX/SUFFIX were removed in [1.3]; reduced to `from npc_llm_client import call_llm`
+2. Bogus imports on line 67: `_rh, _log_llm_call, _get_npc_state, _set_npc_state, _get_npc_metadata` — none exist in npc_redis_helpers; removed entirely
+3. `UnboundLocalError: cannot access local variable 'active_topic_cooldowns'` — imported function name shadowed by local assignment `active_topic_cooldowns = active_topic_cooldowns(r, CHAR_ID)`; renamed local to `_active_cooldowns`
+
+DEPLOYED:
+- scp npc_context.py + npc_agent.py to VPS /docker/federation-game/npc-agent/
+- docker restart federation-game-npc-agent-001-1 federation-game-npc-agent-306-1
+
+VERIFIED:
+- md5 HOST: `9da7f128` (npc_agent.py), `37937901` (npc_context.py)
+- md5 CONTAINER 001: MATCHES both files
+- md5 CONTAINER 306: MATCHES both files
+- Both containers stable, cognition loop running, LLM calls succeeding
+- char_001: Decision `create_artifact` succeeded on llama-3.3-nemotron-super-49b
+- char_306: 429 on nemotron-3-super-120b (expected), fell back to nemotron-3-nano-30b, Decision `investigate` succeeded

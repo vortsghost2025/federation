@@ -1,7 +1,7 @@
 # FEDERATION ARCHITECTURE STATE
 
 **Purpose:** Post-compaction context recovery. Read this instead of re-reading 200KB+ of backend Python.
-**Last updated:** 2026-06-28 (P3 complete)
+**Last updated:** 2026-06-28T22:23 (fourth-wall fixes, startup scrub, model swaps)
 
 ---
 
@@ -9,11 +9,11 @@
 
 | File | md5 (host) | Container sync |
 |------|-----------|---------------|
-| `backend/npc_autonomy.py` | `ae3475acda9596ef9de311ec9cf72ae7` | ✅ all 4 containers |
-| `backend/institutions.py` | `a10900844ef5ec59ab492e21de8c4855` | ✅ all 4 containers |
-| `backend/llm_router.py` | `b8c5d3f...` | ✅ deployed |
+| `npc-agent/npc_agent.py` | `18ebf18a` | ✅ agent-001 + agent-306 |
+| `backend/npc_autonomy.py` | `ae3475ac` | ✅ all 4 containers |
+| `backend/institutions.py` | `a1090084` | ✅ all 4 containers + npc-agent |
+| `backend/llm_router.py` | deployed | ✅ |
 | `backend/event_cascade.py` | deployed | ✅ |
-| `backend/test_needs_queue.py` | 35/35 pass | local only |
 
 ---
 
@@ -166,8 +166,9 @@ Needs queue flow:
 
 | Container type | Mount | Deploy method | Restart picks up changes? |
 |---------------|-------|--------------|--------------------------|
-| backend + worker | read-only bind | scp → overwrite host → `docker compose restart` | ✅ Yes |
-| npc-agent | no bind | scp → `docker cp` → `docker restart` | ⚠️ Must docker cp |
+| backend + worker | read-only bind (`/docker/federation-game/backend:/app:ro`) | scp → overwrite host → `docker compose restart` | ✅ Yes (must restart for loaded modules) |
+| npc-agent | read-only bind (`/docker/federation-game/npc-agent:/app:ro`) | scp → overwrite host → `docker compose restart` | ✅ Yes (must restart for boot code like startup scrub) |
+| frontend | **BAKED** (no bind mount) | scp + `docker cp` + `nginx -s reload` | ❌ Must docker cp |
 | postgres | volume | N/A | N/A |
 
 **PRE-RESTART GATE:** verify local md5 → local import → VPS md5 → container runtime import → THEN restart

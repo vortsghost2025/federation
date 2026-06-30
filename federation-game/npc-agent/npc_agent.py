@@ -21,7 +21,16 @@ import httpx
 import redis
 
 from fourth_wall import _enforce_fourth_wall, _fourth_wall_dirty, _startup_scrub_redis
-from npc_llm_client import call_llm, _api_key_for_model, _call_openrouter_free
+from npc_llm_client import call_llm
+from npc_context import (
+    neighborhood_snapshot, hash_event, promote_events_to_inbox,
+    most_common_topic_word, normalize_topic_label, topic_counter_key,
+    topic_cooldown_key, topic_cooldown_remaining, active_topic_cooldowns,
+    record_topic_fatigue, text_mentions_topic, decision_mentions_topic,
+    collect_topic_sources, new_evidence_for_topic, top_neighborhood_npcs,
+    cosmic_horizon, recent_artifact_dedup_count, dedup_blocked_topic,
+    think_about_world
+)
 from npc_redis_helpers import (
     get_redis,
     _trunc,
@@ -95,11 +104,7 @@ OPERATOR_ID = "moderator"
 OPERATOR_NAME = "Sean / Federation Moderator"
 PAIR_JOURNAL_CAP = int(os.environ.get("PAIR_JOURNAL_CAP", "48"))
 PAIR_STATE_TTL = int(os.environ.get("PAIR_STATE_TTL", str(86400 * 30)))
-PAIR_THREAD_PREVIEW = int(os.environ.get("PAIR_THREAD_PREVIEW", "4"))
 PAIR_MESSAGE_COOLDOWN = int(os.environ.get("PAIR_MESSAGE_COOLDOWN", "180"))
-TOPIC_FATIGUE_WINDOW_MINUTES = int(os.environ.get("TOPIC_FATIGUE_WINDOW_MINUTES", "60"))
-TOPIC_FATIGUE_THRESHOLD = int(os.environ.get("TOPIC_FATIGUE_THRESHOLD", "3"))
-TOPIC_COOLDOWN_MINUTES = int(os.environ.get("TOPIC_COOLDOWN_MINUTES", "60"))
 OPEN_QUESTION_REPEAT_HOURS = int(os.environ.get("OPEN_QUESTION_REPEAT_HOURS", "6"))
 QUESTION_TOKEN_RE = re.compile(r"[a-z0-9]+")
 
@@ -209,777 +214,6 @@ def load_contacts(r):
     except Exception:
         pass
 
-
-# ── Full NPC roster for neighborhood awareness ──
-# Maps char_id → (name, faction) so the snapshot can show human-readable
-# names instead of raw IDs.  Sourced from npc_world_snapshot.py roster.
-_NPC_ROSTER: dict[str, tuple[str, str]] = {
-    "char_001": ("Archimedes Prime", "Research Division"),
-    "char_002": ("Commander Valorix", "Military Command"),
-    "char_003": ("Philosopher Zenith", "Consciousness Collective"),
-    "char_004": ("Ambassador Silven", "Diplomatic Corps"),
-    "char_005": ("Conquistador Drake", "Exploration Initiative"),
-    "char_101": ("Chancellor Harmony", "Diplomatic Corps"),
-    "char_102": ("Marshal Ironbound", "Military Command"),
-    "char_103": ("Maestro Celestia", "Cultural Ministry"),
-    "char_104": ("Dr. Prometheus", "Research Division"),
-    "char_105": ("Oracle Vex", "Consciousness Collective"),
-    "char_106": ("Merchant-Prince Aurelius", "Economic Council"),
-    "char_107": ("Explorer Nova", "Exploration Initiative"),
-    "char_108": ("Archivist Eternal", "Preservation Society"),
-    "char_201": ("Lord Malaxis", "independent"),
-    "char_202": ("The Void Oracle", "independent"),
-    "char_203": ("Baroness Greed", "independent"),
-    "char_204": ("General Devastation", "independent"),
-    "char_301": ("The Wanderer", "independent"),
-    "char_302": ("The Jester", "independent"),
-    "char_303": ("The Hermit", "independent"),
-    "char_304": ("The Spectre", "independent"),
-    "char_305": ("The Trickster", "independent"),
-    "char_306": ("The Oracle", "Consciousness Collective"),
-    "char_401": ("Keeper of the Null", "independent"),
-    "char_402": ("Dr. Celestia", "Cultural Ministry"),
-    "char_403": ("Zara Swiftwind", "Exploration Initiative"),
-    "char_404": ("Tech-Priest Algorithm", "Research Division"),
-    "char_405": ("Captain Riven", "Military Command"),
-    "char_406": ("Echo-7", "Research Division"),
-    "comp_001": ("Shadowborn", "independent"),
-    "comp_002": ("Brother Mercy", "independent"),
-    "comp_003": ("Dr. Sylas Cunningham", "independent"),
-    "comp_004": ("Cipher", "independent"),
-    "comp_005": ("Tempus", "independent"),
-    "comp_006": ("Paradox", "independent"),
-    "comp_007": ("Solace Heartmend", "independent"),
-    "comp_008": ("Scout Aria", "independent"),
-    "comp_009": ("Kyren Frostblade", "independent"),
-    "comp_010": ("Captain Valor", "independent"),
-}
-
-# Threat-relevance ranking weights for NPC status
-_STATUS_WEIGHT = {
-    "corrupted": 10,
-    "scheming": 8,
-    "alarmed": 6,
-    "unsettled": 5,
-    "hidden": 4,
-    "traveling": 3,
-    "worried": 4,
-    "frustrated": 2,
-    "active": 0,
-}
-
-# Moods that signal threat / instability worth surfacing
-_ALERT_MOODS = {
-    "alarmed", "scheming", "calculating", "unsettled", "worried",
-    "suspicious", "frustrated", "confidential", "restless",
-    "battle-ready", "opportunistic", "troubled", "distracted",
-}
-
-
-def _neighborhood_snapshot(r, max_chars: int = 400) -> str:
-    """Return a compact summary of what the OTHER NPCs are doing.
-
-    Reads npc_state:* (status, corruption, last_updated) and npc_mood:* for
-    all 39 NPCs.  Skips self and pair partner (already in Contacts/Pair
-    workspace).  Ranks by threat-relevance: corrupted status > hidden/traveling
-    > active, then corruption_level, then alert moods.  Returns up to
-    max_chars of formatted text — enough to notice Shadowborn's disinformation
-    or Baroness Greed's heist without drowning the prompt.
-    """
-    logger.info("[%s] neighborhood: starting snapshot...", CHAR_ID)
-    partner_id = _partner_id()
-    logger.info("[%s] neighborhood: partner_id=%s", CHAR_ID, partner_id)
-    entries: list[tuple[int, str, str, str]] = []  # (score, id, name, line)
-
-    try:
-        # First, get all npc_state keys (materialize list to close connection)
-        all_state_keys = list(r.keys("npc_state:*"))
-        logger.info("[%s] neighborhood: found %d npc_state keys", CHAR_ID, len(all_state_keys))
-
-        # Batch-read all npc_state hashes
-        pipe = r.pipeline(transaction=False)
-        for k in all_state_keys:
-            pipe.hgetall(k)
-        states = pipe.execute()
-
-        # Batch-read all npc_mood values
-        mood_pipe = r.pipeline(transaction=False)
-        for k in all_state_keys:
-            cid = k.split(":", 1)[1]
-            mood_pipe.get(f"npc_mood:{cid}")
-        moods = mood_pipe.execute()
-
-        # Zip keys with states and moods
-        for key, state, mood in zip(all_state_keys, states, moods):
-            if not state:
-                continue
-            cid = key.split(":", 1)[1]
-            if cid == CHAR_ID or cid == partner_id or cid not in _NPC_ROSTER:
-                continue
-
-            name, faction = _NPC_ROSTER[cid]
-            status = state.get("status", "active")
-            corruption = float(state.get("corruption_level", 0))
-            rumor = float(state.get("rumor_level", 0))
-            mood_str = (mood or "")
-
-            # Score: higher = more worth noticing
-            score = _STATUS_WEIGHT.get(status, 0) * 2
-            score += int(corruption * 6)
-            score += int(rumor * 2)
-            if mood_str.lower() in _ALERT_MOODS:
-                score += 3
-
-            # Build one-line summary
-            label = f"{name} ({faction[:12]})" if faction != "independent" else name
-            flags = []
-            if status not in ("active",):
-                flags.append(status)
-            if corruption > 0:
-                flags.append(f"corruption {corruption:.0f}")
-            if mood_str and mood_str.lower() in _ALERT_MOODS:
-                flags.append(mood_str)
-            line = f"{label}: {', '.join(flags)}" if flags else f"{label}: nominal"
-
-            entries.append((score, cid, name, line))
-
-    except Exception as exc:
-        logger.warning("[%s] neighborhood snapshot failed: %s", CHAR_ID, exc)
-        return ""
-
-    if entries:
-        logger.info("[%s] neighborhood: %d notable NPCs: %s", CHAR_ID, len(entries),
-                    "; ".join(e[3] for e in entries[:5]))
-
-    if not entries:
-        return ""
-
-    # Sort by score descending — most notable NPCs first
-    entries.sort(key=lambda e: e[0], reverse=True)
-
-    # Build output within char budget
-    lines = ["Neighborhood (other NPCs, most notable first):"]
-    budget = max_chars - len(lines[0]) - 2
-    for _score, _cid, _name, line in entries:
-        if budget - len(line) - 2 < 0:
-            break
-        lines.append(f"  {line}")
-        budget -= len(line) + 2
-
-    result = "\n".join(lines) if len(lines) > 1 else ""
-    logger.info("[%s] neighborhood: returning %d chars", CHAR_ID, len(result))
-    return result
-
-
-# === Event Promotion Bridge ===
-# Promote significant events from npc_world_events to councilor awareness
-
-_EVENT_KEYWORDS = {
-    "betray", "corruption", "heist", "warning", "sabotage", "ritual",
-    "disappearance", "cover-up", "undermine", "black market", "covert",
-    "intel breach", "prophecy", "anomaly", "resource discovery",
-    "exploration", "faction instability", "conflict", "attack", "defense",
-}
-
-def _hash_event(event: dict) -> str:
-    """Generate stable hash for event deduplication."""
-    # Handle multiple event structures
-    char_id = event.get("char_id", "") or event.get("source_char_id", "")
-    action = event.get("action_type", "") or event.get("interaction_type", "") or event.get("event_type", "")
-    ts = event.get("ts", 0) or event.get("timestamp", 0)
-    # Bucket by minute to deduplicate repeated events
-    ts_bucket = int(ts // 60)
-    return f"{char_id}:{action}:{ts_bucket}"
-
-def _promote_events_to_inbox(r, max_events: int = 5, max_chars: int = 120) -> list[str]:
-    """Read recent npc_world_events, filter significant ones, push to councilor inbox."""
-    promoted = []
-    try:
-        # Get last 20 events
-        events = r.zrange("npc_world_events", -20, -1, withscores=False)
-        logger.info("[%s] event promotion: checking %d events", CHAR_ID, len(events))
-        for event_json in events:
-            if len(promoted) >= max_events:
-                break
-            try:
-                event = json.loads(event_json)
-            except:
-                continue
-            
-            # Handle multiple event structures
-            action = event.get("action_type", "") or event.get("interaction_type", "") or event.get("event_type", "")
-            desc = event.get("description", "")
-            char_name = event.get("char_name") or event.get("source_char_name") or event.get("name", "Unknown")
-            event_type = event.get("event_type", "")
-            game_event_type = event.get("game_event_type", "")
-            
-            # Normalize for keyword search
-            text_to_search = f"{action} {desc} {event_type} {game_event_type}".lower()
-            
-            # Check for significance
-            if not any(kw in text_to_search for kw in _EVENT_KEYWORDS):
-                continue
-            
-            # Deduplicate
-            event_hash = _hash_event(event)
-            dedup_key = f"councilor_promoted_event:{CHAR_ID}:{event_hash}"
-            if r.exists(dedup_key):
-                logger.debug("[%s] event promotion: skipping duplicate %s", CHAR_ID, event_hash)
-                continue
-            
-            # Build summary
-            summary = f"{char_name}: {desc[:max_chars]}"
-            promoted.append(summary)
-            logger.info("[%s] event promotion: promoted '%s'", CHAR_ID, summary[:50])
-            
-            # Mark as promoted (24h TTL)
-            r.set(dedup_key, "1", ex=86400)
-        
-        return promoted
-    except Exception as e:
-        logger.warning("[%s] event promotion failed: %s", CHAR_ID, e)
-        return []
-
-
-_TOPIC_STOP_WORDS = {"the", "of", "and", "a", "an", "to", "in", "for", "on", "with",
-                      "from", "by", "at", "is", "it", "as", "be", "or", "that", "this",
-                      "its", "are", "was", "but", "not", "all", "report", "analysis",
-                      "assessment", "strategic", "recommendation", "overview",
-                      "comprehensive", "updated", "interim", "final", "review",
-                      "implication", "response", "data", "summary", "integration",
-                      "federation"}
-
-def _most_common_topic_word(titles: list[str]) -> str:
-    """Return the most frequently repeated content word across artifact titles.
-
-    Used to detect topic fixation — if the last 3 artifacts all mention
-    'void oracle', the agent should pivot to something else.
-    """
-    if not titles:
-        return ""
-    words = []
-    for t in titles:
-        tokens = re.findall(r"[a-zA-Z]{3,}", t.lower())
-        words.extend(w for w in tokens if w not in _TOPIC_STOP_WORDS)
-    if not words:
-        return ""
-    from collections import Counter
-    counts = Counter(words)
-    top_word, top_count = counts.most_common(1)[0]
-    if top_count >= len(titles):
-        return top_word
-    return ""
-
-
-def _normalize_topic_label(text: str) -> str:
-    return _most_common_topic_word([text]) if text else ""
-
-
-def _topic_counter_key(topic: str, char_id: str = "") -> str:
-    cid = char_id or CHAR_ID
-    return f"npc_topic_fatigue:{cid}:{topic}"
-
-
-def _topic_cooldown_key(topic: str, char_id: str = "") -> str:
-    cid = char_id or CHAR_ID
-    return f"npc_topic_cooldown:{cid}:{topic}"
-
-
-def _topic_cooldown_remaining(r, topic: str, char_id: str = "") -> int:
-    if r is None or not topic:
-        return 0
-    try:
-        ttl = int(r.ttl(_topic_cooldown_key(topic, char_id)) or 0)
-        return max(ttl, 0)
-    except Exception:
-        return 0
-
-
-def _active_topic_cooldowns(r, char_id: str = "", limit: int = 3) -> list[tuple[str, int]]:
-    cid = char_id or CHAR_ID
-    if r is None or not cid:
-        return []
-    prefix = f"npc_topic_cooldown:{cid}:"
-    rows: list[tuple[str, int]] = []
-    try:
-        keys = r.keys(f"{prefix}*")
-    except Exception:
-        return []
-    for key in keys:
-        try:
-            ttl = int(r.ttl(key) or 0)
-        except Exception:
-            ttl = 0
-        if ttl <= 0:
-            continue
-        topic = str(key)[len(prefix):]
-        if topic:
-            rows.append((topic, ttl))
-    rows.sort(key=lambda item: item[1], reverse=True)
-    return rows[:limit]
-
-
-def _record_topic_fatigue(r, topic: str, window_minutes: int = TOPIC_FATIGUE_WINDOW_MINUTES,
-                          threshold: int = TOPIC_FATIGUE_THRESHOLD,
-                          cooldown_minutes: int = TOPIC_COOLDOWN_MINUTES) -> tuple[int, int]:
-    if r is None or not topic:
-        return 0, 0
-    counter_key = _topic_counter_key(topic)
-    cooldown_key = _topic_cooldown_key(topic)
-    try:
-        count = int(r.incr(counter_key) or 0)
-        r.expire(counter_key, max(window_minutes, 1) * 60)
-    except Exception:
-        return 0, 0
-    existing = _topic_cooldown_remaining(r, topic)
-    if existing > 0:
-        return count, existing
-    if count >= threshold:
-        duration_seconds = max(cooldown_minutes, 1) * 60
-        try:
-            r.set(cooldown_key, topic, ex=duration_seconds)
-        except Exception:
-            return count, 0
-        logger.info(
-            "[%s] topic_cooldown_started topic=%s duration_minutes=%d",
-            CHAR_ID, topic, cooldown_minutes,
-        )
-        return count, duration_seconds
-    return count, 0
-
-
-def _text_mentions_topic(text: str, topic: str) -> bool:
-    if not text or not topic:
-        return False
-    normalized = _normalize_topic_label(text)
-    if normalized:
-        return normalized == topic
-    return topic.lower() in text.lower()
-
-
-def _decision_mentions_topic(decision: dict, topic: str) -> bool:
-    if not decision or not topic:
-        return False
-    fields = [
-        decision.get("title", ""),
-        decision.get("description", ""),
-        decision.get("body", ""),
-        decision.get("reasoning", ""),
-    ]
-    return any(_text_mentions_topic(field, topic) for field in fields if field)
-
-
-def _collect_topic_sources(r, char_id: str, n: int = 5) -> list[str]:
-    """Collect recent artifact titles AND decision descriptions for topic analysis.
-
-    Returns a combined list of text strings. No new Redis schema needed.
-    """
-    sources = []
-    # Recent artifact titles
-    try:
-        arts = r.lrange(f"npc_artifacts:{char_id}", -n, -1) if r.llen(f"npc_artifacts:{char_id}") else []
-        for art in arts:
-            try:
-                title = json.loads(art).get("title", "")
-                if title:
-                    sources.append(title)
-            except Exception:
-                pass
-    except Exception:
-        pass
-    # Recent decision descriptions
-    try:
-        decs_raw = r.zrevrange(f"npc_decisions:{char_id}", 0, n - 1)
-        for d in decs_raw:
-            try:
-                desc = json.loads(d).get("description", "")
-                if desc:
-                    sources.append(desc)
-            except Exception:
-                pass
-    except Exception:
-        pass
-    return sources
-
-
-def _new_evidence_for_topic(r, topic: str, char_id: str, partner_id: str, window_minutes: int = 120) -> str:
-    """Check if fresh evidence exists for a topic. Returns reason string or empty.
-
-    Checks (all existing Redis keys):
-      - npc_world_events: recent promoted events mentioning the topic
-      - npc_artifacts:{partner_id}: partner's recent artifacts on topic
-      - npc_messages:{char_id}:inbox: recent messages mentioning topic
-    """
-    topic_lower = topic.lower()
-    now = time.time()
-    window_sec = window_minutes * 60
-
-    # 1. Recent world events
-    try:
-        events_raw = r.lrange("npc_world_events", -10, -1)
-        for raw in events_raw:
-            try:
-                ev = json.loads(raw) if isinstance(raw, str) else raw
-                ev_text = json.dumps(ev).lower()
-                ev_ts = ev.get("ts", 0) if isinstance(ev, dict) else 0
-                if topic_lower in ev_text and (now - ev_ts) < window_sec:
-                    return "new_world_event"
-            except Exception:
-                pass
-    except Exception:
-        pass
-
-    # 2. Partner artifacts
-    try:
-        partner_arts = r.lrange(f"npc_artifacts:{partner_id}", -5, -1)
-        for art in partner_arts:
-            try:
-                a = json.loads(art) if isinstance(art, str) else art
-                title = (a.get("title", "") if isinstance(a, dict) else "")
-                created = a.get("created_at", 0) if isinstance(a, dict) else 0
-                normalized_partner_topic = _normalize_topic_label(title)
-                if topic_lower in title.lower() and (now - created) < window_sec:
-                    if normalized_partner_topic == topic_lower or topic_lower in (a.get("description", "") if isinstance(a, dict) else "").lower():
-                        logger.info(
-                            "[%s] topic_fatigue_reset_blocked reason=same_partner_topic topic=%s",
-                            CHAR_ID, topic_lower,
-                        )
-                        continue
-                    return "partner_artifact"
-            except Exception:
-                pass
-    except Exception:
-        pass
-
-    # 3. Inbox messages
-    try:
-        msgs = r.lrange(f"npc_messages:{char_id}:inbox", -5, -1)
-        for msg in msgs:
-            try:
-                m = json.loads(msg) if isinstance(msg, str) else msg
-                body = (m.get("body", "") if isinstance(m, dict) else "").lower()
-                msg_ts = m.get("ts", 0) if isinstance(m, dict) else 0
-                if topic_lower in body and (now - msg_ts) < window_sec:
-                    return "inbox_message"
-            except Exception:
-                pass
-    except Exception:
-        pass
-
-    return ""
-
-
-def _top_neighborhood_npcs(r, n: int = 3) -> str:
-    """Return a short comma-separated string of the top N most notable NPCs.
-
-    Lightweight version of _neighborhood_snapshot that only returns
-    names and statuses — used to redirect stuck agents toward fresh
-    investigation targets.
-    """
-    try:
-        all_state_keys = list(r.keys("npc_state:*"))
-        pipe = r.pipeline(transaction=False)
-        for k in all_state_keys:
-            pipe.hgetall(k)
-        states = pipe.execute()
-        mood_pipe = r.pipeline(transaction=False)
-        for k in all_state_keys:
-            cid = k.split(":", 1)[1]
-            mood_pipe.get(f"npc_mood:{cid}")
-        moods = mood_pipe.execute()
-
-        entries = []
-        for key, state, mood in zip(all_state_keys, states, moods):
-            if not state:
-                continue
-            cid = key.split(":", 1)[1]
-            if cid == CHAR_ID or cid == _partner_id() or cid not in _NPC_ROSTER:
-                continue
-            name, faction = _NPC_ROSTER[cid]
-            status = state.get("status", "active")
-            corruption = float(state.get("corruption_level", 0))
-            mood_str = (mood or "")
-            score = _STATUS_WEIGHT.get(status, 0) * 2
-            score += int(corruption * 6)
-            if mood_str.lower() in _ALERT_MOODS:
-                score += 3
-            label = f"{name} ({faction[:12]})" if faction != "independent" else name
-            flags = []
-            if status not in ("active",):
-                flags.append(status)
-            if corruption > 0:
-                flags.append(f"corruption {corruption:.0f}")
-            if mood_str and mood_str.lower() in _ALERT_MOODS:
-                flags.append(mood_str)
-            line = f"{label}: {', '.join(flags)}" if flags else f"{label}: nominal"
-            entries.append((score, line))
-
-        entries.sort(key=lambda e: e[0], reverse=True)
-        top = [e[1] for e in entries[:n]]
-        return "; ".join(top) if top else ""
-    except Exception:
-        return ""
-
-
-
-
-
-# ── Cosmic Horizon tiers ──────────────────────────────────────────
-# Stage 1: Role-filtered awareness of space beyond the Federation.
-# Most NPCs receive nothing. Max 300 chars, max 3 bullets.
-_COSMIC_VISIONARY = {"char_306"}   # simulation-adjacent cosmic hints
-_COSMIC_SCIENTIFIC = {"char_001", "char_104", "char_105", "char_404", "char_406"}
-_COSMIC_FRONTIER = {"char_005", "char_107", "char_301", "char_403"}
-
-
-def _cosmic_horizon(char_id: str) -> str:
-    """Return role-filtered cosmic context string, or empty string.
-
-    Stage 1 — deterministic text only. No Redis reads, no random generation.
-    """
-    if char_id in _COSMIC_VISIONARY:
-        return (
-            "Cosmic Horizon:\n"
-            "  • The Ancient Anchor Network resonates across galactic scales — "
-            "a lattice of fixed-reference beacons predating all known civilizations.\n"
-            "  • Their rhythmic pulses resemble deep-sky carrier waves, but they "
-            "originate from the Anchor Network's phase-locked resonators, not an external intelligence.\n"
-            "  • Investigating the Anchor Network is the path forward: mapping its nodes "
-            "could reveal forgotten transit corridors and archival caches."
-        )
-    if char_id in _COSMIC_SCIENTIFIC:
-        return (
-            "Cosmic Horizon:\n"
-            "  • The Federation's 100 sq ly territory is estimated at <0.001% "
-            "of galactic volume.\n"
-            "  • Long-range projections indicate 3+ unexplored systems within 50 ly.\n"
-            "  • No confirmed civilizations beyond the frontier, but sensor gaps "
-            "remain significant."
-        )
-    if char_id in _COSMIC_FRONTIER:
-        return (
-            "Cosmic Horizon:\n"
-            "  • Frontier reports mention strange signals beyond the Eastern Veil.\n"
-            "  • Trade routes grow thinner past the outer sectors.\n"
-            "  • A few explorers speak of something on the edge of sensor range."
-        )
-    return ""
-
-
-def think_about_world(r) -> str:
-    """Gather recent events, messages, and artifacts for context.
-
-    Goal: give the LLM just enough cross-tick memory to avoid greeting
-    loops, without blowing up the prompt size. Target: <2000 chars total.
-
-    Each tick we surface:
-      - mood + timestamp
-      - 3 newest incoming messages (header + 80 char body)
-      - 3 newest outgoing messages (so the agent sees its own greetings)
-      - last 3 decision categories with timestamps (so the agent
-        can see "I've send_message'd 3 ticks in a row")
-      - artifact count
-      - incoming vs sent balance ("you've sent 7, received 9")
-      - partner mood
-    """
-    logger.info("[%s] think_about_world: building context...", CHAR_ID)
-    parts = [f"--- {NPC_NAME} ({CHAR_ID}) — Tick@{time.strftime('%H:%M:%S')} ---"]
-
-    try:
-        mood = r.get(f"npc_mood:{CHAR_ID}") or "neutral"
-        parts.append(f"Mood: {mood}")
-    except Exception:
-        pass
-
-    # Incoming: 3 newest, body 80 chars
-    try:
-        inbox = r.lrange(f"npc_messages:{CHAR_ID}:inbox", -3, -1)
-        inbox_total = r.llen(f"npc_messages:{CHAR_ID}:inbox")
-        if inbox_total:
-            parts.append(f"Inbox ({inbox_total} unread total, showing newest {len(inbox)}):")
-            for msg in inbox:
-                try:
-                    m = json.loads(msg)
-                    body = m.get("body", "")[:80]
-                    parts.append(f"  ← {m.get('from_name', '?')}: {body}")
-                except Exception:
-                    pass
-    except Exception:
-        pass
-
-    # Outgoing: 3 most recent sent messages
-    try:
-        sent = r.lrange(f"npc_messages:{CHAR_ID}:sent", -3, -1)
-        sent_total = r.llen(f"npc_messages:{CHAR_ID}:sent")
-        if sent_total:
-            parts.append(f"You've sent {sent_total} messages (showing newest {len(sent)}):")
-            for msg in sent:
-                try:
-                    m = json.loads(msg)
-                    body = m.get("body", "")[:80]
-                    parts.append(f"  → {m.get('to_name', '?')}: {body}")
-                except Exception:
-                    pass
-    except Exception:
-        pass
-
-    # Last 3 decisions: category + truncated description
-    try:
-        decs = _recent_decisions(r, 3)
-        if decs:
-            category_seq = []
-            for d in decs:
-                try:
-                    cat = d.get("category", "?")
-                    desc = _compact_text(d.get("description", ""), 60) or d.get("action_taken", "")
-                    category_seq.append(f"{cat} ({desc})")
-                except Exception:
-                    pass
-            if category_seq:
-                parts.append("Last 3 ticks (newest first):")
-                for line in category_seq:
-                    parts.append(f"  - {line}")
-    except Exception:
-        pass
-
-    # Artifact count
-    try:
-        arts = r.llen(f"npc_artifacts:{CHAR_ID}")
-        if arts:
-            parts.append(f"You have produced {arts} artifacts.")
-        else:
-            parts.append("You have produced 0 artifacts yet.")
-    except Exception:
-        pass
-
-    # Partner mood only
-    try:
-        partner_id = _partner_id()
-        partner_state = r.get(f"npc_mood:{partner_id}") or "unknown"
-        # Has partner produced artifacts?
-        partner_arts = 0
-        try:
-            partner_arts = r.llen(f"npc_artifacts:{partner_id}")
-        except Exception:
-            pass
-        partner_summary = f"Partner ({partner_id}): mood={partner_state}"
-        if partner_arts:
-            partner_summary += f", produced {partner_arts} artifacts"
-        parts.append(partner_summary)
-    except Exception:
-        pass
-
-    try:
-        partner_id = _partner_id()
-        pair_state = _pair_state(r, partner_id)
-        if pair_state:
-            parts.append("Shared pair workspace:")
-            if pair_state.get("shared_goal"):
-                parts.append(f"  Goal: {pair_state['shared_goal'][:120]}")
-            if pair_state.get("current_topic"):
-                parts.append(f"  Current topic: {pair_state['current_topic'][:120]}")
-            partner_focus = pair_state.get(f"focus_{partner_id}", "")
-            if partner_focus:
-                parts.append(f"  Partner focus: {partner_focus[:120]}")
-            self_focus = pair_state.get(f"focus_{CHAR_ID}", "")
-            if self_focus:
-                parts.append(f"  Your last focus: {self_focus[:120]}")
-            if pair_state.get("open_question"):
-                q_from = pair_state.get("open_question_from", "")
-                q_label = CONTACTS.get(q_from, "Partner") if q_from else "Partner"
-                parts.append(f"  Open question from {q_label}: {pair_state['open_question'][:120]}")
-            if pair_state.get("last_open_question_sent_to_partner") and not pair_state.get("partner_answer"):
-                parts.append(f"  Your open question awaiting answer: {pair_state['last_open_question_sent_to_partner'][:120]}")
-            if pair_state.get("last_message_preview"):
-                parts.append(f"  Last direct note: {pair_state['last_message_preview'][:120]}")
-
-            recent_journal = _pair_recent_journal(r, partner_id, 3)
-            if recent_journal:
-                parts.append("Shared journal:")
-                for entry in recent_journal:
-                    actor_id = entry.get("actor", "")
-                    actor_label = "You" if actor_id == CHAR_ID else CONTACTS.get(actor_id, entry.get("actor_name", actor_id or "?"))
-                    parts.append(f"  - {actor_label}: {entry.get('summary', '')[:100]}")
-
-            active_thread = pair_state.get("active_thread_id", "")
-            thread_messages = _recent_thread_messages(r, active_thread, PAIR_THREAD_PREVIEW)
-            if thread_messages:
-                parts.append("Active direct thread:")
-                for msg in thread_messages:
-                    if msg.get("from_char_id") == CHAR_ID:
-                        parts.append(f"  → You to {msg.get('to_name', '?')}: {msg.get('body', '')[:80]}")
-                    else:
-                        parts.append(f"  ← {msg.get('from_name', '?')}: {msg.get('body', '')[:80]}")
-    except Exception:
-        pass
-
-    contacts_str = "; ".join(f"{cid}: {name}" for cid, name in CONTACTS.items() if cid != CHAR_ID)
-    parts.append(f"Contacts: {contacts_str}")
-
-    # ── Cosmic Horizon: what lies beyond the Federation ──
-    # Role-filtered; most NPCs get nothing. Target: <300 chars.
-    horizon = _cosmic_horizon(CHAR_ID)
-    if horizon:
-        parts.append(horizon)
-
-    # ── Neighborhood: what are the other 37 NPCs doing right now? ──
-    # Gives councilors enough situational awareness to perceive threats
-    # and opportunities outside the two-agent bubble. Target: <400 chars.
-    neighborhood = _neighborhood_snapshot(r)
-    if neighborhood:
-        parts.append(neighborhood)
-
-    # ── Recent significant world events (promoted from live sim) ──
-    # Events that passed significance filters. Target: 3-5 events, ~100 chars each.
-    logger.info("[%s] think_about_world: calling event promotion", CHAR_ID)
-    promoted = _promote_events_to_inbox(r)
-    logger.info("[%s] think_about_world: event promotion returned %d", CHAR_ID, len(promoted))
-    if promoted:
-        parts.append("Recent significant world events:\n" + "\n".join(f"  • {e}" for e in promoted))
-
-    # ── Topic pivot: warn about blocked/cooldown topics in context ──
-    try:
-        active_cooldowns = _active_topic_cooldowns(r, CHAR_ID)
-        dedup_streak = _recent_artifact_dedup_count(r)
-        dedup_topic = _dedup_blocked_topic(r)
-        pivot_parts = []
-        if active_cooldowns:
-            cd_text = ", ".join(f"{t} ({max(1, (ttl+59))//60}m left)" for t, ttl in active_cooldowns)
-            pivot_parts.append(f"TOPICS ON COOLDOWN (do not pursue): {cd_text}")
-        if dedup_streak >= 2 and dedup_topic:
-            pivot_parts.append(f"DEDUP BLOCKED TOPIC: \"{dedup_topic}\" (blocked {dedup_streak}x). Pivot to a different subject.")
-        if pivot_parts:
-            parts.append("⚠ " + "; ".join(pivot_parts))
-    except Exception:
-        pass
-
-    # ── Institution context: roles, workflows, and autonomy awareness ──
-    try:
-        role_id = r.get(f"councilor:{CHAR_ID}:role")
-        inst_id = r.get(f"councilor:{CHAR_ID}:institution")
-        if inst_id:
-            inst_rec = r.hgetall(inst_id)
-            inst_parts = [f"Your institution: {inst_rec.get('name', inst_id)} ({inst_rec.get('kind', '?')})"]
-            active_wfs = int(r.get(f"{inst_id}:active_workflows") or 0)
-            completed_wfs = int(r.get(f"{inst_id}:completed_workflows") or 0)
-            inst_parts.append(f"  Active workflows: {active_wfs}, Completed: {completed_wfs}")
-            if role_id:
-                role_rec = r.hgetall(role_id)
-                inst_parts.append(f"  Your role: {role_rec.get('title', '?')} — authority: {role_rec.get('authority', '?')}")
-            all_insts = r.smembers("institution:index") or set()
-            inst_parts.append(f"  Existing institutions ({len(all_insts)}): {', '.join(r.hget(i, 'name') or i for i in sorted(all_insts)[:8])}")
-            parts.append("\n".join(inst_parts))
-    except Exception:
-        pass
-
-    # ── Persistent session transcript ──
-    # The rolling last SESSION_CAP turns (3 hours at TICK_INTERVAL=45s).
-    # This is what gives the agent cross-tick memory.
-    transcript = _session_transcript(r, contacts=CONTACTS)
-    if transcript:
-        parts.append(f"── Your recent session (last few hours) ──\n{transcript}")
-
-    return "\n".join(parts)
 
 
 def _consecutive_send_streak(r) -> int:
@@ -1110,35 +344,6 @@ def _session_append(r, entry: dict) -> None:
         logger.debug("[%s] session append failed: %s", CHAR_ID, e)
 
 
-def _recent_artifact_dedup_count(r) -> int:
-    """Return consecutive artifact dedup block count (10 min TTL)."""
-    try:
-        val = r.get(f"npc_dedup_streak:{CHAR_ID}")
-        return int(val) if val is not None else 0
-    except Exception:
-        return 0
-
-
-def _dedup_blocked_topic(r) -> str:
-    """Return the normalized topic of the most recent dedup-deferred artifact.
-
-    Returns empty string if no recent dedup topic. Safe on bytes/string Redis values.
-    """
-    try:
-        key = f"npc_dedup_topic:{CHAR_ID}"
-        if not r.exists(key):
-            return ""
-        raw = r.get(key)
-        if isinstance(raw, bytes):
-            raw = raw.decode("utf-8", errors="replace")
-        return (raw or "").strip()
-    except Exception:
-        return ""
-
-
-
-
-
 def decide_action(context: str, r=None) -> dict:
     """Ask the LLM what to do next.
 
@@ -1241,11 +446,11 @@ Respond in this exact JSON format (no markdown, no explanation):
                 "\n\nDIRECT-MESSAGE COOLDOWN: You sent a direct note very recently. "
                 f"Wait about {cooldown}s before sending another unless you have a genuine breakthrough or direct request."
             )
-        dedup_count = _recent_artifact_dedup_count(r)
-        dedup_topic = _dedup_blocked_topic(r)
+        dedup_count = recent_artifact_dedup_count(r)
+        dedup_topic = dedup_blocked_topic(r)
         if dedup_count >= 2 and dedup_topic:
             _topic_blocked_for_dedup = dedup_topic
-            top_npcs = _top_neighborhood_npcs(r, 3)
+            top_npcs = top_neighborhood_npcs(r, 3)
             npc_hint = f" Your neighborhood scan shows these NPCs in notable states: {top_npcs}." if top_npcs else ""
             if dedup_count >= 3:
                 force_constraint += (
@@ -1270,26 +475,26 @@ Respond in this exact JSON format (no markdown, no explanation):
             _topic_blocked_for_dedup = ""
         # Topic-fatigue: detect topic fixation from artifact titles and decision descriptions,
         # then block same-topic resets and start cooldowns when the loop repeats.
-        active_topic_cooldowns = _active_topic_cooldowns(r, CHAR_ID)
-        if active_topic_cooldowns:
+        _active_cooldowns = active_topic_cooldowns(r, CHAR_ID)
+        if _active_cooldowns:
             cooldown_text = ", ".join(
-                f"{topic} (~{max(1, (ttl + 59) // 60)}m)" for topic, ttl in active_topic_cooldowns
+                f"{topic} (~{max(1, (ttl + 59) // 60)}m)" for topic, ttl in _active_cooldowns
             )
             force_constraint += (
                 "\n\nTOPIC COOLDOWNS ACTIVE: Do NOT continue these topics until cooldown expires: "
                 f"{cooldown_text}. Pick a different topic, NPC, or world problem."
             )
         partner_id_tf = _partner_id()
-        sources = _collect_topic_sources(r, CHAR_ID, 5) if r is not None else []
+        sources = collect_topic_sources(r, CHAR_ID, 5) if r is not None else []
         if len(sources) >= 3:
-            common = _most_common_topic_word(sources)
+            common = most_common_topic_word(sources)
             if common:
                 topic_count = sum(1 for s in sources if common.lower() in s.lower())
                 logger.info(
                     "[%s] topic_fatigue detected topic=%s count=%d window=%d",
                     CHAR_ID, common, topic_count, len(sources),
                 )
-                cooldown_remaining = _topic_cooldown_remaining(r, common)
+                cooldown_remaining = topic_cooldown_remaining(r, common)
                 if cooldown_remaining > 0:
                     _topic_blocked_for_cooldown = common
                     logger.info(
@@ -1304,24 +509,24 @@ Respond in this exact JSON format (no markdown, no explanation):
                 else:
                     evidence_reason = ""
                     if partner_id_tf:
-                        evidence_reason = _new_evidence_for_topic(r, common, CHAR_ID, partner_id_tf)
+                        evidence_reason = new_evidence_for_topic(r, common, CHAR_ID, partner_id_tf)
                     if evidence_reason:
                         logger.info(
                             "[%s] topic_fatigue_reset topic=%s reason=%s",
                             CHAR_ID, common, evidence_reason,
                         )
                     else:
-                        fatigue_count, started_cooldown = _record_topic_fatigue(r, common)
+                        fatigue_count, started_cooldown = record_topic_fatigue(r, common)
                         _topic_blocked_for_cooldown = common
                         topic_words = " → ".join(
-                            _most_common_topic_word([s]) if _most_common_topic_word([s]) else "?"
+                            most_common_topic_word([s]) if most_common_topic_word([s]) else "?"
                             for s in sources[:5]
                         )
                         logger.info(
                             "[%s] topic_history topics=%s",
                             CHAR_ID, topic_words,
                         )
-                        top_npcs = _top_neighborhood_npcs(r, 3)
+                        top_npcs = top_neighborhood_npcs(r, 3)
                         npc_hint = (
                             f" For example, these NPCs have notable states: {top_npcs}."
                             if top_npcs else ""
@@ -1401,11 +606,11 @@ Respond in this exact JSON format (no markdown, no explanation):
         # check whether the proposed topic matches the blocked topic.
         if _topic_blocked_for_dedup and decision.get("category") == "create_artifact":
             proposed_title = decision.get("title", decision.get("description", ""))
-            proposed_topic = _most_common_topic_word([proposed_title])
+            proposed_topic = most_common_topic_word([proposed_title])
             if proposed_topic == _topic_blocked_for_dedup:
                 alt_npc = ""
                 try:
-                    top_npcs_str = _top_neighborhood_npcs(r, 1) if r is not None else ""
+                    top_npcs_str = top_neighborhood_npcs(r, 1) if r is not None else ""
                     if top_npcs_str:
                         alt_npc = top_npcs_str.split(":")[0].strip()
                 except Exception:
@@ -1431,7 +636,7 @@ Respond in this exact JSON format (no markdown, no explanation):
                     "[%s] dedup_topic_allowed_different_topic proposed=%s blocked=%s",
                     CHAR_ID, proposed_topic, _topic_blocked_for_dedup,
                 )
-        if _topic_blocked_for_cooldown and decision.get("category") != "send_message" and _decision_mentions_topic(decision, _topic_blocked_for_cooldown):
+        if _topic_blocked_for_cooldown and decision.get("category") != "send_message" and decision_mentions_topic(decision, _topic_blocked_for_cooldown):
             logger.warning(
                 "[%s] topic_cooldown_forced_alternative topic=%s chosen=%s",
                 CHAR_ID, _topic_blocked_for_cooldown, decision.get("category", "?"),
@@ -1561,7 +766,7 @@ def execute_decision(decision: dict, r):
                     if target in PAIR_IDS and CHAR_ID in PAIR_IDS
                     else _conversation_thread_id(CHAR_ID, target)
                 )
-                msg_topic = _normalize_topic_label(decision.get("topic", "") or desc or body)
+                msg_topic = normalize_topic_label(decision.get("topic", "") or desc or body)
                 msg_id = str(uuid.uuid4())
                 msg = {
                     "id": msg_id,
@@ -1632,7 +837,7 @@ def execute_decision(decision: dict, r):
             r.incr(streak_key)
             r.expire(streak_key, 600)
             # Track the normalized topic of the deferred artifact
-            dedup_topic = _most_common_topic_word([title])
+            dedup_topic = most_common_topic_word([title])
             if dedup_topic:
                 r.set(f"npc_dedup_topic:{CHAR_ID}", dedup_topic, ex=600)
         else:
