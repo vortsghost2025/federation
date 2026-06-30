@@ -618,3 +618,43 @@ VERIFIED LOCAL:
 - from npc_autonomy import ... 17 thought symbols — OK
 - Combined [2.1]+[2.2]+[2.3]+[2.4]+[3] imports — OK
 
+# [4] — 2026-06-30 — npc_opinions.py (opinions + moods)
+
+EXTRACTED FROM npc_autonomy.py:
+- update_opinion (was ~line 184, now npc_opinions.py)
+- get_opinion (was ~line 226)
+- update_mood (was ~line 317)
+- get_mood (was ~line 334)
+- OPINION_TTL (was at line 135, removed — now defined in npc_opinions.py)
+- ARCHETYPE_MOODS (was ~line 260)
+- OPINION_SHIFTS (was inline, moved to npc_opinions.py)
+
+NEW FILE: S:/federation/federation-game/backend/npc_opinions.py — 110 lines
+
+LOST CONSTANTS RE-ADDED:
+- OPINION_TTL, MAX_ACTIONS, MAX_WORLD_EVENTS were accidentally omitted during [3] extraction; re-added to npc_autonomy.py before proceeding with [4]
+
+RE-EXPORTS IN npc_autonomy.py:
+- OPINION_TTL, ARCHETYPE_MOODS, update_opinion, get_opinion, update_mood, get_mood
+
+DEPENDENCIES:
+- update_opinion/get_opinion: _get_redis (lazy import from npc_autonomy)
+- update_mood/get_mood: _get_redis (lazy import from npc_autonomy)
+- No circular import risk
+
+npc_autonomy.py: 1836 → 1683 lines after [4]
+
+VERIFIED LOCAL:
+- python -m py_compile npc_opinions.py — OK
+- python -m py_compile npc_autonomy.py — OK
+- from npc_autonomy import ... 6 opinion symbols — OK
+- Combined [2.1]+[2.2]+[2.3]+[2.4]+[3]+[4] imports — OK
+
+DEPLOYED LIVE:
+- SCP to VPS: npc_opinions.py + npc_autonomy.py
+- Containers restarted: backend, worker
+- md5 match host/backend/worker: opinions=52dbe1e4, autonomy=03f00557
+- docker exec import test — OK
+- Runtime logs: no errors, simulation ticks healthy
+- Kodee/Hostinger: no crash/restart after deploy
+
