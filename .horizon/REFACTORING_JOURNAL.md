@@ -14,8 +14,8 @@
 
 ## CURRENT STATE (read this first after compaction)
 
-**Last updated:** 2026-06-30T09:45:00Z
-**Phase:** Phase 1 complete — [1.6] npc_actions.py extracted and deployed live; npc_agent.py down to 105 lines
+**Last updated:** 2026-06-30T22:00:00Z
+**Phase:** Phase 2 in progress — [2.1] npc_needs.py deployed; [2.2] npc_world.py DEPLOYED LIVE
 
 ### What's safe to touch right now
 - `npc-agent/npc_agent.py` — 105 lines; main() + tick loop only; imports from fourth_wall, npc_decisions, npc_actions, npc_context, npc_redis_helpers
@@ -25,7 +25,9 @@
 - `npc-agent/npc_llm_client.py` — 216 lines; call_llm, _api_key_for_model, _call_openrouter_free, all LLM constants
 - `npc-agent/npc_redis_helpers.py` — 653 lines; all Redis CRUD helpers, session log, thread, question similarity, pair workspace, LLM logging
 - `npc-agent/fourth_wall.py` — standalone, 18 fourth-wall regex rules, deployed live
-- `backend/npc_autonomy.py` — fully functional, deployed, verified
+- `backend/npc_autonomy.py` — fully functional, deployed, verified (re-exports from npc_world, npc_needs); md5 `33f680cc`
+- `backend/npc_world.py` — **NEW** [2.2] 386 lines, WORLD_CONDITIONS + world state functions; md5 `c172b7df` LIVE
+- `backend/npc_needs.py` — **NEW** [2.1] 116 lines, needs queue system; md5 `95bc99dd` LIVE
 - `scripts/Deploy-VpsFile.ps1` — new, verified
 - `scripts/redis-summary.sh` — new, verified (3947 keys, 0 leaks)
 - `docker-compose.yml` — frontend bind mount added
@@ -98,23 +100,22 @@ Steps (each is a single commit + deploy + verify):
 - [1.6] Extract `npc_actions.py` — depends on decisions + redis helpers + fourth_wall **— DONE, deployed live**
 - [1.7] Verify full tick cycle works on VPS, all functions resolve **— DONE, both containers verified**
 
-### Phase 2: Break `npc_autonomy.py` (3,392 lines → ~5 modules)
+### Phase 2: Break `npc_autonomy.py` (3,392 lines → ~4 modules)
 Planned module structure:
 ```
 backend/
-  npc_autonomy.py       # main entry + decision loop (~500 lines)
-  npc_scoring.py         # _score_decision_option, decision weights (~600 lines)
-  npc_needs.py           # needs queue, notifications, fulfilled types (~400 lines)
-  npc_decree.py          # decree evaluation, directive writing (~300 lines)
-  npc_reflection.py      # _reflect_on_missing_context, pivot logic (~300 lines)
+  npc_autonomy.py       # main entry + decision loop + scoring + mood/opinion (~2000 lines)
+  npc_needs.py           # needs queue, notifications, fulfilled types (~120 lines) — DONE
+  npc_world.py           # WORLD_CONDITIONS + world state functions (~390 lines) — DONE, NOT YET LIVE
+  npc_decree.py          # decree evaluation, directive writing, broadcast (~300 lines) — NOT YET EXTRACTED
+  npc_reflection.py      # _reflect_on_missing_context, scoring, biases (~400 lines) — NOT YET EXTRACTED
 ```
 
 Steps (each is a single commit + deploy + verify):
-- [2.0] Create empty module files, verify no breakage
-- [2.1] Extract `npc_needs.py`
-- [2.2] Extract `npc_decree.py`
-- [2.3] Extract `npc_reflection.py`
-- [2.4] Extract `npc_scoring.py`
+- [2.1] Extract `npc_needs.py` — **DONE, deployed**
+- [2.2] Extract `npc_world.py` — **LOCAL_COMPILES, not yet deployed**
+- [2.3] Extract `npc_decree.py` — NOT YET
+- [2.4] Extract `npc_reflection.py` — NOT YET
 - [2.5] Verify full worker tick cycle works on VPS
 
 ### Phase 3: Other large files (lower priority)
@@ -449,4 +450,61 @@ VERIFIED:
 - `from npc_needs import ...` OK in backend container
 - `from npc_autonomy import file_npc_need, get_open_needs, ALLOWED_NEED_TYPES` OK in backend + worker
 - Backend healthz: {"status":"ok"}
+
+---
+
+## [2.2] Extract npc_world.py from backend/npc_autonomy.py — 2026-06-30
+
+STATUS: DONE — deployed live, verified
+
+ANCHOR: WORLD_CONDITIONS L1916 | world_state | get_world_state L1988 | npc_autonomy.py 3c9e8e56
+
+CHANGES:
+- NEW: `backend/npc_world.py` (386 lines) — WORLD_CONDITIONS dict + 5 constants + 5 functions + 1 private
+- MODIFIED: `backend/npc_autonomy.py` (3305 → 2959 lines, -346 lines) — removed lines 1914-2260; added re-export import block
+
+FUNCTIONS EXTRACTED TO npc_world.py:
+- get_world_state() -> dict
+- get_world_condition(condition) -> int|None
+- set_world_condition(condition, value) -> int|None
+- update_world_state(npc_list, tick_decisions) -> dict (DEPRECATED, retained for reference)
+- get_world_state_history(limit=10) -> list
+- _world_state_decision_modifier(category) -> float
+
+CONSTANTS EXTRACTED:
+- WORLD_CONDITIONS (6 conditions with bias tables)
+- WORLD_STATE_KEY, WORLD_STATE_HISTORY_KEY, MAX_WORLD_HISTORY, WORLD_STATE_TTL
+
+BUG FIXES:
+- Control-flow bug in update_world_state: world-state update was entirely inside `except Exception as _fd_err:`, meaning it only ran on faction-dynamics failure. Extracted function now runs faction dynamics in try/except, and world-state update always follows regardless of outcome.
+
+RE-EXPORTS IN npc_autonomy.py:
+```python
+from npc_world import (
+    WORLD_CONDITIONS, WORLD_STATE_KEY, WORLD_STATE_HISTORY_KEY,
+    MAX_WORLD_HISTORY, WORLD_STATE_TTL,
+    get_world_state, get_world_condition, set_world_condition,
+    update_world_state, get_world_state_history,
+    _world_state_decision_modifier,
+)
+```
+
+VERIFIED LOCAL:
+- `python -m py_compile npc_world.py` — OK
+- `python -m py_compile npc_autonomy.py` — OK
+- `from npc_autonomy import get_world_state, get_world_condition, set_world_condition, update_world_state, get_world_state_history, _world_state_decision_modifier, WORLD_CONDITIONS, WORLD_STATE_KEY` — all 8 OK
+- md5 LOCAL: `c172b7dfd53ec41cdd02e77330a582ec` (npc_world.py)
+
+DEPLOYED:
+- scp npc_world.py + npc_autonomy.py to VPS /docker/federation-game/backend/
+- docker restart federation-game-backend-1, federation-game-worker-1
+- __pycache__ read-only on bind mount (Python handles gracefully)
+
+VERIFIED:
+- md5 HOST: `c172b7dfd53ec41cdd02e77330a582ec` (npc_world.py), `33f680cc024bf0266b92fa2d423b4775` (npc_autonomy.py)
+- md5 BACKEND CONTAINER: MATCHES both files
+- md5 WORKER CONTAINER: MATCHES both files
+- `from npc_world import get_world_state` — OK in container
+- `from npc_autonomy import get_world_state, get_world_condition, ...` — all 8 symbols OK in container
+- `from npc_autonomy import file_npc_need, get_open_needs, consume_system_notifications` — [2.1] re-exports still OK
 
