@@ -154,7 +154,7 @@ class CouncilorMemory:
         candidate_mems = []
         for m in candidate_raw:
             try:
-                mem = json.loads(m) if isinstance(m, str) else m
+                mem = json.loads(m)
                 candidate_mems.append(mem)
             except Exception:
                 pass
@@ -167,7 +167,7 @@ class CouncilorMemory:
             )
             for m in important_raw:
                 try:
-                    mem = json.loads(m) if isinstance(m, str) else m
+                    mem = json.loads(m)
                     if mem.get("id") not in candidate_ids:
                         candidate_mems.append(mem)
                         candidate_ids.add(mem.get("id"))
@@ -200,12 +200,13 @@ class CouncilorMemory:
         current_tick = int(self.r.hget(_stats_key(self.char_id), "last_tick") or 0)
         for mem_json, tick in raw:
             try:
-                mem = json.loads(mem_json) if isinstance(mem_json, str) else mem_json
+                mem = json.loads(mem_json)
                 imp = float(mem.get("importance", 0.0))
                 age = max(current_tick - int(mem.get("tick", 0)), 1)
                 recency = 1.0 / age
                 score = imp * 0.6 + recency * 0.4
-                scored.append((score, mem_json if isinstance(mem_json, str) else json.dumps(mem), mem))
+                mem_str = mem_json.decode("utf-8") if isinstance(mem_json, bytes) else mem_json
+                scored.append((score, mem_str, mem))
             except Exception:
                 pass
         scored.sort(key=lambda x: x[0], reverse=True)
