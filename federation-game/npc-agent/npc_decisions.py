@@ -547,7 +547,27 @@ Respond in this exact JSON format (no markdown, no explanation):
     raw = call_llm(system_prompt, context, r=r, call_label="decide")
 
     try:
-        decision = json.loads(raw["content"].strip())
+        text = raw["content"].strip()
+        code_fence = "```json"
+        if code_fence in text:
+            text = text.split(code_fence, 1)[1]
+            text = text.split("```", 1)[0]
+        text = text.strip()
+        brace = text.find("{")
+        if brace >= 0:
+            text = text[brace:]
+        depth = 0
+        for i, ch in enumerate(text):
+            if ch == "{":
+                depth += 1
+            elif ch == "}":
+                depth -= 1
+                if depth == 0:
+                    text = text[:i+1]
+                    break
+        if depth != 0:
+            raise json.JSONDecodeError("Unmatched braces", text, 0)
+        decision = json.loads(text)
         cat = decision.get("category", "rest")
         if cat not in AGENCY_CATEGORIES:
             logger.warning("[%s] Unknown category '%s'; defaulting to rest", CHAR_ID, cat)

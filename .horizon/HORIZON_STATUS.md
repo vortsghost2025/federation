@@ -1,19 +1,22 @@
 # Horizon Status — Living Document
-**Last Updated:** 2026-06-28 14:10
-**Updated By:** GLM-5.1 (z-ai)
+**Last Updated:** 2026-07-01 20:10
+**Updated By:** Kilo (opencode)
 
 ## Current State
 
 | Item | Value |
 |------|-------|
-| HEAD commit | 005fc9f |
-| VPS health | All containers up |
+| HEAD commit | c4545c5 |
+| VPS health | All 16 containers up |
 | Production URL | https://federation-game.deliberatefederation.cloud/ |
 | SSH alias | `ssh federation-vps` |
-| Dirty tree | 2 modified (P3 work — institutions.py, npc_autonomy.py) |
-| Race condition | FIXED end-to-end — backend + frontend both use choice_token |
-| Spatial mode | DEPLOYED — sticky flag live on production |
-| Starmap 3D | DEPLOYED — cosmic scale-of-reality visual pass live on VPS |
+| Dirty tree | 12 modified, 7 untracked (metrics/nginx/spectator fixes + P3/P4 extraction work) |
+| /metrics | FIXED — returns 200 with world_state + 30 institution metrics |
+| Nginx proxy routes | FIXED — 4 missing routes added (/error-reports, /councilor, /institutions, /decrees) |
+| Error-reporter | FIXED — nginx 404 blocked it, now routes through to backend |
+| Councilor proposals label | FIXED — "Councilor autonomy" → "Councilor proposals" (was misleading) |
+| Institution metrics | FIXED — uses correct Redis key pattern `institution:index`, shows real role counts |
+| Admin dashboard | DEPLOYED + VERIFIED — `/api/admin/status` returns full agent/pair state |
 | P3 Outcome Memory | DEPLOYED + VERIFIED LIVE — 35/35 tests pass |
 
 ## Completed 2026-06-27 to 2026-06-28 (P0-P4 + Agency + Decrees + P3)

@@ -681,6 +681,20 @@ def think_about_world(r, contacts: dict | None = None, char_id: str = "") -> str
         pass
 
     try:
+        total_insts = r.scard("institution:index")
+        if total_insts:
+            all_ids = sorted(r.smembers("institution:index") or [])[:6]
+            names = []
+            for iid in all_ids:
+                rec = r.hgetall(iid)
+                names.append(rec.get("name", iid))
+            parts.append(f"Institutions formed so far ({total_insts}): {', '.join(names)}{'...' if total_insts > 6 else ''}")
+        else:
+            parts.append("No institutions have been formed yet.")
+    except Exception:
+        pass
+
+    try:
         partner_id = _partner_id_fn(char_id=cid)
         partner_state = r.get(f"npc_mood:{partner_id}") or "unknown"
         partner_arts = 0

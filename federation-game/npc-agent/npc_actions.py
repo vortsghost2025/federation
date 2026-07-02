@@ -38,6 +38,57 @@ SESSION_CAP = int(os.environ.get("SESSION_CAP", "24"))
 
 PAIR_IDS = {"char_001", "char_306"}
 
+_INST_STOP_WORDS = {"the", "of", "and", "for", "in", "to", "a", "an", "on",
+                    "with", "from", "by", "at", "is", "it", "as", "be", "or",
+                    "that", "this", "its", "are", "was", "but", "not", "all",
+                    "being", "have", "has", "been", "will", "would", "could",
+                    "should", "may", "might", "shall", "do", "does", "did",
+                    "no", "nor", "so", "up", "out", "about", "into", "over",
+                    "after", "before", "between", "under", "above", "below",
+                    "also", "very", "just", "more", "some", "any", "each",
+                    "every", "both", "few", "most", "other", "such", "only",
+                    "own", "same", "than", "too", "well", "now", "even",
+                    "back", "still", "here", "there", "then", "when",
+                    "where", "why", "how", "what", "which", "who", "whom",
+                    "bureau", "committee", "commission", "council", "board",
+                    "office", "authority", "agency", "ministry", "department",
+                    "division", "directorate", "task", "force", "initiative",
+                    "project", "program", "working", "group", "panel",
+                    "assembly", "institute", "foundation", "corporation"}
+MAX_INSTITUTIONS = 30
+
+
+def _is_repetitive_institution(r, name: str, threshold: float = 0.50) -> bool:
+    def tokenize(t: str) -> set:
+        words = re.findall(r"[a-zA-Z]{3,}", t.lower())
+        return {w for w in words if w not in _INST_STOP_WORDS}
+    new_tokens = tokenize(name)
+    if not new_tokens:
+        return False
+    try:
+        existing_ids = list(r.smembers("institution:index") or [])
+    except Exception:
+        return False
+    for inst_id in existing_ids:
+        try:
+            rec = r.hgetall(inst_id)
+            old_name = rec.get("name", "")
+        except Exception:
+            continue
+        if not old_name:
+            continue
+        old_tokens = tokenize(old_name)
+        if not old_tokens:
+            continue
+        intersection = new_tokens & old_tokens
+        union = new_tokens | old_tokens
+        jaccard = len(intersection) / len(union) if union else 0
+        if jaccard > threshold:
+            logger.debug("[%s] Repetitive institution name: %.0f%% overlap with '%s'",
+                         CHAR_ID, jaccard * 100, old_name[:60])
+            return True
+    return False
+
 
 def execute_decision(decision: dict, r, contacts: dict):
     cat = decision.get("category", "rest")
@@ -313,41 +364,59 @@ def execute_decision(decision: dict, r, contacts: dict):
                     "actor": NPC_NAME,
                     "body": f"proposed institution '{inst_name}' but it already exists as {inst_id}",
                 })
-            else:
-                r.sadd("institution:index", inst_id)
-                r.hset(inst_id, mapping={
-                    "name": inst_name,
-                    "kind": inst_kind,
-                    "mandate": mandate,
-                    "status": "proposed",
-                    "proposed_by": CHAR_ID,
-                    "created_at": now_iso,
-                })
-                r.hincrby(f"npc_stats:{CHAR_ID}", "institutions_founded", 1)
-                result["action_taken"] = "institution_created"
-                result["institution_id"] = inst_id
-                result["institution_name"] = inst_name
-                result["summary"] = f"Proposed new institution: {inst_name} ({inst_kind})"
-                logger.info("[%s] Created institution: %s (%s)", CHAR_ID, inst_name, inst_id)
+            elif _is_repetitive_institution(r, inst_name):
+                result["action_taken"] = "institution_repetitive_name"
+                result["summary"] = f"Proposed institution '{inst_name}' too similar to existing ones — deferred"
                 _session_append(r, {
-                    "kind": "institution_founded",
+                    "kind": "institution_proposed",
                     "actor": NPC_NAME,
-                    "title": inst_name,
-                    "body": f"founded {inst_kind} '{inst_name}' — mandate: {mandate[:120]}",
+                    "body": f"proposed institution '{inst_name}' but name was too similar to existing bodies — deferred for more distinctive naming",
                 })
-                try:
-                    partner_id_local = _partner_id()
-                    r.rpush(f"npc_session:{partner_id_local}", json.dumps({
-                        "kind": "institution_founded_by_partner",
+            else:
+                total_insts = r.scard("institution:index")
+                if total_insts >= MAX_INSTITUTIONS:
+                    result["action_taken"] = "institution_at_capacity"
+                    result["summary"] = f"Already {total_insts} institutions — at capacity ({MAX_INSTITUTIONS}). Deferred."
+                    _session_append(r, {
+                        "kind": "institution_proposed",
                         "actor": NPC_NAME,
-                        "from": CHAR_ID,
+                        "body": f"attempted to propose institution '{inst_name}' but the galaxy is at institutional capacity ({MAX_INSTITUTIONS}) — deferred",
+                    })
+                else:
+                    r.sadd("institution:index", inst_id)
+                    r.hset(inst_id, mapping={
+                        "name": inst_name,
+                        "kind": inst_kind,
+                        "mandate": mandate,
+                        "status": "proposed",
+                        "proposed_by": CHAR_ID,
+                        "created_at": now_iso,
+                    })
+                    r.hincrby(f"npc_stats:{CHAR_ID}", "institutions_founded", 1)
+                    result["action_taken"] = "institution_created"
+                    result["institution_id"] = inst_id
+                    result["institution_name"] = inst_name
+                    result["summary"] = f"Proposed new institution: {inst_name} ({inst_kind})"
+                    logger.info("[%s] Created institution: %s (%s)", CHAR_ID, inst_name, inst_id)
+                    _session_append(r, {
+                        "kind": "institution_founded",
+                        "actor": NPC_NAME,
                         "title": inst_name,
-                        "mandate": mandate[:120],
-                        "ts": ts,
-                    }, default=str))
-                    r.ltrim(f"npc_session:{partner_id_local}", -SESSION_CAP, -1)
-                except Exception:
-                    pass
+                        "body": f"founded {inst_kind} '{inst_name}' — mandate: {mandate[:120]}",
+                    })
+                    try:
+                        partner_id_local = _partner_id()
+                        r.rpush(f"npc_session:{partner_id_local}", json.dumps({
+                            "kind": "institution_founded_by_partner",
+                            "actor": NPC_NAME,
+                            "from": CHAR_ID,
+                            "title": inst_name,
+                            "mandate": mandate[:120],
+                            "ts": ts,
+                        }, default=str))
+                        r.ltrim(f"npc_session:{partner_id_local}", -SESSION_CAP, -1)
+                    except Exception:
+                        pass
         except Exception as e:
             result["action_taken"] = f"institution_error: {e}"
             logger.error("[%s] Institution creation failed: %s", CHAR_ID, e)

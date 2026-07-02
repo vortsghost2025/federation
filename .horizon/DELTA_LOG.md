@@ -1,5 +1,25 @@
 # FEDERATION DELTA LOG — Write-Ahead Log
 
+## Institution Dedup Guard
+```
+NEW npc_actions.py:_is_repetitive_institution() -> Jaccard word-overlap vs existing names, threshold 0.50
+NEW npc_actions.py:MAX_INSTITUTIONS = 30 -> capacity cap, blocks after 30
+NEW npc_actions.py:_INST_STOP_WORDS -> domain stop words (bureau, council, committee, commission, etc.)
+UPDATE npc_actions.py:create_institution handler -> guards: existing slug match -> repetitive name -> at capacity (30 max) -> create
+UPDATE npc_context.py:think_about_world() -> always shows institution count + first 6 names, even before NPC joins one
+UPDATE backend/routes/admin.py:/api/admin/status -> returns institution_count + role_count
+DEPLOYED: live, all 3 md5s match (host + 001 + 306), backend restarted
+INSTITUTION COUNT AT DEPLOY: 210 (all proposed, 0 filled) — capacity cap will block new ones
+```
+
+## Institution Redis Cleanup
+```
+RUN inst_cleanup.py -> purged 198 stale institutions + 36 orphaned roles from Redis
+KEPT: 12 (Consciousness Collective Council + Research Division Council with members, 10 narrative-referenced)
+REMAINING: 12 institutions, 91 roles
+VERIFIED: admin endpoint returns 12, both agents ticking normally post-cleanup
+```
+
 **Format:** Each entry = one atomic code change. Append only, never edit.
 **Purpose:** Post-compaction replay — read this instead of grepping git log.
 
@@ -82,4 +102,28 @@ NEW .horizon/ARCHITECTURE_STATE.md -> compressed backend state (signatures, Redi
 UPDATE AGENTS.md -> Ramsingh loop pointer, ARCHITECTURE_STATE reference in project files + session-startup
 UPDATE .horizon/HORIZON_STATUS.md -> current HEAD, P0-P4+P3 logged, dirty tree updated
 NEW .horizon/DELTA_LOG.md -> this file, structured write-ahead log
+```
+UPDATE routes/metrics.py -> lazy prometheus_client imports, graceful fallback when missing (returns None instead of crashing) | UPDATE main.py:metrics(L341) -> returns fallback text when metrics_response() is None | DEPLOY routes/metrics.py + main.py -> VPS, pip install prometheus_client in container, /metrics returns 200 with world_state data
+
+## Nginx Proxy Routes — 4 missing routes deployed
+```
+UPDATE frontend/nginx-default.conf -> added location blocks for /error-reports, /councilor, /institutions, /decrees (were 404ing from frontend)
+DEPLOY nginx-default.conf -> VPS host + container, nginx -s reload
+VERIFY: error-reporter.js can now POST through nginx to backend (was auto-disabling on 404)
+VERIFY: all 3 md5s match (local, VPS host, container)
+```
+
+## Spectator "Councilor autonomy" label fix
+```
+UPDATE frontend/spectator.html:L1176 -> "Councilor autonomy" relabeled to "Councilor proposals" (was misleading — showed active workflow proposal count, not autonomy)
+DEPLOY spectator.html -> VPS host mount /docker/federation-game/public_html/
+VERIFY: all 3 md5s match (local, VPS host, container)
+```
+
+## Institution key pattern fix in metrics.py
+```
+UPDATE routes/metrics.py:_collect_institutions() -> changed from r.keys("institution:*:info") (wrong pattern, returned nothing) to r.smembers("institution:index") (canonical index). Also reads role_count from SCARD and workflow counters from hash fields active_workflows/completed_workflows instead of nonexistent JSON workflow_counts field.
+DEPLOY routes/metrics.py -> VPS host, docker restart backend
+VERIFY: /metrics returns 30 institutions with real role counts (CC Council: 48, Research Council: 16, etc.)
+VERIFY: all 3 md5s match (local, VPS host, container)
 ```

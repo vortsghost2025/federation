@@ -1151,7 +1151,7 @@ function renderInstitutions(){
   const autonomyActive = (instData.active||[]).filter(wf => /proposal_review|analysis_review/.test(wf.type||wf.wf_type||''));
   const autonomyHtml = autonomyActive.length
     ? autonomyActive.map(wf => `<div class="r-item"><span class="val-purple">🏛</span> <span class="r-action">${esc(wf.title||wf.type||'workflow')}</span> <span class="muted">${esc(wf.status||'active')} · ${esc(wf.source_councilor_id||'?')}</span></div>`).join('')
-    : '<div class="muted" style="padding:4px 0">No autonomy workflows in progress yet.</div>';
+    : '<div class="muted" style="padding:4px 0">No councilor proposals in progress yet.</div>';
   const off = instData.completedOffset || 0;
   const total = instData.completedTotal || 0;
   const hasPrev = off > 0;
@@ -1173,7 +1173,7 @@ function renderInstitutions(){
       ${activeCards || '<div class="empty-card">No active workflows right now.</div>'}
     </section>
     <section class="comm-panel" style="margin-top:14px">
-      <h2>Councilor autonomy <span style="color:#7e29b0;font-size:1.1rem">${autonomyActive.length}</span></h2>
+      <h2>Councilor proposals <span style="color:#7e29b0;font-size:1.1rem">${autonomyActive.length}</span></h2>
       ${autonomyHtml}
     </section>
     <section class="comm-panel" style="margin-top:14px">

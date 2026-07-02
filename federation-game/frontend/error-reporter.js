@@ -18,8 +18,10 @@
   var REPORT_URL = '/error-reports';
   var _queue = [];
   var _flushing = false;
+  var _enabled = true;
 
   function sendToBackend(report) {
+    if (!_enabled) return;
     _queue.push(report);
     if (!_flushing) {
       _flushing = true;
@@ -44,9 +46,13 @@
       xhr.open('POST', REPORT_URL, true);
       xhr.setRequestHeader('Content-Type', 'application/json');
       xhr.onerror = function() {
-        // If POST fails, keep in queue for next flush
         _queue = batch.concat(_queue);
         if (_queue.length > 200) _queue = _queue.slice(-200);
+      };
+      xhr.onreadystatechange = function() {
+        if (xhr.readyState === 4 && xhr.status === 404) {
+          _enabled = false;
+        }
       };
       xhr.send(body);
     } catch(e) {

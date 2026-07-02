@@ -312,7 +312,7 @@ var rsi = severityInfo(worstRisk, metrics[worstRisk]);
 var rName = worstRisk.charAt(0).toUpperCase() + worstRisk.slice(1);
 if (worstRisk === 'cascade') rName = 'Cascade Temperature';
 riskText = rName + ' is ' + rsi.label + ' (' + Math.round(metrics[worstRisk]) + (worstRisk==='cascade'?'%':'') + ')';
-if (worstRisk==='morale') riskText += ' \u2014 social cohesion at risk';
+if (worstRisk==='morale') riskText += metrics.morale < 40 ? ' \u2014 social cohesion at risk' : ' \u2014 social cohesion stable';
 else if (worstRisk==='threat') riskText += ' \u2014 external danger escalating';
 else if (worstRisk==='stability') riskText += ' \u2014 institutions weakening';
 else if (worstRisk==='cascade') riskText += ' \u2014 reaction chains may overwhelm decisions';
