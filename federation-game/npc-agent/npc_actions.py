@@ -591,6 +591,13 @@ def execute_decision(decision: dict, r, contacts: dict):
         "body": desc or reasoning or "",
     })
     _sync_pair_workspace(r, decision, result)
+
+    try:
+        from npc_memory_bridge import record_councilor_memory
+        record_councilor_memory(decision, r, ts)
+    except Exception:
+        pass
+
     return result
 
 

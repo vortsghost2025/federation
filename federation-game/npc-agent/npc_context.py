@@ -595,6 +595,27 @@ def dedup_blocked_topic(r, char_id: str = "") -> str:
 
 
 # ══════════════════════════════════════════════════════════════════
+#  Councilor memory loading (Phase 1 bridge)
+# ══════════════════════════════════════════════════════════════════
+
+def load_councilor_memories(r, char_id: str = "") -> str:
+    """Load councilor memories formatted for prompt injection.
+
+    Returns a '## Your Memories' section string, or empty string if
+    no memories exist or the bridge is not available.
+    """
+    cid = char_id or CHAR_ID
+    try:
+        from npc_memory_bridge import CouncilorMemory
+        mem = CouncilorMemory(r, cid)
+        tick = int(time.time())
+        return mem.get_context_for_prompt(tick)
+    except Exception as e:
+        logger.debug("[%s] load_councilor_memories skipped: %s", cid, e)
+        return ""
+
+
+# ══════════════════════════════════════════════════════════════════
 #  Main context assembler
 # ══════════════════════════════════════════════════════════════════
 
@@ -792,5 +813,9 @@ def think_about_world(r, contacts: dict | None = None, char_id: str = "") -> str
     transcript = _session_transcript(r, contacts=_contacts, char_id=cid)
     if transcript:
         parts.append(f"── Your recent session (last few hours) ──\n{transcript}")
+
+    councilor_memories = load_councilor_memories(r, cid)
+    if councilor_memories:
+        parts.append(councilor_memories)
 
     return "\n".join(parts)
