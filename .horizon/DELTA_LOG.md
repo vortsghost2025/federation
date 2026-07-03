@@ -96,3 +96,33 @@ SKIPPED from same commit: npc-agent/ (would delete memory bridge), .horizon/ (su
 NOT DEPLOYED — commit c52bc54, waiting on reverse-proxy audit
 ```
 
+## Admin Dashboard Port (2026-07-03)
+```
+PORTS from commit 9f2b207 -> bridge/memory-phase-1
+NEW federation-game/backend/routes/admin.py -> 235 lines, single GET /admin/status endpoint
+  _agent_ids(r) reads npc_agent:registry -> npc_stats:* scan -> PAIR_IDS fallback
+  _compute_agent_status(r, char_id) health model: green(<120s + <10% err), yellow(<300s + <30% err), red
+  Error breakdown: 429 / timeout / other categories
+  Pair state consumed from npc_pair:{slug}:state, journal, active_thread
+NEW federation-game/frontend/admin.html -> 259 lines, auto-refresh 15s, dark theme
+UPDATE federation-game/backend/main.py -> +2 lines (admin_router import + include_router)
+UPDATE federation-game/frontend/nginx-default.conf -> +4 lines (location /admin try_files)
+COMMIT 13fe857 — auto-pushed
+NOT DEPLOYED
+```
+
+## Metrics Lazy Import + VPS Fallback Port (2026-07-03)
+```
+PORTS: VPS main.py metrics fallback + 9f2b207 metrics.py lazy import pattern
+UPDATE federation-game/backend/routes/metrics.py -> all prometheus_client imports lazy
+  _ensure_registry() guarded: returns False on ImportError
+  metrics_response() returns None when registry unavailble (caller handles)
+  _collect_* functions guarded with if not _gauge: return
+  Institution collection changed: smembers("institution:index") + scard roles
+UPDATE federation-game/backend/main.py:/metrics -> 9-line fallback
+  content is None -> returns 200 with "# federation_metrics_disabled 1\n"
+  Proven live on VPS 7+ days
+COMMIT pending
+```
+
+

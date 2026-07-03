@@ -6,7 +6,7 @@
 
 | Item | Value |
 |------|-------|
-| HEAD commit | c52bc54 (branch: bridge/memory-phase-1) |
+| HEAD commit | 13fe857 (branch: bridge/memory-phase-1) |
 | VPS health | All containers up (production: 187.77.3.56) |
 | Production URL | https://federation-game.deliberatefederation.cloud/ |
 | SSH alias | `ssh federation-vps` (resolves to 187.77.3.56) |
@@ -86,12 +86,16 @@ Both councilors verified recording Redis memories across ticks. Deployed live.
 - [x] `c52bc54` frontend: add nginx proxy routes for federation APIs — committed + auto-pushed
   - 4 new proxy routes: `/error-reports`, `/councilor`, `/institutions`, `/decrees`
   - Ported from `deploy/fix-2026-07-01` commit `9f2b207` preservation checkpoint
-  - Read-only review confirmed whole 9f2b207 cherry-pick would DELETE memory bridge — selective port only
   - NOT deployed to VPS yet (waiting on reverse-proxy routing audit clearance)
 
-## In Progress
-- Port #2: Admin observability dashboard (routes/admin.py + admin.html + main.py + /admin nginx route)
-- Port #3: Metrics refactor with VPS /metrics fallback merge
+- [x] `13fe857` backend+frontend: add admin observability dashboard — committed + auto-pushed
+  - New files: `routes/admin.py` (235 lines), `frontend/admin.html` (259 lines)
+  - Modified: `main.py` (2 lines — import + include_router), `nginx-default.conf` (4 lines — /admin try_files)
+  - Admin panel at `/admin`, API at `/api/admin/status`
+  - Read-only observability: NPC health, model stats, decisions, pair story state
+  - NOT deployed to VPS yet (same nginx deploy block as port #1)
+
+- [x] Port #3: Metrics refactor commit pending — lazy import pattern + VPS /metrics fallback merge
 
 ## Deploy History
 
@@ -115,6 +119,7 @@ Both councilors verified recording Redis memories across ticks. Deployed live.
 | 06-30 wave (11 commits) | NPC autonomy module extraction (npc_needs/world/decree/reflection/thoughts/opinions/actions/interactions/goals + npc_decisions/context/llm_client) | ⚠ Home only — NOT deployed to VPS (see Known Issues #8) |
 | f6cbcdb, 3ea42d7, 88d44a3 (07-01) | Phase 1 memory bridge — councilor memory bridge + tests | ✅ Deployed live; verified both councilors recording Redis memories across ticks |
 | c52bc54 (07-03) | Nginx proxy routes for /error-reports, /councilor, /institutions, /decrees — ported from 9f2b207 | ⏸ Pending — not yet deployed |
+| 13fe857 (07-03) | Admin observability dashboard — routes/admin.py + admin.html + /admin nginx route | ⏸ Pending — not yet deployed |
 
 ## Dirty Tree Summary (2026-07-03)
 

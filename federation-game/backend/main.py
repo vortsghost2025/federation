@@ -341,8 +341,15 @@ app.include_router(admin_router)
 @app.get("/metrics")
 async def prometheus_metrics():
     from routes.metrics import metrics_response
+    content = metrics_response()
+    if content is None:
+        return Response(
+            content="# federation_metrics_disabled 1\n",
+            media_type="text/plain; version=0.0.4",
+            status_code=200,
+        )
     from prometheus_client import CONTENT_TYPE_LATEST
-    return Response(content=metrics_response(), media_type=CONTENT_TYPE_LATEST)
+    return Response(content=content, media_type=CONTENT_TYPE_LATEST)
 
 
 @app.on_event("startup")
