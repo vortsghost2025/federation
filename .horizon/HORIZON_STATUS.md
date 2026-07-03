@@ -6,7 +6,7 @@
 
 | Item | Value |
 |------|-------|
-| HEAD commit | 13fe857 (branch: bridge/memory-phase-1) |
+| HEAD commit | 1c80727 (branch: bridge/memory-phase-1) |
 | VPS health | All containers up (production: 187.77.3.56) |
 | Production URL | https://federation-game.deliberatefederation.cloud/ |
 | SSH alias | `ssh federation-vps` (resolves to 187.77.3.56) |
@@ -95,7 +95,12 @@ Both councilors verified recording Redis memories across ticks. Deployed live.
   - Read-only observability: NPC health, model stats, decisions, pair story state
   - NOT deployed to VPS yet (same nginx deploy block as port #1)
 
-- [x] Port #3: Metrics refactor commit pending — lazy import pattern + VPS /metrics fallback merge
+- [x] Port #3: `1c80727` backend: refactor metrics lazy import + VPS /metrics fallback — committed + auto-pushed
+  - `routes/metrics.py`: all prometheus_client imports moved to lazy `_ensure_registry()` pattern
+  - `main.py:/metrics`: 9-line graceful fallback when prometheus_client is missing (returns 200 with `# federation_metrics_disabled 1\n`)
+  - Institution metrics switched from `institution:*:info` raw hgetall to `institution:index` smembers + scard role counts
+  - Both patterns proven live on VPS: lazy import from 9f2b207, fallback from VPS main.py
+  - NOT deployed to VPS yet
 
 ## Deploy History
 
@@ -120,6 +125,7 @@ Both councilors verified recording Redis memories across ticks. Deployed live.
 | f6cbcdb, 3ea42d7, 88d44a3 (07-01) | Phase 1 memory bridge — councilor memory bridge + tests | ✅ Deployed live; verified both councilors recording Redis memories across ticks |
 | c52bc54 (07-03) | Nginx proxy routes for /error-reports, /councilor, /institutions, /decrees — ported from 9f2b207 | ⏸ Pending — not yet deployed |
 | 13fe857 (07-03) | Admin observability dashboard — routes/admin.py + admin.html + /admin nginx route | ⏸ Pending — not yet deployed |
+| 1c80727 (07-03) | Metrics lazy import refactor + VPS /metrics fallback merge | ⏸ Pending — not yet deployed |
 
 ## Dirty Tree Summary (2026-07-03)
 
