@@ -125,4 +125,23 @@ UPDATE federation-game/backend/main.py:/metrics -> 9-line fallback
 COMMIT pending
 ```
 
+## Institution Bloat Fix (2026-07-03)
+```
+FIX npc-agent/npc_actions.py:create_institution — 3 bloat guards
+NEW _MAX_INSTITUTIONS_PER_NPC = 8
+NEW _TOTAL_INSTITUTION_LIMIT = 20
+NEW _INST_SUFFIXES tuple (11 common suffixes)
+NEW _normalize_inst_name() helper — strips suffix + regexp normalize
+NEW guard 1: per-NPC cap check (founded vs _MAX_INSTITUTIONS_PER_NPC)
+NEW guard 2: total cap check (scard vs _TOTAL_INSTITUTION_LIMIT)
+NEW guard 3: similar-name scan across smembers("institution:index"), normalize-compare
+NEW result keys: institution_cap_reached, institution_total_cap_reached, institution_similar_exists
+NEW session_append kind: institution_rejected
+HOST hash 75794a8776571086838623cdf0f2bdec
+CONTAINER 001 hash 75794a8776571086838623cdf0f2bdec ✅
+CONTAINER 306 hash 75794a8776571086838623cdf0f2bdec ✅
+VERIFIED: institution SCARD stable at 199, 0 errors in both container tails
+Backup: /docker/federation-game/npc-agent/npc_actions.py.bak.20260703_174618
+```
+
 

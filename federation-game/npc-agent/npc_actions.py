@@ -29,6 +29,25 @@ from npc_redis_helpers import (
     _session_append,
 )
 
+# ── Institution bloat guards ──
+_MAX_INSTITUTIONS_PER_NPC = 8
+_TOTAL_INSTITUTION_LIMIT = 20
+_INST_SUFFIXES = (
+    "committee", "bureau", "council", "authority", "agency",
+    "tribunal", "assembly", "board", "directorate", "commission",
+    "consortium",
+)
+
+
+def _normalize_inst_name(name: str) -> str:
+    """Strip common suffixes for similar-name detection."""
+    n = name.lower().strip()
+    for sfx in _INST_SUFFIXES:
+        if n.endswith(sfx):
+            n = n[: -len(sfx)].strip()
+            break
+    return re.sub(r"[^a-z0-9_]+", "", n).strip("_")
+
 logger = logging.getLogger("npc_agent")
 
 CHAR_ID = os.environ.get("CHAR_ID", "")
@@ -314,40 +333,108 @@ def execute_decision(decision: dict, r, contacts: dict):
                     "body": f"proposed institution '{inst_name}' but it already exists as {inst_id}",
                 })
             else:
-                r.sadd("institution:index", inst_id)
-                r.hset(inst_id, mapping={
-                    "name": inst_name,
-                    "kind": inst_kind,
-                    "mandate": mandate,
-                    "status": "proposed",
-                    "proposed_by": CHAR_ID,
-                    "created_at": now_iso,
-                })
-                r.hincrby(f"npc_stats:{CHAR_ID}", "institutions_founded", 1)
-                result["action_taken"] = "institution_created"
-                result["institution_id"] = inst_id
-                result["institution_name"] = inst_name
-                result["summary"] = f"Proposed new institution: {inst_name} ({inst_kind})"
-                logger.info("[%s] Created institution: %s (%s)", CHAR_ID, inst_name, inst_id)
-                _session_append(r, {
-                    "kind": "institution_founded",
-                    "actor": NPC_NAME,
-                    "title": inst_name,
-                    "body": f"founded {inst_kind} '{inst_name}' — mandate: {mandate[:120]}",
-                })
-                try:
-                    partner_id_local = _partner_id()
-                    r.rpush(f"npc_session:{partner_id_local}", json.dumps({
-                        "kind": "institution_founded_by_partner",
+                # ── Institution bloat guards ──
+                _rejected = False
+
+                # 1. Per-NPC institution cap
+                founded = int(r.hget(f"npc_stats:{CHAR_ID}", "institutions_founded") or 0)
+                if founded >= _MAX_INSTITUTIONS_PER_NPC:
+                    _rejected = True
+                    result["action_taken"] = "institution_cap_reached"
+                    result["summary"] = (
+                        f"Institution '{inst_name}' not created — "
+                        f"each councilor may found at most {_MAX_INSTITUTIONS_PER_NPC} institutions"
+                    )
+                    logger.info("[%s] Institution cap reached for %s", CHAR_ID, inst_name)
+                    _session_append(r, {
+                        "kind": "institution_rejected",
                         "actor": NPC_NAME,
-                        "from": CHAR_ID,
+                        "body": (
+                            f"attempted to found '{inst_name}' but has already founded"
+                            f" {founded} institutions (cap: {_MAX_INSTITUTIONS_PER_NPC})"
+                        ),
+                    })
+
+                # 2. Total institution cap
+                if not _rejected:
+                    total = r.scard("institution:index")
+                    if total >= _TOTAL_INSTITUTION_LIMIT:
+                        _rejected = True
+                        result["action_taken"] = "institution_total_cap_reached"
+                        result["summary"] = (
+                            f"Institution '{inst_name}' not created — "
+                            f"Federation institution limit of {_TOTAL_INSTITUTION_LIMIT} reached"
+                        )
+                        logger.info("[%s] Total institution cap reached for %s", CHAR_ID, inst_name)
+                        _session_append(r, {
+                            "kind": "institution_rejected",
+                            "actor": NPC_NAME,
+                            "body": (
+                                f"attempted to found '{inst_name}' but total Federation institution"
+                                f" cap of {_TOTAL_INSTITUTION_LIMIT} has been reached"
+                            ),
+                        })
+
+                # 3. Similar-name check
+                if not _rejected:
+                    normalized_new = _normalize_inst_name(inst_name)
+                    similar_exists = None
+                    for iid in r.smembers("institution:index"):
+                        rec = r.hgetall(iid)
+                        en = rec.get("name", "")
+                        if en and _normalize_inst_name(en) == normalized_new:
+                            similar_exists = en
+                            break
+                    if similar_exists:
+                        _rejected = True
+                        result["action_taken"] = "institution_similar_exists"
+                        result["summary"] = (
+                            f"Institution '{inst_name}' not created — "
+                            f"similar to existing '{similar_exists}'"
+                        )
+                        logger.info("[%s] Similar institution exists: %s ~ %s", CHAR_ID, inst_name, similar_exists)
+                        _session_append(r, {
+                            "kind": "institution_rejected",
+                            "actor": NPC_NAME,
+                            "body": f"proposed '{inst_name}' but similar to existing '{similar_exists}'",
+                        })
+
+                # ── Create institution (passes all guards) ──
+                if not _rejected:
+                    r.sadd("institution:index", inst_id)
+                    r.hset(inst_id, mapping={
+                        "name": inst_name,
+                        "kind": inst_kind,
+                        "mandate": mandate,
+                        "status": "proposed",
+                        "proposed_by": CHAR_ID,
+                        "created_at": now_iso,
+                    })
+                    r.hincrby(f"npc_stats:{CHAR_ID}", "institutions_founded", 1)
+                    result["action_taken"] = "institution_created"
+                    result["institution_id"] = inst_id
+                    result["institution_name"] = inst_name
+                    result["summary"] = f"Proposed new institution: {inst_name} ({inst_kind})"
+                    logger.info("[%s] Created institution: %s (%s)", CHAR_ID, inst_name, inst_id)
+                    _session_append(r, {
+                        "kind": "institution_founded",
+                        "actor": NPC_NAME,
                         "title": inst_name,
-                        "mandate": mandate[:120],
-                        "ts": ts,
-                    }, default=str))
-                    r.ltrim(f"npc_session:{partner_id_local}", -SESSION_CAP, -1)
-                except Exception:
-                    pass
+                        "body": f"founded {inst_kind} '{inst_name}' — mandate: {mandate[:120]}",
+                    })
+                    try:
+                        partner_id_local = _partner_id()
+                        r.rpush(f"npc_session:{partner_id_local}", json.dumps({
+                            "kind": "institution_founded_by_partner",
+                            "actor": NPC_NAME,
+                            "from": CHAR_ID,
+                            "title": inst_name,
+                            "mandate": mandate[:120],
+                            "ts": ts,
+                        }, default=str))
+                        r.ltrim(f"npc_session:{partner_id_local}", -SESSION_CAP, -1)
+                    except Exception:
+                        pass
         except Exception as e:
             result["action_taken"] = f"institution_error: {e}"
             logger.error("[%s] Institution creation failed: %s", CHAR_ID, e)

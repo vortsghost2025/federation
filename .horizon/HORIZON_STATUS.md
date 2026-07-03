@@ -6,7 +6,7 @@
 
 | Item | Value |
 |------|-------|
-| HEAD commit | 37bc423 (branch: bridge/memory-phase-1) |
+| HEAD commit | 1434e6c (branch: bridge/memory-phase-1) |
 | VPS health | All containers up (production: 187.77.3.56) |
 | Production URL | https://federation-game.deliberatefederation.cloud/ |
 | SSH alias | `ssh federation-vps` (resolves to 187.77.3.56) |
@@ -102,6 +102,23 @@ Both councilors verified recording Redis memories across ticks. Deployed live.
   - Both patterns proven live on VPS: lazy import from 9f2b207, fallback from VPS main.py
   - ✅ **Already live on VPS** — preflight verified 2026-07-03. Code identical to local (only cosmetic docstring diff: VPS says "503 error string", local says "None"). `/metrics` returns 200.
 
+## Completed 2026-07-03 (Institution Bloat Fix)
+
+Root cause: `create_institution` in `npc-agent/npc_actions.py` had only an exact-slug duplicate check. NPCs generated 197 variant institutions with different suffixes (ancient_anchor_*, deep_signal_*, corruption_*). Duplicate check never matched because "Ancient Anchor Oversight Bureau" and "Ancient Anchor Oversight Bureau Committee" produce different slugs.
+
+Fix deployed live:
+- **Per-NPC cap** — 8 institutions max per councilor (each has 195-200, both blocked immediately)
+- **Total cap** — 20 institutions max system-wide (199 exists, blocked immediately)
+- **Similar-name check** — strips common suffixes (committee/bureau/council/agency/etc.) before comparing names — catches variant duplicates
+- NPC receives `institution_cap_reached` / `institution_total_cap_reached` / `institution_similar_exists` action result instead of crash
+- Both containers restarted, all 3 hashes match (host + 001 + 306 = `75794a877...`)
+- Zero tracebacks post-deploy
+
+Verification:
+- Institution count stable at 199 (no growth) — verified via `SCARD institution:index`
+- Zero errors in container logs
+- `_TOTAL_INSTITUTION_LIMIT = 20` and `_MAX_INSTITUTIONS_PER_NPC = 8` both trigger immediately given current state
+
 ## Deploy History
 
 | Commit | What | Deployed? |
@@ -126,6 +143,7 @@ Both councilors verified recording Redis memories across ticks. Deployed live.
 | c52bc54 (07-03) | Nginx proxy routes for /error-reports, /councilor, /institutions, /decrees — ported from 9f2b207 | ✅ Already live on VPS (preflight verified 2026-07-03) |
 | 13fe857 (07-03) | Admin observability dashboard — routes/admin.py + admin.html + /admin nginx route | ✅ Already live on VPS (preflight verified 2026-07-03) |
 | 1c80727 (07-03) | Metrics lazy import refactor + VPS /metrics fallback merge | ✅ Already live on VPS (code identical, only cosmetic docstring diff) |
+| (pending) | Institution bloat fix — 3 guards in npc_actions.py (per-NPC cap 8, total cap 20, similar-name check) | ✅ Deployed live — all 3 hashes match, 0 errors, institution growth stopped |
 
 ## Dirty Tree Summary (2026-07-03)
 
