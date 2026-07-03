@@ -6,7 +6,7 @@
 
 | Item | Value |
 |------|-------|
-| HEAD commit | 88d44a3 (branch: bridge/memory-phase-1) |
+| HEAD commit | c52bc54 (branch: bridge/memory-phase-1) |
 | VPS health | All containers up (production: 187.77.3.56) |
 | Production URL | https://federation-game.deliberatefederation.cloud/ |
 | SSH alias | `ssh federation-vps` (resolves to 187.77.3.56) |
@@ -75,9 +75,23 @@ Both councilors verified recording Redis memories across ticks. Deployed live.
 
 - [x] `f6cbcdb` cherry-pick bridge plan from deploy/fix-2026-07-01
 - [x] `3ea42d7` phase1: add councilor memory bridge
-- [x] `88d44a3` phase1: add memory bridge tests (current HEAD)
+- [x] `88d44a3` phase1: add memory bridge tests (committed)
+
+
 
 **Verified live (2026-07-03 session):** both councilors (char_001 = research_chief_mathematician, char_306 = collective_oracle) recording Redis memories across ticks.
+
+## Completed 2026-07-03 (Nginx Proxy Routes — Port #1 from 9f2b207)
+
+- [x] `c52bc54` frontend: add nginx proxy routes for federation APIs — committed + auto-pushed
+  - 4 new proxy routes: `/error-reports`, `/councilor`, `/institutions`, `/decrees`
+  - Ported from `deploy/fix-2026-07-01` commit `9f2b207` preservation checkpoint
+  - Read-only review confirmed whole 9f2b207 cherry-pick would DELETE memory bridge — selective port only
+  - NOT deployed to VPS yet (waiting on reverse-proxy routing audit clearance)
+
+## In Progress
+- Port #2: Admin observability dashboard (routes/admin.py + admin.html + main.py + /admin nginx route)
+- Port #3: Metrics refactor with VPS /metrics fallback merge
 
 ## Deploy History
 
@@ -100,6 +114,7 @@ Both councilors verified recording Redis memories across ticks. Deployed live.
 | e1dc671 (06-27) | Institutions module — seed, bind, proposal_review workflow | ✅ Yes |
 | 06-30 wave (11 commits) | NPC autonomy module extraction (npc_needs/world/decree/reflection/thoughts/opinions/actions/interactions/goals + npc_decisions/context/llm_client) | ⚠ Home only — NOT deployed to VPS (see Known Issues #8) |
 | f6cbcdb, 3ea42d7, 88d44a3 (07-01) | Phase 1 memory bridge — councilor memory bridge + tests | ✅ Deployed live; verified both councilors recording Redis memories across ticks |
+| c52bc54 (07-03) | Nginx proxy routes for /error-reports, /councilor, /institutions, /decrees — ported from 9f2b207 | ⏸ Pending — not yet deployed |
 
 ## Dirty Tree Summary (2026-07-03)
 

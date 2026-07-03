@@ -83,3 +83,16 @@ UPDATE AGENTS.md -> Ramsingh loop pointer, ARCHITECTURE_STATE reference in proje
 UPDATE .horizon/HORIZON_STATUS.md -> current HEAD, P0-P4+P3 logged, dirty tree updated
 NEW .horizon/DELTA_LOG.md -> this file, structured write-ahead log
 ```
+
+## Nginx Proxy Routes Port (2026-07-03)
+```
+PORTS from commit 9f2b207 (deploy/fix-2026-07-01) -> bridge/memory-phase-1
+FILE federation-game/frontend/nginx-default.conf -> +48 lines: 4 proxy route blocks added after /event block
+  NEW location /error-reports -> proxy_pass $backend_upstream (unblocks error-reporter.js POST)
+  NEW location /councilor -> proxy_pass $backend_upstream (exposes councilor API)
+  NEW location /institutions -> proxy_pass $backend_upstream (institution workflow API)
+  NEW location /decrees -> proxy_pass $backend_upstream (decree API)
+SKIPPED from same commit: npc-agent/ (would delete memory bridge), .horizon/ (superseded by fc0097f), npc_autonomy/npc_decisions/npc_simulation (conflicts with extraction wave)
+NOT DEPLOYED — commit c52bc54, waiting on reverse-proxy audit
+```
+
