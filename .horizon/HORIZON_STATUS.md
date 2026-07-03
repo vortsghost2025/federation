@@ -6,7 +6,7 @@
 
 | Item | Value |
 |------|-------|
-| HEAD commit | 1c80727 (branch: bridge/memory-phase-1) |
+| HEAD commit | 37bc423 (branch: bridge/memory-phase-1) |
 | VPS health | All containers up (production: 187.77.3.56) |
 | Production URL | https://federation-game.deliberatefederation.cloud/ |
 | SSH alias | `ssh federation-vps` (resolves to 187.77.3.56) |
@@ -86,21 +86,21 @@ Both councilors verified recording Redis memories across ticks. Deployed live.
 - [x] `c52bc54` frontend: add nginx proxy routes for federation APIs — committed + auto-pushed
   - 4 new proxy routes: `/error-reports`, `/councilor`, `/institutions`, `/decrees`
   - Ported from `deploy/fix-2026-07-01` commit `9f2b207` preservation checkpoint
-  - NOT deployed to VPS yet (waiting on reverse-proxy routing audit clearance)
+  - ✅ **Already live on VPS** — preflight verified 2026-07-03. VPS nginx config (hash `00a64604`, 11389 bytes) has ALL routes plus `/universe/` and `/ws`. Local commit is a subset.
 
 - [x] `13fe857` backend+frontend: add admin observability dashboard — committed + auto-pushed
   - New files: `routes/admin.py` (235 lines), `frontend/admin.html` (259 lines)
   - Modified: `main.py` (2 lines — import + include_router), `nginx-default.conf` (4 lines — /admin try_files)
   - Admin panel at `/admin`, API at `/api/admin/status`
   - Read-only observability: NPC health, model stats, decisions, pair story state
-  - NOT deployed to VPS yet (same nginx deploy block as port #1)
+  - ✅ **Already live on VPS** — preflight verified 2026-07-03. `curl /admin` returns 200, `curl /api/admin/status` returns 200. All hashes match.
 
 - [x] Port #3: `1c80727` backend: refactor metrics lazy import + VPS /metrics fallback — committed + auto-pushed
   - `routes/metrics.py`: all prometheus_client imports moved to lazy `_ensure_registry()` pattern
   - `main.py:/metrics`: 9-line graceful fallback when prometheus_client is missing (returns 200 with `# federation_metrics_disabled 1\n`)
   - Institution metrics switched from `institution:*:info` raw hgetall to `institution:index` smembers + scard role counts
   - Both patterns proven live on VPS: lazy import from 9f2b207, fallback from VPS main.py
-  - NOT deployed to VPS yet
+  - ✅ **Already live on VPS** — preflight verified 2026-07-03. Code identical to local (only cosmetic docstring diff: VPS says "503 error string", local says "None"). `/metrics` returns 200.
 
 ## Deploy History
 
@@ -123,15 +123,15 @@ Both councilors verified recording Redis memories across ticks. Deployed live.
 | e1dc671 (06-27) | Institutions module — seed, bind, proposal_review workflow | ✅ Yes |
 | 06-30 wave (11 commits) | NPC autonomy module extraction (npc_needs/world/decree/reflection/thoughts/opinions/actions/interactions/goals + npc_decisions/context/llm_client) | ⚠ Home only — NOT deployed to VPS (see Known Issues #8) |
 | f6cbcdb, 3ea42d7, 88d44a3 (07-01) | Phase 1 memory bridge — councilor memory bridge + tests | ✅ Deployed live; verified both councilors recording Redis memories across ticks |
-| c52bc54 (07-03) | Nginx proxy routes for /error-reports, /councilor, /institutions, /decrees — ported from 9f2b207 | ⏸ Pending — not yet deployed |
-| 13fe857 (07-03) | Admin observability dashboard — routes/admin.py + admin.html + /admin nginx route | ⏸ Pending — not yet deployed |
-| 1c80727 (07-03) | Metrics lazy import refactor + VPS /metrics fallback merge | ⏸ Pending — not yet deployed |
+| c52bc54 (07-03) | Nginx proxy routes for /error-reports, /councilor, /institutions, /decrees — ported from 9f2b207 | ✅ Already live on VPS (preflight verified 2026-07-03) |
+| 13fe857 (07-03) | Admin observability dashboard — routes/admin.py + admin.html + /admin nginx route | ✅ Already live on VPS (preflight verified 2026-07-03) |
+| 1c80727 (07-03) | Metrics lazy import refactor + VPS /metrics fallback merge | ✅ Already live on VPS (code identical, only cosmetic docstring diff) |
 
 ## Dirty Tree Summary (2026-07-03)
 
 - **0 modified files**
 - **1 untracked file** — `.kilo-federation-profile/` (Kilo profile dir)
-- Branch: `bridge/memory-phase-1` at HEAD `88d44a3`
+- Branch: `bridge/memory-phase-1` at HEAD `37bc423`
 
 ## In Progress
 
