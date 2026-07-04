@@ -299,6 +299,8 @@ def _process_single_npc(npc: Dict) -> Dict[str, Any]:
         decision = make_decision(
             char_id, char_name, archetype, affiliation, mood=new_mood
         )
+        category = ""
+        sig = "medium"
         if decision:
             npc_result["decisions"].append(decision)
             try:
