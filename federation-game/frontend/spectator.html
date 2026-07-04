@@ -131,6 +131,7 @@ p{margin:0 0 8px 0}
 .inst-role-auth{color:#5a6a80;font-size:0.85rem;font-style:italic}
 .inst-kpis{display:flex;flex-wrap:wrap;gap:8px 28px;padding:10px 14px;background:#0a0e16;border-radius:8px;font-size:1.1rem;margin-top:8px}
 .inst-kpis .lbl{color:#5a6a80}.inst-kpis .num{color:#eef2f8;font-weight:700}
+.collapse-body:not(.show){display:none}.collapse-header::before{content:'▶ ';font-size:0.8rem;color:#5a6a80;display:inline-block;transition:transform .15s}.collapse-header.open::before{transform:rotate(90deg)}
 .wf-card{padding:16px 20px;background:#0e121c;border:1px solid #1a2638;border-radius:14px;margin-bottom:10px}
 .wf-card.active{border-left:4px solid #f1c40f}
 .wf-card.completed{border-left:4px solid #2ecc71}
@@ -1029,7 +1030,8 @@ async function loadInstitutions(offset){
     const active = activeRes || {active:[]};
     const completed = doneRes || {completed:[],total:0,offset:0,limit:INST_PAGE_SIZE};
     const health = healthRes;
-    instData = {institutions: institutions.institutions||[], active: active.active||[], completed: completed.completed||[], completedTotal: completed.total||0, completedOffset: completed.offset||0, health};
+    const statusOrder = {active:0, proposed:1};
+    instData = {institutions: (institutions.institutions||[]).sort((a,b) => (statusOrder[a.status] ?? 2) - (statusOrder[b.status] ?? 2)), active: active.active||[], completed: completed.completed||[], completedTotal: completed.total||0, completedOffset: completed.offset||0, health};
   }catch(e){
     instData = {institutions:[],active:[],completed:[],completedTotal:0,completedOffset:0,error:e.message};
   }
@@ -1105,10 +1107,16 @@ function renderWorkflowCard(wf, isActive){
 function renderInstHealth(h){
   if(!h) return '';
   const dot = h.redis ? '<span class="icon icon-green"></span>' : '<span class="icon icon-red"></span>';
+  const insts = instData ? instData.institutions : [];
+  const nActive = insts.filter(i => i.status === 'active').length;
+  const nProposed = insts.filter(i => i.status === 'proposed').length;
+  const nOther = insts.filter(i => i.status !== 'active' && i.status !== 'proposed').length;
   return `<div class="strip" style="margin-bottom:12px">
-    <div>${dot}<span class="lbl">Institutions</span><span class="num">${h.institutions||0}</span></div>
+    <div>${dot}<span class="lbl">Active</span><span class="num" style="color:#2ecc71">${nActive}</span></div>
+    <div><span class="lbl">Proposed</span><span class="num" style="color:#f1c40f">${nProposed}</span></div>
+    ${nOther ? `<div><span class="lbl">Other</span><span class="num" style="color:#5a6a80">${nOther}</span></div>` : ''}
     <div><span class="lbl">Roles</span><span class="num">${h.roles||0}</span></div>
-    <div><span class="lbl">Active</span><span class="num" style="color:#f1c40f">${h.active_workflows||0}</span></div>
+    <div><span class="lbl">Active WFs</span><span class="num" style="color:#f1c40f">${h.active_workflows||0}</span></div>
     <div><span class="lbl">Completed</span><span class="num" style="color:#2ecc71">${h.completed_workflows||0}</span></div>
     <div><span class="lbl">Redis</span><span class="num" style="color:${h.redis?'#2ecc71':'#e74c3c'}">${h.redis?'OK':'DOWN'}</span></div>
   </div>`;
@@ -1150,8 +1158,16 @@ function renderInstitutions(){
   if(instData.error) return `<div class="empty-card">Error: ${esc(instData.error)}</div>`;
 
   const healthHtml = renderInstHealth(instData.health);
-  const instCards = (instData.institutions||[]).map(renderInstitutionCard).join('');
-  const activeCards = (instData.active||[]).map(wf => renderWorkflowCard(wf, true)).join('');
+
+  const allInsts = instData.institutions || [];
+  const activeInsts = allInsts.filter(i => i.status === 'active');
+  const proposedInsts = allInsts.filter(i => i.status === 'proposed');
+  const otherInsts = allInsts.filter(i => i.status !== 'active' && i.status !== 'proposed');
+  const activeCards = activeInsts.map(renderInstitutionCard).join('');
+  const proposedCards = proposedInsts.map(renderInstitutionCard).join('');
+  const otherCards = otherInsts.map(renderInstitutionCard).join('');
+
+  const wfActiveCards = (instData.active||[]).map(wf => renderWorkflowCard(wf, true)).join('');
   const completedCards = (instData.completed||[]).map(wf => renderWorkflowCard(wf, false)).join('');
   const autonomyActive = (instData.active||[]).filter(wf => /proposal_review|analysis_review/.test(wf.type||wf.wf_type||''));
   const autonomyHtml = autonomyActive.length
@@ -1170,12 +1186,23 @@ function renderInstitutions(){
       <button class="btn" onclick="instRebuildCounters()">Rebuild Counters</button>
     </div>
     <section class="comm-panel">
-      <h2>Institutions</h2>
-      ${instCards || '<div class="empty-card">No institutions seeded yet.</div>'}
+      <h2>Active Institutions <span style="color:#2ecc71;font-size:1.1rem">${activeInsts.length}</span></h2>
+      ${activeCards || '<div class="empty-card">No active institutions.</div>'}
     </section>
     <section class="comm-panel" style="margin-top:14px">
+      <h2 class="collapse-header" style="cursor:pointer;user-select:none" onclick="const b=this.nextElementSibling;this.classList.toggle('open');b.classList.toggle('show')">
+        Proposed Institutions <span style="color:#f1c40f;font-size:1.1rem">${proposedInsts.length}</span>
+        <span style="font-size:0.85rem;color:#5a6a80;margin-left:8px">click to expand</span>
+      </h2>
+      <div class="collapse-body">${proposedCards || '<div class="empty-card">No proposed institutions.</div>'}</div>
+    </section>
+    ${otherCards ? `<section class="comm-panel" style="margin-top:14px">
+      <h2>Other <span style="color:#5a6a80;font-size:1.1rem">${otherInsts.length}</span></h2>
+      ${otherCards}
+    </section>` : ''}
+    <section class="comm-panel" style="margin-top:14px">
       <h2>Active workflows <span style="color:#f1c40f;font-size:1.1rem">${instData.active.length}</span></h2>
-      ${activeCards || '<div class="empty-card">No active workflows right now.</div>'}
+      ${wfActiveCards || '<div class="empty-card">No active workflows right now.</div>'}
     </section>
     <section class="comm-panel" style="margin-top:14px">
       <h2>Councilor autonomy <span style="color:#7e29b0;font-size:1.1rem">${autonomyActive.length}</span></h2>
