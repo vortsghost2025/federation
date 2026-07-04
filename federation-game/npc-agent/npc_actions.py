@@ -79,9 +79,16 @@ def execute_decision(decision: dict, r, contacts: dict):
 
     if cat == "send_message":
         target = decision.get("target", "")
-        body = _enforce_fourth_wall(decision.get("body", desc))
+        raw_body = decision.get("body") or desc or ""
+        body = _enforce_fourth_wall(raw_body)
         result["message_body"] = body
-        if target and target in contacts and target != CHAR_ID:
+
+        # Skip empty/whitespace-only messages — prevents "message text" stubs from
+        # entering the thread when the LLM times out or returns a placeholder.
+        if not body or not body.strip():
+            result["action_taken"] = "message_skipped_empty"
+            logger.info("[%s] Skipped empty message to %s", CHAR_ID, target)
+        elif target and target in contacts and target != CHAR_ID:
             cooldown_remaining = _message_cooldown_remaining(r, target) if target == partner_id else 0
             if cooldown_remaining > 0:
                 result["action_taken"] = "message_deferred_to_workspace"

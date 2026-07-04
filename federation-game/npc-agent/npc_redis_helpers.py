@@ -61,6 +61,35 @@ def _extract_open_question(*parts: str) -> str:
     return _trunc(f"{question}?", 180) if question else ""
 
 
+def _derive_question_from_goal(goal: str) -> str:
+    """Derive a short open_question from a shared_goal statement."""
+    goal = goal.strip()
+    if not goal:
+        return ""
+    normalized = goal.lower()
+    for prefix in (
+        "a report on ",
+        "an analysis of ",
+        "a study of ",
+        "an investigation of ",
+    ):
+        if normalized.startswith(prefix):
+            normalized = normalized[len(prefix) :]
+            break
+    for sep in (" and ", " or ", ", "):
+        if sep in normalized:
+            normalized = normalized.split(sep)[0].strip()
+            break
+    core = _trunc(normalized, 120).rstrip(".,;")
+    if core.lower().startswith(("what ", "why ", "how ", "where ", "when ", "who ")):
+        return _trunc(core.rstrip(".") + "?", 180)
+    return _trunc("What about " + core + "?", 180)
+
+
+def _default_open_question() -> str:
+    return "What happens next in the Federation?"
+
+
 def _partner_id(char_id: str = "", pair_ids: set | None = None) -> str:
     cid = char_id or CHAR_ID
     pids = pair_ids or PAIR_IDS
@@ -441,7 +470,35 @@ def _sync_pair_workspace(r, decision: dict, result: dict, npc_name: str = "", ch
         mapping["last_artifact_title"] = result["artifact_title"]
         mapping["last_artifact_from"] = cid
         mapping["last_artifact_ts"] = str(now)
+    # Ensure open_question is always non-blank so the councilors always have
+    # an active inquiry to orbit around. Skip if state already has a real
+    # open_question, or if this action intentionally cleared it.
+    if not state.get("open_question") and mapping.get("open_question") != "":
+        if state.get("shared_goal"):
+            derived = _derive_question_from_goal(state["shared_goal"])
+            if derived:
+                mapping["open_question"] = derived
+                mapping["open_question_from"] = "system"
+                mapping["open_question_ts"] = str(now)
+                mapping["open_question_source"] = "derived_from_shared_goal"
+        if not mapping.get("open_question"):
+            mapping["open_question"] = _default_open_question()
+            mapping["open_question_from"] = "system"
+            mapping["open_question_ts"] = str(now)
+            mapping["open_question_source"] = "system_default"
     _pair_hset(r, pid, mapping, cid)
+    # Lightweight artifact-to-question linkage: if open_question exists and this
+    # action isn't a no-op/skip, record which question the action is addressing.
+    effective_open_question = state.get("open_question") or mapping.get("open_question", "")
+    effective_open_question_source = state.get("open_question_source") or mapping.get("open_question_source", "")
+    if effective_open_question and action_taken not in (
+        "none", "no_target", "message_skipped_empty",
+        "institution_cap_reached", "institution_total_cap_reached",
+        "institution_similar_exists", "institution_already_exists",
+        "institution_error",
+    ):
+        result["open_question_ref"] = effective_open_question
+        result["open_question_source"] = effective_open_question_source
     if action_taken == "artifact_deferred_dedup":
         journal_summary = f"{name} paused \u2014 already working on something very similar"
     elif cat == "send_message" and body:
@@ -460,18 +517,22 @@ def _sync_pair_workspace(r, decision: dict, result: dict, npc_name: str = "", ch
         journal_summary = f"{name} steps back to reflect"
     else:
         journal_summary = _compact_text(desc or reasoning, 120) or f"{name} is {cat}"
+    journal_entry = {
+        "ts": now,
+        "actor": cid,
+        "actor_name": name,
+        "category": cat,
+        "action": action_taken,
+        "summary": journal_summary,
+        "thread_id": result.get("thread_id", ""),
+    }
+    if result.get("open_question_ref"):
+        journal_entry["open_question_ref"] = result["open_question_ref"]
+        journal_entry["open_question_source"] = result.get("open_question_source", "")
     _pair_append_journal(
         r,
         pid,
-        {
-            "ts": now,
-            "actor": cid,
-            "actor_name": name,
-            "category": cat,
-            "action": action_taken,
-            "summary": journal_summary,
-            "thread_id": result.get("thread_id", ""),
-        },
+        journal_entry,
         cid,
     )
 
