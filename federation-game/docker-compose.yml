@@ -325,10 +325,10 @@ services:
       - FALLBACK_MODEL_1=nvidia/nemotron-3-nano-30b-a3b
       - FALLBACK_MODEL_2=meta/llama-3.3-70b-instruct
       - OPENROUTER_API_KEY=${OPENROUTER_API_KEY_1}
-      - REQUEST_TIMEOUT=45
+      - REQUEST_TIMEOUT=20
       - MAX_OUTPUT_TOKENS=1024
       - MAX_TOTAL_BUDGET_MS=120000
-      - TICK_INTERVAL=45
+      - TICK_INTERVAL=120
     volumes:
       - /docker/federation-game/npc-agent:/app:ro
     depends_on:
@@ -353,10 +353,10 @@ services:
       - FALLBACK_MODEL_1=nvidia/nemotron-3-nano-30b-a3b
       - FALLBACK_MODEL_2=meta/llama-3.1-70b-instruct
       - OPENROUTER_API_KEY=${OPENROUTER_API_KEY_1}
-      - REQUEST_TIMEOUT=45
+      - REQUEST_TIMEOUT=20
       - MAX_OUTPUT_TOKENS=1024
       - MAX_TOTAL_BUDGET_MS=120000
-      - TICK_INTERVAL=45
+      - TICK_INTERVAL=120
     volumes:
       - /docker/federation-game/npc-agent:/app:ro
     depends_on:
