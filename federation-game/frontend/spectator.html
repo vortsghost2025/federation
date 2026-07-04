@@ -742,7 +742,12 @@ function renderPairStoryPanel(npcs){
     return `<div class="exchange-row"><strong>${esc(n.name)}</strong> — ${esc(focus)}</div>`;
   }).filter(Boolean).join('');
   const beatRows = beats.length
-    ? beats.map(entry => `<div class="exchange-row"><strong>${esc(entry.actor_name || entry.actor || 'Someone')}</strong> <span class="muted">· ${ago(entry.ts)}</span><br>${esc(entry.summary || '')}</div>`).join('')
+    ? beats.map(entry => {
+        const ref = entry.open_question_ref
+          ? `<div class="muted" style="font-size:.8em">Open question: ${esc(entry.open_question_ref)} · Source: ${esc(entry.open_question_source || '—')}</div>`
+          : '';
+        return `<div class="exchange-row"><strong>${esc(entry.actor_name || entry.actor || 'Someone')}</strong> <span class="muted">· ${ago(entry.ts)}</span><br>${esc(entry.summary || '')}</div>${ref}`;
+      }).join('')
     : '<div class="exchange-row muted">No shared beats recorded yet.</div>';
 
   return `
