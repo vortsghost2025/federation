@@ -89,7 +89,7 @@ echo
 
   # Redis summary
   echo "  Redis summary:"
-  REDIS_CMD='docker exec federation-game-backend-1 python3 -c "import redis,json;r=redis.Redis(host=\"redis\",port=6379,db=0,decode_responses=True);prefixes=[\"msg:\",\"session_log:\",\"workflow:\",\"npc:\",\"councilor:\",\"world_state\",\"institution:\",\"role:\",\"npc_artifact:\",\"circuit_breaker:\"];counts={p:sum(1 for _ in r.scan_iter(p+\"*\")) for p in prefixes};total=r.dbsize();leaks=0;[None for k in list(r.scan_iter(\"msg:*\"))[:200] if r.type(k)==\"hash\" and any(p in (r.hget(k,\"body\")or\"\").lower() for p in [\"simulation\",\"substrate\",\"computational\",\"digital\",\"virtual\",\"algorithm\"])];print(json.dumps({\"total\":total,\"prefix_counts\":{k:v for k,v in counts.items() if v>0}}))"'
+  REDIS_CMD='docker exec federation-game-backend-1 python3 -c "import redis,json;r=redis.Redis(host=\"redis\",port=6379,db=0,decode_responses=True);prefixes=[\"msg:\",\"session_log:\",\"workflow:\",\"npc:\",\"councilor:\",\"councilor_memory:\",\"world_state\",\"institution:\",\"role:\",\"npc_artifact:\",\"circuit_breaker:\"];counts={p:sum(1 for _ in r.scan_iter(p+\"*\")) for p in prefixes};total=r.dbsize();leaks=0;[None for k in list(r.scan_iter(\"msg:*\"))[:200] if r.type(k)==\"hash\" and any(p in (r.hget(k,\"body\")or\"\").lower() for p in [\"simulation\",\"substrate\",\"computational\",\"digital\",\"virtual\",\"algorithm\"])];print(json.dumps({\"total\":total,\"prefix_counts\":{k:v for k,v in counts.items() if v>0}}))"'
   redis_result=$(timeout 10 ssh "${SSH_BASE[@]}" "$SSH_HOST" "$REDIS_CMD" 2>&1 || echo '{"error":"timeout"}')
   echo "    $redis_result"
   echo

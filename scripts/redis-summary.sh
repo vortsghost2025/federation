@@ -42,7 +42,7 @@ r = redis.Redis(host=\"redis\", port=6379, db=0, decode_responses=True)
 
 # Key counts by prefix
 prefixes = [\"msg:\", \"session_log:\", \"workflow:\", \"npc:\",
-            \"npc_decision_bias:\", \"councilor:\", \"world_state\",
+            \"npc_decision_bias:\", \"councilor:\", \"councilor_memory:\", \"world_state\",
             \"institution:\", \"role:\", \"circuit_breaker:\",
             \"npc_artifact:\", \"gemini_\"]
 counts = {}
