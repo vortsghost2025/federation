@@ -721,6 +721,22 @@ def think_about_world(r, contacts: dict | None = None, char_id: str = "") -> str
         ps = _pair_state(r, partner_id, char_id=cid)
         if ps:
             parts.append("Shared pair workspace:")
+            conv_raw = ps.get("convergence_state", "")
+            if conv_raw and isinstance(conv_raw, str):
+                try:
+                    import json as _json
+                    conv = _json.loads(conv_raw)
+                    parts.append("  PAIR CONVERGENCE STATE (revise from here, do not restart from original question):")
+                    if conv.get("current_best_answer"):
+                        parts.append(f"    Current best answer: {conv['current_best_answer'][:200]}")
+                    if conv.get("agreement"):
+                        parts.append(f"    Agreement: {conv['agreement'][:200]}")
+                    if conv.get("disagreement"):
+                        parts.append(f"    Disagreement: {conv['disagreement'][:200]}")
+                    if conv.get("next_question"):
+                        parts.append(f"    Next question: {conv['next_question'][:200]}")
+                except Exception:
+                    pass
             if ps.get("shared_goal"):
                 parts.append(f"  Goal: {ps['shared_goal'][:120]}")
             if ps.get("current_topic"):

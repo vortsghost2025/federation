@@ -530,6 +530,40 @@ Respond in this exact JSON format (no markdown, no explanation):
                     "you can ignore this. Otherwise, answer with send_message."
                 )
         if r is not None:
+            _cs = _pair_state(r, partner_id, CHAR_ID).get("convergence_state", "")
+            if _cs and isinstance(_cs, str):
+                try:
+                    import json as _json
+                    _cc = _json.loads(_cs)
+                    _nq = _cc.get("next_question", "")
+                    _ans = _cc.get("current_best_answer", "")
+                    _dis = _cc.get("disagreement", "")
+                    force_constraint += (
+                        "\n\nPAIR CONVERGENCE STATE: You and your partner have established "
+                        "a shared understanding. Revise from this convergence state, "
+                        "do not restart from the original question."
+                    )
+                    if _nq:
+                        force_constraint += (
+                            f"\n  The open convergence question is: \"{_nq[:150]}\""
+                        )
+                    if _ans:
+                        force_constraint += (
+                            f"\n  Current best answer: \"{_ans[:150]}\""
+                        )
+                    if _dis:
+                        force_constraint += (
+                            f"\n  Remaining disagreement: \"{_dis[:150]}\""
+                        )
+                    force_constraint += (
+                        "\n  Your task is to refine or challenge the current convergence "
+                        "state using your partner's latest evidence."
+                        "\n  Do not repeat the same investigation unless the convergence "
+                        "state says evidence is missing."
+                    )
+                except Exception:
+                    pass
+        if r is not None:
             shapes = _recent_decision_shapes(r, 5)
             streak_len = _newest_first_streak(shapes)
             if streak_len >= 4:

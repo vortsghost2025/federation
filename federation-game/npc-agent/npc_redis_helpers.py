@@ -541,6 +541,80 @@ def _sync_pair_workspace(r, decision: dict, result: dict, npc_name: str = "", ch
         cid,
     )
 
+    # Stage 4A: pair convergence state reducer — runs after both chars have
+    # fresh output since the last convergence update. Overwrites in place.
+    _compute_convergence_state(r, pid, cid, now)
+
+
+def _compute_convergence_state(r, partner_id: str, cid: str, now: int) -> None:
+    state = _pair_state(r, partner_id, cid)
+    if not state:
+        return
+    existing_raw = state.get("convergence_state", "")
+    existing = {}
+    if existing_raw and isinstance(existing_raw, str):
+        try:
+            existing = json.loads(existing_raw)
+        except (json.JSONDecodeError, ValueError):
+            pass
+    last_conv_ts = existing.get("updated_at", 0)
+    ts_001 = int(state.get("updated_char_001", 0) or 0)
+    ts_306 = int(state.get("updated_char_306", 0) or 0)
+    if ts_001 <= last_conv_ts or ts_306 <= last_conv_ts:
+        return
+    shared_goal = state.get("shared_goal", "")
+    open_q = state.get("open_question", "")
+    focus_001 = state.get("focus_char_001", "")
+    focus_306 = state.get("focus_char_306", "")
+    cat_001 = state.get("category_char_001", "")
+    cat_306 = state.get("category_char_306", "")
+    action_001 = state.get("action_char_001", "")
+    action_306 = state.get("action_char_306", "")
+    last_msg = state.get("last_message_preview", "")
+    last_artifact = state.get("last_artifact_title", "")
+    prompt = (
+        "Extract convergence from this councilor pair exchange. Respond in JSON only.\n\n"
+        f"Shared goal: {_compact_text(shared_goal, 120)}\n"
+        f"Open question: {_compact_text(open_q, 120)}\n"
+        f"char_001: {cat_001} — {_compact_text(focus_001, 120)} ({action_001})\n"
+        f"char_306: {cat_306} — {_compact_text(focus_306, 120)} ({action_306})\n"
+        f"Last message: {_compact_text(last_msg, 120)}\n"
+        f"Last artifact: {_compact_text(last_artifact, 120)}\n\n"
+        '{"current_best_answer":"","evidence_from_char_001":"","evidence_from_char_306":"","agreement":"","disagreement":"","next_question":""}'
+    )
+    system = (
+        "You extract convergence state from two councilors in a Federation simulation. "
+        "Output ONLY a single JSON object. Fields: current_best_answer (shared understanding), "
+        "evidence_from_char_001, evidence_from_char_306, agreement (overlap), "
+        "disagreement (divergence), next_question (best next inquiry). "
+        "Keep each field under 200 chars. If uncertain, set field to 'see evidence'."
+    )
+    try:
+        from npc_llm_client import call_llm, DECISION_MODEL
+        raw = call_llm(system, prompt, model=DECISION_MODEL or "", r=r, call_label="convergence")
+        content = raw.get("content", "").strip()
+        json_start = content.find("{")
+        json_end = content.rfind("}")
+        if json_start >= 0 and json_end > json_start:
+            content = content[json_start:json_end + 1]
+        conv = json.loads(content)
+        for key in ("current_best_answer", "evidence_from_char_001", "evidence_from_char_306",
+                     "agreement", "disagreement", "next_question"):
+            if key not in conv:
+                conv[key] = ""
+            if isinstance(conv.get(key), str) and len(conv[key]) > 300:
+                conv[key] = conv[key][:300]
+        conv["source_ids"] = [
+            state.get("last_message_ts", ""),
+            state.get("last_artifact_ts", ""),
+        ]
+        conv["updated_at"] = now
+        conv["version"] = existing.get("version", 0) + 1
+        _pair_hset(r, partner_id, {"convergence_state": json.dumps(conv, default=str)}, cid)
+        logger.info("[%s/%s] convergence_state updated v%d", cid, partner_id, conv["version"])
+    except Exception as ex:
+        logger.debug("[%s/%s] convergence reducer: %s", cid, partner_id, ex)
+
 
 def _log_llm_call(r, call_label, model, system_prompt, user_prompt, response, success, error, latency_ms, char_id: str = ""):
     cid = char_id or CHAR_ID
