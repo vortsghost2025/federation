@@ -544,7 +544,8 @@ Respond in this exact JSON format (no markdown, no explanation):
                 )
     system_prompt = base_system + force_constraint
 
-    raw = call_llm(system_prompt, context, r=r, call_label="decide")
+    from npc_llm_client import DECISION_MODEL
+    raw = call_llm(system_prompt, context, model=DECISION_MODEL or "", r=r, call_label="decide")
 
     try:
         decision = json.loads(raw["content"].strip())

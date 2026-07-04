@@ -322,6 +322,7 @@ services:
       - NVIDIA_API_KEY=${NVIDIA_API_KEY_CHAR_001_TEST}
       - REDIS_URL=redis://redis:6379/0
       - PRIMARY_MODEL=nvidia/llama-3.3-nemotron-super-49b-v1
+      - DECISION_MODEL=nvidia/nemotron-3-nano-30b-a3b
       - FALLBACK_MODEL_1=nvidia/nemotron-3-nano-30b-a3b
       - FALLBACK_MODEL_2=meta/llama-3.3-70b-instruct
       - OPENROUTER_API_KEY=${OPENROUTER_API_KEY_1}
@@ -350,6 +351,7 @@ services:
       - NVIDIA_API_KEY=${NVIDIA_API_KEY_CHAR_306:-KEY_REDACTED_set_in_env}
       - REDIS_URL=redis://redis:6379/0
       - PRIMARY_MODEL=nvidia/nemotron-3-super-120b-a12b
+      - DECISION_MODEL=nvidia/nemotron-3-nano-30b-a3b
       - FALLBACK_MODEL_1=nvidia/nemotron-3-nano-30b-a3b
       - FALLBACK_MODEL_2=meta/llama-3.1-70b-instruct
       - OPENROUTER_API_KEY=${OPENROUTER_API_KEY_1}
