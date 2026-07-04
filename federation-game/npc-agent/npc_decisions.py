@@ -547,8 +547,35 @@ Respond in this exact JSON format (no markdown, no explanation):
     from npc_llm_client import DECISION_MODEL
     raw = call_llm(system_prompt, context, model=DECISION_MODEL or "", r=r, call_label="decide")
 
+    def _extract_json(text):
+        if "```" in text:
+            parts = text.split("```")
+            for i, part in enumerate(parts):
+                if i % 2 == 0:
+                    continue
+                candidate = part
+                if candidate.startswith("json"):
+                    candidate = candidate[4:]
+                candidate = candidate.strip()
+                if candidate.startswith("{") and candidate.endswith("}"):
+                    try:
+                        return json.loads(candidate)
+                    except json.JSONDecodeError:
+                        continue
+        brace_start = text.find("{")
+        if brace_start == -1:
+            raise json.JSONDecodeError("no JSON object found", text, 0)
+        for end in range(len(text) - 1, brace_start, -1):
+            if text[end] == "}":
+                candidate = text[brace_start:end + 1]
+                try:
+                    return json.loads(candidate)
+                except json.JSONDecodeError:
+                    continue
+        raise json.JSONDecodeError("no valid JSON object found", text, brace_start)
+
     try:
-        decision = json.loads(raw["content"].strip())
+        decision = _extract_json(raw["content"])
         cat = decision.get("category", "rest")
         if cat not in AGENCY_CATEGORIES:
             logger.warning("[%s] Unknown category '%s'; defaulting to rest", CHAR_ID, cat)

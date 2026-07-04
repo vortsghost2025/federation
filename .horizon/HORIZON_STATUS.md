@@ -196,6 +196,13 @@ See `.horizon/DECISIONS.md` for the full decisions log.
 8. **npc_autonomy.py DRIFT home vs VPS** (flagged 2026-07-03). Home hash `d1c2f7d6...` (29KB, post-extraction) ≠ VPS hash `274420c1...` (7KB, pre-extraction monolith). The 06-30 extraction wave (11 commits `[2.1]`→`[7]`) split monolithic npc_autonomy.py into `npc_needs/world/decree/reflection/thoughts/opinions/actions/interactions/goals` + `npc_decrees/context/llm_client`. Sibling modules verified identical home ↔ VPS, but the orchestration file itself was NOT pushed. Post-extraction home imports `from npc_reflection import evaluate_decision_options, _score_decision_option, _reflect_on_missing_context, _write_decree_directive` etc. — these resolve downstream once the VPS gets the matching home copies. Action: verify the full extraction set deploys atomically before any `deploy_vps.sh npc-agent npc_autonomy.py` runs.
 9. **P007 only partially implemented** (flagged 2026-07-03). Edit 1 (leader cognition timeout 8s→30s on all 4 leader tiers in `llm_router.py:870,877,884,891`) is live on VPS. Edit 2 (constants `LEADER_COOLDOWN_FAILURE` and `SPECIALIST_COOLDOWN_FAILURE`, function `_set_cooldown` accepting explicit duration) was **never implemented** — grep returns zero matches in both home and VPS. Current cooldown is the coarse fixed `_trip_circuit` (3 failures → `llm_circuit_breaker:{provider}` open for 300s, no per-task-class differentiation). Acceptance criteria for P007 spec are NOT met.
 
+## Completed 2026-07-04 — NPC Model Routing (Stage 1 + 2)
+
+- [x] Stage 1 — TICK_INTERVAL 45→120, REQUEST_TIMEOUT 45→20 — reduced decision pressure
+- [x] Stage 2 — DECISION_MODEL=nvidia/nemotron-3-nano-30b-a3b — routed strict JSON decision calls to nano; kept PRIMARY_MODEL super for artifact/code generation
+- [x] Stage 2 verified stable ~2.5h: char_001 38 nano decisions + 3 super artifact calls, char_306 38 nano + 3 super, 92% LLM calls on nano, zero decision timeouts, zero crashes
+- [x] Stage 3 — JSON extraction/repair for nano prose responses — deployed
+
 ## Architecture
 
 ```
