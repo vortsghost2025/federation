@@ -140,7 +140,7 @@ def neighborhood_snapshot(r, max_chars: int = 400, char_id: str = "") -> str:
     entries: list[tuple[int, str, str, str]] = []
 
     try:
-        all_state_keys = list(r.keys("npc_state:*"))
+        all_state_keys = list(r.scan_iter(match="npc_state:*"))
         logger.info("[%s] neighborhood: found %d npc_state keys", cid, len(all_state_keys))
 
         pipe = r.pipeline(transaction=False)
@@ -321,7 +321,7 @@ def active_topic_cooldowns(r, char_id: str = "", limit: int = 3) -> list[tuple[s
     prefix = f"npc_topic_cooldown:{cid}:"
     rows: list[tuple[str, int]] = []
     try:
-        keys = r.keys(f"{prefix}*")
+        keys = list(r.scan_iter(match=f"{prefix}*"))
     except Exception:
         return []
     for key in keys:
@@ -486,7 +486,7 @@ def top_neighborhood_npcs(r, n: int = 3, char_id: str = "") -> str:
     cid = char_id or CHAR_ID
     _partner_id_fn, *_ = _rh()
     try:
-        all_state_keys = list(r.keys("npc_state:*"))
+        all_state_keys = list(r.scan_iter(match="npc_state:*"))
         pipe = r.pipeline(transaction=False)
         for k in all_state_keys:
             pipe.hgetall(k)
