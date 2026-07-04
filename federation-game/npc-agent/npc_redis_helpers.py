@@ -239,10 +239,15 @@ def _recent_thread_messages(r, thread_id: str, limit: int = 4) -> list[dict]:
         keys = r.zrevrange(f"msg:thread:{thread_id}", 0, max(limit, 1) - 1)
     except Exception:
         return []
+    if not keys:
+        return []
+    try:
+        values = r.mget(keys)
+    except Exception:
+        return []
     items = []
-    for key in reversed(keys):
+    for raw in reversed(values):
         try:
-            raw = r.get(key)
             if raw:
                 items.append(json.loads(raw))
         except Exception:
