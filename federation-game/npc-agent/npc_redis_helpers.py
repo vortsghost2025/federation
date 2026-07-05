@@ -540,7 +540,24 @@ def _sync_pair_workspace(r, decision: dict, result: dict, npc_name: str = "", ch
     # an active inquiry to orbit around. Skip if state already has a real
     # open_question, or if this action intentionally cleared it.
     if not state.get("open_question") and mapping.get("open_question") != "":
-        if state.get("shared_goal"):
+        # Stage 4D: after resolution, do not regenerate open_question from
+        # the same resolved shared_goal — that re-anchors to the blocked topic.
+        _post_resolution_default = False
+        if state.get("convergence_state"):
+            try:
+                _cr = state["convergence_state"]
+                _cc = json.loads(_cr) if isinstance(_cr, str) else {}
+                if _cc.get("resolved", False) and _cc.get("resolved_shared_goal") and \
+                   state.get("shared_goal", "") == _cc["resolved_shared_goal"]:
+                    _post_resolution_default = True
+            except Exception:
+                pass
+        if _post_resolution_default:
+            mapping["open_question"] = _default_open_question()
+            mapping["open_question_from"] = "system"
+            mapping["open_question_ts"] = str(now)
+            mapping["open_question_source"] = "post_resolution_default"
+        elif state.get("shared_goal"):
             derived = _derive_question_from_goal(state["shared_goal"])
             if derived:
                 mapping["open_question"] = derived
@@ -633,16 +650,35 @@ def _compute_convergence_state(r, partner_id: str, cid: str, now: int) -> None:
     action_306 = state.get("action_char_306", "")
     last_msg = state.get("last_message_preview", "")
     last_artifact = state.get("last_artifact_title", "")
-    prompt = (
-        "Extract convergence from this councilor pair exchange. Respond in JSON only.\n\n"
-        f"Shared goal: {_compact_text(shared_goal, 120)}\n"
-        f"Open question: {_compact_text(open_q, 120)}\n"
-        f"char_001: {cat_001} — {_compact_text(focus_001, 120)} ({action_001})\n"
-        f"char_306: {cat_306} — {_compact_text(focus_306, 120)} ({action_306})\n"
-        f"Last message: {_compact_text(last_msg, 120)}\n"
-        f"Last artifact: {_compact_text(last_artifact, 120)}\n\n"
+    prompt_parts = [
+        "Extract convergence from this councilor pair exchange. Respond in JSON only.\n\n",
+        f"Shared goal: {_compact_text(shared_goal, 120)}\n",
+        f"Open question: {_compact_text(open_q, 120)}\n",
+        f"char_001: {cat_001} — {_compact_text(focus_001, 120)} ({action_001})\n",
+        f"char_306: {cat_306} — {_compact_text(focus_306, 120)} ({action_306})\n",
+        f"Last message: {_compact_text(last_msg, 120)}\n",
+        f"Last artifact: {_compact_text(last_artifact, 120)}\n",
+    ]
+    if existing.get("resolved", False):
+        _blocked_for_prompt = existing.get("blocked_topic_terms", [])
+        if _blocked_for_prompt:
+            prompt_parts.append(
+                f"RESOLVED TOPIC — avoid these terms in next_question: {', '.join(_blocked_for_prompt)}\n"
+            )
+        _resolved_answer = existing.get("resolved_answer", "")
+        _resolved_question = existing.get("resolved_question", "")
+        if _resolved_answer:
+            prompt_parts.append(f"Previous resolved answer: {_compact_text(_resolved_answer, 120)}\n")
+        if _resolved_question:
+            prompt_parts.append(f"Previous resolved question: {_compact_text(_resolved_question, 120)}\n")
+        prompt_parts.append(
+            "IMPORTANT: The councilors have already resolved this topic. "
+            "next_question must open a genuinely new direction, not re-enter the resolved topic or its blocked terms.\n"
+        )
+    prompt_parts.append(
         '{"current_best_answer":"","evidence_from_char_001":"","evidence_from_char_306":"","agreement":"","disagreement":"","next_question":""}'
     )
+    prompt = "".join(prompt_parts)
     system = (
         "You extract convergence state from two councilors in a Federation simulation. "
         "Output ONLY a single JSON object. Fields: current_best_answer (shared understanding), "
@@ -728,6 +764,9 @@ def _compute_convergence_state(r, partner_id: str, cid: str, now: int) -> None:
             ]
             # Note: If no terms match, blocked_terms will be empty list (no fallback to "resonance")
             conv["blocked_topic_terms"] = blocked_terms
+            # Stage 4D: snapshot the shared_goal and open_question at resolution time
+            conv["resolved_shared_goal"] = shared_goal
+            conv["resolved_open_question"] = open_q
         else:
             # Preserve existing resolution state
             conv["resolved"] = prev_resolved
@@ -735,9 +774,20 @@ def _compute_convergence_state(r, partner_id: str, cid: str, now: int) -> None:
             conv["resolved_question"] = prev_conv.get("resolved_question", "")
             conv["resolved_at"] = prev_conv.get("resolved_at", 0)
             conv["blocked_topic_terms"] = prev_conv.get("blocked_topic_terms", [])
+            conv["resolved_shared_goal"] = prev_conv.get("resolved_shared_goal", "") or shared_goal
+            conv["resolved_open_question"] = prev_conv.get("resolved_open_question", "") or open_q
             conv["plateau_count"] = new_plateau
         conv["plateau_topic"] = plateau_topic
         conv["plateau_reason"] = plateau_reason
+
+        # Stage 4D: Suppress next_question if it re-enters blocked terms after resolution
+        if conv.get("resolved") and conv.get("next_question"):
+            prohibited = conv.get("blocked_topic_terms", [])
+            if any(term in conv["next_question"].lower() for term in prohibited if term):
+                conv["next_question"] = ""
+                conv["next_question_blocked_reason"] = "blocked_topic_after_resolution"
+        if "next_question_blocked_reason" not in conv:
+            conv["next_question_blocked_reason"] = ""
 
         conv["source_ids"] = [
             state.get("last_message_ts", ""),
