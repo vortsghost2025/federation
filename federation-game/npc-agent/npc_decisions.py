@@ -447,6 +447,20 @@ Respond in this exact JSON format (no markdown, no explanation):
                     evidence_reason = ""
                     if partner_id_tf:
                         evidence_reason = new_evidence_for_topic(r, common, CHAR_ID, partner_id_tf)
+                    # Block partner_artifact fatigue reset for resolved topics
+                    if evidence_reason and "partner_artifact" in evidence_reason:
+                        _cps = _pair_state(r, partner_id, CHAR_ID) if r else {}
+                        _conv_raw = _cps.get("convergence_state", "") if _cps else ""
+                        try:
+                            _conv = json.loads(_conv_raw) if _conv_raw else {}
+                        except Exception:
+                            _conv = {}
+                        _blocked_terms = _conv.get("blocked_topic_terms", []) if _conv else []
+                        if _blocked_terms and any(
+                            common == term or common in term or term in common
+                            for term in _blocked_terms
+                        ):
+                            evidence_reason = ""
                     if evidence_reason:
                         logger.info(
                             "[%s] topic_fatigue_reset topic=%s reason=%s",
@@ -538,29 +552,40 @@ Respond in this exact JSON format (no markdown, no explanation):
                     _nq = _cc.get("next_question", "")
                     _ans = _cc.get("current_best_answer", "")
                     _dis = _cc.get("disagreement", "")
-                    force_constraint += (
-                        "\n\nPAIR CONVERGENCE STATE: You and your partner have established "
-                        "a shared understanding. Revise from this convergence state, "
-                        "do not restart from the original question."
-                    )
-                    if _nq:
+                    _resolved = _cc.get("resolved", False)
+                    _blocked = _cc.get("blocked_topic_terms", [])
+
+                    if _resolved and _nq:
                         force_constraint += (
-                            f"\n  The open convergence question is: \"{_nq[:150]}\""
+                            "\n\nRESOLUTION PRESSURE: The current question has been resolved. "
+                            "You must advance beyond the resolved answer with a NEW downstream question. "
+                            f"Resolved answer: \"{_ans[:100]}\""
+                            f" Blocked topics: {', '.join(_blocked[:2]) if _blocked else 'none'}"
                         )
-                    if _ans:
+                    else:
                         force_constraint += (
-                            f"\n  Current best answer: \"{_ans[:150]}\""
+                            "\n\nPAIR CONVERGENCE STATE: You and your partner have established "
+                            "a shared understanding. Revise from this convergence state, "
+                            "do not restart from the original question."
                         )
-                    if _dis:
+                        if _nq:
+                            force_constraint += (
+                                f"\n  The open convergence question is: \"{_nq[:150]}\""
+                            )
+                        if _ans:
+                            force_constraint += (
+                                f"\n  Current best answer: \"{_ans[:150]}\""
+                            )
+                        if _dis:
+                            force_constraint += (
+                                f"\n  Remaining disagreement: \"{_dis[:150]}\""
+                            )
                         force_constraint += (
-                            f"\n  Remaining disagreement: \"{_dis[:150]}\""
+                            "\n  Your task is to refine or challenge the current convergence "
+                            "state using your partner's latest evidence."
+                            "\n  Do not repeat the same investigation unless the convergence "
+                            "state says evidence is missing."
                         )
-                    force_constraint += (
-                        "\n  Your task is to refine or challenge the current convergence "
-                        "state using your partner's latest evidence."
-                        "\n  Do not repeat the same investigation unless the convergence "
-                        "state says evidence is missing."
-                    )
                 except Exception:
                     pass
         if r is not None:

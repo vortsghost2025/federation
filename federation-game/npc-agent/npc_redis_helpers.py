@@ -22,6 +22,25 @@ TICK_INTERVAL = int(os.environ.get("TICK_INTERVAL", "30"))
 REDIS_URL = os.environ.get("REDIS_URL", "redis://redis:6379/0")
 
 
+KNOWN_BLOCKED_TERMS = [
+    "structured resonance lattice",
+    "corruption-linked resonance",
+    "anchor network",
+    "resonance",
+    "lattice",
+]
+
+
+def _is_no_substantive_disagreement(text: str) -> bool:
+    t = (text or "").lower()
+    return (
+        "no substantive disagreement" in t
+        or "no substantive" in t
+        or "no disagreement" in t
+        or "no substantive divergence" in t
+    )
+
+
 def get_redis():
     return redis.from_url(REDIS_URL, decode_responses=True, socket_connect_timeout=5, socket_timeout=5)
 
@@ -604,6 +623,46 @@ def _compute_convergence_state(r, partner_id: str, cid: str, now: int) -> None:
                 conv[key] = ""
             if isinstance(conv.get(key), str) and len(conv[key]) > 300:
                 conv[key] = conv[key][:300]
+        # Plateau tracking for resolution pressure
+        prev_conv = existing  # Already parsed from state.get("convergence_state", "")
+        prev_resolved = prev_conv.get("resolved", False)
+        prev_plateau = prev_conv.get("plateau_count", 0)
+
+        # Check for "no substantive disagreement" (fuzzy match)
+        disagreement = conv.get("disagreement", "")
+        is_no_disagreement = _is_no_substantive_disagreement(disagreement)
+
+        if is_no_disagreement and not prev_resolved:
+            new_plateau = prev_plateau + 1
+        else:
+            # Reset plateau if disagreement exists or already resolved
+            new_plateau = 0 if not prev_resolved else prev_plateau
+
+        # Trigger resolution at 3 versions of no disagreement
+        if new_plateau >= 3 and not prev_resolved:
+            conv["resolved"] = True
+            conv["resolved_answer"] = conv.get("current_best_answer", "")
+            conv["resolved_question"] = conv.get("next_question", "")
+            conv["resolved_at"] = now
+            conv["plateau_count"] = new_plateau
+            # Extract blocked topic terms from resolved content
+            resolved_text = (conv.get("resolved_question", "") + " " + conv.get("resolved_answer", "")).lower()
+            # Extract known blocked terms for blocking (resonance) topics
+            blocked_terms = [
+                term for term in KNOWN_BLOCKED_TERMS
+                if term in resolved_text
+            ]
+            # Note: If no terms match, blocked_terms will be empty list (no fallback to "resonance")
+            conv["blocked_topic_terms"] = blocked_terms
+        else:
+            # Preserve existing resolution state
+            conv["resolved"] = prev_resolved
+            conv["resolved_answer"] = prev_conv.get("resolved_answer", "")
+            conv["resolved_question"] = prev_conv.get("resolved_question", "")
+            conv["resolved_at"] = prev_conv.get("resolved_at", 0)
+            conv["blocked_topic_terms"] = prev_conv.get("blocked_topic_terms", [])
+            conv["plateau_count"] = new_plateau
+
         conv["source_ids"] = [
             state.get("last_message_ts", ""),
             state.get("last_artifact_ts", ""),
