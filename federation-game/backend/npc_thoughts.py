@@ -135,6 +135,7 @@ def _call_llm(
     max_tokens: int = 150,
     temperature: float = 0.9,
     priority: str = "local",
+    char_id: str = "",
 ) -> str:
     task_class = {
         "heavy": "leader",
@@ -150,6 +151,9 @@ def _call_llm(
             user_prompt=user_prompt,
             max_tokens=max_tokens,
             temperature=temperature,
+            char_id=char_id,
+            source="thought",
+            system_path="backend.npc_thoughts._call_llm",
         )
         if result.get("success") and result.get("content"):
             content = _clean_llm_output(result["content"])
@@ -271,6 +275,7 @@ Examples:
                 "What is on your mind right now?",
                 max_tokens=80,
                 temperature=0.95,
+                char_id=char_id,
             )
         if thought_text and _is_leaked_prompt(thought_text):
             logger.warning(

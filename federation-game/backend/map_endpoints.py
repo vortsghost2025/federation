@@ -1466,6 +1466,8 @@ async def ask_assistant(query: AssistantQuery):
                 user_prompt=user_prompt,
                 max_tokens=300,
                 temperature=0.7,
+                source="assistant",
+                system_path="backend.map_endpoints.ask_assistant_fallback",
             )
         else:
             result = route_call(
@@ -1474,6 +1476,8 @@ async def ask_assistant(query: AssistantQuery):
                 user_prompt=user_prompt,
                 max_tokens=300,
                 temperature=0.7,
+                source="assistant",
+                system_path="backend.map_endpoints.ask_assistant_fallback",
             )
         if result.get("success"):
             return {
