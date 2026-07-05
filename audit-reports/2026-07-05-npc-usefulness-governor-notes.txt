@@ -1,0 +1,58 @@
+NPC USEFULNESS GOVERNOR — AUDIT NOTES
+Date: 2026-07-05
+Source: NPC cognition code-path audit + live Redis llm_audit query
+
+PREVIOUS FEAR:
+  37 NPCs burning paid API calls.
+
+ACTUAL FINDING:
+  37 NPCs ARE making worker-tier thought LLM calls,
+  but mostly through small/local/free fallback paths.
+  The bigger waste is Redis/tick churn, not API cost.
+
+KEY DATA (llm_audit, 1-hour window 15:55-16:57 UTC):
+  - 501 entries total
+  - actual route_call attempts: ~179
+  - task_class=worker: 179
+  - task_class=leader: 0
+  - task_class=specialist: 0
+  - task_class=narrator: 0
+  - NIM: mostly 403 Forbidden (keys expired/invalid)
+  - Ollama: mostly successful (qwen2.5-coder:3b)
+  - OpenRouter: some 429 rate limited
+  - Models: llama-3.1-8b (245), qwen2.5-coder:3b (118), nano-8b (78), free OR (~60)
+  - Success rate: 72.7%
+  - Avg latency: 1757ms
+
+LLM AUDIT LOGGING GAP:
+  - llm_audit entries do NOT include char_id or source system path
+  - Current fields: ts, provider, model, task_class, success, latency_ms
+  - Cannot attribute which NPC triggered which call
+  - npc_llm_logs covers ONLY agent-side (char_001, char_306)
+  - Backend sub-calls from _call_provider() logged with empty task_class
+
+COGNITION VS THOUGHT:
+  - cognition tier (leader/specialist) did NOT fire in audit window
+  - thought system (all NPCs, worker-tier) DID fire
+  - _call_ollama() + _call_provider() write sub-calls with task_class=""
+  - Each route_call attempt produces 2-3 audit entries
+
+REDIS WASTE:
+  - 86,561 npc_turns over 7 days
+  - 37 npc_thoughts:* keys, 37 npc_actions:* keys, 39 npc_decisions:* keys
+  - Template-generated content accumulating with zero downstream consumers
+
+ARTIFACTS:
+  - Produced only by char_001/char_306 (councilor containers)
+  - Not affected by background NPC thought/action churn
+
+PROPOSED GOVERNOR:
+  - persistent councilors (char_001, char_306): high cadence
+  - event-relevant NPCs: medium cadence
+  - background NPCs: low cadence
+  - stale NPCs (>N hours inactive): sleep until triggered
+
+PROPOSED LOGGING FIX:
+  - every route_call audit entry should include char_id/source/system_path
+  - distinguish provider sub-call logs from final route_call result logs
+  - add source field: "cognition" | "thought" | "narrator" | "assistant"
