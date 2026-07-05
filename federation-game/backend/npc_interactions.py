@@ -66,6 +66,9 @@ def _generate_dialogue(npc_a: Dict, npc_b: Dict, interaction_type: str) -> Optio
     aff_a = npc_a.get("affiliation", "independent")
     aff_b = npc_b.get("affiliation", "independent")
 
+    # Extract char_id for attribution (using first NPC's ID)
+    char_id = npc_a.get("char_id") or npc_a.get("id", "")
+
     system_prompt = (
         f"You are a dialogue generator for a consciousness simulation. "
         f"Generate a brief 2-3 line exchange between two NPCs. "
@@ -88,6 +91,7 @@ def _generate_dialogue(npc_a: Dict, npc_b: Dict, interaction_type: str) -> Optio
             max_tokens=150,
             temperature=0.9,
             priority="local",
+            char_id=char_id,
         )
         if result and len(result) > 20:
             cleaned = result.strip()
