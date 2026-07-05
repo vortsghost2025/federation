@@ -56,7 +56,7 @@ Federation sessions run in a PowerShell-first environment unless a bash-only scr
 
 - Do not assume Linux shell tools during normal work. Avoid `bash`, `find`, `grep`, `head`, and Unix-style flags in PowerShell sessions.
 - Prefer `Get-ChildItem`, `Select-String`, `Select-Object -First`, `Get-Content -Raw`, and `Test-Path`.
-- Use Git Bash only for explicit bash-only workflows such as `S:/federation/scripts/fed-state.sh`.
+- Use Git Bash only for explicit bash-only workflows.
 - Broad exploration must avoid heavy or sensitive paths unless the task explicitly needs them: `.kilo`, `.opencode`, `.kilocode`, `.horizon`, `session`, `continuity-test-handoff`, `tmp`, `node_modules`, `.secrets`, `genesis-memory/*.db`, `docs/2FAuth.txt`, `docs/VPS.txt`, and large dumps/log bundles.
 
 ---
@@ -67,38 +67,28 @@ For complex problems, see `docs/ramsingh-synthesis-loop.md` for the 6-step escal
 
 ---
 
-## SESSION-STARTUP PROBE — fed-state.sh
+## SESSION-STARTUP PROBE
 
 Federation context is large (47+ NPCs, 8 factions, 5 critical constraints,
-active specs/plans). Before doing anything on federation, run:
+active specs/plans).
 
-```
-bash S:/federation/scripts/fed-state.sh
-```
+**Do not use `scripts/fed-state.sh` right now.** It is known broken and
+returns only `"w"`. It is not valid evidence of repo, deploy, or runtime
+state. Use direct checks instead:
 
-Or for a full VPS probe (slower, ~5s extra):
+- `git status -sb`
+- `git log --oneline -10`
+- `docker ps` / `docker logs`
+- direct SSH to VPS (`ssh root@187.77.3.56`)
+- Redis key checks via `docker exec`
+- specific file diffs via `git diff`
 
-```
-bash S:/federation/scripts/fed-state.sh --vps
-```
+**After compaction:** read `.horizon/ARCHITECTURE_STATE.md` first — it has
+pinned function signatures, Redis key map, wiring, and deploy rules. One 2KB
+file replaces re-reading 200KB of backend Python.
 
-**After compaction:** read `.horizon/ARCHITECTURE_STATE.md` first — it has pinned function signatures, Redis key map, wiring, and deploy rules. One 2KB file replaces re-reading 200KB of backend Python.
-
-`fed-state.sh` returns:
-- HEAD commit + last 5 commits
-- Active specs in `docs/superpowers/specs/` and plans in `docs/superpowers/plans/`
-- Last 10 entries of `.horizon/HORIZON_STATUS.md` (what's been done)
-- Dirty tree summary (modified + untracked counts, first 10 paths)
-- With `--vps`: federation docker container status
-
-This is the context-recovery tool. Run it:
-- At the start of any federation-related session
-- After a compaction or new conversation
-- Before suggesting code changes (so you can verify a change hasn't
-  already been deployed)
-
-When the script reports `<N> modified, <M> untracked`, mention that to the
-user before making changes. Don't propose fixes to files you haven't read.
+Do not re-run mid-session after state is confirmed in context — wastes
+cycles and risks resetting working memory.
 
 ---
 
