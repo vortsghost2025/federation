@@ -28,6 +28,7 @@ from npc_redis_helpers import (
     _pair_append_journal,
     _pair_recent_journal,
     _pair_thread_id,
+    _parse_convergence_state,
     _store_thread_message,
     _recent_thread_messages,
     _recent_decisions,
@@ -284,6 +285,34 @@ def _acknowledge_inbox(r, partner_id: str = None) -> int:
         return ack_count
     except Exception:
         return 0
+
+
+def _extract_json(text: str):
+    if "```" in text:
+        parts = text.split("```")
+        for i, part in enumerate(parts):
+            if i % 2 == 0:
+                continue
+            candidate = part
+            if candidate.startswith("json"):
+                candidate = candidate[4:]
+            candidate = candidate.strip()
+            if candidate.startswith("{") and candidate.endswith("}"):
+                try:
+                    return json.loads(candidate)
+                except json.JSONDecodeError:
+                    continue
+    brace_start = text.find("{")
+    if brace_start == -1:
+        raise json.JSONDecodeError("no JSON object found", text, 0)
+    for end in range(len(text) - 1, brace_start, -1):
+        if text[end] == "}":
+            candidate = text[brace_start:end + 1]
+            try:
+                return json.loads(candidate)
+            except json.JSONDecodeError:
+                continue
+    raise json.JSONDecodeError("no valid JSON object found", text, brace_start)
 
 
 def decide_action(context: str, r=None) -> dict:
@@ -560,49 +589,45 @@ Respond in this exact JSON format (no markdown, no explanation):
                 )
         if r is not None:
             _cs = _pair_state(r, partner_id, CHAR_ID).get("convergence_state", "")
-            if _cs and isinstance(_cs, str):
-                try:
-                    import json as _json
-                    _cc = _json.loads(_cs)
-                    _nq = _cc.get("next_question", "")
-                    _ans = _cc.get("current_best_answer", "")
-                    _dis = _cc.get("disagreement", "")
-                    _resolved = _cc.get("resolved", False)
-                    _blocked = _cc.get("blocked_topic_terms", [])
+            _cc = _parse_convergence_state(_cs)
+            if _cc:
+                _nq = _cc.get("next_question", "")
+                _ans = _cc.get("current_best_answer", "")
+                _dis = _cc.get("disagreement", "")
+                _resolved = _cc.get("resolved", False)
+                _blocked = _cc.get("blocked_topic_terms", [])
 
-                    if _resolved and _nq:
+                if _resolved and _nq:
+                    force_constraint += (
+                        "\n\nRESOLUTION PRESSURE: The current question has been resolved. "
+                        "You must advance beyond the resolved answer with a NEW downstream question. "
+                        f"Resolved answer: \"{_ans[:100]}\""
+                        f" Blocked topics: {', '.join(_blocked[:2]) if _blocked else 'none'}"
+                    )
+                else:
+                    force_constraint += (
+                        "\n\nPAIR CONVERGENCE STATE: You and your partner have established "
+                        "a shared understanding. Revise from this convergence state, "
+                        "do not restart from the original question."
+                    )
+                    if _nq:
                         force_constraint += (
-                            "\n\nRESOLUTION PRESSURE: The current question has been resolved. "
-                            "You must advance beyond the resolved answer with a NEW downstream question. "
-                            f"Resolved answer: \"{_ans[:100]}\""
-                            f" Blocked topics: {', '.join(_blocked[:2]) if _blocked else 'none'}"
+                            f"\n  The open convergence question is: \"{_nq[:150]}\""
                         )
-                    else:
+                    if _ans:
                         force_constraint += (
-                            "\n\nPAIR CONVERGENCE STATE: You and your partner have established "
-                            "a shared understanding. Revise from this convergence state, "
-                            "do not restart from the original question."
+                            f"\n  Current best answer: \"{_ans[:150]}\""
                         )
-                        if _nq:
-                            force_constraint += (
-                                f"\n  The open convergence question is: \"{_nq[:150]}\""
-                            )
-                        if _ans:
-                            force_constraint += (
-                                f"\n  Current best answer: \"{_ans[:150]}\""
-                            )
-                        if _dis:
-                            force_constraint += (
-                                f"\n  Remaining disagreement: \"{_dis[:150]}\""
-                            )
+                    if _dis:
                         force_constraint += (
-                            "\n  Your task is to refine or challenge the current convergence "
-                            "state using your partner's latest evidence."
-                            "\n  Do not repeat the same investigation unless the convergence "
-                            "state says evidence is missing."
+                            f"\n  Remaining disagreement: \"{_dis[:150]}\""
                         )
-                except Exception:
-                    pass
+                    force_constraint += (
+                        "\n  Your task is to refine or challenge the current convergence "
+                        "state using your partner's latest evidence."
+                        "\n  Do not repeat the same investigation unless the convergence "
+                        "state says evidence is missing."
+                    )
         if r is not None:
             shapes = _recent_decision_shapes(r, 5)
             streak_len = _newest_first_streak(shapes)
@@ -620,33 +645,6 @@ Respond in this exact JSON format (no markdown, no explanation):
 
     from npc_llm_client import DECISION_MODEL
     raw = call_llm(system_prompt, context, model=DECISION_MODEL or "", r=r, call_label="decide")
-
-    def _extract_json(text):
-        if "```" in text:
-            parts = text.split("```")
-            for i, part in enumerate(parts):
-                if i % 2 == 0:
-                    continue
-                candidate = part
-                if candidate.startswith("json"):
-                    candidate = candidate[4:]
-                candidate = candidate.strip()
-                if candidate.startswith("{") and candidate.endswith("}"):
-                    try:
-                        return json.loads(candidate)
-                    except json.JSONDecodeError:
-                        continue
-        brace_start = text.find("{")
-        if brace_start == -1:
-            raise json.JSONDecodeError("no JSON object found", text, 0)
-        for end in range(len(text) - 1, brace_start, -1):
-            if text[end] == "}":
-                candidate = text[brace_start:end + 1]
-                try:
-                    return json.loads(candidate)
-                except json.JSONDecodeError:
-                    continue
-        raise json.JSONDecodeError("no valid JSON object found", text, brace_start)
 
     try:
         decision = _extract_json(raw["content"])

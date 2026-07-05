@@ -118,8 +118,9 @@ def _rh():
         _pair_recent_journal,
         _recent_thread_messages,
         _session_transcript,
+        _parse_convergence_state,
     )
-    return _partner_id, _recent_decisions, _compact_text, _pair_state, _pair_recent_journal, _recent_thread_messages, _session_transcript
+    return _partner_id, _recent_decisions, _compact_text, _pair_state, _pair_recent_journal, _recent_thread_messages, _session_transcript, _parse_convergence_state
 
 
 # ══════════════════════════════════════════════════════════════════
@@ -633,7 +634,7 @@ def think_about_world(r, contacts: dict | None = None, char_id: str = "") -> str
     """
     cid = char_id or CHAR_ID
     _contacts = contacts or {}
-    _partner_id_fn, _recent_decisions, _compact_text, _pair_state, _pair_recent_journal, _recent_thread_messages_fn, _session_transcript = _rh()
+    _partner_id_fn, _recent_decisions, _compact_text, _pair_state, _pair_recent_journal, _recent_thread_messages_fn, _session_transcript, _parse_convergence_state = _rh()
 
     logger.info("[%s] think_about_world: building context...", cid)
     parts = [f"--- {NPC_NAME} ({cid}) — Tick@{time.strftime('%H:%M:%S')} ---"]
@@ -722,21 +723,17 @@ def think_about_world(r, contacts: dict | None = None, char_id: str = "") -> str
         if ps:
             parts.append("Shared pair workspace:")
             conv_raw = ps.get("convergence_state", "")
-            if conv_raw and isinstance(conv_raw, str):
-                try:
-                    import json as _json
-                    conv = _json.loads(conv_raw)
-                    parts.append("  PAIR CONVERGENCE STATE (revise from here, do not restart from original question):")
-                    if conv.get("current_best_answer"):
-                        parts.append(f"    Current best answer: {conv['current_best_answer'][:200]}")
-                    if conv.get("agreement"):
-                        parts.append(f"    Agreement: {conv['agreement'][:200]}")
-                    if conv.get("disagreement"):
-                        parts.append(f"    Disagreement: {conv['disagreement'][:200]}")
-                    if conv.get("next_question"):
-                        parts.append(f"    Next question: {conv['next_question'][:200]}")
-                except Exception:
-                    pass
+            conv = _parse_convergence_state(conv_raw)
+            if conv:
+                parts.append("  PAIR CONVERGENCE STATE (revise from here, do not restart from original question):")
+                if conv.get("current_best_answer"):
+                    parts.append(f"    Current best answer: {conv['current_best_answer'][:200]}")
+                if conv.get("agreement"):
+                    parts.append(f"    Agreement: {conv['agreement'][:200]}")
+                if conv.get("disagreement"):
+                    parts.append(f"    Disagreement: {conv['disagreement'][:200]}")
+                if conv.get("next_question"):
+                    parts.append(f"    Next question: {conv['next_question'][:200]}")
             if ps.get("shared_goal"):
                 parts.append(f"  Goal: {ps['shared_goal'][:120]}")
             if ps.get("current_topic"):
