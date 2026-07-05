@@ -35,6 +35,7 @@ from npc_redis_helpers import (
     _question_similarity,
     _partner_answered_open_question,
     _new_evidence_since,
+    _matched_loop_topic,
     _open_question_from_partner,
     _state_question_from_partner,
     _has_work_after_open_question,
@@ -447,7 +448,8 @@ Respond in this exact JSON format (no markdown, no explanation):
                     evidence_reason = ""
                     if partner_id_tf:
                         evidence_reason = new_evidence_for_topic(r, common, CHAR_ID, partner_id_tf)
-                    # Block partner_artifact fatigue reset for resolved topics
+                    # Block partner_artifact fatigue reset for resolved or known
+                    # loop topics once the recent topic window is already high.
                     if evidence_reason and "partner_artifact" in evidence_reason:
                         _cps = _pair_state(r, partner_id, CHAR_ID) if r else {}
                         _conv_raw = _cps.get("convergence_state", "") if _cps else ""
@@ -456,10 +458,23 @@ Respond in this exact JSON format (no markdown, no explanation):
                         except Exception:
                             _conv = {}
                         _blocked_terms = _conv.get("blocked_topic_terms", []) if _conv else []
-                        if _blocked_terms and any(
+                        _resolved = bool(_conv.get("resolved", False)) if _conv else False
+                        _conv_topic = _matched_loop_topic(" ".join([
+                            _conv.get("disagreement", "") if _conv else "",
+                            _conv.get("current_best_answer", "") if _conv else "",
+                            _conv.get("agreement", "") if _conv else "",
+                            _conv.get("next_question", "") if _conv else "",
+                        ]))
+                        _common_topic = _matched_loop_topic(common)
+                        _blocked_match = _blocked_terms and any(
                             common == term or common in term or term in common
                             for term in _blocked_terms
-                        ):
+                        )
+                        _resolved_match = _resolved and _common_topic and _common_topic == _conv_topic
+                        _loop_match = topic_count >= 3 and _common_topic and (
+                            not _conv_topic or _common_topic == _conv_topic
+                        )
+                        if _blocked_match or _resolved_match or _loop_match:
                             evidence_reason = ""
                     if evidence_reason:
                         logger.info(

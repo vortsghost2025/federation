@@ -41,6 +41,48 @@ def _is_no_substantive_disagreement(text: str) -> bool:
     )
 
 
+def _matched_loop_topic(text: str) -> str:
+    t = (text or "").lower()
+    if not t:
+        return ""
+    for term in KNOWN_BLOCKED_TERMS:
+        if term in t:
+            if term in {"structured resonance lattice", "corruption-linked resonance", "resonance", "lattice"}:
+                return "resonance"
+            return term
+    return ""
+
+
+def _is_pseudo_framing_disagreement(text: str) -> bool:
+    t = (text or "").lower()
+    if not t:
+        return False
+    hard_conflict_terms = (
+        "contradict",
+        "conflict",
+        "incompatible",
+        "rejects",
+        "opposes",
+        "cannot both",
+        "mutually exclusive",
+    )
+    if any(term in t for term in hard_conflict_terms):
+        return False
+    pseudo_framing_terms = (
+        "emphasizes",
+        "stresses",
+        "proposes",
+        "focuses",
+        "differing only in emphasis",
+        "report",
+        "investigation",
+        "metrics",
+        "policy",
+        "governance",
+    )
+    return any(term in t for term in pseudo_framing_terms)
+
+
 def get_redis():
     return redis.from_url(REDIS_URL, decode_responses=True, socket_connect_timeout=5, socket_timeout=5)
 
@@ -628,11 +670,43 @@ def _compute_convergence_state(r, partner_id: str, cid: str, now: int) -> None:
         prev_resolved = prev_conv.get("resolved", False)
         prev_plateau = prev_conv.get("plateau_count", 0)
 
-        # Check for "no substantive disagreement" (fuzzy match)
+        # Check for "no substantive disagreement" (fuzzy match) or repeated
+        # same-topic framing differences that otherwise avoid closure forever.
         disagreement = conv.get("disagreement", "")
         is_no_disagreement = _is_no_substantive_disagreement(disagreement)
+        current_topic = _matched_loop_topic(" ".join([
+            disagreement,
+            conv.get("current_best_answer", ""),
+            conv.get("evidence_from_char_001", ""),
+            conv.get("evidence_from_char_306", ""),
+            conv.get("agreement", ""),
+            conv.get("next_question", ""),
+        ]))
+        previous_topic = _matched_loop_topic(" ".join([
+            prev_conv.get("disagreement", ""),
+            prev_conv.get("current_best_answer", ""),
+            prev_conv.get("evidence_from_char_001", ""),
+            prev_conv.get("evidence_from_char_306", ""),
+            prev_conv.get("agreement", ""),
+            prev_conv.get("next_question", ""),
+        ]))
+        same_topic_pseudo_disagreement = (
+            bool(current_topic)
+            and current_topic == previous_topic
+            and _is_pseudo_framing_disagreement(disagreement)
+        )
+        if is_no_disagreement:
+            plateau_reason = "no_substantive"
+            plateau_topic = current_topic or previous_topic
+        elif same_topic_pseudo_disagreement:
+            plateau_reason = "pseudo_framing"
+            plateau_topic = current_topic
+        else:
+            plateau_reason = "none"
+            plateau_topic = ""
+        counts_as_plateau = is_no_disagreement or same_topic_pseudo_disagreement
 
-        if is_no_disagreement and not prev_resolved:
+        if counts_as_plateau and not prev_resolved:
             new_plateau = prev_plateau + 1
         else:
             # Reset plateau if disagreement exists or already resolved
@@ -662,6 +736,8 @@ def _compute_convergence_state(r, partner_id: str, cid: str, now: int) -> None:
             conv["resolved_at"] = prev_conv.get("resolved_at", 0)
             conv["blocked_topic_terms"] = prev_conv.get("blocked_topic_terms", [])
             conv["plateau_count"] = new_plateau
+        conv["plateau_topic"] = plateau_topic
+        conv["plateau_reason"] = plateau_reason
 
         conv["source_ids"] = [
             state.get("last_message_ts", ""),
