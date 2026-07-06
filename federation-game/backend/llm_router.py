@@ -1171,7 +1171,7 @@ def _check_rate_limit(provider: str, key: Optional[str] = None) -> bool:
         return True
 
 
-_VALID_AUDIT_SOURCES = {"cognition", "thought", "narrator", "assistant", "unknown"}
+_VALID_AUDIT_SOURCES = {"cognition", "thought", "narrator", "assistant", "unknown", "dialogue"}
 
 
 def _normalize_audit_source(source: str) -> str:
