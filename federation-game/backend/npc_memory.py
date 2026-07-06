@@ -203,10 +203,19 @@ def harvest_tick_memories(
     r = _get_redis()
     harvested = 0
     summaries_triggered = 0
-    for npc, decision in zip(npc_list, tick_decisions):
-        char_id = npc.get("char_id", npc.get("id", ""))
-        if not char_id:
+    npc_by_id = {
+        (npc.get("char_id") or npc.get("id", "")): npc
+        for npc in npc_list
+        if npc.get("char_id") or npc.get("id")
+    }
+    for decision in tick_decisions:
+        decision_char_id = decision.get("char_id", "")
+        if not decision_char_id:
             continue
+        npc = npc_by_id.get(decision_char_id)
+        if not npc:
+            continue
+        char_id = decision_char_id
         events = []
         thought = decision.get("thought", "")
         action = decision.get("action", "")
@@ -271,7 +280,6 @@ def harvest_tick_memories(
         # when no thought/action/mood/opinion/faction/quest events were found.
         # This bridges the gap between make_decision() output and what
         # harvest_tick_memories() expects.
-        decision_char_id = decision.get("char_id", "")
         if (
             not events
             and decision.get("description")
