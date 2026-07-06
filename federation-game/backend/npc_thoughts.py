@@ -136,6 +136,8 @@ def _call_llm(
     temperature: float = 0.9,
     priority: str = "local",
     char_id: str = "",
+    source: str = "thought",
+    system_path: str = "backend.npc_thoughts._call_llm",
 ) -> str:
     task_class = {
         "heavy": "leader",
@@ -152,8 +154,8 @@ def _call_llm(
             max_tokens=max_tokens,
             temperature=temperature,
             char_id=char_id,
-            source="thought",
-            system_path="backend.npc_thoughts._call_llm",
+            source=source,
+            system_path=system_path,
         )
         if result.get("success") and result.get("content"):
             content = _clean_llm_output(result["content"])

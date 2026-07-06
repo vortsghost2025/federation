@@ -92,6 +92,8 @@ def _generate_dialogue(npc_a: Dict, npc_b: Dict, interaction_type: str) -> Optio
             temperature=0.9,
             priority="local",
             char_id=char_id,
+            source="dialogue",
+            system_path="backend.npc_interactions._generate_dialogue",
         )
         if result and len(result) > 20:
             cleaned = result.strip()
