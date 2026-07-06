@@ -55,6 +55,7 @@ html{height:auto;min-height:100vh}body{height:auto;min-height:100vh;overflow-x:h
 .brief-state-badge{font-family:'Orbitron',sans-serif;font-size:0.625rem;font-weight:900;letter-spacing:1px;padding:2px 8px;border-radius:4px;white-space:nowrap;border:1px solid}
 .brief-state-badge.state-stable{color:var(--green);border-color:rgba(76,175,80,0.4);background:var(--green-dim)}
 .brief-state-badge.state-unstable{color:var(--amber);border-color:rgba(255,152,0,0.4);background:var(--amber-dim)}
+.brief-state-badge.state-watch{color:var(--amber);border-color:rgba(255,152,0,0.4);background:var(--amber-dim)}
 .brief-state-badge.state-critical{color:var(--red);border-color:rgba(244,67,54,0.4);background:var(--red-dim);animation:sevPulse 2s ease infinite}
 .brief-meta{color:var(--dim);font-size:0.75rem}
 .brief-headline{font-weight:700;color:var(--white);line-height:1.3}
@@ -806,7 +807,8 @@ html{height:auto;min-height:100vh}body{height:auto;min-height:100vh;overflow-x:h
   font-weight: 700;
 }
 .rm-summary-state.stable { color: var(--green); }
-.rm-summary-state.warning { color: var(--amber); }
+.rm-summary-state.watch { color: var(--amber); }
+.rm-summary-state.unstable { color: var(--red); }
 .rm-summary-state.crisis { color: var(--red); }
 .rm-summary-event-item {
   font-size: 0.9375rem;
