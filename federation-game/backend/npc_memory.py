@@ -59,6 +59,26 @@ def _significance_score(event: Dict) -> int:
         "diplomacy_proposal",
     ):
         score += 3
+    elif etype == "decision":
+        category = event.get("category", "unknown")
+        if category in (
+            "advance_goal",
+            "investigate",
+            "seek_resources",
+            "self_improve",
+            "explore",
+            "help_ally",
+            "confront_rival",
+            "socialise",
+            "socialize",
+        ):
+            score += 2
+        elif category in ("rest", "observe", "unknown"):
+            score += 1
+        if event.get("action_taken") or event.get("action_desc"):
+            score += 1
+        if event.get("target_faction"):
+            score += 1
     elif etype in ("mood_shift", "opinion_change", "action", "thought"):
         score += 1
     if event.get("faction_impact"):
@@ -244,6 +264,28 @@ def harvest_tick_memories(
                 {
                     "type": "quest_event",
                     "content": str(quest_event)[:300],
+                    "ts": tick_ts,
+                }
+            )
+        # Fallback: create a decision event from the decision schema
+        # when no thought/action/mood/opinion/faction/quest events were found.
+        # This bridges the gap between make_decision() output and what
+        # harvest_tick_memories() expects.
+        decision_char_id = decision.get("char_id", "")
+        if (
+            not events
+            and decision.get("description")
+            and (not decision_char_id or decision_char_id == char_id)
+        ):
+            events.append(
+                {
+                    "type": "decision",
+                    "category": decision.get("category", "unknown"),
+                    "content": decision.get("description", "")[:300],
+                    "reasoning": decision.get("reasoning", "")[:300],
+                    "action_taken": decision.get("action_taken"),
+                    "action_desc": decision.get("action_desc"),
+                    "target_faction": decision.get("target_faction"),
                     "ts": tick_ts,
                 }
             )
