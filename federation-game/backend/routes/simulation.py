@@ -250,6 +250,29 @@ async def simulation_operator_tick():
     return JSONResponse(status_code=202, content={"status": "started", "tick_id": tick_id})
 
 
+@router.post("/simulation/operator/governor/metrics/snapshot")
+async def simulation_operator_governor_metrics_snapshot():
+    """Create a metrics-only NPC governor snapshot.
+
+    This is observe-only: it persists a report but does not alter tick behavior,
+    NPC selection, memory scoring, LLM routing, or fallback handling.
+    """
+    from npc_governor_metrics import build_governor_metrics_snapshot
+
+    return build_governor_metrics_snapshot(persist=True)
+
+
+@router.get("/simulation/operator/governor/metrics/latest")
+async def simulation_operator_governor_metrics_latest():
+    """Return the latest persisted metrics-only NPC governor snapshot."""
+    from npc_governor_metrics import get_latest_governor_metrics
+
+    snapshot = get_latest_governor_metrics()
+    if snapshot is None:
+        return {"status": "missing"}
+    return snapshot
+
+
 # ---------------------------------------------------------------------------
 # Lazy shared Redis connection for observer endpoints
 # ---------------------------------------------------------------------------
