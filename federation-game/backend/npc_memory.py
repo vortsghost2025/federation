@@ -203,17 +203,40 @@ def harvest_tick_memories(
     r = _get_redis()
     harvested = 0
     summaries_triggered = 0
+    real_decisions_count = 0
+    fallback_decisions_count = 0
+    skipped_no_char_id = 0
+    skipped_no_npc_match = 0
+    skipped_no_description = 0
+    skipped_below_threshold = 0
+    skipped_fallback_rest = 0
+    harvested_by_category: Dict[str, int] = {}
+    skipped_by_category: Dict[str, int] = {}
     npc_by_id = {
         (npc.get("char_id") or npc.get("id", "")): npc
         for npc in npc_list
         if npc.get("char_id") or npc.get("id")
     }
     for decision in tick_decisions:
+        category = decision.get("category", "unknown")
+        is_fallback_rest = (
+            decision.get("reason") == "operator_injected_fallback"
+            and category == "rest"
+            and not decision.get("description")
+        )
+        if is_fallback_rest:
+            fallback_decisions_count += 1
+            skipped_fallback_rest += 1
+            skipped_by_category[category] = skipped_by_category.get(category, 0) + 1
+            continue
+        real_decisions_count += 1
         decision_char_id = decision.get("char_id", "")
         if not decision_char_id:
+            skipped_no_char_id += 1
             continue
         npc = npc_by_id.get(decision_char_id)
         if not npc:
+            skipped_no_npc_match += 1
             continue
         char_id = decision_char_id
         events = []
@@ -343,7 +366,23 @@ def harvest_tick_memories(
                         "faction_impact": True,
                     }
                 )
+        if not events and not decision.get("description"):
+            skipped_no_description += 1
+            skipped_by_category[category] = skipped_by_category.get(category, 0) + 1
+            continue
         if events:
+            for event in events:
+                score = _significance_score(event)
+                event_category = event.get("category", event.get("type", "unknown"))
+                if score < MEMORY_SIGNIFICANCE_THRESHOLD:
+                    skipped_below_threshold += 1
+                    skipped_by_category[event_category] = (
+                        skipped_by_category.get(event_category, 0) + 1
+                    )
+                else:
+                    harvested_by_category[event_category] = (
+                        harvested_by_category.get(event_category, 0) + 1
+                    )
             result = record_memories_batch(char_id, events)
             harvested += result.get("recorded", 0)
             summary_tick_key = MEMORY_SUMMARY_TICK_KEY.format(char_id=char_id)
@@ -361,6 +400,16 @@ def harvest_tick_memories(
                     logger.warning("Auto-summary failed for %s: %s", char_id, exc)
     return {
         "harvested": harvested,
+        "harvested_memory_count": harvested,
         "summaries_triggered": summaries_triggered,
         "npcs_processed": len(npc_list),
+        "real_decisions_count": real_decisions_count,
+        "fallback_decisions_count": fallback_decisions_count,
+        "skipped_no_char_id": skipped_no_char_id,
+        "skipped_no_npc_match": skipped_no_npc_match,
+        "skipped_no_description": skipped_no_description,
+        "skipped_below_threshold": skipped_below_threshold,
+        "skipped_fallback_rest": skipped_fallback_rest,
+        "harvested_by_category": harvested_by_category,
+        "skipped_by_category": skipped_by_category,
     }
