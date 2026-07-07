@@ -6,10 +6,10 @@
 #
 # Requires: ssh access to the VPS, and curl/ssh on PATH (built into Windows 10+).
 # Usage:  .\tools\runtime-topology-check.ps1
-#         .\tools\runtime-topology-check.ps1 -VPSHost root@187.77.3.56 -Domain federation-game.deliberatefederation.cloud
+#         .\tools\runtime-topology-check.ps1 -VPSHost federation-vps -Domain federation-game.deliberatefederation.cloud
 
 param(
-    [string]$VPSHost = "root@187.77.3.56",
+    [string]$VPSHost = "federation-vps",
     [string]$Domain  = "federation-game.deliberatefederation.cloud"
 )
 
