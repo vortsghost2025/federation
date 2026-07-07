@@ -97,10 +97,18 @@ def _generate_dialogue(npc_a: Dict, npc_b: Dict, interaction_type: str) -> Optio
         )
         if result and len(result) > 20:
             cleaned = result.strip()
+            # Reject responses that echo the system prompt instead of dialogue.
+            low = cleaned.lower()
+            if any(frag in low for frag in (
+                "generate a brief", "each npc speaks", "keep it under",
+                "no narration", "you are a dialogue generator",
+            )):
+                return None
             lines = []
             for line in cleaned.split("\n"):
                 line = line.strip()
-                if line and (name_a in line or name_b in line or ":" in line):
+                # Keep only genuine dialogue: a speaker name or quoted speech.
+                if line and (name_a in line or name_b in line or '"' in line):
                     lines.append(line)
             if len(lines) >= 2:
                 return "\n".join(lines[:3])
