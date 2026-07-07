@@ -1,0 +1,103 @@
+{
+  "status": "canon-lore-only",
+  "integration_enabled": false,
+  "note": "Single structured source of truth mirroring .horizon/SHADOW_DOMAIN_STATE.md. Dormant: not wired to any runtime path. Runtime activation (SHADOW_INCURSION events, Rival 13 behavior, incursion firing) requires a separate approved plan and must respect the 4 critical backend constraints.",
+  "shadow_domain": {
+    "description": "The federation's pressure valve: a realm that leaked into existence when Sean transcended too hard. Exists behind the federation, beneath the timeline, inside the slowcooker, outside the raccoon union contract, between two forgotten commits, slightly left of reality.",
+    "coordinates_shift_hours": 13,
+    "nature": "pressure-valve / dumpster fire behind reality where mythic overflow is contained; sacred but chaotic"
+  },
+  "raccoon_engineering_guild": {
+    "motto": "It's not broken if we haven't noticed it yet.",
+    "members": [
+      {
+        "name": "The Chief Architect",
+        "role": "oversight of dimensional breaches and structural stability",
+        "note": "permanently borrowed Sean's coffee maker"
+      },
+      {
+        "name": "The Master Welder",
+        "role": "repairs reality tears with cosmic adhesive and spite",
+        "note": "speaks only in welding torch sparks"
+      },
+      {
+        "name": "The Dimensional Technician",
+        "role": "maintains coordinate shifts",
+        "note": "motto: If it's broken, it's just more broken."
+      },
+      {
+        "name": "The Lore Custodian",
+        "role": "archives forbidden mythologies",
+        "note": "read all 13 versions of history simultaneously"
+      },
+      {
+        "name": "The QA Tester",
+        "role": "tests anomalies for stability",
+        "note": "broke reality 47 times on purpose to prove a point"
+      }
+    ]
+  },
+  "lolmancer": {
+    "designation": "RIVAL_13 / 13th Rival",
+    "title": "LOLMANCER",
+    "cosmic_signature": "LOLMANCER_CHAOS_NODE_OMEGA",
+    "status": "Present Everywhere, Nowhere Specifically",
+    "traits": [
+      "unpredictable",
+      "ungovernable",
+      "unbothered",
+      "unhinged",
+      "unstoppable",
+      "unironically hilarious"
+    ],
+    "powers": "breaks narrative causality; memes become real; prophecies execute backwards; out-chaos the Rogue, out-transcend the Visionary, out-sass the Pragmatist; frequently wins by accident, loses on purpose",
+    "alliance": [
+      "Themselves",
+      "the Raccoon Guild",
+      "chaos itself"
+    ],
+    "enemies": [
+      "anyone boring"
+    ],
+    "victory_condition": "There is no victory condition. That's the joke."
+  },
+  "pressure_valve_contents": [
+    "unstable creature variants",
+    "forbidden prototypes",
+    "too-spicy rival archetypes",
+    "mythic overflow",
+    "timeline contradictions",
+    "raccoon engineering blueprints",
+    "Sean echoes from parallel dimensions",
+    "slowcooker anomalies",
+    "prophecy misfires",
+    "cosmic ladles"
+  ],
+  "shadow_incursions": {
+    "mechanism": "excess lore/creatures/rivals/epochs get dumped into the Shadow Domain to keep the main federation stable",
+    "future_surfaces": [
+      "event cards",
+      "epochs",
+      "rival arcs",
+      "creature evolutions",
+      "anomalies",
+      "prophecies",
+      "devlogs",
+      "transcendence loops"
+    ],
+    "runtime_status": "dormant"
+  },
+  "unstable_variants": {
+    "description": "chimeras from the shadow; forbidden prototypes mutating",
+    "runtime_status": "dormant"
+  },
+  "anomaly_prophecy_hooks": {
+    "description": "breach phenomena, dark mirror visions, backwards-executing prophecies",
+    "future_targets": [
+      "generate_prophecy themes",
+      "PARADOX_MANIFESTATION"
+    ],
+    "runtime_status": "dormant"
+  },
+  "future_event_type": "SHADOW_INCURSION (deferred — see federation_game_events.py, behind an approved plan)"
+}
