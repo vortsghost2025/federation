@@ -40,8 +40,9 @@
 - **Definition:** The 06-30 extraction wave (11 commits splitting `npc_autonomy.py` into sibling modules) cannot be atomically deployed. Mid-wave deploys leave the VPS in a mixed state where some files are post-extraction and others pre-extraction, causing import resolution failures.
 - **Evidence:** Home hash `d1c2f7d6` (29KB, post-extraction shim importing from `npc_reflection`, `npc_decree` etc.) vs VPS hash `274420c1` (7KB, pre-extraction monolith with inline definitions). The VPS *does* have extracted modules in `npc-agent/` — the drift is that `backend/npc_autonomy.py` is still the monolith, referencing functions that were extracted.
 - **Root cause:** 11 separate commits deployed across 3 paths (backend, npc-agent-001, npc-agent-306) with no atomicity. Each `scp` + `docker restart` sequence deploys one file at a time, creating windows where imports resolve on one container but not the other.
-- **Current mitigation:** Both VPS paths (backend, npc-agent) are independently functional. The backend container uses the monolith. The npc-agent containers use the extracted sibling modules. They don't cross-reference.
+- **Current mitigation:** `deploy_vps.sh` now supports `npc-agent-batch` mode (2026-07-07). Stages ALL `.py` files to `/tmp/npc-agent-batch/` on VPS, syntax-checks each, then copies all at once with a single container restart. Prevents the partial-deploy window entirely.
 - **Detection pattern:** `ImportError` or `AttributeError` in container logs immediately after a deploy. Container restarts that succeed on one NPC but fail on another.
+- **Resolution (2026-07-07):** `deploy_vps.sh npc-agent-batch <dir>` — stages, validates, copies atomically, single restart. Introduced to close the deploy-atomicity gap.
 
 ---
 

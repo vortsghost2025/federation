@@ -200,3 +200,17 @@ NFM-005: Memory Provenance Absence — no lineage on memories
 Each NFM: ID, definition, evidence, root cause, current mitigation, detection pattern
 Relationship to Book-6: these are architectural (how Federation is built), not behavioral (how agents behave)
 ```
+
+## NFM-004 Fix — Atomic Batch Deploy (2026-07-07)
+```
+NEW deploy_vps.sh:npc-agent-batch mode — atomic extraction-wave deploys
+  Stages all .py files to /tmp/npc-agent-batch/ on VPS
+  Syntax-checks each on remote Python
+  On any failure: abort + clean up staging (all-or-nothing)
+  On all pass: backup + copy all at once with a single container restart
+USAGE: ./deploy_vps.sh npc-agent-batch npc-agent/
+USAGE doc: updated heading + notes section to document batch mode
+NFM-004: mitigation updated (batch mode), resolution field added
+ARCHITECTURE_STATE: deploy rules table updated to npc-agent-batch; batch deploy note added
+RESOLUTION: NFM-004 gap addressed — partial-deploy window eliminated for npc-agent extraction waves
+```

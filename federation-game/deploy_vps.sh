@@ -12,6 +12,7 @@ Usage:
   ./deploy_vps.sh check backend <remote_name>
   ./deploy_vps.sh check backend+worker <remote_name>
   ./deploy_vps.sh npc-agent <local_file> [remote_name]
+  ./deploy_vps.sh npc-agent-batch <local_directory>
   ./deploy_vps.sh backend <local_file> <remote_name>
   ./deploy_vps.sh backend+worker <local_file> <remote_name>
 
@@ -20,11 +21,15 @@ Examples:
   ./deploy_vps.sh check backend npc_messaging.py
   ./deploy_vps.sh check backend+worker worker.py
   ./deploy_vps.sh npc-agent npc-agent/npc_agent.canonical_v2.py
+  ./deploy_vps.sh npc-agent-batch npc-agent/
   ./deploy_vps.sh backend backend/npc_messaging.patched.py npc_messaging.py
   ./deploy_vps.sh backend+worker backend/some_shared_file.py some_shared_file.py
 
 Notes:
   - npc-agent updates the VPS host copy and restarts BOTH NPC containers.
+  - npc-agent-batch stages ALL .py files, syntax-checks each, then copies
+    atomically to the host directory with a single restart. Use this for
+    extraction-wave deploys to prevent mid-deploy drift (NFM-004).
   - backend updates the mounted host copy and restarts backend.
   - backend+worker updates host/backend and restarts both.
 EOF
@@ -161,6 +166,68 @@ case "$MODE" in
     print_md5_block "container federation-game-npc-agent-001-1" "docker exec federation-game-npc-agent-001-1 md5sum /app/$REMOTE_NAME"
     print_md5_block "container federation-game-npc-agent-306-1" "docker exec federation-game-npc-agent-306-1 md5sum /app/$REMOTE_NAME"
     print_md5_block "status" "docker ps --format 'table {{.Names}}\t{{.Status}}' | grep -E 'npc-agent-(001|306)'"
+    ;;
+
+  npc-agent-batch)
+    SRC_DIR="$LOCAL_FILE"
+    if [ ! -d "$SRC_DIR" ]; then
+      echo "Source must be a directory (e.g. npc-agent/)" >&2
+      exit 1
+    fi
+    STAGING="/tmp/npc-agent-batch/"
+
+    echo "==> Staging ALL files from $SRC_DIR to VPS staging area"
+    ssh "$VPS" "rm -rf '$STAGING' && mkdir -p '$STAGING'"
+    scp "$SRC_DIR"/*.py "$VPS:$STAGING"
+
+    echo "==> Syntax-checking all Python files on VPS"
+    FAILED=0
+    while IFS= read -r f; do
+      fname="$(basename "$f")"
+      if ! ssh "$VPS" "python3 -m py_compile '$STAGING$fname'" 2>/dev/null; then
+        echo "  FAIL: $fname" >&2
+        FAILED=$((FAILED + 1))
+      else
+        echo "  OK: $fname"
+      fi
+    done < <(ssh "$VPS" "cd '$STAGING' && ls *.py" 2>/dev/null || true)
+
+    if [ "$FAILED" -ne 0 ]; then
+      echo "==> ERROR: $FAILED file(s) failed syntax check — deploy ABORTED" >&2
+      ssh "$VPS" "rm -rf '$STAGING'"
+      exit 1
+    fi
+
+    echo "==> All files valid. Copying to $APP_ROOT/npc-agent/ atomically"
+    ssh "$VPS" bash -s -- "$STAGING" "$APP_ROOT/npc-agent" <<'ATOMIC_DEPLOY'
+set -euo pipefail
+STAGING="$1"
+TARGET="$2"
+TS="$(date +%Y%m%d_%H%M%S)"
+for f in "$STAGING"*.py; do
+  fname="$(basename "$f")"
+  if [ -f "$TARGET/$fname" ]; then
+    cp "$TARGET/$fname" "$TARGET/$fname.bak.$TS"
+  fi
+  cp "$f" "$TARGET/$fname"
+done
+ATOMIC_DEPLOY
+
+    echo "==> Single restart of NPC containers"
+    ssh "$VPS" "docker restart federation-game-npc-agent-001-1 federation-game-npc-agent-306-1 >/dev/null"
+    sleep 3
+
+    echo "==> Verifying"
+    while IFS= read -r f; do
+      fname="$(basename "$f")"
+      print_md5_block "host $fname" "md5sum '$APP_ROOT/npc-agent/$fname'"
+      print_md5_block "container-001 $fname" "docker exec federation-game-npc-agent-001-1 md5sum /app/$fname"
+      print_md5_block "container-306 $fname" "docker exec federation-game-npc-agent-306-1 md5sum /app/$fname"
+    done < <(ssh "$VPS" "cd '$STAGING' && ls *.py" 2>/dev/null || true)
+    print_md5_block "status" "docker ps --format 'table {{.Names}}\t{{.Status}}' | grep -E 'npc-agent-(001|306)'"
+
+    echo "==> Cleaning up staging area"
+    ssh "$VPS" "rm -rf '$STAGING'"
     ;;
 
   backend)

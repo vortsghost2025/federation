@@ -214,11 +214,13 @@ Needs queue flow:
 | Container type | Mount | Deploy method | Restart picks up changes? |
 |---------------|-------|--------------|--------------------------|
 | backend + worker | read-only bind (`/docker/federation-game/backend:/app:ro`) | scp → overwrite host → `docker compose restart` | ✅ Yes (must restart for loaded modules) |
-| npc-agent | read-only bind (`/docker/federation-game/npc-agent:/app:ro`) | scp → overwrite host → `docker compose restart` | ✅ Yes (must restart for boot code like startup scrub) |
+| npc-agent | read-only bind (`/docker/federation-game/npc-agent:/app:ro`) | `deploy_vps.sh npc-agent-batch npc-agent/` — stages, validates, copies atomically, single restart | ✅ Yes (single restart) |
 | frontend | **BAKED** (no bind mount) | scp + `docker cp` + `nginx -s reload` | ❌ Must docker cp |
 | postgres | volume | N/A | N/A |
 
 **PRE-RESTART GATE:** verify local md5 → local import → VPS md5 → container runtime import → THEN restart
+
+**BATCH DEPLOY (NFM-004 fix):** `deploy_vps.sh npc-agent-batch <dir>` uploads all `.py` to `/tmp/npc-agent-batch/`, syntax-checks each, then copies all at once with a single container restart. Prevents mid-wave deploy drift.
 
 **Large files (>100KB):** `ssh_ssh_upload` fails; use chunked base64 via Python stdin pipe
 
