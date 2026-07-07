@@ -223,3 +223,16 @@ tools/
 
 # NPC agent workspace scratch (local only)
 federation-game/WORKSPACE/
+
+# Federation one-off diagnostic scratch scripts (root level, local only)
+/audit.py
+/audit_baseline.py
+/audit_baseline_v2.py
+/audit_check.py
+/audit_check_post_restart.py
+/governor_baseline_v3.py
+/investigate_zero_mem.py
+/investigate_zero_mem_pg.py
+/observe_memory.py
+/post_tick_count.py
+/pre_tick_count.py
