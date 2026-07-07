@@ -15,6 +15,7 @@ from typing import Optional, Dict, List, Any
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException
 from fastapi.responses import JSONResponse, Response
 from fastapi.middleware.cors import CORSMiddleware
+from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware
 from pydantic import BaseModel
 import sys
 import os
@@ -308,6 +309,15 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+)
+
+# Traefik/nginx terminate TLS in front of uvicorn, so without this the app
+# believes it is http and emits `http://` redirect Locations (307). That makes
+# the browser follow an insecure redirect -> mixed-content block on HTTPS pages.
+# Trusting X-Forwarded-Proto fixes the scheme at the source.
+app.add_middleware(
+    ProxyHeadersMiddleware,
+    trusted_hosts="*",
 )
 
 app.include_router(core_router)
