@@ -71,6 +71,7 @@ for _i in range(1, 9):
 _NVIDIA_KEY = os.environ.get("NVIDIA_API_KEY", "")
 if _NVIDIA_KEY and _NVIDIA_KEY not in NIM_KEYS:
     NIM_KEYS.append(_NVIDIA_KEY)
+NIM_DISABLED = os.environ.get("NIM_DISABLED", "").strip() == "1"
 NIM_BASE_URL = "https://integrate.api.nvidia.com/v1/chat/completions"
 NIM_RATE_LIMIT_PER_KEY = 40  # requests per minute per key
 NIM_RATE_LIMIT_WINDOW = 60  # seconds
@@ -1411,6 +1412,9 @@ def _call_provider(
     }
 
     if provider == "nim":
+        if NIM_DISABLED:
+            logger.info("NIM disabled by env; skipping hosted NIM tier")
+            return _early_failure("NIM disabled by env (NIM_DISABLED=1)")
         key = _get_nim_key()
         if not key:
             return _early_failure("No NIM API keys configured")
