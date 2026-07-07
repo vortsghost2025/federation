@@ -544,7 +544,11 @@ def _sync_pair_workspace(r, decision: dict, result: dict, npc_name: str = "", ch
         # the same resolved shared_goal — that re-anchors to the blocked topic.
         _post_resolution_default = False
         if state.get("convergence_state"):
-            _cc = _parse_convergence_state(state["convergence_state"])
+            try:
+                _cr = state["convergence_state"]
+                _cc = json.loads(_cr) if isinstance(_cr, str) else {}
+            except Exception:
+                _cc = {}
             if _cc and _cc.get("resolved", False) and _cc.get("resolved_shared_goal") and \
                state.get("shared_goal", "") == _cc["resolved_shared_goal"]:
                 _post_resolution_default = True
@@ -974,11 +978,4 @@ def _session_transcript(r, contacts: dict | None = None, char_id: str = "") -> s
     return text
 
 
-def _parse_convergence_state(raw):
-    if not raw or not isinstance(raw, str):
-        return None
-    try:
-        return json.loads(raw)
-    except Exception as ex:
-        logger.debug("convergence_state parse failed: %s", ex)
-        return None
+

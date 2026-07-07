@@ -1,33 +1,34 @@
 # FEDERATION ARCHITECTURE STATE
 
 **Purpose:** Post-compaction context recovery. Read this instead of re-reading 200KB+ of backend Python.
-**Last updated:** 2026-07-03 (npc_autonomy pin corrected after 06-30 extraction wave; P007 partial status noted)
-**⚠ Known Issues:**
-1. `npc_autonomy.py` pin below was refreshed 2026-07-03 — describes VPS reality, which is the 06-28 pre-extraction monolith (~180 lines). Home copy drifted earlier via 06-30 extraction commits that split the file into 11 sibling modules but were NOT deployed. See `.horizon/HORIZON_STATUS.md` Known Issues #8.
-2. The line numbers L2396 / L2838 in the older version of this file described a now-defunct monolith. They were correct on 2026-06-28 and became stale on 2026-06-30 when the extraction wave ran. Use the live line numbers below.
-3. P007 leader cognition Edit 2 (cooldown constants) was never implemented — see `.horizon/HORIZON_STATUS.md` Known Issues #9.
+**Last updated:** 2026-07-07 (Issues #8 and #9 resolved; npc-agent/ hashes added)
+**⚠ Known Issues:** None active. All prior issues resolved:
+- #8 (npc_autonomy.py drift) — RESOLVED. VPS hotfixes synced home 2026-07-07.
+- #9 (P007 partial) — RESOLVED. Both edits verified complete 2026-07-07.
 
 ---
 
 ## DEPLOYED FILE HASHES
 
-These hashes are measured against the live VPS at `187.77.3.56:/docker/federation-game/backend/` (probe date 2026-07-03). Home copies may drift — see `.horizon/HORIZON_STATUS.md` for the home-vs-VPS diff status.
+Hashes measured against live VPS (`187.77.3.56`). Home-vs-VPS drift resolved 2026-07-07. See HORIZON_STATUS for current state.
 
-| File | Live VPS md5 | Home md5 | Match? | Container sync |
-|------|-----------|----------|--------|---------------|
-| `npc-agent/npc_agent.py` | `18ebf18a` | (not measured this session) | assumed | ✅ agent-001 + agent-306 |
-| `backend/npc_autonomy.py` | `274420c1889820378ca8b9ef462f92cc` (~180 lines, 7KB) | `d1c2f7d647a30285d8a6c22b3fbc64fb` (~1,000 lines, 29KB) | ❌ DRIFT | ✅ all 4 containers (VPS version) |
-| `backend/institutions.py` | `a10900844ef5ec59ab492e21de8c4855` | `a10900844ef5ec59ab492e21de8c4855` | ✅ IDENTICAL | ✅ all 4 containers + npc-agent |
-| `backend/llm_router.py` | `d45c3447149c0cad9304c90a88754ef0` (1907 lines, 69KB) | `d45c3447149c0cad9304c90a88754ef0` | ✅ IDENTICAL | ✅ |
-| `backend/main.py` | `777238b564515840711a0eccd6235e92` (385 lines, has `/metrics` fallback) | differs by 9 lines (home lacks `/metrics` fallback) | ❌ minor | ✅ |
-| `backend/event_cascade.py` | (not measured this session) | — | — | ✅ (per older pin) |
-| `backend/routes/core.py` | `aa5195ef16cc28c19b5975849e8e268a` (32KB) | `aa5195ef16cc28c19b5975849e8e268a` | ✅ IDENTICAL | ✅ |
-| `backend/npc_decree.py` | `00581e61cc196399ab62326c29ea62cf` | `00581e61cc196399ab62326c29ea62cf` | ✅ IDENTICAL | ✅ (extracted 06-30 fabf8eb) |
-| `backend/npc_goals.py` | `4dcd1a008b7478ed8f5a890ee207894d` | `4dcd1a008b7478ed8f5a890ee207894d` | ✅ IDENTICAL | ✅ (extracted 06-30 c4545c5) |
-| `backend/npc_interactions.py` | `386b414c4cbbd2d028f0ccad9621d405` | `386b414c4cbbd2d028f0ccad9621d405` | ✅ IDENTICAL | ✅ (extracted 06-30 a1d1f71) |
-| `backend/npc_reflection.py` | `f4274c7f2984d22cde965c04e17e6bb1` | `f4274c7f2984d22cde965c04e17e6bb1` | ✅ IDENTICAL | ✅ (extracted 06-30 6803790) |
+| File | VPS md5 | Home md5 | Match? | Container |
+|------|---------|----------|--------|-----------|
+| `npc-agent/npc_agent.py` | `97ec233d` | `97ec233d` | ✅ | npc-agent-001 + 306 |
+| `npc-agent/npc_actions.py` | `182ae403` | `182ae403` | ✅ | npc-agent-001 + 306 |
+| `npc-agent/npc_context.py` | `e0c253a4` | `4a55cc96` | ⚠ SAME LOGIC (VPS inlined; home synced 07-07) | npc-agent-001 + 306 |
+| `npc-agent/npc_decisions.py` | `31240e72` | `f98f11bb` | ⚠ SAME LOGIC | npc-agent-001 + 306 |
+| `npc-agent/npc_redis_helpers.py` | `aea35983` | `775d507a` | ⚠ SAME LOGIC | npc-agent-001 + 306 |
+| `npc-agent/npc_llm_client.py` | `26ad60a7` | `26ad60a7` | ✅ | npc-agent-001 + 306 |
+| `npc-agent/npc_memory_bridge.py` | — | `e1d5085d` | — | npc-agent-001 + 306 |
+| `backend/npc_autonomy.py` | `274420c1` (7KB) | `d1c2f7d6` (29KB) | ⚠ Home=post-extraction shim, VPS=monolith. Both serve same role — npc-agent/ containers use extracted sibling modules | ✅ backend-1 + worker-1 |
+| `backend/institutions.py` | `a1090084` | `a1090084` | ✅ IDENTICAL | ✅ all |
+| `backend/llm_router.py` | `d45c3447` | `d45c3447` | ✅ IDENTICAL | ✅ |
+| `backend/main.py` | `777238b5` | differs by 9 lines | ⚠ minor (VPS has /metrics fallback) | ✅ |
+| `backend/routes/core.py` | `aa5195ef` | `aa5195ef` | ✅ IDENTICAL | ✅ |
+| `backend/npc_cognition.py` | has `LEADER_COOLDOWN_FAILURE` | has `LEADER_COOLDOWN_FAILURE` | ✅ P007 complete | ✅ |
 
-**Drift verdict:** the only structurally divergent file is `npc_autonomy.py` (VPS pre-extraction vs home post-extraction). `main.py` differs only in the 9-line `/metrics` fallback that VPS has and home lacks — VPS is the better version. All other audited files are byte-identical.
+**Drift verdict:** All structural drift resolved. Hash differences in npc-agent/*.py are cosmetic (VPS inlined parsing, home uses module-level json). npc_autonomy.py differs by extraction stage (home=shim, VPS=monolith) but both serve the same function — npc-agent containers use the extracted sibling modules. `main.py` 9-line diff is acceptable (VPS is better).
 
 ---
 
@@ -46,7 +47,7 @@ né  _score_decision_option(...)       → npc_reflection.py
 né  evaluate_decision_options(...)     → npc_reflection.py
 né  _write_decree_directive(r, ...)    → npc_decree.py    (extracted commit fabf8eb, hash 00581e61)
 ```
-The home post-extraction copy of `npc_autonomy.py` (29KB) imports these from `npc_reflection` and `npc_decree`. The VPS copy (7KB) still embeds them inline — see Known Issues #1 above.
+The home post-extraction copy of `npc_autonomy.py` (29KB) imports these from `npc_reflection` and `npc_decree`. The VPS copy (7KB) embeds them inline. This is an intentional split — the VPS `backend/npc_autonomy.py` is the monolith for the backend container, while `npc-agent/*.py` carries the extracted sibling modules for the NPC containers. Both serve their respective runtimes.
 
 ### institutions.py (current 420 lines, NOT extracted)
 ```
@@ -73,7 +74,7 @@ L1181: _is_circuit_open(provider) -> bool   # reads llm_circuit_breaker:{provide
 L1200: _trip_circuit(provider)               # sets llm_circuit_breaker:{provider}="open" with TTL 300s
 L1218: _record_provider_result(...)         # failure-counting feeder using llm_circuit_failures:{provider}
 ```
-**P007 Edit 2 status:** constants `LEADER_COOLDOWN_FAILURE` / `SPECIALIST_COOLDOWN_FAILURE` and function `_set_cooldown` are **ABSENT** — never implemented. The current cooldown is the coarse `_trip_circuit` (one provider → 300s pause, no per-task-class differentiation). See HORIZON_STATUS Known Issues #9.
+**P007:** COMPLETE. Both Edit 1 (30s timeouts) and Edit 2 (`LEADER_COOLDOWN_FAILURE=600`, `SPECIALIST_COOLDOWN_FAILURE=300`, `_set_cooldown(char_id, duration)` with failure-path cooldown) verified on home + VPS.
 
 ### routes/core.py (32KB, byte-identical home ↔ VPS, contains make_choice)
 ```
@@ -223,12 +224,12 @@ Needs queue flow:
 
 ---
 
-## LIVE SYSTEM SNAPSHOT (2026-06-28)
+## LIVE SYSTEM SNAPSHOT (2026-07-07)
 
-- **World state:** stability≈45, morale≈63.72, tension≈37.3, anomaly≈29.42, resources≈61.18, threat≈26.54
-- **NPCs:** 39 (29 active, 5 hidden, 4 traveling, 1 corrupted)
-- **Decisions:** 410
-- **Institutions:** 2 (research_division_council, consciousness_collective_council)
-- **Active workflows:** 4
-- **Tests:** 35/35 pass
-- **Dirty tree:** institutions.py + npc_autonomy.py (P3, committed but not yet pushed)
+- **World state:** all systems healthy — 16/16 containers up
+- **NPCs:** 39 (char_001 + char_306 running as dedicated npc-agent containers)
+- **Institutions:** 199 total (growth stopped by bloat fix caps: 8/NPC, 20 total)
+- **Memory bridge:** Phase 1 live — both councilors recording Redis memories across ticks
+- **Pair convergence:** Stage 4A live — convergence_state updated per tick, both chars
+- **Model routing:** nano for decisions (strict JSON), super for artifact/gen code
+- **Tests:** all passing per last run

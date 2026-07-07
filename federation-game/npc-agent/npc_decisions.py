@@ -28,7 +28,6 @@ from npc_redis_helpers import (
     _pair_append_journal,
     _pair_recent_journal,
     _pair_thread_id,
-    _parse_convergence_state,
     _store_thread_message,
     _recent_thread_messages,
     _recent_decisions,
@@ -589,7 +588,12 @@ Respond in this exact JSON format (no markdown, no explanation):
                 )
         if r is not None:
             _cs = _pair_state(r, partner_id, CHAR_ID).get("convergence_state", "")
-            _cc = _parse_convergence_state(_cs)
+            _cc = None
+            if _cs and isinstance(_cs, str):
+                try:
+                    _cc = json.loads(_cs)
+                except Exception:
+                    pass
             if _cc:
                 _nq = _cc.get("next_question", "")
                 _ans = _cc.get("current_best_answer", "")

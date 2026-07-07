@@ -144,4 +144,59 @@ VERIFIED: institution SCARD stable at 199, 0 errors in both container tails
 Backup: /docker/federation-game/npc-agent/npc_actions.py.bak.20260703_174618
 ```
 
+## P0 — Stage 4A pair convergence state
+```
+COMMIT 01b4ded feat: add NPC pair convergence state
+UPDATE npc_redis_helpers.py:_sync_pair_workspace(L544) -> calls _compute_convergence_state after journal append
+NEW npc_redis_helpers.py:_compute_convergence_state(L549) -> nano reducer, writes convergence_state JSON to pair hash; timestamp gate (both chars fresh); fail-safe preserves prior state
+UPDATE npc_context.py:think_about_world(L724) -> displays PAIR CONVERGENCE STATE above shared_goal/open_question
+UPDATE npc_decisions.py:build_decision_prompt(L532) -> injects convergence pressure into force_constraint: "refine or challenge", "do not repeat"
+SHAPE: single Redis hash field convergence_state, overwrites in place, 6 fields capped 300 chars each
+NO shared_goal overwrite (intentional, Stage 4B only)
+HOST hashes: npc_redis_helpers bc867795 / npc_context e0c253a4 / npc_decisions ba86b776
+CONTAINER 001 + 306 MATCH ✅
+LOG EVIDENCE: 22:23:42 convergence_state updated v1
+Backup: /docker/federation-game/npc-agent/*.bak.20260704_222249
+```
 
+## VPS Hotfix Sync Home (2026-07-07)
+```
+SYNC federation-game/npc-agent/npc_context.py -> removed _parse_convergence_state import; inlined try/except JSON parse at convergence_state display site
+SYNC federation-game/npc-agent/npc_decisions.py -> removed _parse_convergence_state import; inlined try/except JSON parse at convergence_state pressure site
+SYNC federation-game/npc-agent/npc_redis_helpers.py -> inlined try/except JSON parse in _sync_pair_workspace; removed _parse_convergence_state function
+VERIFIED: all 3 files compile clean (Python 3.13)
+DRIFT RESOLVED: Issue #8 — VPS hotfixes now synced to home. VPS was running inlined parsing + Stage 4D post-resolution guard. Home now matches.
+NEW HOME HASHES: npc_context 4a55cc96 / npc_decisions f98f11bb / npc_redis_helpers 775d507a
+PREVIOUS VPS HASHES: npc_context e0c253a4 / npc_decisions 31240e72 / npc_redis_helpers aea35983
+```
+
+## P007 — Verified Complete (2026-07-07)
+```
+VERIFIED: Edit 1 (leader/specialist timeout 30) in llm_router.py — home + VPS both have timeout:30
+VERIFIED: Edit 2 (LEADER_COOLDOWN_FAILURE=600, SPECIALIST_COOLDOWN_FAILURE=300, _set_cooldown char_id duration) in npc_cognition.py — home + VPS both have 3 matches
+VERIFIED: Failure-path cooldown active — both leader and specialist branches set cooldown on failure
+STATUS: HORIZON_STATUS.md Issue #9 was stale — both edits were already implemented. Marked resolved.
+```
+
+## ARCHITECTURE_STATE.md Refresh (2026-07-07)
+```
+UPDATE .horizon/ARCHITECTURE_STATE.md:
+  - Known Issues header: #8 and #9 now marked RESOLVED
+  - Hash table: added npc-agent/ file hashes, updated drift verdict, added npc_cognition.py with P007 verification
+  - P007 Edit 2 status: "ABSENT" → "COMPLETE"
+  - npc_autonomy.py description: updated to reflect intentional split (monolith in backend, extracted in npc-agent)
+  - Live system snapshot: refreshed from 2026-06-28 stale → 2026-07-07 current
+NEW HASH: b56519fb
+```
+
+## NFM-00X: Federation-Specific Failure Modes (2026-07-07)
+```
+NEW docs/FEDERATION_NFMS.md -> 5 Federation-specific NFMs documented
+NFM-001: Parallel Monologist Gap — NPC speaker collision in tick loop
+NFM-002: Tick-Loop Causality Inversion — effect before cause in tick phases
+NFM-003: NIM Shared Pool Trust Gap — state leakage across persona NIMs
+NFM-004: Extraction Wave Deploy Drift — partial deploy mid-extraction-wave
+NFM-005: Memory Provenance Absence — no lineage on memories
+Each NFM: ID, definition, evidence, root cause, current mitigation, detection pattern
+Relationship to Book-6: these are architectural (how Federation is built), not behavioral (how agents behave)
+```

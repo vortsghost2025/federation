@@ -118,9 +118,8 @@ def _rh():
         _pair_recent_journal,
         _recent_thread_messages,
         _session_transcript,
-        _parse_convergence_state,
     )
-    return _partner_id, _recent_decisions, _compact_text, _pair_state, _pair_recent_journal, _recent_thread_messages, _session_transcript, _parse_convergence_state
+    return _partner_id, _recent_decisions, _compact_text, _pair_state, _pair_recent_journal, _recent_thread_messages, _session_transcript
 
 
 # ══════════════════════════════════════════════════════════════════
@@ -634,7 +633,7 @@ def think_about_world(r, contacts: dict | None = None, char_id: str = "") -> str
     """
     cid = char_id or CHAR_ID
     _contacts = contacts or {}
-    _partner_id_fn, _recent_decisions, _compact_text, _pair_state, _pair_recent_journal, _recent_thread_messages_fn, _session_transcript, _parse_convergence_state = _rh()
+    _partner_id_fn, _recent_decisions, _compact_text, _pair_state, _pair_recent_journal, _recent_thread_messages_fn, _session_transcript = _rh()
 
     logger.info("[%s] think_about_world: building context...", cid)
     parts = [f"--- {NPC_NAME} ({cid}) — Tick@{time.strftime('%H:%M:%S')} ---"]
@@ -723,7 +722,12 @@ def think_about_world(r, contacts: dict | None = None, char_id: str = "") -> str
         if ps:
             parts.append("Shared pair workspace:")
             conv_raw = ps.get("convergence_state", "")
-            conv = _parse_convergence_state(conv_raw)
+            conv = None
+            if conv_raw and isinstance(conv_raw, str):
+                try:
+                    conv = json.loads(conv_raw)
+                except Exception:
+                    pass
             if conv:
                 parts.append("  PAIR CONVERGENCE STATE (revise from here, do not restart from original question):")
                 if conv.get("current_best_answer"):

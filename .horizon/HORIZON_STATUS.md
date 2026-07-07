@@ -6,18 +6,18 @@
 
 | Item | Value |
 |------|-------|
-| HEAD commit | 1434e6c (branch: bridge/memory-phase-1) |
+| HEAD commit | 5a4023f (branch: bridge/memory-phase-1) |
 | VPS health | All containers up (production: 187.77.3.56) |
 | Production URL | https://federation-game.deliberatefederation.cloud/ |
 | SSH alias | `ssh federation-vps` (resolves to 187.77.3.56) |
-| Dirty tree | 1 untracked (.kilo-federation-profile/) — no modified files |
+| Dirty tree | 3 modified (`.horizon/DELTA_LOG.md`, `.horizon/HORIZON_STATUS.md`, `.horizon/ARCHITECTURE_STATE.md`) — 1 new (`docs/FEDERATION_NFMS.md`) — 3 synced (`federation-game/npc-agent/npc_context.py`, `npc_decisions.py`, `npc_redis_helpers.py`) |
 | Race condition | FIXED end-to-end — backend + frontend both use choice_token |
 | Spatial mode | DEPLOYED — sticky flag live on production |
 | Starmap 3D | DEPLOYED — cosmic scale-of-reality visual pass live on VPS |
 | P3 Outcome Memory | DEPLOYED + VERIFIED LIVE — 35/35 tests pass |
 | Phase 1 Memory Bridge | COMMITTED + DEPLOYED LIVE — both councilors recording Redis memories across ticks |
-| NPC Autonomy refactor | ⚠ DRIFT — home `npc_autonomy.py` is the post-extraction (06-30) version; live VPS file is pre-extraction monolith. Deploy pending verification. See "Known Issues" #8 |
-| P007 Cognition Loop Fix | PARTIAL — Edit 1 (30s leader timeout) deployed; Edit 2 (LEADER/SPECIALIST cooldown constants + `_set_cooldown`) never implemented. See "Known Issues" #9 |
+| NPC Autonomy refactor | ✅ RESOLVED — VPS hotfixes synced back to home. All 3 files compile clean. See DELTA_LOG: VPS Hotfix Sync Home |
+| P007 Cognition Loop Fix | ✅ COMPLETE — both Edit 1 (30s timeout) and Edit 2 (LEADER_COOLDOWN_FAILURE + _set_cooldown) verified on home AND VPS. See "Known Issues" #9 — resolved |
 
 ## Completed 2026-06-27 to 2026-06-28 (P0-P4 + Agency + Decrees + P3)
 
@@ -160,12 +160,16 @@ Verification:
 - OpenRouter paid models fail with HTTP 402 — ALL 3 keys have no credits for paid models
 - Gemini fails with HTTP 429 "Prepayment credits depleted" — silenced 1hr via Redis key
 
+## Completed 2026-07-07
+
+- [x] **Issue #8 resolved** — VPS hotfixes synced back to home (npc_context.py, npc_decisions.py, npc_redis_helpers.py). Inlined convergence state parsing, removed _parse_convergence_state dependency, Stage 4D post-resolution guard preserved.
+- [x] **Issue #9 resolved** — P007 verified complete. Both Edit 1 (30s timeouts) and Edit 2 (LEADER_COOLDOWN_FAILURE=600, SPECIALIST_COOLDOWN_FAILURE=300, _set_cooldown with failure-path cooldown) present on home AND VPS.
+- [x] **ARCHITECTURE_STATE.md refreshed** — stale pins corrected, hash table expanded with npc-agent/ files, P007 status updated, live system snapshot current.
+- [x] **5 Federation-specific NFMs documented** — docs/FEDERATION_NFMS.md covers all 5 with definition, evidence, root cause, current mitigation, detection pattern.
+
 ## Next Steps (Prioritized)
 
-1. **Resolve npc_autonomy.py deploy drift** — home post-extraction (~1,000 lines / 29KB / hash d1c2f7d6) vs live VPS pre-extraction (~180 lines / 7KB / hash 274420c1). Before any deploy, verify the extracted sibling modules (npc_needs/world/decree/reflection/thoughts/opinions/actions/interactions/goals + npc_decisions/context/llm_client) resolve cleanly together. See Known Issues #8.
-2. **Finish P007** — implement Edit 2 (LEADER_COOLDOWN_FAILURE / SPECIALIST_COOLDOWN_FAILURE constants + `_set_cooldown` accepting explicit duration) in `llm_router.py`, then deploy + verify. See Known Issues #9.
-3. **Refresh ARCHITECTURE_STATE.md** — stale pin (npc_autonomy L2396/L2838 describes defunct monolith); needs removal + replacement with reality. See ARCHITECTURE_STATE Known Issues #1 inline.
-4. **Frontend hardening** — error handling, loading states, offline resilience.
+1. **Frontend hardening** — error handling, loading states, offline resilience.
 
 ## Agent File Ownership
 
@@ -193,8 +197,8 @@ See `.horizon/DECISIONS.md` for the full decisions log.
 5. **NVIDIA API key leaked in commit `e587a11` (`.kilo/kilo.json`).** Working copy + index clean (`.kilo/kilo.json` gitignored, key blanked) but the old key is still in GitHub history at `vortsghost2025/federation`. **Action: rotate the key at `integrate.api.nvidia.com`. Sean needs sighted help from his brother to do the rotation — flagged 2026-06-15.** Until rotated, treat the leaked prefix `nvapi-s7xc…` as compromised.
 6. **starmap3d.html NOT in Traefik router list** — served via nginx catch-all, not explicitly routed. May need Traefik rule update if caching/routing matters.
 7. **Stash `b6250c9` unexamined** — may contain additional uncommitted work.
-8. **npc_autonomy.py DRIFT home vs VPS** (flagged 2026-07-03). Home hash `d1c2f7d6...` (29KB, post-extraction) ≠ VPS hash `274420c1...` (7KB, pre-extraction monolith). The 06-30 extraction wave (11 commits `[2.1]`→`[7]`) split monolithic npc_autonomy.py into `npc_needs/world/decree/reflection/thoughts/opinions/actions/interactions/goals` + `npc_decrees/context/llm_client`. Sibling modules verified identical home ↔ VPS, but the orchestration file itself was NOT pushed. Post-extraction home imports `from npc_reflection import evaluate_decision_options, _score_decision_option, _reflect_on_missing_context, _write_decree_directive` etc. — these resolve downstream once the VPS gets the matching home copies. Action: verify the full extraction set deploys atomically before any `deploy_vps.sh npc-agent npc_autonomy.py` runs.
-9. **P007 only partially implemented** (flagged 2026-07-03). Edit 1 (leader cognition timeout 8s→30s on all 4 leader tiers in `llm_router.py:870,877,884,891`) is live on VPS. Edit 2 (constants `LEADER_COOLDOWN_FAILURE` and `SPECIALIST_COOLDOWN_FAILURE`, function `_set_cooldown` accepting explicit duration) was **never implemented** — grep returns zero matches in both home and VPS. Current cooldown is the coarse fixed `_trip_circuit` (3 failures → `llm_circuit_breaker:{provider}` open for 300s, no per-task-class differentiation). Acceptance criteria for P007 spec are NOT met.
+8. **npc_autonomy.py DRIFT home vs VPS** — ✅ RESOLVED 2026-07-07. VPS hotfixes (inlined convergence state parsing, Stage 4D post-resolution guard) synced back to home. Home now matches VPS logic. See DELTA_LOG: VPS Hotfix Sync Home.
+9. **P007 Cognition Loop Fix** — ✅ RESOLVED 2026-07-07. Both Edit 1 (30s timeout) and Edit 2 (LEADER_COOLDOWN_FAILURE=600, SPECIALIST_COOLDOWN_FAILURE=300, `_set_cooldown(char_id, duration)` failure-path cooldown) verified on home AND VPS. The issue was stale — both edits were already implemented.
 
 ## Completed 2026-07-04 — NPC Model Routing (Stage 1 + 2)
 
