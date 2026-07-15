@@ -42,7 +42,6 @@ from faction_dynamics import (
     compute_faction_stances,
     store_faction_dynamics,
 )
-from institutions import get_npc_outcome_history
 from npc_activity_logger import log_npc_activity
 from npc_event_log import log_decision_event, log_from_broadcast_event
 import logging
@@ -71,7 +70,6 @@ ALLOWED_NEED_TYPES = frozenset({
     "workflow_visibility",
     "decision_feedback",
     "world_state_gap",
-    "pivot_strategy",
 })
 
 FORBIDDEN_NEED_TYPES = frozenset({
@@ -2393,35 +2391,13 @@ def _get_institution_context():
         return {"institutions": [], "active_workflow_count": 0}
 
 
-def _get_npc_outcome_ctx(npc_id):
-    try:
-        _r = _get_redis()
-        return get_npc_outcome_history(_r, npc_id)
-    except Exception:
-        return {"approved": 0, "rejected": 0, "total": 0, "consecutive_rejections": 0, "recent_rejected_types": set(), "recent": []}
-
-
 LOW_VALUE_CATEGORIES = frozenset({"rest", "wander", "noop"})
 
 
-def _reflect_on_missing_context(npc_id, recent_decisions, inst_ctx, world_ctx, fulfilled_need_types=None, outcome_ctx=None):
+def _reflect_on_missing_context(npc_id, recent_decisions, inst_ctx, world_ctx):
     """Return a suggested need record or None if the NPC seems well-resourced."""
-    if fulfilled_need_types is None:
-        fulfilled_need_types = set()
     if not recent_decisions:
         return None
-    # P3: pivot strategy — if NPC has consecutive rejections, suggest pivoting before low-value pattern emerges
-    if outcome_ctx and outcome_ctx.get("consecutive_rejections", 0) >= 2:
-        rej_types = ", ".join(outcome_ctx.get("recent_rejected_types", set())[:3]) or "workflow"
-        need_type = "pivot_strategy"
-        if need_type not in fulfilled_need_types:
-            return {
-                "need_type": need_type,
-                "priority": "high",
-                "description": f"My recent {outcome_ctx['consecutive_rejections']} proposals were rejected ({rej_types}). I should coordinate with allies before proposing again.",
-                "why_needed": "Repeated rejections indicate my approach needs adjustment — I need strategic context for a different approach.",
-                "suggested_capability": "coalition_or_ally_review_before_proposal",
-            }
     low_count = 0
     for dec in recent_decisions[-10:]:
         cat = dec.get("category", "")
@@ -2434,70 +2410,51 @@ def _reflect_on_missing_context(npc_id, recent_decisions, inst_ctx, world_ctx, f
     has_active_inst = any(i.get("status") == "active" and i.get("active_workflows", 0) > 0 for i in institutions)
     is_member = any(npc_id in i.get("members", []) for i in institutions)
     if has_active_inst and not is_member:
-        need_type = "institution_support"
-        if need_type in fulfilled_need_types:
-            pass
-        else:
-            return {
-                "need_type": need_type,
-                "priority": "high",
-                "description": "Active institution workflows exist but I have no membership or visibility into them.",
-                "why_needed": "Over half my recent actions were low-value (rest/wander) — lacking institutional coordination context.",
-                "suggested_capability": "institution_membership_or_observer_feed",
-            }
+        return {
+            "need_type": "institution_support",
+            "priority": "high",
+            "description": "Active institution workflows exist but I have no membership or visibility into them.",
+            "why_needed": "Over half my recent actions were low-value (rest/wander) — lacking institutional coordination context.",
+            "suggested_capability": "institution_membership_or_observer_feed",
+        }
     if has_active_inst and is_member:
         active_wfs = sum(i.get("active_workflows", 0) for i in institutions if npc_id in i.get("members", []))
         if active_wfs >= 3:
-            need_type = "workflow_visibility"
-            if need_type in fulfilled_need_types:
-                pass
-            else:
-                return {
-                    "need_type": need_type,
-                    "priority": "high",
-                    "description": f"My institution has {active_wfs} active workflows but I cannot see their progress or blockers.",
-                    "why_needed": "I keep resting because I lack workflow status to act on.",
-                    "suggested_capability": "npc_decision_summary_feed",
-                }
+            return {
+                "need_type": "workflow_visibility",
+                "priority": "high",
+                "description": f"My institution has {active_wfs} active workflows but I cannot see their progress or blockers.",
+                "why_needed": "I keep resting because I lack workflow status to act on.",
+                "suggested_capability": "npc_decision_summary_feed",
+            }
         if active_wfs == 0:
-            need_type = "coordination_help"
-            if need_type in fulfilled_need_types:
-                pass
-            else:
-                return {
-                    "need_type": need_type,
-                    "priority": "medium",
-                    "description": "I am an institution member but no workflows are active despite world events.",
-                    "why_needed": "Low action rate suggests I need better triggers to initiate institutional processes.",
-                    "suggested_capability": "institution_trigger_context",
-                }
+            return {
+                "need_type": "coordination_help",
+                "priority": "medium",
+                "description": "I am an institution member but no workflows are active despite world events.",
+                "why_needed": "Low action rate suggests I need better triggers to initiate institutional processes.",
+                "suggested_capability": "institution_trigger_context",
+            }
     world_stable = all(
         world_ctx.get(k, 50) in range(30, 70)
         for k in ("stability", "morale", "resource_abundance")
         if k in world_ctx
     )
     if world_stable and low_ratio > 0.6:
-        need_type = "world_state_gap"
-        if need_type in fulfilled_need_types:
-            pass
-        else:
-            return {
-                "need_type": need_type,
-                "priority": "medium",
-                "description": "World state appears stable but I lack granular context to find productive actions.",
-                "why_needed": "Stable world + high rest rate = missing decision-driving information.",
-                "suggested_capability": "sector_or_faction_detail_feed",
-            }
-    need_type = "information_access"
-    if need_type not in fulfilled_need_types:
         return {
-            "need_type": need_type,
+            "need_type": "world_state_gap",
             "priority": "medium",
-            "description": "I am under-acting relative to my role — I need better context about what is happening.",
-            "why_needed": f"{low_count}/{len(recent_decisions[-10:])} recent actions were low-value.",
-            "suggested_capability": "general_context_enrichment",
+            "description": "World state appears stable but I lack granular context to find productive actions.",
+            "why_needed": "Stable world + high rest rate = missing decision-driving information.",
+            "suggested_capability": "sector_or_faction_detail_feed",
         }
-    return None
+    return {
+        "need_type": "information_access",
+        "priority": "medium",
+        "description": "I am under-acting relative to my role — I need better context about what is happening.",
+        "why_needed": f"{low_count}/{len(recent_decisions[-10:])} recent actions were low-value.",
+        "suggested_capability": "general_context_enrichment",
+    }
 
 
 MOOD_DECISION_BIAS = {
@@ -2602,9 +2559,6 @@ def _score_decision_option(
     has_active_quests=False,
     inst_ctx=None,
     need_reflection=None,
-    fulfilled_need_types=None,
-    affiliation=None,
-    outcome_ctx=None,
 ):
     score = 1.0
     mood_biases = MOOD_DECISION_BIAS.get(mood, {})
@@ -2634,28 +2588,6 @@ def _score_decision_option(
                 score *= _bias_val
     except Exception:
         pass  # bias is optional — never break decision scoring
-
-    # Apply decree directive bias (councilor intent influences faction-aligned NPCs)
-    try:
-        _dir_r = _get_redis()
-        _dir_raw = _dir_r.get(DIRECTIVE_KEY)
-        if _dir_raw and affiliation:
-            _dir_data = json.loads(_dir_raw)
-            _dir_metric = _dir_data.get("metric", "")
-            _dir_faction = _dir_data.get("issuer_faction", "")
-            _dir_bias_map = DECREE_DIRECTIVE_BIAS.get(_dir_metric, {})
-            if _dir_faction and _dir_bias_map:
-                if affiliation == _dir_faction:
-                    _dir_cat_biases = _dir_bias_map.get("same_faction", {})
-                elif _is_allied_faction(affiliation, _dir_faction):
-                    _dir_cat_biases = _dir_bias_map.get("allied_faction", {})
-                else:
-                    _dir_cat_biases = _dir_bias_map.get("other_faction", {})
-                _dir_mult = _dir_cat_biases.get(category, 1.0)
-                if _dir_mult != 1.0:
-                    score *= _dir_mult
-    except Exception:
-        pass  # directive bias is optional — never break decision scoring
 
     # Quest-aware bias: NPCs with active quests strongly prefer advance_goal
     if has_active_quests and category == "advance_goal":
@@ -2689,24 +2621,11 @@ def _score_decision_option(
         else:
             score *= 0.05
 
-    # P3: Outcome-memory bias — past workflow outcomes shape future decisions
-    if outcome_ctx and outcome_ctx.get("total", 0) > 0:
-        cons_rej = outcome_ctx.get("consecutive_rejections", 0)
-        if cons_rej >= 2:
-            if category == "advance_goal":
-                score *= max(0.4, 1.0 - cons_rej * 0.15)
-            if category in ("help_ally", "socialize"):
-                score *= 1.0 + min(cons_rej * 0.15, 0.6)
-        approved_count = outcome_ctx.get("approved", 0)
-        if approved_count >= 2 and cons_rej == 0:
-            if category == "advance_goal":
-                score *= 1.0 + min(approved_count * 0.05, 0.3)
-
     score += random.uniform(-0.1, 0.1)
     return max(0.1, score)
 
 
-def evaluate_decision_options(char_id, char_name, archetype, affiliation, mood="", fulfilled_need_types=None):
+def evaluate_decision_options(char_id, char_name, archetype, affiliation, mood=""):
     mood = mood or get_mood(char_id)
     active_goals = get_goals(char_id, status=GOAL_STATUS_ACTIVE)
     has_active_goals = len(active_goals) > 0
@@ -2737,8 +2656,6 @@ def evaluate_decision_options(char_id, char_name, archetype, affiliation, mood="
 
     inst_ctx = _get_institution_context()
 
-    outcome_ctx = _get_npc_outcome_ctx(char_id)
-
     need_reflection = None
     try:
         _nr = _get_redis()
@@ -2752,9 +2669,7 @@ def evaluate_decision_options(char_id, char_name, archetype, affiliation, mood="
         _world_raw = _nr.get("world_state")
         _world_ctx = json.loads(_world_raw) if _world_raw else {}
         need_reflection = _reflect_on_missing_context(
-            char_id, _recent_decisions, inst_ctx, _world_ctx,
-            fulfilled_need_types=fulfilled_need_types,
-            outcome_ctx=outcome_ctx,
+            char_id, _recent_decisions, inst_ctx, _world_ctx
         )
     except Exception:
         pass
@@ -2774,9 +2689,6 @@ def evaluate_decision_options(char_id, char_name, archetype, affiliation, mood="
             has_active_quests=has_active_quests,
             inst_ctx=inst_ctx,
             need_reflection=need_reflection,
-            fulfilled_need_types=fulfilled_need_types,
-            affiliation=affiliation,
-            outcome_ctx=outcome_ctx,
         )
         reasons = []
         mood_biases = MOOD_DECISION_BIAS.get(mood, {})
@@ -2809,37 +2721,16 @@ def evaluate_decision_options(char_id, char_name, archetype, affiliation, mood="
                         reasons.append(inst["name"] + " busy")
         if cat == "request_capability" and need_reflection:
             reasons.append("missing: " + need_reflection.get("need_type", "context"))
-        if cat == "request_capability" and fulfilled_need_types:
-            nr_type = need_reflection.get("need_type", "") if need_reflection else ""
-            if nr_type in fulfilled_need_types:
-                score *= 0.1
-                reasons.append("already_fulfilled: " + nr_type)
-            else:
-                for ft in fulfilled_need_types:
-                    if ft in ("information_access", "world_state_gap", "context_enrichment"):
-                        score *= 0.5
-                        reasons.append("recent_fulfillment")
-                        break
-        # P3: outcome-memory reason labels
-        if outcome_ctx and outcome_ctx.get("total", 0) > 0:
-            cons_rej = outcome_ctx.get("consecutive_rejections", 0)
-            if cons_rej >= 2 and cat == "advance_goal":
-                reasons.append(f"rejection_cautious({cons_rej})")
-            if cons_rej >= 2 and cat in ("help_ally", "socialize"):
-                reasons.append("pivoting_to_collaborate")
-            if outcome_ctx.get("approved", 0) >= 2 and cons_rej == 0 and cat == "advance_goal":
-                reasons.append("approval_confidence")
         options.append({"category": cat, "score": round(score, 2), "reasons": reasons})
 
     options.sort(key=lambda x: x["score"], reverse=True)
-    return options, need_reflection
+    return options
 
 
 def make_decision(char_id, char_name, archetype, affiliation, mood=""):
     r = _get_redis()
     notifications = consume_system_notifications(r, char_id)
     notification_context = ""
-    fulfilled_need_types = set()
     if notifications:
         parts = []
         for n in notifications:
@@ -2847,13 +2738,10 @@ def make_decision(char_id, char_name, archetype, affiliation, mood=""):
                 f"[System Notice: Your request for {n.get('need_type','')} has been "
                 f"{n.get('resolution','').replace('closed_','')}. {n.get('message','')}]"
             )
-            if n.get("resolution", "").startswith("closed_fulfilled"):
-                fulfilled_need_types.add(n.get("need_type", ""))
         notification_context = " ".join(parts)
 
-    options, need_reflection = evaluate_decision_options(
-        char_id, char_name, archetype, affiliation, mood,
-        fulfilled_need_types=fulfilled_need_types,
+    options = evaluate_decision_options(
+        char_id, char_name, archetype, affiliation, mood
     )
     if not options:
         return None
@@ -3173,220 +3061,3 @@ def get_broadcast_events(char_id=None, affiliation=None, limit=10):
 
 def get_relevant_events_for_npc(char_id, affiliation, limit=5):
     return get_broadcast_events(char_id=char_id, affiliation=affiliation, limit=limit)
-
-
-# --- COUNCILOR DECREES: Bounded world-state write access ---
-
-DECREES_ALLOWED_NPCS = [
-    x.strip()
-    for x in os.environ.get("EXTERNAL_AGENT_NPCS", "char_001,char_306").split(",")
-    if x.strip()
-]
-
-DECREES_ALLOWED_METRICS = [
-    "stability",
-    "morale",
-    "resource_abundance",
-    "tension_level",
-    "threat_level",
-    "anomaly_activity",
-]
-
-DECREE_MAX_DELTA = 5
-DECREE_COOLDOWN_SECONDS = 3600
-DECREE_HISTORY_KEY = "councilor:decrees:history"
-DECREE_COOLDOWN_KEY = "councilor:decrees:cooldown:{char_id}"
-DECREE_MAX_HISTORY = 200
-DECREE_HISTORY_TTL = 86400 * 30
-
-DIRECTIVE_KEY = "councilor:directive:active"
-DIRECTIVE_TTL = 600
-
-DECREE_DIRECTIVE_BIAS = {
-    "stability": {
-        "same_faction": {"help_ally": 1.35, "advance_goal": 1.25, "socialize": 1.15, "confront_rival": 0.65, "rest": 0.75},
-        "allied_faction": {"help_ally": 1.2, "socialize": 1.1, "confront_rival": 0.8},
-        "other_faction": {"confront_rival": 0.9},
-    },
-    "morale": {
-        "same_faction": {"socialize": 1.4, "help_ally": 1.25, "advance_goal": 1.1, "rest": 0.65, "self_improve": 0.85},
-        "allied_faction": {"socialize": 1.2, "help_ally": 1.15, "rest": 0.8},
-        "other_faction": {},
-    },
-    "resource_abundance": {
-        "same_faction": {"seek_resources": 1.45, "advance_goal": 1.15, "rest": 0.7, "socialize": 0.85},
-        "allied_faction": {"seek_resources": 1.25, "advance_goal": 1.1},
-        "other_faction": {"seek_resources": 1.1},
-    },
-    "tension_level": {
-        "same_faction": {"socialize": 1.4, "help_ally": 1.25, "confront_rival": 0.55, "investigate": 0.85},
-        "allied_faction": {"socialize": 1.2, "confront_rival": 0.7},
-        "other_faction": {"investigate": 1.15, "confront_rival": 1.1},
-    },
-    "threat_level": {
-        "same_faction": {"self_improve": 1.35, "help_ally": 1.25, "seek_resources": 1.15, "explore": 0.6, "socialize": 0.85},
-        "allied_faction": {"self_improve": 1.2, "help_ally": 1.15},
-        "other_faction": {"investigate": 1.15},
-    },
-    "anomaly_activity": {
-        "same_faction": {"investigate": 1.4, "explore": 1.25, "rest": 0.75, "seek_resources": 0.85},
-        "allied_faction": {"investigate": 1.2, "explore": 1.15, "rest": 0.85},
-        "other_faction": {"investigate": 1.1},
-    },
-}
-
-
-COUNCILOR_AFFILIATIONS = {
-    "char_001": "research_division",
-    "char_306": "none",
-}
-
-FACTION_ALLIANCES = {
-    "research_division": ["exploration_initiative"],
-    "exploration_initiative": ["research_division"],
-    "military_command": ["preservation_society"],
-    "preservation_society": ["military_command"],
-    "diplomatic_corps": ["cultural_ministry", "economic_council"],
-    "cultural_ministry": ["diplomatic_corps", "consciousness_collective"],
-    "economic_council": ["diplomatic_corps"],
-    "consciousness_collective": ["cultural_ministry"],
-}
-
-
-def _is_allied_faction(npc_faction, issuer_faction):
-    if not npc_faction or not issuer_faction:
-        return False
-    return npc_faction in FACTION_ALLIANCES.get(issuer_faction, [])
-
-
-def _write_decree_directive(r, char_id, metric):
-    issuer_faction = COUNCILOR_AFFILIATIONS.get(char_id, "")
-    directive_data = json.dumps({
-        "metric": metric,
-        "issuer": char_id,
-        "issuer_faction": issuer_faction,
-        "ts": int(time.time()),
-    })
-    r.set(DIRECTIVE_KEY, directive_data, ex=DIRECTIVE_TTL)
-
-
-def issue_decree(char_id, char_name, metric, delta, reasoning=""):
-    if char_id not in DECREES_ALLOWED_NPCS:
-        return {"ok": False, "error": f"{char_id} is not authorized to issue decrees"}
-    if metric not in DECREES_ALLOWED_METRICS:
-        return {"ok": False, "error": f"metric '{metric}' is not decreable"}
-    if delta == 0:
-        return {"ok": False, "error": "delta must be non-zero"}
-    if abs(delta) > DECREE_MAX_DELTA:
-        return {
-            "ok": False,
-            "error": f"delta {delta} exceeds max ±{DECREE_MAX_DELTA}",
-        }
-    if metric not in WORLD_CONDITIONS:
-        return {"ok": False, "error": f"unknown metric: {metric}"}
-    r = _get_redis()
-    cooldown_key = DECREE_COOLDOWN_KEY.format(char_id=char_id)
-    ttl = r.ttl(cooldown_key)
-    if ttl and ttl > 0:
-        return {
-            "ok": False,
-            "error": f"cooldown active for {ttl}s",
-            "cooldown_remaining": ttl,
-        }
-    current = get_world_condition(metric)
-    if current is None:
-        return {"ok": False, "error": f"could not read current value for {metric}"}
-    config = WORLD_CONDITIONS[metric]
-    new_val = max(config["min"], min(config["max"], current + delta))
-    actual_delta = new_val - current
-    if actual_delta == 0:
-        return {"ok": False, "error": "change would have no effect (value clamped)"}
-    r.hset(WORLD_STATE_KEY, metric, str(int(round(new_val))))
-    r.set("world_state_updated", str(int(time.time())), ex=WORLD_STATE_TTL)
-    r.setex(cooldown_key, DECREE_COOLDOWN_SECONDS, "1")
-    _write_decree_directive(r, char_id, metric)
-    decree_record = {
-        "decree_id": f"dcr_{char_id}_{int(time.time())}",
-        "char_id": char_id,
-        "char_name": char_name,
-        "metric": metric,
-        "previous_value": current,
-        "new_value": int(round(new_val)),
-        "delta": actual_delta,
-        "reasoning": reasoning,
-        "ts": int(time.time()),
-    }
-    r.zadd(DECREE_HISTORY_KEY, {json.dumps(decree_record): decree_record["ts"]})
-    r.zremrangebyrank(DECREE_HISTORY_KEY, 0, -(DECREE_MAX_HISTORY + 1))
-    r.expire(DECREE_HISTORY_KEY, DECREE_HISTORY_TTL)
-    event_desc = (
-        f"{char_name} issued a decree: {metric} {current}\u2192{int(round(new_val))}"
-        f" ({'+' if actual_delta > 0 else ''}{actual_delta})"
-    )
-    if reasoning:
-        event_desc += f" \u2014 {reasoning[:120]}"
-    try:
-        from federation_game_events import add_event
-        add_event("decree_issued", event_desc, significance=0.9)
-    except Exception:
-        pass
-    return {"ok": True, "decree": decree_record}
-
-
-def get_decree_history(char_id=None, limit=20):
-    r = _get_redis()
-    raw = r.zrevrange(DECREE_HISTORY_KEY, 0, limit * 2 - 1)
-    decrees = []
-    for item in raw:
-        try:
-            rec = json.loads(item)
-        except (json.JSONDecodeError, TypeError):
-            continue
-        if char_id and rec.get("char_id") != char_id:
-            continue
-        decrees.append(rec)
-        if len(decrees) >= limit:
-            break
-    return decrees
-
-
-DECREE_THRESHOLDS = {
-    "stability": {"low": 50, "high": 85, "low_delta": 5, "high_delta": -2},
-    "morale": {"low": 40, "high": 80, "low_delta": 4, "high_delta": -2},
-    "resource_abundance": {"low": 35, "high": 90, "low_delta": 5, "high_delta": -2},
-    "tension_level": {"low": 15, "high": 65, "low_delta": -2, "high_delta": -4},
-    "threat_level": {"low": 10, "high": 60, "low_delta": -1, "high_delta": -4},
-    "anomaly_activity": {"low": 5, "high": 70, "low_delta": -1, "high_delta": -3},
-}
-
-COUNCILOR_NAMES = {"char_001": "Archimedes Prime", "char_306": "The Oracle"}
-
-
-def evaluate_decree_opportunity(r=None):
-    ws = get_world_state()
-    if not ws:
-        return None
-    for char_id in DECREES_ALLOWED_NPCS:
-        cooldown_key = DECREE_COOLDOWN_KEY.format(char_id=char_id)
-        check_r = r or _get_redis()
-        if check_r.ttl(cooldown_key) and check_r.ttl(cooldown_key) > 0:
-            continue
-        char_name = COUNCILOR_NAMES.get(char_id, char_id)
-        for metric, cfg in DECREE_THRESHOLDS.items():
-            val = ws.get(metric)
-            if val is None:
-                continue
-            val = float(val)
-            if val <= cfg["low"]:
-                result = issue_decree(char_id, char_name, metric, cfg["low_delta"],
-                                      f"{metric} critically low at {val:.0f}")
-                if result.get("ok"):
-                    return result.get("decree")
-                break
-            if val >= cfg["high"]:
-                result = issue_decree(char_id, char_name, metric, cfg["high_delta"],
-                                      f"{metric} critically high at {val:.0f}")
-                if result.get("ok"):
-                    return result.get("decree")
-                break
-    return None

@@ -15,6 +15,7 @@ from typing import Optional, Dict, List, Any
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException
 from fastapi.responses import JSONResponse, Response
 from fastapi.middleware.cors import CORSMiddleware
+from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware
 from pydantic import BaseModel
 import sys
 import os
@@ -84,6 +85,7 @@ from routes.institutions import router as institutions_router
 from routes.councilor_needs import router as councilor_needs_router
 from routes.decrees import router as decrees_router
 from routes.universe import router as universe_router
+from routes.admin import router as admin_router
 from map_endpoints import router as map_router
 from data.events import EVENTS
 
@@ -309,6 +311,15 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Traefik/nginx terminate TLS in front of uvicorn, so without this the app
+# believes it is http and emits `http://` redirect Locations (307). That makes
+# the browser follow an insecure redirect -> mixed-content block on HTTPS pages.
+# Trusting X-Forwarded-Proto fixes the scheme at the source.
+app.add_middleware(
+    ProxyHeadersMiddleware,
+    trusted_hosts="*",
+)
+
 app.include_router(core_router)
 app.include_router(timeline_router)
 app.include_router(consciousness_router)
@@ -334,13 +345,21 @@ app.include_router(map_router)
 app.include_router(institutions_router)
 app.include_router(councilor_needs_router)
 app.include_router(decrees_router)
+app.include_router(admin_router)
 
 
 @app.get("/metrics")
 async def prometheus_metrics():
     from routes.metrics import metrics_response
+    content = metrics_response()
+    if content is None:
+        return Response(
+            content="# federation_metrics_disabled 1\n",
+            media_type="text/plain; version=0.0.4",
+            status_code=200,
+        )
     from prometheus_client import CONTENT_TYPE_LATEST
-    return Response(content=metrics_response(), media_type=CONTENT_TYPE_LATEST)
+    return Response(content=content, media_type=CONTENT_TYPE_LATEST)
 
 
 @app.on_event("startup")
