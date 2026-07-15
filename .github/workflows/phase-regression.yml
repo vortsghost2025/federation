@@ -3,12 +3,9 @@ name: Phase Regression
 on:
   push:
     branches:
-      - main
-      - master
       - feature/**
   pull_request:
-  schedule:
-    - cron: "0 7 * * *"
+  # schedule removed — tests only exist on PR branches, not main
   workflow_dispatch:
 
 concurrency:
