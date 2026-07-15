@@ -12,6 +12,11 @@
 # removed because running against `main` always skipped every phase test (they
 # are absent there) — a machine that screamed into the void nightly. Keeping the
 # trigger scoped to branches that actually carry the tests keeps CI honest.
+#
+# NOTE: External check statuses (Kilo Code Review, Continuous AI agents from
+# continue.dev) are not controlled by this workflow. If they fail with service-
+# side errors, a repo admin must retry them from the respective dashboards or
+# remove them from branch protection.
 
 name: Phase Regression
 
