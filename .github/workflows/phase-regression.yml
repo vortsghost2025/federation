@@ -62,3 +62,20 @@ jobs:
           else
             echo "Skipping test-phase-8-completion.js (not found)"
           fi
+
+      - name: Regression Summary
+        run: |
+          {
+            echo "## Phase Regression Summary"
+            echo ""
+            echo "Phase test files are expected only on PR branches that add them;"
+            echo "on branches without them the relevant steps skip (not fail)."
+            echo ""
+            for f in test-phase-6-1-knowledge.js test-phase-6-2-resilience.js test-phase-6-3-learning.js test-phase-6-4-orchestration.js test-phase-7-all.js test-phase-8-all.js test-phase-8-completion.js; do
+              if [ -f "$f" ]; then
+                echo "- ran: $f"
+              else
+                echo "- skipped (not found): $f"
+              fi
+            done
+          } >> "$GITHUB_STEP_SUMMARY"
