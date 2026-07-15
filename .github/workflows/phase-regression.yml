@@ -27,6 +27,11 @@ on:
   pull_request:
   workflow_dispatch:
 
+# Least-privilege token: this workflow only checks out and runs Node smoke
+# tests, so it needs read access to repo contents and nothing else.
+permissions:
+  contents: read
+
 concurrency:
   group: phase-regression-${{ github.ref }}
   cancel-in-progress: true
