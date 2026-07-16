@@ -26,6 +26,8 @@ _institution_role_gauge = None
 _notification_backlog_gauge = None
 _needs_total_gauge = None
 _needs_open_gauge = None
+_decision_total = None
+_decision_latency = None
 _initialized = False
 
 _redis_pool = None
@@ -45,11 +47,19 @@ def _r():
 def _ensure_registry():
     global _registry, _needs_gauge, _world_gauge, _institution_workflow_gauge
     global _institution_role_gauge, _notification_backlog_gauge
-    global _needs_total_gauge, _needs_open_gauge, _initialized
+    global _needs_total_gauge, _needs_open_gauge, _decision_total, _decision_latency
+    global _initialized
     if _initialized:
         return True
     try:
-        from prometheus_client import CollectorRegistry, Gauge, generate_latest, CONTENT_TYPE_LATEST
+        from prometheus_client import (
+            CollectorRegistry,
+            Counter,
+            Gauge,
+            Histogram,
+            generate_latest,
+            CONTENT_TYPE_LATEST,
+        )
         _registry = CollectorRegistry()
         _needs_gauge = Gauge(
             "federation_npc_open_needs",
@@ -89,6 +99,19 @@ def _ensure_registry():
         _needs_open_gauge = Gauge(
             "federation_npc_needs_open",
             "Total open needs in queue",
+            registry=_registry,
+        )
+        # ── NPC decision-loop metrics (templated path, no LLM) ──────────────
+        _decision_total = Counter(
+            "federation_npc_decisions_total",
+            "Total templated NPC decisions made",
+            ["category"],
+            registry=_registry,
+        )
+        _decision_latency = Histogram(
+            "federation_npc_decision_latency_seconds",
+            "Latency of make_decision() in seconds",
+            buckets=(0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0),
             registry=_registry,
         )
         _initialized = True
@@ -182,6 +205,12 @@ def collect_all():
         _collect_world_state(r)
         _collect_institutions(r)
         _collect_notifications(r)
+        # LLM router shim scrapes its own Redis keys; never let it break /metrics.
+        try:
+            from metrics_llm import collect_llm_metrics
+            collect_llm_metrics()
+        except Exception as exc:
+            logger.warning("LLM metrics collection failed: %s", exc)
     except Exception as exc:
         logger.warning("Metrics collection failed: %s", exc)
 

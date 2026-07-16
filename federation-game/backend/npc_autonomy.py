@@ -597,6 +597,7 @@ def _get_npc_outcome_ctx(npc_id):
 
 # --- REFLECTION + SCORING --- extracted to npc_reflection.py [2.4] ---
 def make_decision(char_id, char_name, archetype, affiliation, mood=""):
+    _decision_start = time.perf_counter()
     r = _get_redis()
     notifications = consume_system_notifications(r, char_id)
     notification_context = ""
@@ -832,6 +833,14 @@ def make_decision(char_id, char_name, archetype, affiliation, mood=""):
         "action_taken": decision.get("action_taken", "none"),
         "action_desc": decision.get("action_desc", ""),
     })
+
+    # ── Decision-loop metrics (no LLM; pure observability) ──
+    try:
+        from routes.metrics import _decision_total, _decision_latency
+        _decision_total.labels(category=category).inc()
+        _decision_latency.observe(time.perf_counter() - _decision_start)
+    except Exception:
+        pass
 
     return decision
 
