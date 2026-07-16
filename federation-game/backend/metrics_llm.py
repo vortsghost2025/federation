@@ -18,35 +18,18 @@ it from ``collect_all``.
 import logging
 
 import redis as _redis
-from prometheus_client import Counter, Gauge, CollectorRegistry
 
 logger = logging.getLogger(__name__)
 
-# Reuse the same registry instance as routes/metrics.py so /metrics exports once.
-try:
-    from routes.metrics import _registry
-except Exception:  # pragma: no cover - fallback if layout differs
-    _registry = CollectorRegistry()
-
-_llm_calls_total = Counter(
-    "federation_llm_calls_total",
-    "Total LLM router calls recorded in llm_audit",
-    registry=_registry,
-)
-
-_llm_errors_total = Counter(
-    "federation_llm_errors_total",
-    "Total LLM provider errors recorded in llm_errors:<provider>",
-    ["provider"],
-    registry=_registry,
-)
-
-_llm_circuit_open = Gauge(
-    "federation_llm_circuit_open",
-    "1 if a provider's circuit breaker is currently open, else 0",
-    ["provider"],
-    registry=_registry,
-)
+# Lazily reuse the same registry instance as routes/metrics.py so /metrics
+# exports once. Importing prometheus_client and building the metrics is deferred
+# to _ensure() so a missing package or a different import order never crashes
+# module load (mirrors the lazy style in routes/metrics.py).
+_registry = None
+_llm_calls_total = None
+_llm_errors_total = None
+_llm_circuit_open = None
+_initialized = False
 
 # Provider names match the router's CIRCUIT_BREAKER_KEY_PREFIX consumers.
 _PROVIDERS = ("nim", "cloudflare", "together", "openrouter", "gemini", "grok", "ollama")
@@ -63,6 +46,45 @@ def _r():
     return _redis.Redis(connection_pool=_pool)
 
 
+def _ensure():
+    """Build the LLM metrics on the shared registry. Safe if prometheus missing."""
+    global _registry, _llm_calls_total, _llm_errors_total, _llm_circuit_open, _initialized
+    if _initialized:
+        return True
+    try:
+        from prometheus_client import Counter, Gauge, CollectorRegistry
+        try:
+            from routes.metrics import _registry as shared
+        except Exception:
+            shared = CollectorRegistry()
+        _registry = shared
+        _llm_calls_total = Counter(
+            "federation_llm_calls_total",
+            "Total LLM router calls recorded in llm_audit",
+            registry=_registry,
+        )
+        _llm_errors_total = Counter(
+            "federation_llm_errors_total",
+            "Total LLM provider errors recorded in llm_errors:<provider>",
+            ["provider"],
+            registry=_registry,
+        )
+        _llm_circuit_open = Gauge(
+            "federation_llm_circuit_open",
+            "1 if a provider's circuit breaker is currently open, else 0",
+            ["provider"],
+            registry=_registry,
+        )
+        _initialized = True
+        return True
+    except ImportError:
+        logger.warning("prometheus_client not available — LLM metrics disabled")
+        return False
+    except Exception as exc:
+        logger.warning("LLM metrics init failed: %s", exc)
+        return False
+
+
 def _circuit_open(r, provider: str) -> int:
     try:
         key = f"{_CIRCUIT_BREAKER_KEY_PREFIX}{provider}"
@@ -75,6 +97,8 @@ def _circuit_open(r, provider: str) -> int:
 
 def collect_llm_metrics():
     """Scrape router Redis zsets into the shared registry. Safe if Redis is down."""
+    if not _ensure():
+        return
     try:
         r = _r()
     except Exception as exc:
