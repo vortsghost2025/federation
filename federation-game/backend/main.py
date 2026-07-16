@@ -86,6 +86,7 @@ from routes.councilor_needs import router as councilor_needs_router
 from routes.decrees import router as decrees_router
 from routes.universe import router as universe_router
 from routes.admin import router as admin_router
+from routes.councilor_exchange import router as councilor_exchange_router
 from map_endpoints import router as map_router
 from data.events import EVENTS
 
@@ -346,6 +347,7 @@ app.include_router(institutions_router)
 app.include_router(councilor_needs_router)
 app.include_router(decrees_router)
 app.include_router(admin_router)
+app.include_router(councilor_exchange_router)
 
 
 @app.get("/metrics")
