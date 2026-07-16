@@ -34,11 +34,13 @@ import logging
 import os
 import random
 import threading
+import copy
 import time
 import urllib.error
 import urllib.parse
 import urllib.request
 from typing import Any, Dict, List, Optional, Tuple
+from collections import OrderedDict
 
 import redis
 
@@ -1574,6 +1576,50 @@ def _call_provider(
 # ── Public API: Route Call ──────────────────────────────────────────
 
 
+# ── Prompt cache (in-memory, LRU) ───────────────────────────────────
+# Caches only successful route_call results. Keyed on everything that can
+# change the output: task_class, char_id, source, prompts, sampling params,
+# fallback toggles, and a route-config version salt. api_key / system_path are
+# intentionally excluded (legacy-compat / attribution-only; they do not change
+# generated content). char_id in the key guarantees councilor outputs are never
+# reused across characters (e.g. Archimedes char_001 vs Oracle char_306).
+ROUTE_CACHE_VERSION = "2026-07-15"
+_PROMPT_CACHE_TTL = 600          # seconds (soft; enforced via LRU cap below)
+_PROMPT_CACHE_MAX = 2000         # max entries; LRU eviction
+_PROMPT_CACHE_LOCK = threading.Lock()
+_PROMPT_CACHE = OrderedDict()    # key -> deep-copied result dict
+
+
+def _prompt_cache_key(
+    task_class, system_prompt, user_prompt, max_tokens, temperature,
+    allow_ollama, allow_gemini, char_id, source,
+):
+    payload = "|".join(
+        repr(x) for x in (
+            task_class, char_id, source, system_prompt, user_prompt,
+            max_tokens, temperature, allow_ollama, allow_gemini,
+            ROUTE_CACHE_VERSION,
+        )
+    )
+    return hashlib.sha256(payload.encode("utf-8")).hexdigest()
+
+
+def _prompt_cache_get(key):
+    with _PROMPT_CACHE_LOCK:
+        if key not in _PROMPT_CACHE:
+            return None
+        _PROMPT_CACHE.move_to_end(key)          # LRU touch
+        return copy.deepcopy(_PROMPT_CACHE[key])
+
+
+def _prompt_cache_put(key, result):
+    with _PROMPT_CACHE_LOCK:
+        _PROMPT_CACHE[key] = copy.deepcopy(result)
+        _PROMPT_CACHE.move_to_end(key)
+        while len(_PROMPT_CACHE) > _PROMPT_CACHE_MAX:
+            _PROMPT_CACHE.popitem(last=False)   # evict oldest
+
+
 def route_call(
     task_class: str,
     system_prompt: str,
@@ -1628,6 +1674,17 @@ def route_call(
     }
     if not source and task_class in ("assistant", "narrator"):
         source = task_class
+    # ── Prompt cache lookup ───────────────────────────────────────
+    # On a hit we return a deep copy and skip the provider chain entirely.
+    # A cache hit intentionally skips llm_audit (no real call was made).
+    _cache_key = _prompt_cache_key(
+        task_class, system_prompt, user_prompt, max_tokens, temperature,
+        allow_ollama, allow_gemini, char_id, source,
+    )
+    _cached = _prompt_cache_get(_cache_key)
+    if _cached is not None:
+        return _cached
+
 
     config = TASK_MODELS.get(task_class)
     if not config:
@@ -1644,6 +1701,7 @@ def route_call(
             source=source,
             system_path=system_path,
         )
+        if result.get("success"): _prompt_cache_put(_cache_key, result)
         return result
 
     messages = [
@@ -1726,6 +1784,7 @@ def route_call(
                 source=source,
                 system_path=system_path,
             )
+            if result.get("success"): _prompt_cache_put(_cache_key, result)
             return result
         else:
             result["errors"].append(f"{provider}/{model}: {content[:150]}")
@@ -1766,6 +1825,7 @@ def route_call(
                 source=source,
                 system_path=system_path,
             )
+            if result.get("success"): _prompt_cache_put(_cache_key, result)
             return result
         else:
             result["errors"].append(f"ollama/{OLLAMA_MODEL}: {content[:150]}")
@@ -1834,6 +1894,7 @@ def route_call(
                     source=source,
                     system_path=system_path,
                 )
+                if result.get("success"): _prompt_cache_put(_cache_key, result)
                 return result
             else:
                 result["errors"].append(f"{provider}/{model}: {content[:150]}")
@@ -1882,6 +1943,7 @@ def route_call(
                     source=source,
                     system_path=system_path,
                 )
+                if result.get("success"): _prompt_cache_put(_cache_key, result)
                 return result
             else:
                 result["errors"].append(f"{pp}/{pmodel}: {content[:150]}")
@@ -1939,6 +2001,7 @@ def route_call(
                     source=source,
                     system_path=system_path,
                 )
+                if result.get("success"): _prompt_cache_put(_cache_key, result)
                 return result
             else:
                 result["errors"].append(f"{provider}/{model}: {content[:150]}")
@@ -1960,6 +2023,7 @@ def route_call(
         source=source,
         system_path=system_path,
     )
+    if result.get("success"): _prompt_cache_put(_cache_key, result)
     return result
 
 
