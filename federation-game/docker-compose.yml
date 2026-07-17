@@ -198,10 +198,12 @@
       - fed-net
     labels:
       - traefik.enable=true
+      - traefik.http.middlewares.adminer-allowlist.ipallowlist.sourcerange=100.64.0.0/10,127.0.0.0/8
       - "traefik.http.routers.adminer.rule=Host(`adminer.federation-game.deliberatefederation.cloud`)"
       - traefik.http.routers.adminer.entrypoints=websecure
       - traefik.http.routers.adminer.tls.certresolver=letsencrypt
       - traefik.http.services.adminer-svc.loadbalancer.server.port=8080
+      - traefik.http.routers.adminer.middlewares=adminer-allowlist
 
   prometheus:
     image: prom/prometheus:latest
@@ -245,15 +247,17 @@
       - fed-net
     labels:
       - traefik.enable=true
+      - traefik.http.middlewares.grafana-allowlist.ipallowlist.sourcerange=100.95.92.117/32,127.0.0.1/32
       - "traefik.http.routers.grafana.rule=Host(`federation-game.deliberatefederation.cloud`) && PathPrefix(`/grafana`)"
       - traefik.http.routers.grafana.entrypoints=websecure
       - traefik.http.routers.grafana.tls.certresolver=letsencrypt
-      - "traefik.http.routers.grafana.priority=100"
+      - "traefik.http.routers.grafana.priority=200"
       - traefik.http.routers.grafana.service=grafana-svc
+      - traefik.http.routers.grafana.middlewares=grafana-allowlist
       - traefik.http.services.grafana-svc.loadbalancer.server.port=3000
       - "traefik.http.routers.grafana-http.rule=Host(`federation-game.deliberatefederation.cloud`) && PathPrefix(`/grafana`)"
       - traefik.http.routers.grafana-http.entrypoints=web
-      - traefik.http.routers.grafana-http.priority=100
+      - traefik.http.routers.grafana-http.priority=200
       - traefik.http.routers.grafana-http.service=grafana-http-svc
       - traefik.http.services.grafana-http-svc.loadbalancer.server.port=3000
     deploy:
