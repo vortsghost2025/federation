@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import json
 import logging
@@ -10,8 +10,10 @@ from collections import Counter
 from typing import Any, Dict, List, Optional
 
 import redis
-from fastapi import APIRouter, HTTPException, Query, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel, Field
+
+from operator_auth import require_operator
 
 router = APIRouter(prefix="", tags=["agents"])
 logger = logging.getLogger(__name__)
@@ -349,12 +351,16 @@ def _queue_message(
 
 
 @router.get("/agents/{agent_id}/messages")
-def get_agent_messages(
+async def get_agent_messages(
     agent_id: str,
     request: Request,
     limit: int = Query(20, ge=1, le=100),
     thread_limit: int = Query(30, ge=1, le=100),
 ):
+    # The moderator inbox is private operator data; the councilor pair-thread
+    # GETs (char_001 / char_306) remain public by design (spectator panel).
+    if agent_id == OPERATOR_ID:
+        await require_operator(request)
     r = _get_redis(request)
     labels = _agent_labels(r)
     inbox = _json_list(r, f"npc_messages:{agent_id}:inbox", limit)
@@ -377,7 +383,7 @@ def get_agent_messages(
     }
 
 
-@router.post("/agents/{agent_id}/messages")
+@router.post("/agents/{agent_id}/messages", dependencies=[Depends(require_operator)])
 def post_agent_message(agent_id: str, req: AgentMessageRequest, request: Request):
     r = _get_redis(request)
     labels = _agent_labels(r)
@@ -398,7 +404,7 @@ def post_agent_message(agent_id: str, req: AgentMessageRequest, request: Request
     return {"ok": True, "message": payload}
 
 
-@router.post("/agents/broadcast")
+@router.post("/agents/broadcast", dependencies=[Depends(require_operator)])
 def broadcast_agent_message(req: AgentBroadcastRequest, request: Request):
     if not req.body and not req.pause_topic:
         raise HTTPException(status_code=400, detail="broadcast requires body or pause_topic")
@@ -428,7 +434,7 @@ def broadcast_agent_message(req: AgentBroadcastRequest, request: Request):
     return {"ok": True, "sent": sent, "cooldowns": cooldowns}
 
 
-@router.post("/agents/{agent_id}/self-diagnostic")
+@router.post("/agents/{agent_id}/self-diagnostic", dependencies=[Depends(require_operator)])
 def request_self_diagnostic(agent_id: str, req: SelfDiagnosticRequest, request: Request):
     r = _get_redis(request)
     labels = _agent_labels(r)

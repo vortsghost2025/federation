@@ -1,12 +1,13 @@
-"""Councilor needs queue — read and mutation endpoints for NPC capability requests."""
+﻿"""Councilor needs queue — read and mutation endpoints for NPC capability requests."""
 
 import json
 import os
 import redis as _redis
 from typing import Optional
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
 
+from operator_auth import require_operator
 from npc_autonomy import (
     file_npc_need,
     get_open_needs,
@@ -50,8 +51,8 @@ class NeedFiling(BaseModel):
     context_snapshot: dict = Field(default_factory=dict, description="World state + recent decisions at time of filing")
 
 
-@router.post("/councilor/needs")
-def create_need(filing: NeedFiling):
+@router.post("/councilor/needs", dependencies=[Depends(require_operator)])
+def create_need(filing: NeedFiling, request: Request):
     r = _r(None)
     result = file_npc_need(
         r,

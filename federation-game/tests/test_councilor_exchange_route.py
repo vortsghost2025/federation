@@ -1,22 +1,21 @@
-"""
-Isolated tests for the Phase 2 councilor-exchange operator route (Gate C).
+﻿"""
+Isolated tests for the Phase2 councilor-exchange operator route (Gate C).
 
 Test-first: this file is created and run before main.py is wired.
 
 The isolated app mounts ONLY the new router plus one ordinary public route,
 so we can prove:
-- operator auth outcomes (401/403/503) are owned by require_operator
+- operator auth outcomes (401) are owned by require_operator (network trust)
 - contract inputs never produce 422
 - authorization completes before get_entries / Redis
 - get_entries is invoked exactly once for a valid request
-- the public route remains accessible without the operator key
+- the public route remains accessible without operator trust
 - the router explicitly carries require_operator as a dependency
 
 No live Redis, VPS, or real secret is used. get_entries is patched at the
 route module so the handler never touches a store.
 """
 
-import os
 import sys
 import importlib.util
 from pathlib import Path
@@ -26,7 +25,7 @@ sys.path.insert(0, str(BACKEND))
 
 import pytest
 from fastapi import FastAPI, APIRouter
-from fastapi.testclient import TestClient
+from fastapi.testclient import TestClient as _RealTestClient
 
 import councilor_exchange
 from councilor_exchange import (
@@ -45,14 +44,43 @@ route_module = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(route_module)
 exchange_router = route_module.router
 
-# Dummy key for tests only. Never a real provider secret.
-DUMMY_KEY = "test-operator-key-only"
+
+# --- Proxy-validated client-address injection -------------------------------
+# The operator guard trusts ONLY request.client.host (populated by Uvicorn
+# from forwarded headers only when the direct proxy IP is trusted via
+# --forwarded-allow-ips). We simulate that validated address by injecting
+# scope["client"] in an ASGI wrapper. No X-Forwarded-For header is used;
+# that header is explicitly NOT trusted by the corrected guard.
+_TRUSTED_ADDR = ("100.64.0.1", 54321)
+
+
+def _client_injector(app, addr):
+    async def wrapper(scope, receive, send):
+        if scope["type"] == "http":
+            # Override whatever address the test transport set (e.g.
+            # ("testclient", 123)) with the proxy-validated address the
+            # guard actually trusts.
+            scope["client"] = addr
+        await app(scope, receive, send)
+
+    return wrapper
+
+
+class TestClient(_RealTestClient):
+    """TestClient that injects a proxy-validated client address."""
+
+    def __init__(self, app, addr=_TRUSTED_ADDR):
+        super().__init__(_client_injector(app, addr))
+
+
+def untrusted_client(app):
+    """Client whose injected address is a public (untrusted) IP."""
+    return TestClient(app, addr=("203.0.113.5", 54321))
 
 
 @pytest.fixture
-def app_with_public(monkeypatch):
+def app_with_public():
     """Isolated app with the operator router + one public route."""
-    monkeypatch.setenv("FEDERATION_OPERATOR_API_KEY", DUMMY_KEY)
 
     public = APIRouter()
 
@@ -100,48 +128,31 @@ EMPTY_PAYLOAD = {
 }
 
 
-# --- 1-4: authentication outcomes owned by require_operator ---
+# --- 1-4: authorization outcomes owned by require_operator (network trust) ---
 
-def test_missing_operator_header_401(app_with_public):
-    client = TestClient(app_with_public)
+def test_untrusted_source_401(app_with_public):
+    client = untrusted_client(app_with_public)
     resp = client.get("/simulation/operator/councilor-exchange")
     assert resp.status_code == 401
 
 
-def test_whitespace_only_header_401(app_with_public):
-    client = TestClient(app_with_public)
+def test_public_source_xff_401(app_with_public):
+    # Even with a spoofed X-Forwarded-For, the guard must reject: it does
+    # NOT read that header. The injected (public) client address is untrusted.
+    client = untrusted_client(app_with_public)
     resp = client.get(
         "/simulation/operator/councilor-exchange",
-        headers={"X-Operator-Key": "   "},
+        headers={"X-Forwarded-For": "203.0.113.5"},
     )
     assert resp.status_code == 401
 
 
-def test_wrong_key_403(app_with_public):
-    client = TestClient(app_with_public)
-    resp = client.get(
-        "/simulation/operator/councilor-exchange",
-        headers={"X-Operator-Key": "wrong-key"},
-    )
-    assert resp.status_code == 403
-
-
-def test_missing_server_config_503(app_with_public, monkeypatch):
-    monkeypatch.delenv("FEDERATION_OPERATOR_API_KEY", raising=False)
-    client = TestClient(app_with_public)
-    resp = client.get(
-        "/simulation/operator/councilor-exchange",
-        headers={"X-Operator-Key": DUMMY_KEY},
-    )
-    assert resp.status_code == 503
-
-
-def test_valid_key_reaches_handler(app_with_public, monkeypatch):
+def test_trusted_source_reaches_handler(app_with_public, monkeypatch):
     calls = make_call_counter(monkeypatch, GOOD_PAYLOAD)
     client = TestClient(app_with_public)
     resp = client.get(
         "/simulation/operator/councilor-exchange",
-        headers={"X-Operator-Key": DUMMY_KEY},
+
     )
     assert resp.status_code == 200
     assert len(calls) == 1
@@ -149,7 +160,7 @@ def test_valid_key_reaches_handler(app_with_public, monkeypatch):
 
 def test_unauthorized_invokes_get_entries_zero_times(app_with_public, monkeypatch):
     calls = make_call_counter(monkeypatch, GOOD_PAYLOAD)
-    client = TestClient(app_with_public)
+    client = untrusted_client(app_with_public)
     resp = client.get("/simulation/operator/councilor-exchange")
     assert resp.status_code == 401
     assert calls == []
@@ -157,21 +168,24 @@ def test_unauthorized_invokes_get_entries_zero_times(app_with_public, monkeypatc
 
 def test_unauthorized_with_invalid_view_still_401(app_with_public, monkeypatch):
     make_call_counter(monkeypatch, GOOD_PAYLOAD)
-    client = TestClient(app_with_public)
+    client = untrusted_client(app_with_public)
     resp = client.get(
-        "/simulation/operator/councilor-exchange?view=dashboard"
+        "/simulation/operator/councilor-exchange?view=dashboard",
     )
     assert resp.status_code == 401
 
 
-def test_wrong_key_with_invalid_limit_still_403(app_with_public, monkeypatch):
+def test_trusted_source_passes_before_limit_validation(app_with_public, monkeypatch):
+    # With a trusted source, the (invalid) limit is validated by the handler
+    # and returns 400 -- proving auth passed and validation ran, not a 401.
     make_call_counter(monkeypatch, GOOD_PAYLOAD)
     client = TestClient(app_with_public)
     resp = client.get(
         "/simulation/operator/councilor-exchange?limit=abc",
-        headers={"X-Operator-Key": "wrong-key"},
+
     )
-    assert resp.status_code == 403
+    assert resp.status_code == 400
+    assert resp.status_code != 401
 
 
 def test_default_view_is_shared(app_with_public, monkeypatch):
@@ -179,7 +193,7 @@ def test_default_view_is_shared(app_with_public, monkeypatch):
     client = TestClient(app_with_public)
     client.get(
         "/simulation/operator/councilor-exchange",
-        headers={"X-Operator-Key": DUMMY_KEY},
+
     )
     assert calls[0]["view"] == "shared"
 
@@ -189,7 +203,7 @@ def test_default_limit_is_50(app_with_public, monkeypatch):
     client = TestClient(app_with_public)
     client.get(
         "/simulation/operator/councilor-exchange",
-        headers={"X-Operator-Key": DUMMY_KEY},
+
     )
     assert calls[0]["limit"] == 50
 
@@ -199,18 +213,17 @@ def test_shared_view_allows_absent_char_id(app_with_public, monkeypatch):
     client = TestClient(app_with_public)
     resp = client.get(
         "/simulation/operator/councilor-exchange?view=shared",
-        headers={"X-Operator-Key": DUMMY_KEY},
+
     )
     assert resp.status_code == 200
     assert calls[0]["char_id"] is None
 
 
 def test_inbox_without_char_id_400(app_with_public):
-    # Real helper validates before any Redis contact; expect 400.
     client = TestClient(app_with_public)
     resp = client.get(
         "/simulation/operator/councilor-exchange?view=inbox",
-        headers={"X-Operator-Key": DUMMY_KEY},
+
     )
     assert resp.status_code == 400
 
@@ -219,7 +232,7 @@ def test_outbox_without_char_id_400(app_with_public):
     client = TestClient(app_with_public)
     resp = client.get(
         "/simulation/operator/councilor-exchange?view=outbox",
-        headers={"X-Operator-Key": DUMMY_KEY},
+
     )
     assert resp.status_code == 400
 
@@ -228,7 +241,7 @@ def test_unknown_char_id_400(app_with_public):
     client = TestClient(app_with_public)
     resp = client.get(
         "/simulation/operator/councilor-exchange?view=inbox&char_id=char_999",
-        headers={"X-Operator-Key": DUMMY_KEY},
+
     )
     assert resp.status_code == 400
 
@@ -237,7 +250,7 @@ def test_invalid_view_400(app_with_public):
     client = TestClient(app_with_public)
     resp = client.get(
         "/simulation/operator/councilor-exchange?view=dashboard",
-        headers={"X-Operator-Key": DUMMY_KEY},
+
     )
     assert resp.status_code == 400
 
@@ -247,7 +260,7 @@ def test_non_integer_limit_400_not_422(app_with_public, monkeypatch):
     client = TestClient(app_with_public)
     resp = client.get(
         "/simulation/operator/councilor-exchange?limit=abc",
-        headers={"X-Operator-Key": DUMMY_KEY},
+
     )
     assert resp.status_code == 400
     assert resp.status_code != 422
@@ -258,7 +271,7 @@ def test_limit_zero_400(app_with_public, monkeypatch):
     client = TestClient(app_with_public)
     resp = client.get(
         "/simulation/operator/councilor-exchange?limit=0",
-        headers={"X-Operator-Key": DUMMY_KEY},
+
     )
     assert resp.status_code == 400
 
@@ -268,7 +281,7 @@ def test_limit_201_400(app_with_public, monkeypatch):
     client = TestClient(app_with_public)
     resp = client.get(
         "/simulation/operator/councilor-exchange?limit=201",
-        headers={"X-Operator-Key": DUMMY_KEY},
+
     )
     assert resp.status_code == 400
 
@@ -278,7 +291,7 @@ def test_limit_1_succeeds(app_with_public, monkeypatch):
     client = TestClient(app_with_public)
     resp = client.get(
         "/simulation/operator/councilor-exchange?limit=1",
-        headers={"X-Operator-Key": DUMMY_KEY},
+
     )
     assert resp.status_code == 200
     assert calls[0]["limit"] == 1
@@ -289,7 +302,7 @@ def test_limit_200_succeeds(app_with_public, monkeypatch):
     client = TestClient(app_with_public)
     resp = client.get(
         "/simulation/operator/councilor-exchange?limit=200",
-        headers={"X-Operator-Key": DUMMY_KEY},
+
     )
     assert resp.status_code == 200
     assert calls[0]["limit"] == 200
@@ -300,7 +313,7 @@ def test_empty_ledger_exact_shape(app_with_public, monkeypatch):
     client = TestClient(app_with_public)
     resp = client.get(
         "/simulation/operator/councilor-exchange",
-        headers={"X-Operator-Key": DUMMY_KEY},
+
     )
     assert resp.status_code == 200
     assert resp.json() == EMPTY_PAYLOAD
@@ -311,7 +324,7 @@ def test_populated_result_returned_unchanged(app_with_public, monkeypatch):
     client = TestClient(app_with_public)
     resp = client.get(
         "/simulation/operator/councilor-exchange",
-        headers={"X-Operator-Key": DUMMY_KEY},
+
     )
     assert resp.json() == GOOD_PAYLOAD
 
@@ -324,7 +337,7 @@ def test_store_unavailable_503(app_with_public, monkeypatch):
     client = TestClient(app_with_public)
     resp = client.get(
         "/simulation/operator/councilor-exchange",
-        headers={"X-Operator-Key": DUMMY_KEY},
+
     )
     assert resp.status_code == 503
     assert "unavailable" in resp.json()["detail"].lower()
@@ -338,7 +351,7 @@ def test_store_error_text_absent_from_response(app_with_public, monkeypatch):
     client = TestClient(app_with_public)
     resp = client.get(
         "/simulation/operator/councilor-exchange",
-        headers={"X-Operator-Key": DUMMY_KEY},
+
     )
     body = resp.text
     assert "REDIS_DOWN" not in body
@@ -351,7 +364,7 @@ def test_get_entries_invoked_once(app_with_public, monkeypatch):
     client = TestClient(app_with_public)
     client.get(
         "/simulation/operator/councilor-exchange",
-        headers={"X-Operator-Key": DUMMY_KEY},
+
     )
     assert len(calls) == 1
 
@@ -379,8 +392,8 @@ def test_public_route_accessible_without_key(app_with_public, monkeypatch):
 
 
 def test_no_contract_input_returns_422(app_with_public):
-    # Exercise every contract-input failure path with a valid key and assert
-    # the route returns 400 (never 422) from the real helper / manual parse.
+    # Exercise every contract-input failure path with a trusted source and
+    # assert the route returns 400 (never 422) from the real helper.
     client = TestClient(app_with_public)
     cases = [
         "?view=dashboard",
@@ -394,20 +407,18 @@ def test_no_contract_input_returns_422(app_with_public):
     for q in cases:
         resp = client.get(
             f"/simulation/operator/councilor-exchange{q}",
-            headers={"X-Operator-Key": DUMMY_KEY},
+
         )
         assert resp.status_code != 422, f"422 for {q}"
         assert resp.status_code == 400, f"expected 400 for {q}, got {resp.status_code}"
 
 
 def test_empty_view_query_normalizes_to_shared(app_with_public, monkeypatch):
-    # Empty-view query value (?view=) must normalize to "shared",
-    # not be treated as an invalid view.
     calls = make_call_counter(monkeypatch, GOOD_PAYLOAD)
     client = TestClient(app_with_public)
     resp = client.get(
         "/simulation/operator/councilor-exchange?view=",
-        headers={"X-Operator-Key": DUMMY_KEY},
+
     )
     assert resp.status_code == 200
     assert resp.status_code != 422
@@ -417,13 +428,11 @@ def test_empty_view_query_normalizes_to_shared(app_with_public, monkeypatch):
 
 
 def test_empty_limit_query_normalizes_to_50(app_with_public, monkeypatch):
-    # Empty-limit query value (?limit=) must normalize to 50,
-    # not be treated as a non-integer limit.
     calls = make_call_counter(monkeypatch, GOOD_PAYLOAD)
     client = TestClient(app_with_public)
     resp = client.get(
         "/simulation/operator/councilor-exchange?limit=",
-        headers={"X-Operator-Key": DUMMY_KEY},
+
     )
     assert resp.status_code == 200
     assert resp.status_code != 422
@@ -433,7 +442,7 @@ def test_empty_limit_query_normalizes_to_50(app_with_public, monkeypatch):
 
 
 # ---------------------------------------------------------------------------
-# Wiring proofs (28-33) added after isolated route tests pass.
+# Wiring proofs added after isolated route tests pass.
 # ---------------------------------------------------------------------------
 
 def test_import_main_app_no_redis(monkeypatch):
@@ -444,7 +453,6 @@ def test_import_main_app_no_redis(monkeypatch):
         calls.append(True)
         return EMPTY_PAYLOAD
 
-    # Patch at source so any accidental invocation is caught.
     monkeypatch.setattr(councilor_exchange, "get_entries", fake_get_entries)
 
     import main  # noqa: F401

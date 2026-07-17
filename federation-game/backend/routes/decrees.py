@@ -1,11 +1,12 @@
-"""Councilor Decrees — bounded world-state write access for authorized councilors."""
+﻿"""Councilor Decrees — bounded world-state write access for authorized councilors."""
 
 import os
 import redis as _redis
 from typing import Optional
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, Depends, Request
 from pydantic import BaseModel, Field
 
+from operator_auth import require_operator
 from npc_autonomy import (
     issue_decree,
     get_decree_history,
@@ -39,8 +40,8 @@ class DecreeRequest(BaseModel):
     reasoning: str = Field("", max_length=500)
 
 
-@router.post("/councilor/decree")
-def post_decree(req: DecreeRequest):
+@router.post("/councilor/decree", dependencies=[Depends(require_operator)])
+def post_decree(req: DecreeRequest, request: Request):
     result = issue_decree(req.char_id, req.char_name, req.metric, req.delta, req.reasoning)
     return result
 

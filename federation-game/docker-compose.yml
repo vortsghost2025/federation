@@ -1,4 +1,4 @@
-services:
+﻿services:
   reverse-proxy:
     image: traefik:latest
     command:
@@ -51,6 +51,9 @@ services:
       - 0.0.0.0
       - --port
       - '8000'
+      - --proxy-headers
+      - --forwarded-allow-ips
+      - 172.16.2.7
     restart: unless-stopped
     env_file:
       - .env
@@ -76,6 +79,19 @@ services:
       - traefik.enable=true
       - traefik.http.services.fed-api-svc.loadbalancer.server.port=8000
       - traefik.http.services.fed-api-http-svc.loadbalancer.server.port=8000
+      # Operator-only route: restricted to Tailscale + internal Docker networks.
+      - "traefik.http.middlewares.fed-operator-allowlist.ipallowlist.sourcerange=100.64.0.0/10, 127.0.0.0/8"
+      - "traefik.http.routers.fed-operator.rule=Host(`federation-game.deliberatefederation.cloud`) && Path(`/simulation/operator/councilor-exchange`)"
+      - traefik.http.routers.fed-operator.entrypoints=websecure
+      - traefik.http.routers.fed-operator.tls.certresolver=letsencrypt
+      - traefik.http.routers.fed-operator.service=fed-api-svc
+      - "traefik.http.routers.fed-operator.priority=400"
+      - traefik.http.routers.fed-operator.middlewares=fed-operator-allowlist
+      - "traefik.http.routers.fed-operator-http.rule=Host(`federation-game.deliberatefederation.cloud`) && Path(`/simulation/operator/councilor-exchange`)"
+      - traefik.http.routers.fed-operator-http.entrypoints=web
+      - traefik.http.routers.fed-operator-http.service=fed-api-http-svc
+      - "traefik.http.routers.fed-operator-http.priority=400"
+      - traefik.http.routers.fed-operator-http.middlewares=fed-operator-allowlist
     deploy:
       resources:
         limits:
@@ -103,7 +119,7 @@ services:
       - "traefik.http.routers.fed-sim-html.rule=Host(`federation-game.deliberatefederation.cloud`) && (Path(`/simulation.html`) || Path(`/bridge.html`) || Path(`/starmap.html`) || Path(`/starmap3d.html`) || Path(`/earth.html`) || Path(`/constellation.html`) || PathPrefix(`/worldguide`) || Path(`/adult.html`) || Path(`/spectator.html`) || Path(`/council-chat.html`) || Path(`/index.html`) || Path(`/spectator.css`) || Path(`/spectator.js`))"
       - traefik.http.routers.fed-sim-html.entrypoints=websecure
       - traefik.http.routers.fed-sim-html.tls.certresolver=letsencrypt
-      - "traefik.http.routers.fed-sim-html.priority=200"
+      - "traefik.http.routers.fed-sim-html.priority=400"
       - traefik.http.routers.fed-sim-html.service=fed-sim-html-svc
       - traefik.http.services.fed-sim-html-svc.loadbalancer.server.port=80
       - "traefik.http.routers.fed-sim-html-http.rule=Host(`federation-game.deliberatefederation.cloud`) && (Path(`/simulation.html`) || Path(`/bridge.html`) || Path(`/starmap.html`) || Path(`/starmap3d.html`) || Path(`/earth.html`) || Path(`/constellation.html`) || PathPrefix(`/worldguide`) || Path(`/adult.html`) || Path(`/spectator.html`) || Path(`/council-chat.html`) || Path(`/index.html`) || Path(`/spectator.css`) || Path(`/spectator.js`))"
