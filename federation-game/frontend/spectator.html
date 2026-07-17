@@ -1094,7 +1094,7 @@ function renderWorkflowCard(wf, isActive){
       <div class="wf-meta">
         <span>ID: ${esc(wf.id||'?').slice(0,12)}…</span>
         <span>Kind: ${esc(wf.kind||'?')}</span>
-        <span>State: <strong>${esc(wf.state||'?')}</strong></span>
+        <span>State: <strong>${esc(wf.status||'?')}</strong></span>
         <span>Started: ${esc(startedAt)}</span>
         ${endedAt ? `<span>Ended: ${esc(endedAt)}</span>` : ''}
         ${(wf.artifact_count||0) > 0 ? `<span>Artifacts: ${wf.artifact_count}</span>` : ''}
