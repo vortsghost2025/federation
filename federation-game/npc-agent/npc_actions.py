@@ -685,12 +685,14 @@ def execute_decision(decision: dict, r, contacts: dict):
         acked_total += _acknowledge_inbox(r, ack_target)
 
     if is_terminal_operator_response:
-        # Patch B: archive ONLY the one directive by its exact id.
+        # Patch B: archive ONLY the one directive by its exact id. Pass the
+        # attribution object explicitly — no shared/global state.
         operator_acked = _acknowledge_operator_directive(
             r,
             decision["operator_directive_id"],
             char_id=CHAR_ID,
             status=decision["operator_response_status"],
+            attribution=decision.get("operator_attribution") or {},
         )
         if operator_acked:
             result["operator_directive_acked"] = decision["operator_directive_id"]

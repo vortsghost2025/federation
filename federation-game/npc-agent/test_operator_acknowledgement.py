@@ -318,9 +318,9 @@ def test_ack_wired_via_execute_decision(setup, monkeypatch):
         generic_calls.append((target, char_id))
         return 0
 
-    def spy_exact(r, directive_id, char_id="", status="complete"):
-        exact_calls.append((directive_id, char_id, status))
-        return rh._acknowledge_operator_directive(r, directive_id, char_id, status)
+    def spy_exact(r, directive_id, char_id="", status="complete", attribution=None):
+        exact_calls.append((directive_id, char_id, status, attribution))
+        return rh._acknowledge_operator_directive(r, directive_id, char_id, status, attribution=attribution)
 
     monkeypatch.setattr(na, "_acknowledge_inbox", spy_generic)
     monkeypatch.setattr(na, "_acknowledge_operator_directive", spy_exact)
@@ -340,7 +340,7 @@ def test_ack_wired_via_execute_decision(setup, monkeypatch):
     assert result.get("action_taken") == "message_sent"
     assert result.get("operator_directive_acked") == "msg_a"
     # exactly one exact-id ack, no generic moderator ack
-    assert exact_calls == [("msg_a", "char_306", "complete")]
+    assert exact_calls == [("msg_a", "char_306", "complete", {})]
     assert generic_calls == []  # OPERATOR_ID never appended to ack_targets
     # only msg_a removed; msg_b remains
     assert fr._zset_inbox == ["msg_b"]
@@ -381,9 +381,9 @@ def _run_execute_decision_with_acks(monkeypatch, fr, decision, char_id="char_306
         generic_calls.append((target, char_id))
         return 0
 
-    def spy_exact(r, directive_id, char_id="", status="complete"):
-        exact_calls.append((directive_id, char_id, status))
-        return rh._acknowledge_operator_directive(r, directive_id, char_id, status)
+    def spy_exact(r, directive_id, char_id="", status="complete", attribution=None):
+        exact_calls.append((directive_id, char_id, status, attribution))
+        return rh._acknowledge_operator_directive(r, directive_id, char_id, status, attribution=attribution)
 
     monkeypatch.setattr(na, "_acknowledge_inbox", spy_generic)
     monkeypatch.setattr(na, "_acknowledge_operator_directive", spy_exact)
@@ -563,7 +563,7 @@ def test_failed_status_acked_only_after_send(setup, monkeypatch):
     }
     result, generic, exact = _run_execute_decision_with_acks(monkeypatch, fr, decision)
     # failed terminal response must still be acknowledged by exact id
-    assert exact and exact[0] == ("msg_a", "char_306", "failed")
+    assert exact and exact[0] == ("msg_a", "char_306", "failed", {})
     assert generic == []
     assert result.get("operator_directive_acked") == "msg_a"
     assert fr._zset_inbox == []

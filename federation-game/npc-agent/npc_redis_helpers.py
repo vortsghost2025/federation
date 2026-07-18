@@ -865,7 +865,7 @@ def _acknowledge_inbox(r, partner_id: str = None, char_id: str = "") -> int:
         return 0
 
 
-def _acknowledge_operator_directive(r, directive_id: str = "", char_id: str = "", status: str = "complete") -> bool:
+def _acknowledge_operator_directive(r, directive_id: str = "", char_id: str = "", status: str = "complete", attribution: dict | None = None) -> bool:
     """Archive exactly one moderator directive by its message id.
 
     This is the message-specific replacement for the sender-wide
@@ -885,46 +885,81 @@ def _acknowledge_operator_directive(r, directive_id: str = "", char_id: str = ""
     try:
         target = directive_id if directive_id.startswith("msg_") else f"msg_{directive_id}"
         zset_key = f"msg:inbox:{cid}"
+        removed = False
         if r.exists(zset_key):
             # production ZSET: remove only the matching member by id
-            removed = r.zrem(zset_key, target)
-            if removed:
-                # Bounded audit record: always the single latest acknowledgement
-                # for this NPC. Uses SET (overwrite), never a growing LIST/ZSET,
-                # so the key cannot accumulate without bound and never copies
-                # the directive body. Failure to write must not restore/duplicate
-                # the already-removed inbox member.
-                try:
-                    r.set(
-                        f"operator_ack:{cid}",
-                        json.dumps({
-                            "directive_id": target,
-                            "status": status,
-                            "ts": _now_ts(),
-                        }, default=str),
-                    )
-                except Exception:
-                    pass
-                return True
+            if r.zrem(zset_key, target):
+                removed = True
             # legacy member may have been stored without the msg_ prefix
-            if r.zrem(zset_key, directive_id):
-                return True
+            elif r.zrem(zset_key, directive_id):
+                removed = True
 
-        # legacy LIST fallback
-        list_key = f"npc_messages:{cid}:inbox"
-        if r.exists(list_key):
-            for raw in r.lrange(list_key, 0, -1):
-                try:
-                    m = json.loads(raw)
-                except Exception:
-                    continue
-                mid = m.get("id") or m.get("msg_id") or ""
-                if mid == directive_id or mid == target:
-                    r.lrem(list_key, 1, raw)
-                    return True
-        return False
+        if not removed:
+            # legacy LIST fallback
+            list_key = f"npc_messages:{cid}:inbox"
+            if r.exists(list_key):
+                for raw in r.lrange(list_key, 0, -1):
+                    try:
+                        m = json.loads(raw)
+                    except Exception:
+                        continue
+                    mid = m.get("id") or m.get("msg_id") or ""
+                    if mid == directive_id or mid == target:
+                        r.lrem(list_key, 1, raw)
+                        removed = True
+                        break
+
+        # ONLY after the exact directive was successfully removed do we record
+        # acknowledgement. A failed removal writes neither the latest ack nor
+        # the bounded history, so a failed ack can never leave a false record.
+        if not removed:
+            return False
+
+        try:
+            r.set(
+                f"operator_ack:{cid}",
+                json.dumps({
+                    "directive_id": target,
+                    "status": status,
+                    "ts": _now_ts(),
+                }, default=str),
+            )
+        except Exception:
+            pass
+        _record_operator_ack_history(r, target, status, attribution or {}, cid=cid)
+        return True
     except Exception:
         return False
+
+
+def _record_operator_ack_history(r, directive_id: str = "", status: str = "complete", attribution: dict | None = None, cid: str = "") -> None:
+    """Bounded forensic audit LIST for operator acknowledgements.
+
+    The single `operator_ack:{cid}` record is overwritten on every ack and
+    therefore erases the identities of earlier acknowledgements (observed
+    during the oracle crash loop). This separate LIST keeps up to 20 lightweight
+    entries (LPUSH + LTRIM 0 19) so recent acknowledgement history survives
+    while remaining bounded. Each entry carries only an id, status, ts, and the
+    requested/actual model for clean attribution — never a directive body.
+    Called only after a successful exact acknowledgement.
+    """
+    if not directive_id:
+        return
+    attribution = attribution or {}
+    try:
+        r.lpush(
+            f"operator_ack_history:{cid}",
+            json.dumps({
+                "directive_id": directive_id,
+                "status": status,
+                "ts": _now_ts(),
+                "requested_model": attribution.get("requested_model", ""),
+                "actual_model": attribution.get("actual_model", ""),
+            }, default=str),
+        )
+        r.ltrim(f"operator_ack_history:{cid}", 0, 19)
+    except Exception:
+        pass
 
 
 def _now_ts() -> float:
