@@ -652,8 +652,21 @@ def think_about_world(r, contacts: dict | None = None, char_id: str = "") -> str
             for msg in inbox:
                 try:
                     m = json.loads(msg)
-                    body = m.get("body", "")[:80]
-                    parts.append(f"  ← {m.get('from_name', '?')}: {body}")
+                    from_char_id = m.get("from_char_id", "")
+                    if from_char_id == "moderator":
+                        # Operator directives are high-priority and must reach the
+                        # model intact. Preserve the full body up to a safe cap and
+                        # keep it out of the 80-char partner-preview limit.
+                        body = m.get("body", "")[:2000]
+                        parts.append("=== MODERATOR DIRECTIVE: READ FULLY AND ACT FIRST ===")
+                        parts.append(f"  From: {m.get('from_name', 'Sean / Federation Moderator')}")
+                        if m.get("subject"):
+                            parts.append(f"  Subject: {m.get('subject')}")
+                        parts.append(f"  {body}")
+                        parts.append("=== END MODERATOR DIRECTIVE ===")
+                    else:
+                        body = m.get("body", "")[:80]
+                        parts.append(f"  ← {m.get('from_name', '?')}: {body}")
                 except Exception:
                     pass
     except Exception:
