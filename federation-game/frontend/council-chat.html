@@ -40,6 +40,11 @@
     .msg.partner{border-left:5px solid var(--accent)}
     .msg.oracle{border-left:5px solid #c788ff}
     .msg.operator{border-left:5px solid var(--accent-2)}
+    .badge{display:inline-block;padding:2px 8px;border-radius:999px;font-size:.78rem;font-weight:700;letter-spacing:.04em;border:1px solid transparent}
+    .badge-sent{background:#13351f;color:#9be8b4;border-color:#2f6b43}
+    .badge-delivered{background:#1a2c44;color:#9bc4ff;border-color:#2f4f6b}
+    .badge-reply{background:#2a2348;color:#cdb4ff;border-color:#4a3f6b}
+    .badge-failed{background:#3a1717;color:#ffb0b0;border-color:#6b2f2f}
     .controls{display:grid;gap:12px}
     .control-row{display:grid;gap:10px}
     .button-row{display:flex;gap:10px;flex-wrap:wrap}
@@ -192,6 +197,37 @@ function renderMessages(el, rows, emptyText){
     </div>
   `).join('');
 }
+function moderatorMessageKind(msg){
+  // Classify each moderator-row so Sean can tell at a glance what happened.
+  const from = msg.from_char_id || '';
+  const to = msg.to_char_id || '';
+  const text = ((msg.subject || '') + ' ' + (msg.body || '')).toLowerCase();
+  if (from === 'moderator') return 'sent';           // you sent it
+  if (/failed validation|unable to|inability|could not produce/.test(text)) return 'failed'; // NPC reported a failure
+  if (to === 'moderator' && (from === 'char_001' || from === 'char_306')) return 'reply'; // an NPC answered you
+  return 'delivered';                                  // delivered to an NPC, no reply yet
+}
+function kindBadge(kind){
+  const labels = { sent:'SENT', delivered:'DELIVERED', reply:'REPLY', failed:'FAILED' };
+  return `<span class="badge badge-${kind}">${labels[kind] || kind}</span>`;
+}
+function renderModeratorMessages(el, rows, emptyText){
+  if(!rows || !rows.length){ el.innerHTML = `<div class="subtle">${escapeHtml(emptyText)}</div>`; return; }
+  el.innerHTML = rows.map(msg => {
+    const kind = moderatorMessageKind(msg);
+    return `
+    <div class="msg ${messageClass(msg)}">
+      <div class="meta">
+        <span><strong>${escapeHtml(msg.from_name || msg.from_char_id || '?')}</strong> → ${escapeHtml(msg.to_name || msg.to_char_id || '?')}</span>
+        ${kindBadge(kind)}
+        <span>${escapeHtml(msg.type || 'direct_message')}</span>
+        <span>${escapeHtml(msg.topic || 'no-topic')}</span>
+        <span>${escapeHtml(fmtTs(msg.created_at || msg.ts))}</span>
+      </div>
+      <div class="body">${escapeHtml(msg.body || '')}</div>
+    </div>`;
+  }).join('');
+}
 function renderStatusCard(agentId, routeData, agency){
   const focus = (agency?.npc_focus && agency.npc_focus[agentId]) || {};
   const cooldowns = (routeData.cooldowns || []).map(cd => `${cd.topic} (${cd.remaining_minutes}m)`).join(', ');
@@ -233,11 +269,16 @@ async function loadAll(){
       renderStatusCard('char_306', oracle, agency)
     ].join('');
 
+    // Render newest-first so the moderator's most recent activity is always
+    // at the top of the scroll panel (accessibility: no hunting for new mail).
     const moderatorRows = [
       ...(moderator.inbox || []),
       ...(moderator.active_thread || [])
-    ].sort((a,b) => Number(a.ts || a.created_at || 0) - Number(b.ts || b.created_at || 0));
-    renderMessages($('moderator-inbox'), moderatorRows, 'No agent replies to moderator yet.');
+    ].sort((a,b) => Number(b.ts || b.created_at || 0) - Number(a.ts || a.created_at || 0));
+    renderModeratorMessages($('moderator-inbox'), moderatorRows, 'No agent replies to moderator yet.');
+    // Keep the newest entry visible after every refresh.
+    const inboxEl = $('moderator-inbox');
+    if (inboxEl) inboxEl.scrollTop = 0;
     status(`Updated ${new Date().toLocaleTimeString()}`);
   }catch(err){
     console.error(err);
