@@ -27,6 +27,7 @@ from npc_redis_helpers import (
     _message_cooldown_remaining,
     _sync_pair_workspace,
     _session_append,
+    _acknowledge_operator_directive,
 )
 
 # ── Institution bloat guards ──
@@ -657,14 +658,47 @@ def execute_decision(decision: dict, r, contacts: dict):
             "body": f"unknown category {cat}: {note}",
         })
 
+    # Operator (moderator) acknowledgement must be message-specific, not
+    # sender-wide. A terminal enforced operator response bypasses the generic
+    # `_acknowledge_inbox(r, "moderator")` entirely so it never deletes every
+    # queued moderator message before the exact-id helper runs.
+    is_terminal_operator_response = (
+        isinstance(decision, dict)
+        and result.get("action_taken") == "message_sent"
+        and result.get("target") == OPERATOR_ID
+        and decision.get("operator_directive_id")
+        and decision.get("operator_response_status") in {"complete", "failed"}
+    )
+
     ack_targets = []
-    if partner_id and result.get("action_taken") != "no_target":
-        ack_targets.append(partner_id)
-    if result.get("action_taken") == "message_sent" and result.get("target") == OPERATOR_ID:
-        ack_targets.append(OPERATOR_ID)
+    is_operator_response = bool(decision.get("operator_directive_id"))
+    if not is_operator_response:
+        # Ordinary acknowledgement path. Enforced operator responses bypass ALL
+        # generic acknowledgement (the exact-id ack handles them by directive id).
+        if partner_id and result.get("action_taken") != "no_target":
+            ack_targets.append(partner_id)
+        if (result.get("action_taken") == "message_sent"
+                and result.get("target") == OPERATOR_ID):
+            ack_targets.append(OPERATOR_ID)
     acked_total = 0
     for ack_target in dict.fromkeys(ack_targets):
         acked_total += _acknowledge_inbox(r, ack_target)
+
+    if is_terminal_operator_response:
+        # Patch B: archive ONLY the one directive by its exact id.
+        operator_acked = _acknowledge_operator_directive(
+            r,
+            decision["operator_directive_id"],
+            char_id=CHAR_ID,
+            status=decision["operator_response_status"],
+        )
+        if operator_acked:
+            result["operator_directive_acked"] = decision["operator_directive_id"]
+            acked_total += 1
+    elif decision.get("operator_directive_id") and decision.get("operator_response_status") not in {"complete", "failed"}:
+        # non-terminal operator response (e.g. failed to send) acknowledges nothing
+        pass
+
     if acked_total:
         result["acked_messages"] = acked_total
 

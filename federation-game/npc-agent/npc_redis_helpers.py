@@ -865,6 +865,73 @@ def _acknowledge_inbox(r, partner_id: str = None, char_id: str = "") -> int:
         return 0
 
 
+def _acknowledge_operator_directive(r, directive_id: str = "", char_id: str = "", status: str = "complete") -> bool:
+    """Archive exactly one moderator directive by its message id.
+
+    This is the message-specific replacement for the sender-wide
+    `_acknowledge_inbox(r, "moderator")`. It removes ONLY the ZSET
+    member (or legacy LIST entry) that matches `directive_id`, never every
+    message from the moderator, and never deletes the underlying
+    `msg:{id}` payload (preserved for history/audit).
+
+    Production schema: inbox is the ZSET `msg:inbox:{cid}` whose members
+    are `msg_{uuid}`; the body lives at `msg:{msg_id}` (HASH or JSON
+    string). Legacy schema: inbox is the LIST `npc_messages:{cid}:inbox`
+    of JSON strings carrying `id`/`msg_id`.
+    """
+    if not directive_id:
+        return False
+    cid = char_id or CHAR_ID
+    try:
+        target = directive_id if directive_id.startswith("msg_") else f"msg_{directive_id}"
+        zset_key = f"msg:inbox:{cid}"
+        if r.exists(zset_key):
+            # production ZSET: remove only the matching member by id
+            removed = r.zrem(zset_key, target)
+            if removed:
+                # Bounded audit record: always the single latest acknowledgement
+                # for this NPC. Uses SET (overwrite), never a growing LIST/ZSET,
+                # so the key cannot accumulate without bound and never copies
+                # the directive body. Failure to write must not restore/duplicate
+                # the already-removed inbox member.
+                try:
+                    r.set(
+                        f"operator_ack:{cid}",
+                        json.dumps({
+                            "directive_id": target,
+                            "status": status,
+                            "ts": _now_ts(),
+                        }, default=str),
+                    )
+                except Exception:
+                    pass
+                return True
+            # legacy member may have been stored without the msg_ prefix
+            if r.zrem(zset_key, directive_id):
+                return True
+
+        # legacy LIST fallback
+        list_key = f"npc_messages:{cid}:inbox"
+        if r.exists(list_key):
+            for raw in r.lrange(list_key, 0, -1):
+                try:
+                    m = json.loads(raw)
+                except Exception:
+                    continue
+                mid = m.get("id") or m.get("msg_id") or ""
+                if mid == directive_id or mid == target:
+                    r.lrem(list_key, 1, raw)
+                    return True
+        return False
+    except Exception:
+        return False
+
+
+def _now_ts() -> float:
+    import time
+    return time.time()
+
+
 def _recent_artifact_dedup_count(r, char_id: str = "") -> int:
     cid = char_id or CHAR_ID
     try:
