@@ -1,10 +1,15 @@
-"""Focused tests for Patch A: deterministic moderator-reply enforcement.
+"""Focused tests for Patch A / A2: deterministic moderator-reply enforcement and content-contract validation.
 
 These tests run in isolation from Redis and the live LLM by monkeypatching
 npc_decisions.call_llm and supplying a FakeRedis. They prove that a pending
 moderator reply-directive forces a single send_message to "moderator" and
 bypasses all ordinary anti-loop / dedup / partner controls, while leaving
 ordinary behavior untouched when no qualifying directive exists.
+
+They also cover directive-label extraction, five-section content validation,
+meta-acknowledgement rejection, repair prompting, and complete/failed response
+status. Message-specific acknowledgement (exact-ID removal, generic-ack bypass,
+bounded operator_ack record) lives in test_operator_acknowledgement.py.
 """
 import importlib
 import json
@@ -17,7 +22,7 @@ import pytest
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 import npc_decisions as nd
-
+import npc_redis_helpers as rh
 
 class FakeRedis:
     """Minimal Redis stub.
@@ -31,7 +36,9 @@ class FakeRedis:
     def __init__(self):
         self._inbox = []
         self._zset_inbox = []          # ordered newest-first list of msg_ids
+        self._zset_scores = {}         # msg_id -> score (created_at)
         self._hashes = {}              # msg_id -> dict
+        self._strings = {}             # simple SET/HASH-less key -> string store
 
     def set_inbox(self, items):
         self._inbox = items
@@ -40,6 +47,7 @@ class FakeRedis:
         # hashes: list of dict message bodies, newest-first
         self._hashes = {h["id"]: dict(h) for h in hashes}
         self._zset_inbox = [h["id"] for h in hashes]
+        self._zset_scores = {h["id"]: h.get("created_at", 0) for h in hashes}
 
     def lrange(self, key, start, end):
         if key.endswith(":inbox"):
@@ -53,16 +61,19 @@ class FakeRedis:
         return 0
 
     def lrem(self, key, count, value):
-        return 0
+        before = len(self._inbox)
+        self._inbox = [x for x in self._inbox if x != value]
+        return before - len(self._inbox)
 
     def ltrim(self, key, start, end):
         return None
 
     def get(self, key):
-        return None
+        return self._strings.get(key)
 
     def set(self, key, value):
-        return None
+        self._strings[key] = value
+        return True
 
     def hget(self, key, field):
         return None
@@ -97,7 +108,20 @@ class FakeRedis:
         return None
 
     def exists(self, key):
+        if key.startswith("msg:inbox:"):
+            return 1 if self._zset_inbox else 0
+        # legacy LIST key
+        if key.endswith(":inbox"):
+            return 1 if self._inbox else 0
         return 0
+
+    def zrem(self, key, *members):
+        removed = 0
+        for m in members:
+            if m in self._zset_inbox:
+                self._zset_inbox.remove(m)
+                removed += 1
+        return removed
 
 
 def _mod_msg(msg_id, body, subject="Directive"):
@@ -138,11 +162,18 @@ def setup(monkeypatch):
 
     def fake_call_llm(system_prompt, user_prompt, model="", r=None, call_label=""):
         calls.append((call_label, system_prompt, user_prompt))
-        # default: a valid moderator send
+        # default: a valid moderator send whose body satisfies the 5 required
+        # labelled sections extracted from REPLY_BODY.
         content = json.dumps({
             "category": "send_message",
             "target": "moderator",
-            "body": "Here is the completed synthesis.",
+            "body": (
+                "1. Prioritized Criteria: signal depth over volume. "
+                "2. Quantitative Metrics and Suggested Thresholds: score > 0.7. "
+                "3. Sector Comparison Method: rank normalized deltas. "
+                "4. Risk and Ethical Safeguards: anonymize sources. "
+                "5. Final Recommendation: adopt the deep-signal rubric."
+            ),
             "description": "final report",
             "reasoning": "operator directive",
         })
@@ -243,7 +274,12 @@ def test_valid_moderator_send_passes(setup):
     dec = nd.decide_action("ctx", r=fr)
     assert dec["category"] == "send_message"
     assert dec["target"] == "moderator"
-    assert dec["body"] == "Here is the completed synthesis."
+    # default fixture body satisfies all 5 required labelled sections
+    assert all(
+        lbl in dec["body"].lower()
+        for lbl in ["prioritized criteria", "quantitative metrics",
+                    "sector comparison", "risk and ethical", "final recommend"]
+    )
 
 
 def test_partner_target_retargeted_to_moderator(setup, monkeypatch):
@@ -274,7 +310,12 @@ def test_wrong_category_triggers_repair(setup, monkeypatch):
         }),
         "decide_operator_repair": json.dumps({
             "category": "send_message", "target": "moderator",
-            "body": "repaired reply", "description": "d", "reasoning": "r"
+            "body": (
+                "1. Prioritized Criteria: x. 2. Quantitative Metrics and Suggested Thresholds: y. "
+                "3. Sector Comparison Method: z. 4. Risk and Ethical Safeguards: w. "
+                "5. Final Recommendation: v."
+            ),
+            "description": "d", "reasoning": "r"
         }),
     }
 
@@ -290,7 +331,11 @@ def test_wrong_category_triggers_repair(setup, monkeypatch):
     assert "decide_operator_repair" in labels
     assert dec["category"] == "send_message"
     assert dec["target"] == "moderator"
-    assert dec["body"] == "repaired reply"
+    assert all(
+        lbl in dec["body"].lower()
+        for lbl in ["prioritized criteria", "quantitative metrics",
+                    "sector comparison", "risk and ethical", "final recommend"]
+    )
 
 
 def test_repair_failure_truthful_message(setup, monkeypatch):
@@ -452,3 +497,199 @@ def test_legacy_list_takes_priority_over_empty_zset(setup):
     dec = nd.decide_action("ctx", r=fr)
     # not a reply request -> ordinary path
     assert "operator_directive_id" not in dec
+
+
+# ────────────────────────────────────────────────────────────────────────────
+# Patch A2: response-contract validation (required labelled sections).
+# ────────────────────────────────────────────────────────────────────────────
+
+def test_extract_required_labels_from_reply_body():
+    labels = nd._extract_required_labels(REPLY_BODY)
+    assert "prioritized criteria" in labels
+    assert "quantitative metrics and suggested thresholds" in labels
+    assert "sector comparison method" in labels
+    assert "risk and ethical safeguards" in labels
+    assert "final recommendation" in labels
+    assert len(labels) == 5
+
+
+def test_observed_451_meta_ack_fails_contract(setup, monkeypatch):
+    """The real production meta-acknowledgement (451 chars, no sections) MUST
+    fail the content contract and trigger the repair path."""
+    fr, calls = setup
+    meta = (
+        "Moderator, I acknowledge your directive. The completed final "
+        "deep-signal analytical report has been prepared and is attached as "
+        "the deliverable. I confirm receipt and will proceed per instructions."
+    )
+
+    def fake_call_llm(system_prompt, user_prompt, model="", r=None, call_label=""):
+        calls.append((call_label, system_prompt, user_prompt))
+        if call_label == "decide_operator":
+            return {"content": json.dumps({
+                "category": "send_message", "target": "moderator",
+                "body": meta, "description": "ack", "reasoning": "ack",
+            }), "error": None}
+        # repair must now carry the sections
+        return {"content": json.dumps({
+            "category": "send_message", "target": "moderator",
+            "body": (
+                "1. Prioritized Criteria: depth. "
+                "2. Quantitative Metrics and Suggested Thresholds: score. "
+                "3. Sector Comparison Method: rank. "
+                "4. Risk and Ethical Safeguards: anonymize. "
+                "5. Final Recommendation: adopt."
+            ),
+            "description": "r", "reasoning": "r",
+        }), "error": None}
+
+    monkeypatch.setattr(nd, "call_llm", fake_call_llm)
+    fr.set_inbox([_mod_msg("m1", REPLY_BODY, REPLY_SUBJECT)])
+    dec = nd.decide_action("ctx", r=fr)
+    labels = [c[0] for c in calls]
+    assert "decide_operator_repair" in labels
+    assert dec["operator_response_status"] == "complete"
+    assert all(
+        lbl in dec["body"].lower()
+        for lbl in ["prioritized criteria", "quantitative metrics",
+                    "sector comparison", "risk and ethical", "final recommend"]
+    )
+
+
+def test_missing_labels_trigger_repair(setup, monkeypatch):
+    fr, calls = setup
+
+    def fake_call_llm(system_prompt, user_prompt, model="", r=None, call_label=""):
+        calls.append((call_label, system_prompt, user_prompt))
+        if call_label == "decide_operator":
+            return {"content": json.dumps({
+                "category": "send_message", "target": "moderator",
+                "body": "Only a partial answer with no labelled sections.",
+                "description": "d", "reasoning": "r",
+            }), "error": None}
+        return {"content": json.dumps({
+            "category": "send_message", "target": "moderator",
+            "body": (
+                "1. Prioritized Criteria: a. 2. Quantitative Metrics and "
+                "Suggested Thresholds: b. 3. Sector Comparison Method: c. "
+                "4. Risk and Ethical Safeguards: d. 5. Final Recommendation: e."
+            ),
+            "description": "d", "reasoning": "r",
+        }), "error": None}
+
+    monkeypatch.setattr(nd, "call_llm", fake_call_llm)
+    fr.set_inbox([_mod_msg("m1", REPLY_BODY, REPLY_SUBJECT)])
+    dec = nd.decide_action("ctx", r=fr)
+    assert "decide_operator_repair" in [c[0] for c in calls]
+    assert dec["operator_response_status"] == "complete"
+
+
+def test_partial_section_coverage_fails(setup, monkeypatch):
+    fr, calls = setup
+
+    def fake_call_llm(system_prompt, user_prompt, model="", r=None, call_label=""):
+        # only 3 of 5 sections present -> invalid, triggers repair
+        if call_label == "decide_operator":
+            return {"content": json.dumps({
+                "category": "send_message", "target": "moderator",
+                "body": (
+                    "1. Prioritized Criteria: x. "
+                    "3. Sector Comparison Method: y. "
+                    "5. Final Recommendation: z."
+                ),
+                "description": "d", "reasoning": "r",
+            }), "error": None}
+        return {"content": json.dumps({
+            "category": "send_message", "target": "moderator",
+            "body": (
+                "1. Prioritized Criteria: a. 2. Quantitative Metrics and "
+                "Suggested Thresholds: b. 3. Sector Comparison Method: c. "
+                "4. Risk and Ethical Safeguards: d. 5. Final Recommendation: e."
+            ),
+            "description": "d", "reasoning": "r",
+        }), "error": None}
+
+    monkeypatch.setattr(nd, "call_llm", fake_call_llm)
+    fr.set_inbox([_mod_msg("m1", REPLY_BODY, REPLY_SUBJECT)])
+    dec = nd.decide_action("ctx", r=fr)
+    assert dec["operator_response_status"] == "complete"
+    assert all(
+        lbl in dec["body"].lower()
+        for lbl in ["prioritized criteria", "quantitative metrics",
+                    "sector comparison", "risk and ethical", "final recommend"]
+    )
+
+
+def test_simple_reply_without_labels_still_valid(setup, monkeypatch):
+    """A plain reply directive (no required labelled sections) keeps the simple
+    non-empty send_message validation."""
+    fr, calls = setup
+    simple = _mod_msg("m1", "Reply to the moderator with your current status.", "Status")
+
+    def fake_call_llm(system_prompt, user_prompt, model="", r=None, call_label=""):
+        return {"content": json.dumps({
+            "category": "send_message", "target": "moderator",
+            "body": "Status: on track with the councilor exchange.",
+            "description": "d", "reasoning": "r",
+        }), "error": None}
+
+    monkeypatch.setattr(nd, "call_llm", fake_call_llm)
+    fr.set_inbox([simple])
+    dec = nd.decide_action("ctx", r=fr)
+    assert dec["category"] == "send_message"
+    assert dec["operator_response_status"] == "complete"
+    assert dec["operator_missing_requirements"] == []
+
+
+def test_complete_vs_failed_terminal_status(setup, monkeypatch):
+    fr, calls = setup
+    seq = {
+        "decide_operator": json.dumps({
+            "category": "create_artifact", "title": "x", "description": "y",
+        }),
+        "decide_operator_repair": "not json at all",
+    }
+
+    def fake_call_llm(system_prompt, user_prompt, model="", r=None, call_label=""):
+        return {"content": seq.get(call_label, "{}"), "error": None}
+
+    monkeypatch.setattr(nd, "call_llm", fake_call_llm)
+    fr.set_inbox([_mod_msg("m1", REPLY_BODY, REPLY_SUBJECT)])
+    dec = nd.decide_action("ctx", r=fr)
+    # both invalid -> truthful failure message, status "failed"
+    assert dec["operator_response_status"] == "failed"
+    body = dec["body"].lower()
+    assert "could not" in body or "failed" in body or "invalid" in body
+    assert dec["target"] == "moderator"
+
+
+def test_failed_repair_produces_truthful_message(setup, monkeypatch):
+    fr, calls = setup
+
+    def fake_call_llm(system_prompt, user_prompt, model="", r=None, call_label=""):
+        if call_label == "decide_operator":
+            return {"content": json.dumps({"category": "rest"}), "error": None}
+        return {"content": "garbage", "error": None}
+
+    monkeypatch.setattr(nd, "call_llm", fake_call_llm)
+    fr.set_inbox([_mod_msg("m1", REPLY_BODY, REPLY_SUBJECT)])
+    dec = nd.decide_action("ctx", r=fr)
+    assert dec["operator_response_status"] == "failed"
+    assert "no artifact" in dec["body"].lower() or "partner" not in dec["body"].lower()
+    assert dec["category"] == "send_message"
+
+
+def test_zset_production_detection_still_covered(setup):
+    """Regression: production ZSET/HASH detection still activates enforcement."""
+    fr, calls = setup
+    newer = {
+        "id": "msg_2dcaad150359",
+        "from_char_id": "moderator",
+        "from_name": "Sean / Federation Moderator",
+        "subject": REPLY_SUBJECT,
+        "body": REPLY_BODY,
+    }
+    fr.set_zset_inbox([newer])
+    dec = nd.decide_action("ctx", r=fr)
+    assert dec["operator_directive_id"] == "msg_2dcaad150359"
+    assert dec["category"] == "send_message"

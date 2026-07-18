@@ -397,6 +397,63 @@ def _newest_moderator_directive(r, char_id: str = "") -> dict | None:
     return newest_moderator
 
 
+def _norm_body(s: str) -> str:
+    import re
+    return re.sub(r"[\s\-_]+", " ", (s or "").strip().lower())
+
+
+def _extract_required_labels(directive_body: str) -> list[str]:
+    """Extract labelled/numbered section requirements from a directive body.
+
+    Supports both:
+      * one label per line (e.g. "1. Prioritized Criteria");
+      * multiple numbered labels inside one paragraph.
+
+    Comparison is normalized: case, whitespace, numbering, punctuation,
+    and hyphen/underscore variants are collapsed so the moderator's wording
+    (e.g. "Suggested Thresholds" vs "Suggest ed Thresholds") still matches.
+    """
+    if not directive_body:
+        return []
+    import re
+    norm = lambda s: re.sub(r"[\s\-_]+", " ", s.strip().lower())
+    # candidate label lines: leading "N." / "N)" or a numbered/lettered token
+    labels: list[str] = []
+    inline_pat = re.compile(r"(?:\d+[.)])\s*([A-Z][A-Za-z][^0-9(.)]{2,60}?)(?=(?:\s*\d+[.)])|\.\s+[A-Z]|\.?\s*\Z)")
+    for raw_line in directive_body.splitlines():
+        line = raw_line.strip()
+        # Paragraph with inline numbered labels: "1) Foo 2) Bar 3) Baz"
+        # Prefer this so a single line holding all five labels is not swallowed
+        # whole by the line-level fallback below.
+        inline = list(inline_pat.finditer(line))
+        if inline:
+            for mm in inline:
+                captured = mm.group(1).rstrip(". ").strip()
+                labels.append(norm(captured))
+            continue
+        m = re.match(r"^\s*(?:\d+[.)]|[a-z][.)])\s*(.+)$", line)
+        if m:
+            labels.append(norm(m.group(1)))
+    # de-dup preserving order
+    seen = set()
+    out = []
+    for l in labels:
+        if l and l not in seen:
+            seen.add(l)
+            out.append(l)
+    return out
+
+
+def _body_satisfies_labels(body: str, labels: list[str]) -> bool:
+    if not labels:
+        return True
+    norm = lambda s: re.sub(r"[\s\-_]+", " ", s.strip().lower())
+    nb = norm(body or "")
+    if not nb:
+        return False
+    return all(lbl in nb for lbl in labels)
+
+
 def _decide_operator_response(directive: dict, context: str, r=None) -> dict:
     """Deterministic operator-reply path.
 
@@ -407,6 +464,7 @@ def _decide_operator_response(directive: dict, context: str, r=None) -> dict:
     """
     subject = directive.get("subject", "")
     body = directive.get("body", "")
+    required_labels = _extract_required_labels(body)
     constraint = (
         "\n\nBINDING OPERATOR DIRECTIVE — COMPLETE THIS TURN.\n"
         "The Federation Moderator has issued a directive that explicitly "
@@ -422,6 +480,14 @@ def _decide_operator_response(directive: dict, context: str, r=None) -> dict:
         "propose_role, submit_to_institution, investigate, read_artifacts, "
         "rest, self_improve, write_code, request_capability are ALL invalid.\n"
         "- Do not ask a question; deliver the requested response.\n"
+        "- A claim that the report is \"complete\" WITHOUT the actual labelled "
+        "sections below is INVALID. You must include the real content.\n"
+    )
+    if required_labels:
+        constraint += "- Your reply body MUST contain every one of these labelled sections:\n"
+        for i, lbl in enumerate(required_labels, 1):
+            constraint += f"    {i}. {lbl}\n"
+    constraint += (
         "Direct your reply to the moderator as follows.\n"
         f"DIRECTIVE SUBJECT: {subject}\n"
         f"DIRECTIVE BODY:\n{body}\n"
@@ -442,6 +508,11 @@ def _decide_operator_response(directive: dict, context: str, r=None) -> dict:
         body_out = dec.get("body") or dec.get("description") or ""
         if not body_out.strip():
             return None
+        # content-contract: when the directive required labelled sections,
+        # the body must actually contain them. A meta-acknowledgement that
+        # merely claims completion is INVALID.
+        if required_labels and not _body_satisfies_labels(body_out, required_labels):
+            return None
         return dec
 
     decision = None
@@ -450,17 +521,37 @@ def _decide_operator_response(directive: dict, context: str, r=None) -> dict:
     except Exception:
         decision = None
 
+    missing = []
     if _valid(decision) is None:
-        # constrained repair call
+        # constrained repair call — name the missing labels explicitly
+        if required_labels:
+            body_for_check = (decision or {}).get("body") or (decision or {}).get("description") or ""
+            missing = [l for l in required_labels if l not in _norm_body(body_for_check)]
         repair_system = (
             SELF_INTRO
-            + "\n\nYou previously failed to produce the required moderator reply. "
-            "Return ONLY this JSON, filled in:\n"
-            '{"category": "send_message", "target": "moderator", '
-            '"body": "<your full reply to the moderator>", '
-            '"description": "<short summary>", "reasoning": "<why>"}\n'
-            "The target MUST be \"moderator\". The body MUST be non-empty."
+            + "\n\nYou previously failed to produce the required moderator reply"
         )
+        if required_labels:
+            repair_system += (
+                " — the following labelled sections were MISSING from your reply:\n"
+            )
+            for i, lbl in enumerate(missing, 1):
+                repair_system += f"    {i}. {lbl}\n"
+            repair_system += (
+                "A message that only claims completion WITHOUT these actual sections "
+                "is INVALID. Include the real content for each section.\n"
+            )
+        else:
+            repair_system += " — return a valid non-empty reply.\n"
+        repair_system += (
+            'Return ONLY this JSON, filled in:\n'
+            '{"category": "send_message", "target": "moderator", '
+            '"body": "<your full reply to the moderator with every required section>", '
+            '"description": "<short summary>", "reasoning": "<why>"}\n'
+            "The target MUST be \"moderator\". The body MUST be non-empty"
+        )
+        if required_labels:
+            repair_system += " and MUST contain every listed section."
         repair_raw = call_llm(
             repair_system, context, model=DECISION_MODEL or "", r=r, call_label="decide_operator_repair"
         )
@@ -469,7 +560,17 @@ def _decide_operator_response(directive: dict, context: str, r=None) -> dict:
         except Exception:
             decision = None
 
-    if _valid(decision) is None:
+    # terminal status metadata
+    if _valid(decision) is not None:
+        operator_response_status = "complete"
+        operator_missing = []
+    else:
+        operator_response_status = "failed"
+        if required_labels:
+            body_for_check = (decision or {}).get("body") or (decision or {}).get("description") or ""
+            operator_missing = [l for l in required_labels if l not in _norm_body(body_for_check)]
+        else:
+            operator_missing = []
         # truthful fallback: never silently pick rest/artifact/partner
         decision = {
             "category": "send_message",
@@ -485,6 +586,8 @@ def _decide_operator_response(directive: dict, context: str, r=None) -> dict:
         }
 
     decision["operator_directive_id"] = directive.get("id") or directive.get("msg_id")
+    decision["operator_response_status"] = operator_response_status
+    decision["operator_missing_requirements"] = operator_missing
     return decision
 
 
