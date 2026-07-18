@@ -106,8 +106,24 @@ _FORBIDDEN_PATTERNS = {
     "redis": re.compile(r"\b(redis|rpush|r\.set|r\.hset|hset\(|lpush)", re.I),
 }
 
-# String fields scanned for forbidden authority claims.
-_SCANNED_TEXT_FIELDS = ("name", "description", "body", "notes")
+# Explicit top-level field contract. ANY key not in this set is rejected
+# (strict schema — unknown fields cannot hide authority instructions).
+ALLOWED_FIELDS = frozenset({
+    "creator_id",
+    "action",
+    "object_type",
+    "name",
+    "description",
+    "body",
+    "importance",
+    "tags",
+    "parent_ref",
+})
+
+# Proposal-controlled text fields scanned for forbidden authority claims.
+# `notes` is intentionally NOT in the contract: it is rejected as an unknown
+# field rather than silently accepted-and-discarded.
+_SCANNED_TEXT_FIELDS = ("name", "description", "body")
 
 REQUIRED_FIELDS = ("creator_id", "action", "object_type", "name", "description")
 
@@ -202,6 +218,16 @@ def validate_proposal(raw: dict) -> dict:
     # Work on a shallow copy so we never mutate the caller's object.
     p = dict(raw)
 
+    # 0.5 Strict schema: reject any unknown top-level field BEFORE any other
+    # check, so an undeclared field (e.g. flavor_text, or a dict hiding
+    # instructions inside parent_ref) cannot smuggle forbidden authority.
+    unknown = [k for k in p if k not in ALLOWED_FIELDS]
+    if unknown:
+        return _err(
+            "REJECT_UNKNOWN_FIELD",
+            f"unknown field(s): {sorted(unknown)}",
+        )
+
     # 1. Action whitelist
     action = p.get("action")
     if action not in ALLOWED_ACTIONS:
@@ -258,7 +284,10 @@ def validate_proposal(raw: dict) -> dict:
         return _err("REJECT_MISSING_FIELD", f"missing required field(s): {missing}")
 
     # 7. Name normalization + length + format
-    norm = normalize_name(p.get("name", ""))
+    raw_name = p.get("name")
+    if not isinstance(raw_name, str):
+        return _err("REJECT_NAME_TYPE", "name must be a string")
+    norm = normalize_name(raw_name)
     if not norm:
         return _err("REJECT_NAME_EMPTY", "name normalizes to empty")
     if len(norm) > MAX_NAME_LEN:
@@ -306,12 +335,19 @@ def validate_proposal(raw: dict) -> dict:
     parent_type = PARENT_REQUIREMENT.get(object_type)
     if parent_type:
         parent_ref = p.get("parent_ref")
+        # Strict contract: parent_ref must be a plain string. A dict/object is
+        # rejected (nested keys would be un-scannable) via REJECT_PARENT_FORMAT.
         if not parent_ref:
             return _err(
                 "REJECT_MISSING_PARENT",
                 f"{object_type} requires parent_ref of type {parent_type}",
             )
-        if not isinstance(parent_ref, str) or not _NAME_RE.match(normalize_name(parent_ref)):
+        if not isinstance(parent_ref, str):
+            return _err(
+                "REJECT_PARENT_FORMAT",
+                "parent_ref must be a string (no nested objects)",
+            )
+        if not _NAME_RE.match(normalize_name(parent_ref)):
             return _err("REJECT_PARENT_FORMAT", "parent_ref has invalid format")
 
     # 13. Forbidden authority content (never let creators claim infra/creds/etc.)
@@ -356,6 +392,7 @@ def is_valid_result(result: dict) -> bool:
 # Reject-code catalogue (deterministic, exported for tests/docs).
 REJECT_CODES = (
     "REJECT_NOT_OBJECT",
+    "REJECT_UNKNOWN_FIELD",
     "REJECT_ACTION_NOT_ALLOWED",
     "REJECT_NO_ACTION",
     "REJECT_REVISE_HAS_NO_OBJECT",
@@ -365,6 +402,7 @@ REJECT_CODES = (
     "REJECT_ROLE_TYPE_MISMATCH",
     "REJECT_MISSING_FIELD",
     "REJECT_NAME_EMPTY",
+    "REJECT_NAME_TYPE",
     "REJECT_NAME_TOO_LONG",
     "REJECT_NAME_FORMAT",
     "REJECT_DESC_TYPE",

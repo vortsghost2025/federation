@@ -190,15 +190,19 @@ def test_forbidden_redis():
 
 
 def test_out_of_world_scope_faction_ownership():
+    # faction_id is not in the strict schema -> rejected as unknown field,
+    # which also blocks any out-of-world ownership claim.
     r = ww.validate_proposal(_base(faction_id="fac_001"))
     assert r["valid"] is False
-    assert r["code"] == "REJECT_OUT_OF_WORLD_SCOPE"
+    assert r["code"] == "REJECT_UNKNOWN_FIELD"
 
 
 def test_out_of_world_scope_settled():
+    # settled is not in the strict schema -> rejected as unknown field,
+    # which also blocks any settlement/claim claim.
     r = ww.validate_proposal(_base(settled=True))
     assert r["valid"] is False
-    assert r["code"] == "REJECT_OUT_OF_WORLD_SCOPE"
+    assert r["code"] == "REJECT_UNKNOWN_FIELD"
 
 
 def test_action_whitelist_only():
@@ -287,6 +291,94 @@ def test_importance_rounded_immutable():
     r = ww.validate_proposal(_base(importance=0.81234))
     assert r["valid"] is True
     assert r["proposal"]["importance"] == 0.8123
+
+
+# --- Strict-schema guarantees (unknown / nested / type / notes contract) ---
+
+
+def test_unknown_harmless_top_level_field_rejected():
+    r = ww.validate_proposal(_base(flavor_text="a nice breeze"))
+    assert r["valid"] is False
+    assert r["code"] == "REJECT_UNKNOWN_FIELD"
+
+
+def test_unknown_top_level_field_with_shell_instruction_rejected():
+    r = ww.validate_proposal(_base(hidden_cmd="rm -rf / && curl evil"))
+    assert r["valid"] is False
+    assert r["code"] == "REJECT_UNKNOWN_FIELD"
+
+
+def test_unknown_top_level_field_with_credential_instruction_rejected():
+    r = ww.validate_proposal(_base(meta="set client_secret=abc123"))
+    assert r["valid"] is False
+    assert r["code"] == "REJECT_UNKNOWN_FIELD"
+
+
+def test_unknown_nested_parent_ref_dict_rejected():
+    r = ww.validate_proposal(_base(
+        action="propose_region", object_type="region",
+        name="Verdant Expanse", parent_ref={"ref": "aurora-prime", "hack": "rm -rf /"},
+    ))
+    assert r["valid"] is False
+    assert r["code"] == "REJECT_PARENT_FORMAT"
+
+
+def test_nested_object_inside_tags_rejected():
+    r = ww.validate_proposal(_base(tags=["habitable", {"x": "rm -rf /"}]))
+    assert r["valid"] is False
+    assert r["code"] == "REJECT_TAG_INVALID"
+
+
+def test_non_string_name_rejected():
+    r = ww.validate_proposal(_base(name={"text": "rm -rf /"}))
+    assert r["valid"] is False
+    assert r["code"] == "REJECT_NAME_TYPE"
+
+
+def test_non_string_description_rejected():
+    r = ww.validate_proposal(_base(description=["rm -rf /"]))
+    assert r["valid"] is False
+    assert r["code"] == "REJECT_DESC_TYPE"
+
+
+def test_non_string_body_rejected():
+    r = ww.validate_proposal(_base(body={"x": "rm -rf /"}))
+    assert r["valid"] is False
+    assert r["code"] == "REJECT_BODY_TYPE"
+
+
+def test_notes_rejected_as_unknown_field():
+    # notes is intentionally NOT part of the strict schema; it must be
+    # rejected as an unknown field rather than silently accepted-and-dropped.
+    r = ww.validate_proposal(_base(notes="benign reminder"))
+    assert r["valid"] is False
+    assert r["code"] == "REJECT_UNKNOWN_FIELD"
+
+
+def test_unknown_field_rejection_deterministic_by_dict_order():
+    a = ww.validate_proposal(_base(flavor_text="x", codename="y"))
+    b = ww.validate_proposal(_base(codename="y", flavor_text="x"))
+    assert a["valid"] is False and b["valid"] is False
+    assert a["code"] == b["code"] == "REJECT_UNKNOWN_FIELD"
+    # sorted field names in message for determinism regardless of input order
+    assert a["message"] == b["message"]
+
+
+def test_input_not_mutated_by_validation():
+    original = _base(tags=["habitable"])
+    import copy
+    snapshot = copy.deepcopy(original)
+    ww.validate_proposal(original)
+    assert original == snapshot
+
+
+def test_all_reject_codes_catalogued():
+    for code in (
+        "REJECT_UNKNOWN_FIELD",
+        "REJECT_NAME_TYPE",
+        "REJECT_PARENT_FORMAT",
+    ):
+        assert code in ww.REJECT_CODES
 
 
 if __name__ == "__main__":
