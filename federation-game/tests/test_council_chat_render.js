@@ -22,7 +22,9 @@ function moderatorMessageKind(msg) {
   const to = msg.to_char_id || '';
   const text = ((msg.subject || '') + ' ' + (msg.body || '')).toLowerCase();
   if (from === 'moderator') return 'sent';
-  if (/failed validation|unable to|inability|could not produce/.test(text)) return 'failed';
+  // Only the backend's actual failure vocabulary ("failed validation",
+  // "could not produce") triggers FAILED, so generic phrasing is never mislabeled.
+  if (/failed validation|could not produce/.test(text)) return 'failed';
   if (to === 'moderator' && (from === 'char_001' || from === 'char_306')) return 'reply';
   return 'delivered';
 }
@@ -53,6 +55,8 @@ assert(
 
 assert(moderatorMessageKind({ from_char_id: 'moderator', to_char_id: 'char_306' }) === 'sent', 'sent classified');
 assert(moderatorMessageKind({ from_char_id: 'char_306', to_char_id: 'moderator', subject: 'x', body: 'failed validation' }) === 'failed', 'failed classified');
+// Regression: a benign reply containing a generic word must NOT be FAILED.
+assert(moderatorMessageKind({ from_char_id: 'char_306', to_char_id: 'moderator', subject: 'x', body: 'I am unable to attend the meeting' }) === 'reply', 'benign "unable to" not mislabeled');
 assert(moderatorMessageKind({ from_char_id: 'char_306', to_char_id: 'moderator', subject: 'x', body: 'normal' }) === 'reply', 'reply classified');
 // char_306 -> char_001 is not a reply to the moderator, so it is neither
 // sent nor reply; it falls through to 'delivered' (delivered, no moderator reply).

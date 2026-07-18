@@ -203,7 +203,10 @@ function moderatorMessageKind(msg){
   const to = msg.to_char_id || '';
   const text = ((msg.subject || '') + ' ' + (msg.body || '')).toLowerCase();
   if (from === 'moderator') return 'sent';           // you sent it
-  if (/failed validation|unable to|inability|could not produce/.test(text)) return 'failed'; // NPC reported a failure
+  // Only flag the specific failure vocabulary the backend actually emits
+  // ("failed validation", "could not produce") so ordinary replies containing
+  // generic words like "unable to" are never mislabeled as FAILED.
+  if (/failed validation|could not produce/.test(text)) return 'failed'; // NPC reported a failure
   if (to === 'moderator' && (from === 'char_001' || from === 'char_306')) return 'reply'; // an NPC answered you
   return 'delivered';                                  // delivered to an NPC, no reply yet
 }
