@@ -379,6 +379,15 @@
       - MAX_OUTPUT_TOKENS=1024
       - MAX_TOTAL_BUDGET_MS=120000
       - TICK_INTERVAL=120
+      # Operator-only OpenRouter route (OFF by default; see OPERATOR_ROUTE_ENABLED).
+      # Enable with ORACLE_OPERATOR_ROUTE_ENABLED=true plus the operator config vars.
+      # Reversion: set ORACLE_OPERATOR_ROUTE_ENABLED=false and recreate the container.
+      - OPERATOR_ROUTE_ENABLED=${ORACLE_OPERATOR_ROUTE_ENABLED:-false}
+      - OPERATOR_LLM_BASE_URL=${ORACLE_OPERATOR_LLM_BASE_URL:-https://openrouter.ai/api/v1}
+      - OPERATOR_LLM_API_KEY=${OPENROUTER_API_KEY:-}
+      - OPERATOR_DECISION_MODEL=${ORACLE_OPERATOR_DECISION_MODEL:-openrouter/free}
+      - OPERATOR_REQUEST_TIMEOUT=${ORACLE_OPERATOR_REQUEST_TIMEOUT:-90}
+      - OPERATOR_MAX_OUTPUT_TOKENS=${ORACLE_OPERATOR_MAX_OUTPUT_TOKENS:-4096}
     volumes:
       - /docker/federation-game/npc-agent:/app:ro
     depends_on:

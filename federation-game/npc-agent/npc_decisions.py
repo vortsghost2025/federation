@@ -14,7 +14,10 @@ import re
 import time
 
 from fourth_wall import _enforce_fourth_wall, _fourth_wall_dirty
-from npc_llm_client import call_llm
+from npc_llm_client import (
+    call_llm,
+    call_llm_operator,
+)
 from npc_redis_helpers import (
     get_redis,
     _trunc,
@@ -454,6 +457,30 @@ def _body_satisfies_labels(body: str, labels: list[str]) -> bool:
     return all(lbl in nb for lbl in labels)
 
 
+def _operator_call(system_prompt: str, user_prompt: str, is_repair: bool = False, r=None) -> dict:
+    """Route an operator directive call through the operator-only OpenRouter
+    route when enabled and fully configured; otherwise fall back to the
+    existing NVIDIA route.
+
+    Only decide_operator / decide_operator_repair reach this. The repair flag
+    is forwarded so call logging can distinguish initial vs repair attempts.
+
+    A disabled route (OPERATOR_ROUTE_ENABLED false/absent/invalid, or no
+    config) returns ``attribution.error_category == "disabled"``; in that case
+    we preserve existing NVIDIA behavior. Any other error category (including
+    fail-closed config_incomplete / config_error) is returned as-is so the
+    Patch A2 repair / truthful-failure path engages — it never silently mixes
+    routes.
+    """
+    from npc_llm_client import DECISION_MODEL
+    call_label = "decide_operator_repair" if is_repair else "decide_operator"
+    op = call_llm_operator(system_prompt, user_prompt, r=r, call_label=call_label, is_repair=is_repair)
+    if (op.get("error") == "operator route disabled"
+            and op.get("attribution", {}).get("error_category") == "disabled"):
+        return call_llm(system_prompt, user_prompt, model=DECISION_MODEL or "", r=r, call_label=call_label)
+    return op
+
+
 def _decide_operator_response(directive: dict, context: str, r=None) -> dict:
     """Deterministic operator-reply path.
 
@@ -495,7 +522,10 @@ def _decide_operator_response(directive: dict, context: str, r=None) -> dict:
     )
     system_prompt = SELF_INTRO + constraint
     from npc_llm_client import DECISION_MODEL
-    raw = call_llm(system_prompt, context, model=DECISION_MODEL or "", r=r, call_label="decide_operator")
+    raw = _operator_call(system_prompt, context, is_repair=False, r=r)
+    # Capture the per-call attribution returned by the operator route. This is
+    # bound to THIS decision and never overwritten by a subsequent call.
+    operator_attribution = raw.get("attribution", {})
 
     def _valid(dec):
         if not isinstance(dec, dict):
@@ -552,9 +582,12 @@ def _decide_operator_response(directive: dict, context: str, r=None) -> dict:
         )
         if required_labels:
             repair_system += " and MUST contain every listed section."
-        repair_raw = call_llm(
-            repair_system, context, model=DECISION_MODEL or "", r=r, call_label="decide_operator_repair"
-        )
+        repair_raw = _operator_call(repair_system, context, is_repair=True, r=r)
+        # The repair call's attribution supersedes the initial call's only when
+        # a repair occurred; it stays bound to this decision.
+        repair_attribution = repair_raw.get("attribution", {})
+        if repair_attribution:
+            operator_attribution = repair_attribution
         try:
             decision = _extract_json(repair_raw["content"])
         except Exception:
@@ -588,6 +621,7 @@ def _decide_operator_response(directive: dict, context: str, r=None) -> dict:
     decision["operator_directive_id"] = directive.get("id") or directive.get("msg_id")
     decision["operator_response_status"] = operator_response_status
     decision["operator_missing_requirements"] = operator_missing
+    decision["operator_attribution"] = operator_attribution
     return decision
 
 

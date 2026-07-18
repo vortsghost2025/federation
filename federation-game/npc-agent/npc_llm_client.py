@@ -38,6 +38,89 @@ MAX_OUTPUT_TOKENS = int(os.environ.get("MAX_OUTPUT_TOKENS", "1024"))
 NVIDIA_BASE = "https://integrate.api.nvidia.com/v1"
 OR_BASE = "https://openrouter.ai/api/v1/chat/completions"
 
+# ── Operator-only OpenRouter route (Patch A2 escalation tier) ────────────────
+#
+# Ordinary NPC cognition stays on the NVIDIA route. Only the two operator call
+# labels (decide_operator / decide_operator_repair) may use this route, and
+# ONLY when OPERATOR_ROUTE_ENABLED is an explicit truthy value AND the required
+# operator configuration is complete. The route is OFF unless deliberately
+# switched on, and any partial/invalid configuration fails CLOSED into the
+# existing Patch A2 repair / truthful-failure path — it never falls back to a
+# mixed NVIDIA+OpenRouter setup. All values are read at call time so runtime
+# environment changes and monkeypatched tests take effect without a reload.
+
+# Accepted spellings for the enable switch.
+_OPERATOR_ENABLED_TRUE = {"true", "1", "yes", "on"}
+_OPERATOR_ENABLED_FALSE = {"false", "0", "no", "off", ""}
+
+# Safe bounds for operator route numeric configuration.
+_OPERATOR_TIMEOUT_MIN = 1
+_OPERATOR_TIMEOUT_MAX = 600
+_OPERATOR_TOKENS_MIN = 1
+_OPERATOR_TOKENS_MAX = 8192
+
+# Required operator settings when the route is enabled.
+OPERATOR_REQUIRED_KEYS = (
+    "OPERATOR_LLM_BASE_URL",
+    "OPERATOR_LLM_API_KEY",
+    "OPERATOR_DECISION_MODEL",
+    "OPERATOR_REQUEST_TIMEOUT",
+    "OPERATOR_MAX_OUTPUT_TOKENS",
+)
+
+
+def _operator_route_config():
+    """Resolve the operator route configuration.
+
+    Returns a 2-tuple ``(config, error)``:
+      * (False, None)            — route disabled (use NVIDIA fallback).
+      * (None, "invalid_bool")   — OPERATOR_ROUTE_ENABLED present but unparseable;
+                                    route disabled, caller should treat as safe error.
+      * ("incomplete", <list>)   — enabled but required values missing; FAIL CLOSED
+                                    (repair / truthful-failure, never NVIDIA mix).
+      * (<dict>, None)           — enabled and valid; dict has base/key/model/
+                                    timeout/tokens validated as positive ints.
+
+    Read at call time so environment overrides apply immediately.
+    """
+    raw = (os.environ.get("OPERATOR_ROUTE_ENABLED") or "false").strip().lower()
+    if raw not in _OPERATOR_ENABLED_TRUE and raw not in _OPERATOR_ENABLED_FALSE:
+        return None, "invalid_bool"
+    if raw not in _OPERATOR_ENABLED_TRUE:
+        return False, None  # disabled (false / absent / 0 / no / off)
+
+    base = (os.environ.get("OPERATOR_LLM_BASE_URL") or "").strip().rstrip("/")
+    key = (os.environ.get("OPERATOR_LLM_API_KEY") or "").strip()
+    model = (os.environ.get("OPERATOR_DECISION_MODEL") or "").strip()
+    timeout_raw = (os.environ.get("OPERATOR_REQUEST_TIMEOUT") or "90").strip()
+    tokens_raw = (os.environ.get("OPERATOR_MAX_OUTPUT_TOKENS") or "4096").strip()
+
+    missing = [
+        name for name, val in (
+            ("OPERATOR_LLM_BASE_URL", base),
+            ("OPERATOR_LLM_API_KEY", key),
+            ("OPERATOR_DECISION_MODEL", model),
+        ) if not val
+    ]
+    if missing:
+        return "incomplete", missing  # fail closed
+
+    try:
+        timeout = int(timeout_raw)
+    except ValueError:
+        return "invalid_timeout", None
+    if timeout < _OPERATOR_TIMEOUT_MIN or timeout > _OPERATOR_TIMEOUT_MAX:
+        return "invalid_timeout", None
+
+    try:
+        tokens = int(tokens_raw)
+    except ValueError:
+        return "invalid_tokens", None
+    if tokens < _OPERATOR_TOKENS_MIN or tokens > _OPERATOR_TOKENS_MAX:
+        return "invalid_tokens", None
+
+    return {"base": base, "key": key, "model": model, "timeout": timeout, "tokens": tokens}, None
+
 
 def _api_key_for_model(model_name: str) -> str:
     primary = model_name == PRIMARY_MODEL or (not model_name)
@@ -106,6 +189,159 @@ def _call_openrouter_free(system_prompt: str, user_prompt: str, r=None, call_lab
     return {"content": "", "error": "All OR free models failed"}
 
 
+
+def call_llm_operator(system_prompt: str, user_prompt: str, r=None, call_label: str = "", is_repair: bool = False) -> dict:
+    """Operator-only OpenRouter route used by decide_operator / decide_operator_repair.
+
+    Ordinary cognition must NOT call this. The route is OFF unless
+    OPERATOR_ROUTE_ENABLED is an explicit truthy value AND the required
+    operator configuration is complete.
+
+    Returned dict ALWAYS carries a per-call ``attribution`` object so the exact
+    provider/model used is attached to the specific decision and cannot be
+    overwritten by a later call:
+
+        {"content": "...", "attribution": {
+            "requested_model": "openrouter/free",
+            "actual_model": "...",
+            "provider": "operator_openrouter",
+            "error_category": "",
+            "is_repair": False,
+        }}
+
+    No prompt, key, or moderator body is ever placed in logs.
+
+    Resolution (see _operator_route_config):
+      * disabled            -> {"content": "", "error": "operator route disabled", ...}
+                               so the caller falls back to the NVIDIA route.
+      * invalid bool        -> {"content": "", "error": "operator route misconfigured:
+                               invalid_bool", ...} (route disabled, safe error).
+      * enabled + incomplete -> FAILS CLOSED: returns empty content with
+                               error_category "config_incomplete" so the Patch A2
+                               repair / truthful-failure path engages. It never
+                               mixes an OpenRouter key with the NVIDIA URL.
+      * enabled + valid     -> performs the OpenRouter chat completion and returns
+                               the content with attribution populated.
+    """
+    cfg, err = _operator_route_config()
+
+    if cfg is False:
+        # Route disabled -> caller falls back to NVIDIA unchanged.
+        logger.info("[%s] operator route disabled; caller uses NVIDIA", CHAR_ID)
+        return {
+            "content": "",
+            "error": "operator route disabled",
+            "attribution": {
+                "requested_model": (os.environ.get("OPERATOR_DECISION_MODEL") or "").strip(),
+                "actual_model": "",
+                "provider": "operator_openrouter",
+                "error_category": "disabled",
+                "is_repair": is_repair,
+            },
+        }
+
+    if cfg is None:
+        # Invalid boolean spelling -> route disabled with a safe config error.
+        logger.warning("[%s] operator route misconfigured: %s", CHAR_ID, err)
+        return {
+            "content": "",
+            "error": f"operator route misconfigured: {err}",
+            "attribution": {
+                "requested_model": (os.environ.get("OPERATOR_DECISION_MODEL") or "").strip(),
+                "actual_model": "",
+                "provider": "operator_openrouter",
+                "error_category": "config_error",
+                "is_repair": is_repair,
+            },
+        }
+
+    if cfg == "incomplete":
+        # Enabled but missing required values -> FAIL CLOSED, never NVIDIA mix.
+        missing = err or []
+        logger.error("[%s] operator route enabled but incomplete, missing: %s", CHAR_ID, ", ".join(missing))
+        return {
+            "content": "",
+            "error": f"operator route incomplete: {', '.join(missing)}",
+            "attribution": {
+                "requested_model": os.environ.get("OPERATOR_DECISION_MODEL", "").strip(),
+                "actual_model": "",
+                "provider": "operator_openrouter",
+                "error_category": "config_incomplete",
+                "is_repair": is_repair,
+            },
+        }
+
+    # cfg is a validated dict: base/key/model/timeout/tokens.
+    requested_model = cfg["model"]
+    start = time.monotonic()
+    try:
+        body = {
+            "model": requested_model,
+            "messages": [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt},
+            ],
+            "temperature": 0.7,
+            "max_tokens": cfg["tokens"],
+        }
+        with httpx.Client(timeout=cfg["timeout"]) as client:
+            resp = client.post(
+                f"{cfg['base']}/chat/completions",
+                headers={
+                    "Authorization": f"Bearer {cfg['key']}",
+                    "Content-Type": "application/json",
+                    "HTTP-Referer": "https://federation.game",
+                },
+                json=body,
+            )
+            status_code = getattr(resp, "status_code", None)
+            if status_code == 429:
+                elapsed_ms = int((time.monotonic() - start) * 1000)
+                logger.warning("[%s] operator route 429 (call=%s, %dms)", CHAR_ID, call_label, elapsed_ms)
+                return {"content": "", "error": "429 rate limit", "attribution": {
+                    "requested_model": requested_model, "actual_model": "",
+                    "provider": "operator_openrouter", "error_category": "rate_limit", "is_repair": is_repair}}
+            resp.raise_for_status()
+            data = resp.json()
+            content = (data.get("choices") or [{}])[0].get("message", {}).get("content", "") or ""
+            content = content.strip()
+            actual_model = data.get("model", requested_model)
+            elapsed_ms = int((time.monotonic() - start) * 1000)
+            if not content:
+                logger.warning("[%s] operator route empty content (call=%s, %dms)", CHAR_ID, call_label, elapsed_ms)
+                return {"content": "", "error": "empty content", "attribution": {
+                    "requested_model": requested_model, "actual_model": actual_model,
+                    "provider": "operator_openrouter", "error_category": "empty_content", "is_repair": is_repair}}
+            logger.info("[%s] operator route OK (call=%s, requested=%s, actual=%s, %dms)", CHAR_ID, call_label, requested_model, actual_model, elapsed_ms)
+            if r:
+                from npc_redis_helpers import _log_llm_call
+                _log_llm_call(r, call_label, actual_model, system_prompt, user_prompt, content, True, "", elapsed_ms)
+            return {"content": content, "model": actual_model, "attribution": {
+                "requested_model": requested_model, "actual_model": actual_model,
+                "provider": "operator_openrouter", "error_category": "", "is_repair": is_repair}}
+    except Exception as e:
+        elapsed_ms = int((time.monotonic() - start) * 1000)
+        status = getattr(e, "response", None)
+        status_code = getattr(status, "status_code", 0) if status else 0
+        err_msg = str(e)[:200]
+        # classify error category
+        if status_code == 429:
+            category = "rate_limit"
+        elif status_code in (404, 400, 422):
+            category = "unavailable_model"
+        elif "timeout" in err_msg.lower() or isinstance(e, httpx.TimeoutException):
+            category = "timeout"
+        elif "json" in err_msg.lower() or "expecting value" in err_msg.lower():
+            category = "malformed_response"
+        else:
+            category = "provider_error"
+        logger.warning("[%s] operator route failed (call=%s, category=%s, HTTP %s, %dms): %s", CHAR_ID, call_label, category, status_code, elapsed_ms, err_msg)
+        if r:
+            from npc_redis_helpers import _log_llm_call
+            _log_llm_call(r, call_label, requested_model, system_prompt, user_prompt, "", False, err_msg, elapsed_ms)
+        return {"content": "", "error": err_msg, "attribution": {
+            "requested_model": requested_model, "actual_model": "",
+            "provider": "operator_openrouter", "error_category": category, "is_repair": is_repair}}
 def call_llm(system_prompt: str, user_prompt: str, model: str = "", r=None, call_label: str = "") -> dict:
     from npc_redis_helpers import _log_llm_call
 
