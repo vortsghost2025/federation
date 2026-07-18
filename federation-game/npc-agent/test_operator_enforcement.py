@@ -20,13 +20,26 @@ import npc_decisions as nd
 
 
 class FakeRedis:
-    """Minimal Redis stub. Inbox contents are set per-test via set_inbox()."""
+    """Minimal Redis stub.
+
+    Supports two inbox schemas:
+      * legacy LIST at `npc_messages:{cid}:inbox` (set via set_inbox);
+      * production ZSET at `msg:inbox:{cid}` of msg_ids + HASH at `msg:{msg_id}`
+        (set via set_zset_inbox).
+    """
 
     def __init__(self):
         self._inbox = []
+        self._zset_inbox = []          # ordered newest-first list of msg_ids
+        self._hashes = {}              # msg_id -> dict
 
     def set_inbox(self, items):
         self._inbox = items
+
+    def set_zset_inbox(self, hashes):
+        # hashes: list of dict message bodies, newest-first
+        self._hashes = {h["id"]: dict(h) for h in hashes}
+        self._zset_inbox = [h["id"] for h in hashes]
 
     def lrange(self, key, start, end):
         if key.endswith(":inbox"):
@@ -55,6 +68,9 @@ class FakeRedis:
         return None
 
     def hgetall(self, key):
+        # key like "msg:{msg_id}"
+        if key.startswith("msg:") and key[4:] in self._hashes:
+            return dict(self._hashes[key[4:]])
         return {}
 
     def hset(self, key, *args, **kwargs):
@@ -67,6 +83,11 @@ class FakeRedis:
         return None
 
     def zrange(self, key, start, end, withscores=False):
+        return []
+
+    def zrevrange(self, key, start, end):
+        if key.startswith("msg:inbox:"):
+            return list(self._zset_inbox)
         return []
 
     def zremrangebyrank(self, key, start, end):
@@ -369,3 +390,65 @@ def test_msg_id_only_entry_supported(setup):
     assert dec["category"] == "send_message"
     assert dec["target"] == "moderator"
     assert dec["operator_directive_id"] == "m-only"
+
+
+def test_production_zset_inbox_activates_enforcement(setup):
+    """Production stores the inbox as a ZSET of msg_ids (`msg:inbox:{cid}`)
+    with bodies in HASH objects (`msg:{msg_id}`). The operator path must read
+    that schema and enforce the newest moderator reply-directive."""
+    fr, calls = setup
+    newer = {
+        "id": "msg_2dcaad150359",
+        "from_char_id": "moderator",
+        "from_name": "Sean / Federation Moderator",
+        "subject": REPLY_SUBJECT,
+        "body": REPLY_BODY,
+    }
+    older = {
+        "id": "msg_e2b20249253f",
+        "from_char_id": "moderator",
+        "from_name": "Sean / Federation Moderator",
+        "subject": "Stop planning loop - produce final report",
+        "body": "Reply to moderator only when the report is completed.",
+    }
+    # newest first
+    fr.set_zset_inbox([newer, older])
+    dec = nd.decide_action("ctx", r=fr)
+    assert dec["category"] == "send_message"
+    assert dec["target"] == "moderator"
+    assert dec["operator_directive_id"] == "msg_2dcaad150359"
+    assert any(c[0] == "decide_operator" for c in calls)
+
+
+def test_zset_newest_selected_over_older(setup):
+    """Within the ZSET schema, the newest moderator directive wins even if an
+    older entry contains a stronger reply request."""
+    fr, calls = setup
+    newer = {
+        "id": "msg_new",
+        "from_char_id": "moderator",
+        "from_name": "Sean / Federation Moderator",
+        "subject": "Status check",
+        "body": "Please let me know how things are going.",
+    }
+    older = {
+        "id": "msg_old",
+        "from_char_id": "moderator",
+        "from_name": "Sean / Federation Moderator",
+        "subject": "Old reply request",
+        "body": "send the completed final synthesis directly to the Federation Moderator as one send_message response.",
+    }
+    fr.set_zset_inbox([newer, older])
+    dec = nd.decide_action("ctx", r=fr)
+    # newest is not a reply request -> no enforcement
+    assert "operator_directive_id" not in dec
+
+
+def test_legacy_list_takes_priority_over_empty_zset(setup):
+    """If the legacy LIST inbox is populated, the ZSET fallback must not double
+    read. Ordinary-path behavior for a non-reply LIST entry is unchanged."""
+    fr, calls = setup
+    fr.set_inbox([_mod_msg("legacy1", "just a normal note, no reply requested", "Note")])
+    dec = nd.decide_action("ctx", r=fr)
+    # not a reply request -> ordinary path
+    assert "operator_directive_id" not in dec

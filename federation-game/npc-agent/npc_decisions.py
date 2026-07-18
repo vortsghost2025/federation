@@ -334,22 +334,46 @@ def _newest_moderator_directive(r, char_id: str = "") -> dict | None:
     cid = char_id or CHAR_ID
     if r is None:
         return None
+
+    msgs: list[tuple[dict, str]] = []
+
+    # Primary schema (branch/legacy): inbox stored as a LIST of JSON strings.
     try:
-        inbox = r.lrange(f"npc_messages:{cid}:inbox", 0, -1)
+        for raw in r.lrange(f"npc_messages:{cid}:inbox", 0, -1):
+            try:
+                m = json.loads(raw)
+            except Exception:
+                # malformed entries are skipped; newest parseable wins
+                continue
+            msgs.append((m, raw))
     except Exception:
-        return None
-    newest_moderator = None
-    for raw in inbox:
+        pass
+
+    # Production schema: inbox is a ZSET of msg_ids at `msg:inbox:{cid}`,
+    # with full message bodies stored as HASH objects at `msg:{msg_id}`.
+    # zrevrange returns newest-first; reverse to oldest-first so the shared
+    # "last moderator message wins" selection below yields the NEWEST.
+    if not msgs:
         try:
-            m = json.loads(raw)
+            msg_ids = r.zrevrange(f"msg:inbox:{cid}", 0, -1)
+            for mid in reversed(msg_ids):
+                try:
+                    h = r.hgetall(f"msg:{mid}")
+                except Exception:
+                    continue
+                if not h:
+                    continue
+                msgs.append((dict(h), mid))
         except Exception:
-            # malformed entries are skipped; newest parseable wins
-            continue
+            pass
+
+    newest_moderator = None
+    for m, raw_id in msgs:
         if m.get("from_char_id") != OPERATOR_ID:
             continue
         # keep overwriting -> newest parseable moderator message wins
         newest_moderator = {
-            "id": m.get("id") or m.get("msg_id") or raw,
+            "id": m.get("id") or m.get("msg_id") or raw_id,
             "from_char_id": m.get("from_char_id", OPERATOR_ID),
             "from_name": m.get("from_name", OPERATOR_NAME),
             "subject": m.get("subject", ""),
