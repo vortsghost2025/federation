@@ -1755,6 +1755,14 @@ def evolve_npc_relationships(npc_list: List[Dict], r) -> int:
                 delta[cid][target_id] += DECAY_RATE
 
     # e) Persistence
+    # MIN_NEW_EDGE_DELTA lets an NPC that has NO existing edges still form a
+    # first relationship when a real signal arrives (voting +/-0.15, treaties
+    # +/-0.05, quests +/-0.1). Real signals are 2-decimal magnitudes, so we
+    # round the delta to 2 decimals before comparing: float drift such as
+    # 0.15 - 0.10 (== 0.04999999999999999) must not be wrongly dropped as
+    # sub-threshold. A brand-new edge with no real signal (rounded delta 0)
+    # is still suppressed.
+    MIN_NEW_EDGE_DELTA = 0.05
     updated_pairs = 0
     pipe = r.pipeline(transaction=False)
     for cid in char_ids:
@@ -1766,10 +1774,8 @@ def evolve_npc_relationships(npc_list: List[Dict], r) -> int:
                 continue
             old = merged.get(target_id, DECAY_TOWARD)
             new_val = max(MIN_VAL, min(MAX_VAL, round(old + d, 2)))
-            if (
-                abs(new_val - DECAY_TOWARD) < 0.01
-                and target_id not in existing_rels[cid]
-            ):
+            is_new_edge = target_id not in existing_rels[cid]
+            if is_new_edge and round(abs(d), 2) < MIN_NEW_EDGE_DELTA:
                 continue
             merged[target_id] = new_val
             pipe.hset(rel_key, target_id, str(new_val))
