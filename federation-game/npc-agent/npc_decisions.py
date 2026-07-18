@@ -314,6 +314,156 @@ def _extract_json(text: str):
     raise json.JSONDecodeError("no valid JSON object found", text, brace_start)
 
 
+def _newest_moderator_directive(r, char_id: str = "") -> dict | None:
+    """Return the newest parseable moderator message in the cognition inbox.
+
+    The inbox is stored oldest-first, so the LAST parseable moderator
+    message in the list is the newest. We first isolate the newest moderator
+    message, then decide whether it is a reply-type directive. This means a
+    newer non-reply moderator instruction is always seen in preference to an
+    older reply request: we never enforce a stale older command while a newer
+    moderator message exists.
+
+    A "reply-type" directive is one whose body explicitly requests a reply /
+    send_message to the moderator — the only directives the operator-priority
+    path can enforce deterministically.
+
+    Returns a dict with keys: id, from_char_id, from_name, subject, body,
+    or None when no qualifying directive is present.
+    """
+    cid = char_id or CHAR_ID
+    if r is None:
+        return None
+    try:
+        inbox = r.lrange(f"npc_messages:{cid}:inbox", 0, -1)
+    except Exception:
+        return None
+    newest_moderator = None
+    for raw in inbox:
+        try:
+            m = json.loads(raw)
+        except Exception:
+            # malformed entries are skipped; newest parseable wins
+            continue
+        if m.get("from_char_id") != OPERATOR_ID:
+            continue
+        # keep overwriting -> newest parseable moderator message wins
+        newest_moderator = {
+            "id": m.get("id") or m.get("msg_id") or raw,
+            "from_char_id": m.get("from_char_id", OPERATOR_ID),
+            "from_name": m.get("from_name", OPERATOR_NAME),
+            "subject": m.get("subject", ""),
+            "body": m.get("body", ""),
+        }
+    if newest_moderator is None:
+        return None
+    body = (newest_moderator.get("body") or "").lower()
+    is_reply_request = (
+        "moderator" in body
+        and (
+            "send_message" in body
+            or "reply" in body
+            or "send the" in body
+            or "send a" in body
+        )
+    )
+    if not is_reply_request:
+        # newest moderator message is not a reply request -> do not enforce
+        return None
+    return newest_moderator
+
+
+def _decide_operator_response(directive: dict, context: str, r=None) -> dict:
+    """Deterministic operator-reply path.
+
+    Forces a single send_message to the moderator, bypassing all ordinary
+    anti-loop / dedup / partner controls. Validates the returned decision
+    and applies a constrained repair if it is invalid. Returns the decision
+    dict with operator_directive_id metadata attached.
+    """
+    subject = directive.get("subject", "")
+    body = directive.get("body", "")
+    constraint = (
+        "\n\nBINDING OPERATOR DIRECTIVE — COMPLETE THIS TURN.\n"
+        "The Federation Moderator has issued a directive that explicitly "
+        "requests a reply (send_message) to the moderator. Completing it is "
+        "mandatory this turn. The ONLY valid action is:\n"
+        '  {"category": "send_message", "target": "moderator", '
+        '"body": "<your full reply to the moderator>", '
+        '"description": "<short summary>", "reasoning": "<why>"}\n'
+        "Rules for this turn only:\n"
+        "- target MUST be exactly \"moderator\".\n"
+        "- category MUST be exactly \"send_message\".\n"
+        "- partner messages, create_artifact, create_institution, "
+        "propose_role, submit_to_institution, investigate, read_artifacts, "
+        "rest, self_improve, write_code, request_capability are ALL invalid.\n"
+        "- Do not ask a question; deliver the requested response.\n"
+        "Direct your reply to the moderator as follows.\n"
+        f"DIRECTIVE SUBJECT: {subject}\n"
+        f"DIRECTIVE BODY:\n{body}\n"
+        "END DIRECTIVE. Respond now with the required send_message JSON only."
+    )
+    system_prompt = SELF_INTRO + constraint
+    from npc_llm_client import DECISION_MODEL
+    raw = call_llm(system_prompt, context, model=DECISION_MODEL or "", r=r, call_label="decide_operator")
+
+    def _valid(dec):
+        if not isinstance(dec, dict):
+            return None
+        if dec.get("category") != "send_message":
+            return None
+        if (dec.get("target") or "") != OPERATOR_ID:
+            # retarget deterministically instead of discarding
+            dec["target"] = OPERATOR_ID
+        body_out = dec.get("body") or dec.get("description") or ""
+        if not body_out.strip():
+            return None
+        return dec
+
+    decision = None
+    try:
+        decision = _extract_json(raw["content"])
+    except Exception:
+        decision = None
+
+    if _valid(decision) is None:
+        # constrained repair call
+        repair_system = (
+            SELF_INTRO
+            + "\n\nYou previously failed to produce the required moderator reply. "
+            "Return ONLY this JSON, filled in:\n"
+            '{"category": "send_message", "target": "moderator", '
+            '"body": "<your full reply to the moderator>", '
+            '"description": "<short summary>", "reasoning": "<why>"}\n'
+            "The target MUST be \"moderator\". The body MUST be non-empty."
+        )
+        repair_raw = call_llm(
+            repair_system, context, model=DECISION_MODEL or "", r=r, call_label="decide_operator_repair"
+        )
+        try:
+            decision = _extract_json(repair_raw["content"])
+        except Exception:
+            decision = None
+
+    if _valid(decision) is None:
+        # truthful fallback: never silently pick rest/artifact/partner
+        decision = {
+            "category": "send_message",
+            "target": OPERATOR_ID,
+            "body": (
+                "Moderator, I received your directive but could not produce the "
+                "requested response: the decision output was invalid and a repair "
+                "attempt also failed. No artifact or partner action was taken in "
+                "its place. Please reissue or clarify the directive."
+            ),
+            "description": "operator reply failed validation; reporting inability truthfully",
+            "reasoning": "decision and repair both returned invalid output",
+        }
+
+    decision["operator_directive_id"] = directive.get("id") or directive.get("msg_id")
+    return decision
+
+
 def decide_action(context: str, r=None) -> dict:
     """Ask the LLM what to do next.
 
@@ -322,6 +472,15 @@ def decide_action(context: str, r=None) -> dict:
     system prompt forbidding a third message. This breaks the greeting
     spiral without needing parser tricks.
     """
+    # Operator-priority enforcement (Patch A): when a moderator directive
+    # explicitly requests a reply, complete it this turn and bypass all
+    # ordinary anti-loop / dedup / partner controls. Lifecycle/acknowledgement
+    # is intentionally left to a later, separate patch.
+    _directive = _newest_moderator_directive(r)
+    if _directive is not None:
+        logger.info("[%s] operator directive active; entering binding reply path", CHAR_ID)
+        return _decide_operator_response(_directive, context, r)
+
     base_system = SELF_INTRO + """
 
 You have these action categories. Pick ONE per turn:
