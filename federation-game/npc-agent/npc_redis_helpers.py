@@ -151,6 +151,69 @@ def _default_open_question() -> str:
     return "What happens next in the Federation?"
 
 
+# Neutral one-time transition inquiry used when a resolved pair has no valid
+# next_question. It must be unrelated to the resolved topic and distinct from
+# the generic default so the pair does not orbit the same context forever.
+_POST_RESOLUTION_NEUTRAL_QUESTION = (
+    "What new Federation priority, unrelated to the resolved topic, "
+    "should this pair pursue next?"
+)
+
+# Similarity at or above this threshold counts as "substantially similar"
+# to the resolved goal (kept consistent with _duplicate_open_question).
+_POST_RESOLUTION_SIMILARITY_THRESHOLD = 0.75
+
+
+def _post_resolution_question_blocked(candidate: str, blocked_terms: list) -> bool:
+    c = (candidate or "").lower()
+    if not c:
+        return True
+    return any(term and term in c for term in (blocked_terms or []))
+
+
+def _post_resolution_question_valid(
+    candidate: str,
+    resolved_goal: str,
+    default_question: str,
+    blocked_terms: list,
+    last_question: str,
+) -> bool:
+    """True when candidate is a genuinely new, usable post-resolution question."""
+    candidate = (candidate or "").strip()
+    if not candidate:
+        return False
+    if candidate == default_question:
+        return False
+    if _post_resolution_question_blocked(candidate, blocked_terms):
+        return False
+    if resolved_goal and _question_similarity(candidate, resolved_goal) >= \
+            _POST_RESOLUTION_SIMILARITY_THRESHOLD:
+        return False
+    if last_question and _question_similarity(candidate, last_question) >= \
+            _POST_RESOLUTION_SIMILARITY_THRESHOLD:
+        return False
+    return True
+
+
+def _resolve_post_resolution_question(state: dict, conv: dict) -> tuple:
+    """Return (question, source) for a resolved pair's one-time transition.
+
+    Prefers conv['next_question'] when it is valid; otherwise falls back to the
+    neutral transition inquiry. 'open_question_source' is one of
+    'post_resolution_next_question' or 'post_resolution_new_topic'.
+    """
+    resolved_goal = (conv.get("resolved_shared_goal") or "")
+    blocked_terms = conv.get("blocked_topic_terms", []) or []
+    last_question = state.get("last_open_question_sent_to_partner", "")
+    candidate = (conv.get("next_question") or "").strip()
+    if _post_resolution_question_valid(
+        candidate, resolved_goal, _default_open_question(),
+        blocked_terms, last_question,
+    ):
+        return candidate, "post_resolution_next_question"
+    return _POST_RESOLUTION_NEUTRAL_QUESTION, "post_resolution_new_topic"
+
+
 def _partner_id(char_id: str = "", pair_ids: set | None = None) -> str:
     cid = char_id or CHAR_ID
     pids = pair_ids or PAIR_IDS
@@ -553,10 +616,23 @@ def _sync_pair_workspace(r, decision: dict, result: dict, npc_name: str = "", ch
                state.get("shared_goal", "") == _cc["resolved_shared_goal"]:
                 _post_resolution_default = True
         if _post_resolution_default:
-            mapping["open_question"] = _default_open_question()
+            # Active goal still equals the resolved goal. Perform a ONE-TIME
+            # transition away from the resolved topic instead of re-anchoring to
+            # the generic default ("What happens next in the Federation?"),
+            # which would loop forever. resolved_shared_goal is preserved as
+            # historical evidence; the active shared_goal is retired (deleted).
+            _transition_q, _transition_source = _resolve_post_resolution_question(state, _cc)
+            mapping["open_question"] = _transition_q
             mapping["open_question_from"] = "system"
             mapping["open_question_ts"] = str(now)
-            mapping["open_question_source"] = "post_resolution_default"
+            mapping["open_question_source"] = _transition_source
+            # Retire the resolved goal from the active workspace. _pair_hset
+            # deletes fields whose mapping value is "" so this removes the
+            # active shared_goal without touching resolved_shared_goal.
+            mapping["shared_goal"] = ""
+            mapping["post_resolution_transitioned"] = "1"
+            mapping["last_open_question_sent_to_partner"] = _transition_q
+            mapping["last_open_question_ts"] = str(now)
         elif state.get("shared_goal"):
             derived = _derive_question_from_goal(state["shared_goal"])
             if derived:
