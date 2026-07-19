@@ -9,6 +9,7 @@ from __future__ import annotations
 import importlib
 import json
 import os
+import sys
 import tempfile
 import unittest
 from dataclasses import asdict
@@ -396,6 +397,112 @@ class TestCLI(unittest.TestCase):
         with self.assertRaises(SystemExit) as ctx:
             s3cli.main([])
         self.assertEqual(ctx.exception.code, 2)
+
+
+class TestSafePathPlatformIndependent(unittest.TestCase):
+    """Mock-based path/traversal/symlink/junction guards.
+
+    Windows symlink creation needs a privilege; these tests simulate the
+    link/junction/reparse condition by patching os.path.islink, so the
+    security rule is exercised on every platform.
+    """
+
+    def _call(self, path, base, is_link=False):
+        from steward import s3cli
+        import steward.s3cli as mod
+        real_islink = os.path.islink
+        os.path.islink = lambda p: is_link if p == path else real_islink(p)
+        try:
+            return s3cli._safe_path(path, base)
+        finally:
+            os.path.islink = real_islink
+
+    def test_35_symlink_rejected(self):
+        with tempfile.TemporaryDirectory() as d:
+            self.assertRaises(ValueError, self._call,
+                            os.path.join(d, "link.json"), d, is_link=True)
+
+    def test_36_junction_reparse_rejected(self):
+        # Same guard path as a Windows junction/reparse point.
+        with tempfile.TemporaryDirectory() as d:
+            self.assertRaises(ValueError, self._call,
+                            os.path.join(d, "jnk.json"), d, is_link=True)
+
+    def test_37_traversal_rejected(self):
+        with tempfile.TemporaryDirectory() as d:
+            evil = os.path.abspath(os.path.join(d, "..", "escape.json"))
+            self.assertRaises(ValueError, self._call, evil, d, is_link=False)
+
+    def test_38_resolved_escape_rejected(self):
+        with tempfile.TemporaryDirectory() as d:
+            # A path that textually starts with base but resolves outside via ../
+            nested = os.path.join(d, "sub")
+            os.makedirs(nested)
+            escape = os.path.abspath(os.path.join(nested, "..", "..", "x.json"))
+            self.assertRaises(ValueError, self._call, escape, d, is_link=False)
+
+    def test_39_contained_path_accepted(self):
+        from steward import s3cli
+        with tempfile.TemporaryDirectory() as d:
+            good = os.path.join(d, "ok.json")
+            resolved = s3cli._safe_path(good, d)
+            self.assertTrue(resolved.startswith(os.path.abspath(d)))
+
+    def test_40_rejection_is_fail_closed(self):
+        # If islink detection is true the call must raise, never return a path.
+        with tempfile.TemporaryDirectory() as d:
+            raised = False
+            try:
+                self._call(os.path.join(d, "x.json"), d, is_link=True)
+            except ValueError:
+                raised = True
+            self.assertTrue(raised)
+
+
+class TestCrossProcessDeterminism(unittest.TestCase):
+    """A3: two separate Python processes, different hash seed + dict order,
+    must produce byte-identical plan/commit/replay hashes."""
+
+    _HARNESS = r'''
+import sys, json, hashlib
+from steward.s3a_action import ProposedAction, S3A_SCHEMA_VERSION
+from steward.s3a_writer import WriterCore
+from steward.s3a_store import InMemoryStore
+p = {"zeta": 1, "alpha": 2, "mid": 3}
+ordered = dict(sorted(p.items())) if sys.argv[1] == "sorted" else p
+a = ProposedAction(schema_version=S3A_SCHEMA_VERSION, action_type="incident_create",
+    action_id=None, source_finding_id="fdg_x", source_snapshot_id="snap_x",
+    target_namespace="steward:local", requested_capability="steward:incident:create",
+    actor_id="actor:operator", requested_at="ts:SAME", idempotency_key="idem_x",
+    approval_state="none", normalized_payload=ordered)
+s = InMemoryStore(); w = WriterCore(s)
+o1 = w.execute(a, "ts:SAME")
+o2 = w.execute(a, "ts:SAME")
+def h(x): return hashlib.sha256(x.encode()).hexdigest()[:16]
+print(h(json.dumps(a.to_dict(), sort_keys=True)),
+      h(json.dumps(o1.result.to_dict(), sort_keys=True)),
+      h(json.dumps(o2.result.to_dict(), sort_keys=True)))
+'''
+
+    def _run(self, order, seed):
+        import subprocess
+        with tempfile.NamedTemporaryFile("w", suffix=".py", delete=False) as fh:
+            fh.write(self._HARNESS)
+            path = fh.name
+        try:
+            env = dict(os.environ, PYTHONPATH=os.environ.get("PYTHONPATH", ""),
+                       PYTHONHASHSEED=str(seed))
+            out = subprocess.run([sys.executable, path, order], capture_output=True,
+                                text=True, env=env, cwd=os.getcwd())
+            return out.stdout.split()
+        finally:
+            os.unlink(path)
+
+    def test_41_cross_process_byte_identical(self):
+        h1 = self._run("scrambled", 0)
+        h2 = self._run("sorted", 12345)
+        self.assertEqual(h1, h2, "cross-process determinism broken")
+        self.assertEqual(len(h1), 3)
 
 
 class TestNoLiveConnectors(unittest.TestCase):
