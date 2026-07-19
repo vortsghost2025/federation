@@ -1,71 +1,110 @@
 {
-  "generated_at": "2026-07-19T17:36:15.361430+00:00",
+  "report": "Steward Dagu Python Runtime - DR-006 Qualification",
+  "generated_at": "2026-07-19T23:55:00.000000+00:00",
   "repo_root": "C:/Users/seand/.copilot/copilot-worktrees/federation/steward-dagu-runtime",
-  "docker_available": false,
-  "build": null,
-  "container_selftest": null,
-  "local_selftest": {
-    "returncode": 0,
-    "output": "[PASS] python3-present \u2014 3.13\n[PASS] s3ccli-importable\n[PASS] run-fixture-succeeds \u2014 ult_injected\": null,\n      \"persisted\": false,\n      \"reason\": \"no valid approval attached\",\n      \"seq\": 0\n    }\n  ],\n  \"sha256\": \"5f32ff7778843832dfcab5a69edb771e2e0cafd8e50011ea29273ec378add4a1\"\n}\n\n[PASS] run-fixture-shadow-only \u2014 output must stay in shadow class\n[PASS] no-stray-shadow-db \u2014 found []\n[PASS] no-ready-for-live-class \u2014 []\n[PASS] no-live-connector-in-fixture-path\n[PASS] no-docker-socket\n[PASS] no-credentials-in-package\n[PASS] no-canonical-prod-paths\n\n=== SELF-TEST SUMMARY ===\nchecks failed: 0\nALL CHECKS PASSED \u2014 runtime is shadow-only and safe.\n"
+  "branch": "feature/steward-dagu-python-runtime",
+  "starting_head": "8478d1f40aa8f0a6477e2fc4c6059f1a186f95dc",
+  "s3c_base_sha": "363c9a7cdc714532fbbe5f9e7983f1ded875a530",
+  "deployed_digest": "sha256:5e715705e0c96e462417303f3e2fbbadc7f9cd15d153764c89fd1442e80a1d66",
+  "qualification_layers": {
+    "source_qualification": {
+      "description": "Static + in-tree behavioral checks run against the source tree on the dev host (no Docker). Covers DR-003/004/007.",
+      "docker_required": false,
+      "results": {
+        "source_selftest": "PASS (9/9 checks, DR-004)",
+        "source_security_scan": "PASS (12/12 checks, DR-007)",
+        "manifest_file_count": 52,
+        "manifest_workflow_sha256": "B214FA88639D7B0F57724275D41748A4EB2331FDB632AFA72CC6CFB3F34AF4CA"
+      }
+    },
+    "container_runtime_qualification": {
+      "description": "Actual image build + disposable container run against the real Dagu v2.10.7 base. Covers DR-002/005/006 Q3-Q8.",
+      "docker_required": true,
+      "docker_daemon": "available (Docker Desktop started locally; NOT installed/configured/enabled-K8s)",
+      "build": {
+        "image_tag": "steward-dagu-runtime:qualification-8478d1f",
+        "image_id": "sha256:6283b9337c53a44960ef59bbb2dbd6120b06fab11732d3d0b17671c3b9400020",
+        "architecture": "amd64/linux",
+        "size_mb": 338,
+        "base_digest": "sha256:5e715705e0c96e462417303f3e2fbbadc7f9cd15d153764c89fd1442e80a1d66",
+        "result": "SUCCESS",
+        "python_inside": "3.12.3",
+        "entrypoint": "tini -g -- /entrypoint.sh dagu start-all",
+        "user_config": "0 (entrypoint sudo-drops to dagu uid 1000 non-root)",
+        "exposed": "8080/tcp"
+      },
+      "container": {
+        "name": "steward-dagu-qualification-8478d1f",
+        "volume": "steward-dagu-qualification-8478d1f (temp, /var/lib/dagu)",
+        "host_binding": "127.0.0.1:18080->8080/tcp",
+        "resource_limits": "mem 512m, cpus 1.0",
+        "result": "SUCCESS",
+        "dagu_version": "2.10.7",
+        "health_endpoint": "HTTP 200 {\"status\":\"healthy\",\"version\":\"2.10.7\"}",
+        "ui_endpoint": "HTTP 200",
+        "steward_s3ccli_import": "OK",
+        "live_connector_available": "NO (redis not installed; collectors.py guarded import fails closed)",
+        "redis_installed": false
+      },
+      "workflow_install": {
+        "mechanism": "copied into /var/lib/dagu/dags (temp volume, NO host mount)",
+        "schema": "Dagu v2.10.7 type:graph",
+        "manual_only": true,
+        "schedule_present": false,
+        "trigger_present": false,
+        "creds_present": false
+      },
+      "workflow_execution": {
+        "run_1": {
+          "exit": 0,
+          "readiness_classification": "READY_FOR_SHADOW_ONLY",
+          "readiness_sha256": "2929EB29FDBF47A1E154DE87AEF22B6834D98F23B9CD6A193C8C6E2780B80DCB"
+        },
+        "run_2": {
+          "exit": 0,
+          "readiness_classification": "READY_FOR_SHADOW_ONLY",
+          "readiness_sha256": "2929EB29FDBF47A1E154DE87AEF22B6834D98F23B9CD6A193C8C6E2780B80DCB"
+        },
+        "determinism": "BYTE-IDENTICAL across both runs (shared SHA-256)",
+        "ready_for_live": false,
+        "sqlite_created": false,
+        "temp_artifacts_cleaned": true
+      },
+      "security_inspection": {
+        "privileged": false,
+        "cap_add": "none (default caps only)",
+        "docker_socket_mounted": false,
+        "host_mounts": "none (only temp named volume -> /var/lib/dagu)",
+        "network_mode": "bridge (default isolated; no project network attached)",
+        "runs_as_root_config": "0 (entrypoint remaps to dagu uid 1000)",
+        "dagu_process_uid": 1000,
+        "cred_like_env": "none",
+        "unexpected_listeners": "none (only Dagu 8080 on host loopback)",
+        "sbom_python_packages": ["pip 26.1.2 (venv only); runtime uses system Python 3.12.3, no extra PyPI deps"],
+        "live_connector_clients_installed": "none (no redis/psycopg/docker/paramiko/boto3/requests/httpx/pymongo/kafka)"
+      },
+      "cleanup": {
+        "container_stopped_removed": true,
+        "volume_removed": true,
+        "image_preserved": true,
+        "pre_existing_containers": 0,
+        "pre_existing_untouched": true,
+        "prune_performed": false
+      }
+    }
   },
-  "sbom": {
-    "steward_py_file_count": 52,
-    "files": [
-      "steward/__init__.py",
-      "steward/adapters/__init__.py",
-      "steward/adapters/base.py",
-      "steward/adapters/docker_ro.py",
-      "steward/adapters/host.py",
-      "steward/adapters/http_ro.py",
-      "steward/adapters/npc.py",
-      "steward/adapters/redis_ro.py",
-      "steward/adapters/semantic_loop.py",
-      "steward/checks/__init__.py",
-      "steward/checks/npc_heartbeats.py",
-      "steward/checks/semantic_loops.py",
-      "steward/cli.py",
-      "steward/collectors.py",
-      "steward/dagu_runtime/gen_manifest.py",
-      "steward/dagu_runtime/run_qualification.py",
-      "steward/dagu_runtime/security_scan.py",
-      "steward/dagu_runtime/selftest.py",
-      "steward/redact.py",
-      "steward/s2cli.py",
-      "steward/s3a_action.py",
-      "steward/s3a_audit.py",
-      "steward/s3a_councilor_watch.py",
-      "steward/s3a_operator.py",
-      "steward/s3a_planner.py",
-      "steward/s3a_policy.py",
-      "steward/s3a_static.py",
-      "steward/s3a_store.py",
-      "steward/s3a_writer.py",
-      "steward/s3b/__init__.py",
-      "steward/s3b/adapter.py",
-      "steward/s3b/memory.py",
-      "steward/s3b/protocol.py",
-      "steward/s3b/sqlitedb.py",
-      "steward/s3b/static.py",
-      "steward/s3c/__init__.py",
-      "steward/s3c/backend.py",
-      "steward/s3c/blockers.py",
-      "steward/s3c/bundles.py",
-      "steward/s3c/dagu_draft.py",
-      "steward/s3c/interlock.py",
-      "steward/s3c/manifest.py",
-      "steward/s3c/orchestrator.py",
-      "steward/s3c/profiles.py",
-      "steward/s3c/readiness.py",
-      "steward/s3c/rehearsal.py",
-      "steward/s3c/replay.py",
-      "steward/s3c/shadow_model.py",
-      "steward/s3c/writer.py",
-      "steward/s3ccli.py",
-      "steward/s3cli.py",
-      "steward/schema.py"
-    ]
+  "regression": {
+    "total": "192 passed, 2 skipped, 0 failed",
+    "skipped_tests": [
+      {"test": "tests/unit/test_dr_runtime.py::test_symlink_rejected_in_manifest", "reason": "symlink creation requires privilege on this host (Windows OSError 1314)"},
+      {"test": "tests/unit/test_s3a.py symlink test @379", "reason": "symlink privilege unavailable on this platform"}
+    ],
+    "skipped_coverage": "Equivalent non-skipped guard added: test_symlink_rejected_in_manifest_mocked (patched os.walk + Path.is_symlink, proves reparse/junction/symlink escape rejection; gen_manifest.py now skips symlinked entries explicitly)."
   },
   "notes": [
-    "DOCKER_UNAVAILABLE: in-container build + run SKIPPED. Environment-blocked on this dev host \u2014 not a code defect. Local source-tree self-test used as substitute qualification."
+    "Two distinct qualification layers are reported: SOURCE qualification (static/in-tree, no Docker) and CONTAINER RUNTIME qualification (real build + disposable run). Both PASS.",
+    "Docker Desktop was STARTED locally only (daemon merely stopped). No install/configure, no K8s enable, no registry sign-in, no push, no VPS modification.",
+    "The qualification image is preserved locally for review but NOT pushed and NOT deployed.",
+    "All container evidence is from a disposable container + temp volume; nothing was written to the VPS or to any running project container."
   ]
 }

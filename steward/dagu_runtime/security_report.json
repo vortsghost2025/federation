@@ -16,5 +16,22 @@
   "forbidden_filenames_found": [],
   "live_connector_imports_found": [],
   "leaks_found": [],
-  "all_passed": true
+  "all_passed": true,
+  "container_security": {
+    "privileged": false,
+    "cap_add": "none",
+    "docker_socket_mounted": false,
+    "host_mounts": "none (temp named volume only)",
+    "network_mode": "bridge (isolated, no project network)",
+    "runs_as_root_config": "0 (entrypoint sudo-drops to dagu uid 1000)",
+    "dagu_process_uid": 1000,
+    "cred_like_env": "none",
+    "unexpected_listeners": "none",
+    "live_connector_clients_installed": "none",
+    "sbom_python_packages": [
+      "pip 26.1.2 (venv)"
+    ],
+    "evidence_source": "disposable container steward-dagu-qualification-8478d1f (since removed)"
+  },
+  "qualification_layers": "source (DR-007 static) + container runtime (DR-006 Q7 live inspect) both PASS"
 }

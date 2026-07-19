@@ -15,71 +15,54 @@
 #   - expected result:          READY_FOR_SHADOW_ONLY
 
 name: steward-s3c-shadow-fixture
+type: graph
 # Intentionally absent: schedule, scheduler, timezone, retry policy, mailOn.
 # Dagu treats a workflow with no schedule as manual-only.
 
 env:
-  STEWARD_HOME: /opt/steward
-  PYTHONPATH: /opt/steward
-  DAGU_HOME: /var/lib/dagu
+  - STEWARD_HOME: /opt/steward
+  - PYTHONPATH: /opt/steward
+  - DAGU_HOME: /var/lib/dagu
 
 steps:
-  - name: assert-python-runtime
-    command: python3
-    args: ["--version"]
+  - id: assert_python_runtime
+    run: python3 --version
 
-  - name: run-s3c-fixture-shadow
-    command: python3
-    args:
-      - "-m"
-      - "steward.s3ccli"
-      - "run-fixture"
-      - "--backend"
-      - "memory"
-      - "--namespace"
-      - "steward:shadow:gastown"
-      - "--findings"
-      - "find_1"
-    # Synthetic input only. No production data is ever read.
+  - id: run_s3c_fixture_shadow
+    run: >-
+      python3 -m steward.s3ccli run-fixture
+      --backend memory
+      --namespace steward:shadow:gastown
+      --findings find_1
     output: FIXTURE_OUTPUT
+    depends: [assert_python_runtime]
 
-  - name: assert-shadow-only-classification
-    command: python3
-    args:
-      - "-c"
-      - >-
-        import os, sys, json;
-        out = os.environ.get('FIXTURE_OUTPUT', '');
-        ok = ('shadow' in out.lower()) or ('READY_FOR_SHADOW_ONLY' in out);
-        print('SHADOW_ONLY_OK' if ok else 'NOT_SHADOW_ONLY');
-        sys.exit(0 if ok else 1)
+  - id: assert_shadow_only_classification
+    run: >-
+      python3 -c "import os,sys;
+      out=os.environ.get('FIXTURE_OUTPUT','');
+      ok=('shadow' in out.lower()) or ('READY_FOR_SHADOW_ONLY' in out);
+      print('SHADOW_ONLY_OK' if ok else 'NOT_SHADOW_ONLY');
+      sys.exit(0 if ok else 1)"
+    depends: [run_s3c_fixture_shadow]
 
-  - name: readiness-check
-    command: python3
-    args:
-      - "-m"
-      - "steward.s3ccli"
-      - "readiness"
+  - id: readiness_check
+    run: python3 -m steward.s3ccli readiness
     output: READINESS_OUTPUT
+    depends: [assert_shadow_only_classification]
 
-  - name: assert-readiness-shadow-only
-    command: python3
-    args:
-      - "-c"
-      - >-
-        import os, sys;
-        out = os.environ.get('READINESS_OUTPUT', '');
-        ok = 'READY_FOR_SHADOW_ONLY' in out;
-        print('READINESS_SHADOW_ONLY' if ok else 'READINESS_NOT_SHADOW');
-        sys.exit(0 if ok else 1)
+  - id: assert_readiness_shadow_only
+    run: >-
+      python3 -c "import os,sys;
+      out=os.environ.get('READINESS_OUTPUT','');
+      ok='READY_FOR_SHADOW_ONLY' in out;
+      print('READINESS_SHADOW_ONLY' if ok else 'READINESS_NOT_SHADOW');
+      sys.exit(0 if ok else 1)"
+    depends: [readiness_check]
 
-  - name: cleanup-temp-artifacts
-    command: sh
-    args:
-      - "-c"
-      - "rm -f /tmp/steward_fixture_* 2>/dev/null; echo cleanup-done"
-    continueOnError: true
+  - id: cleanup_temp_artifacts
+    run: sh -c "rm -f /tmp/steward_fixture_* 2>/dev/null; echo cleanup-done"
+    depends: [assert_readiness_shadow_only]
 
-# Dagu-level guardrails (best-effort; not a substitute for the interlock).
-maxAliveSteps: 1
-timeoutSec: 300
+# Dagu-level guardrail (best-effort; not a substitute for the interlock).
+timeout_sec: 300

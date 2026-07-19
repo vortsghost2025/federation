@@ -97,7 +97,22 @@ action, never by a timer or watcher.
 | Dagu workflow | `steward-s3c-shadow-fixture.yaml` |
 | Dockerfile | `Dockerfile` (digest-pinned) |
 
-> Docker build/run was **environment-blocked** on the dev host (no Docker
-> daemon). The local source-tree self-test + security scan substitute for the
-> in-container run. In-container execution remains pending a Docker-capable
-> environment. This is recorded, not hidden.
+> **CONTAINER RUNTIME QUALIFICATION COMPLETE (DR-006).** A local Docker daemon
+> was made available by starting the already-installed Docker Desktop (no
+> install/configure, no K8s enable, no registry sign-in). The image was built
+> (`steward-dagu-runtime:qualification-8478d1f`, image id
+> `sha256:6283b9337c53...`) and run in a **disposable** container with a temp
+> volume. The workflow executed twice with **byte-identical** readiness output
+> (SHA-256 `2929EB29...`), `READY_FOR_SHADOW_ONLY`, no `READY_FOR_LIVE`, no
+> SQLite created, temp artifacts cleaned. The container + temp volume were
+> removed; the image is **preserved locally for review only** — NOT pushed,
+> NOT deployed, VPS untouched.
+>
+> Two qualification layers are now evidenced:
+> 1. **SOURCE qualification** — static + in-tree self-test (DR-004) and security
+>    scan (DR-007): both PASS, no Docker required.
+> 2. **CONTAINER RUNTIME qualification** — real build + disposable run (DR-006
+>    Q3–Q8): PASS, Docker required, now satisfied.
+>
+> The previous "environment-blocked" note applied only to the earlier
+> Docker-less attempt and is superseded by this run.

@@ -18,34 +18,45 @@ LABEL steward.runtime=qualification \
       steward.dagu-version=2.10.7
 
 # Add ONLY the minimum runtime required by Steward fixture execution.
-# - python3 + pip (Steward is a Python package)
+# The pinned Dagu base already ships python3 (Debian externally-managed per
+# PEP 668). We install Steward into an isolated venv so we never touch the
+# system Python and never need --break-system-packages.
 # - no docker CLI, no git, no ssh, no compilers, no redis/db clients, no creds
 USER 0
 RUN set -eu; \
     apt-get update \
-    && apt-get install -y --no-install-recommends python3 python3-pip python3-venv \
-    && python3 -m pip install --no-cache-dir --upgrade pip \
+    && apt-get install -y --no-install-recommends python3-venv \
     && rm -rf /var/lib/apt/lists/* \
     && apt-get clean
 
 # Install the Steward package (committed S1-S3C files only) into the image.
+# The package is run as `python -m steward.s3ccli` (no setup.py/pyproject.toml),
+# so we COPY it to /opt/steward and expose it on PYTHONPATH rather than pip-install.
 # Source manifest (DR-003) enumerates exactly what is copied + SHA-256.
+# Files are made world-readable so the (non-root) Dagu runtime user can import them.
 COPY steward /opt/steward/steward
-RUN python3 -m pip install --no-cache-dir /opt/steward
-
-# Non-root execution user (matches deployed PUID/PGID=1000 convention).
 RUN set -eu; \
-    groupadd -g 1000 steward 2>/dev/null || true; \
-    useradd -u 1000 -g 1000 -M -s /usr/sbin/nologin steward 2>/dev/null || true
+    python3 -m venv /opt/venv \
+    && /opt/venv/bin/pip install --no-cache-dir --upgrade pip \
+    && chmod -R a+rX /opt/steward /opt/venv
+
+# NOTE: We intentionally do NOT create a custom user or set USER here.
+# The pinned Dagu base already ships a non-root 'dagu' user (UID 1001) with a
+# NOPASSWD sudoers rule, and its /entrypoint.sh re-maps that user to PUID/PGID
+# (1000/1000) via usermod/groupmod, then execs the command as that user.
+# Overriding USER would break the entrypoint's sudo target. We rely on the
+# base's non-root execution design (matches deployed PUID/PGID=1000 convention).
 
 ENV STEWARD_HOME=/opt/steward \
+    PATH=/opt/venv/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin \
     PYTHONPATH=/opt/steward \
+    PUID=1000 \
+    PGID=1000 \
     DAGU_HOME=/var/lib/dagu
 
 WORKDIR /home/dagu
 
 # Preserve normal Dagu startup behavior (entrypoint.tini -> /entrypoint.sh).
 # The S3C fixture workflow is invoked manually through Dagu, never scheduled.
-USER 1000
 ENTRYPOINT ["/usr/local/bin/tini", "-g", "--", "/entrypoint.sh"]
 CMD ["dagu", "start-all"]

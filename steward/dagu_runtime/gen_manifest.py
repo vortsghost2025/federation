@@ -47,6 +47,12 @@ def main() -> int:
         rel_root = Path(root).relative_to(REPO_ROOT)
         for fn in files:
             p = Path(root) / fn
+            # Never follow symlinks/junctions/reparse-points into the manifest.
+            # A symlinked entry could escape the allowlisted steward package
+            # (e.g. point at /docker/federation-game). Skip it explicitly.
+            if p.is_symlink():
+                print(f"SYMLINK SKIPPED: {p}", file=sys.stderr)
+                continue
             if p.suffix in EXCLUDE_SUFFIXES:
                 continue
             low = fn.lower()
