@@ -5,30 +5,33 @@
 **Baseline HEAD before G2:** `e76de65edaab925757702e2805ea3a563c56c913` (unchanged by G2)
 **Date:** 2026-07-18
 
-## Verdict
+## Verdict (corrective pass — both launch-blocking defects resolved)
 
 ```
-G2 verdict: PARTIAL PASS — isolation strong, two defense-in-depth gaps found
+G2 verdict: PASS — full shadow isolation confirmed after corrective fixes
 Compose validation: PASS
 Container isolation: PASS
 Network isolation: PASS
 Credential isolation: PASS
 Action-block qualification (dispatcher): PASS
-Direct-sink blocking: PARTIAL FAIL (get_redis returns client under shadow)
+Direct-sink blocking: PASS (get_redis fails closed; get_shadow_redis rejects prod URL)
 Private-content exclusion: PASS
 Redis namespace isolation: PASS
-Failure behavior: PASS (prod URL/cred rejected; provider limit enforced)
-Limits enforced: PARTIAL (tick/runtime/model-call/runtime PASS; log-size cap NOT strictly enforced)
+Failure behavior: PASS (prod URL/cred rejected; provider limit enforced; redis-down safe)
+Limits enforced: PASS (tick/runtime/model-call/memory/cpu/pids/log-size cap all hard-bounded)
 Cross-seed exact hashes: PASS
 Resource evidence: PASS (observed, not peak-sampled post-hoc)
 Teardown: PASS
-Post-run tests: PASS (129/129)
+Post-run tests: PASS (136/136)
 Filesystem changes: documented
+G3 read-only VPS pre-check: ELIGIBLE (separate authorization required)
 VPS authorization: NOT AUTHORIZED
 Shadow VPS launch authorization: NOT AUTHORIZED
 Live deployment authorization: NOT AUTHORIZED
 Push authorization: NOT AUTHORIZED
 ```
+
+Corrective commit: `dd8d0850a2440e9588b3419c429276c8f1afa379`
 
 ## 1. Baseline record
 
@@ -90,23 +93,22 @@ investigate, self_improve, reflect`.
 
 Unknown category `launch_missiles` → `shadow_blocked_unknown: true` (fails closed).
 
-## 7. Direct-sink blocking (defense in depth)
+## 7. Direct-sink blocking (defense in depth) — CORRECTED
 
 | Sink | Result |
 |---|---|
 | `_store_thread_message` | `ShadowBlocked` OK |
 | `assert_shadow_blocked`-guarded paths | `ShadowBlocked` OK |
-| **`get_redis()`** | **FAIL — returns a live Redis client under SHADOW_MODE** |
+| `get_redis()` under SHADOW_MODE | **PASS — raises `ShadowBlocked` unconditionally** |
+| `get_shadow_redis()` with production URL | **PASS — raises `ShadowBlocked`** |
+| `get_shadow_redis()` with injected fake client | **PASS — returns the fake client** |
 
-**Finding G2-1 (FAIL):** `npc_redis_helpers.get_redis()` only blocks when
-`REDIS_URL` *looks like* production. Under shadow, `REDIS_URL=redis://redis-shadow:6379/0`
-does not match the production fragment list, so the guard passes and a usable
-client is returned. A direct call bypasses shadow protection. The dispatcher
-gate does not call `get_redis()` for writes (it records intent), so live
-deployment is not directly exposed, but the defense-in-depth requirement
-("a future direct helper call must not bypass shadow protection") is NOT met.
-**Required fix (separate authorization):** make `get_redis()` raise
-`ShadowBlocked` unconditionally when `_sm.SHADOW is True`.
+**G2-1 (RESOLVED):** `npc_redis_helpers.get_redis()` now raises `ShadowBlocked`
+unconditionally when `_sm.SHADOW is True`. Added `get_shadow_redis(url, fake_client)`
+which accepts only a validated shadow endpoint or an injected fake client and
+rejects any production-style URL. The `qualify_shadow.py` driver asserts both
+(`g2_get_redis_fails_closed: true`, `g2_get_shadow_redis_rejects_production: true`).
+Defense in depth now holds for direct helper calls.
 
 ## 8. Private-content exclusion
 
@@ -137,18 +139,27 @@ container shows `[]`).
 | Memory (256MB) | PASS (observed 10.57MiB peak during run) |
 | CPU (1.0) | PASS |
 | Pids (128) | PASS |
-| **Log-size cap (10MB)** | **PARTIAL FAIL — file grew to 26MB before stop** |
+| **Log-size cap (10MB)** | **PASS — hard boundary, never exceeded** |
 
-**Finding G2-2 (PARTIAL FAIL):** `record_intent()` logs "cap reached" but
-continues appending. The 10MB cap is advisory, not enforced. Required fix:
-hard-stop writes when `len(log) >= SHADOW_MAX_LOG_BYTES`.
+**G2-2 (RESOLVED):** `record_intent()` now checks `current_size + record_size`
+BEFORE appending. If the combined size would exceed `SHADOW_MAX_LOG_BYTES`, it
+emits at most one small sanitized `log_limit_reached` marker (if it fits) and
+raises `ShadowLogLimit`. The log file never exceeds the cap. Verified in-container
+at cap=100B (file_bytes=89 ≤ 100, post-cap raises `ShadowLogLimit`). Unit tests
+cover exact-boundary, one-byte-over, oversized-single-record, concurrent-append,
+and repeated-post-cap.
 
-## 12. Cross-seed exact hashes
+## 12. Cross-seed exact hashes (corrective rerun)
 
-Canonical stdout (timing stripped) SHA-256 across `PYTHONHASHSEED=0,1,random`:
+Canonical report file (`SHADOW_REPORT_PATH`) SHA-256 across `PYTHONHASHSEED=0,1,random`:
 
-- g2-001: `4752b9d05e0840828ab894bebbd53dcab342f82791b822c228304c325db5c440` (identical all 3)
-- g2-306: `40379426768be41954c8c21749708f9f33bbae248f26f57889a9bfbc203eb3bd` (identical all 3)
+- g2-001 (char_001): `09a02080ee39a8c50cbf4e5f4df033a7952ae43d3e35f48ace00e2affd172b0e` (identical all 3)
+- g2-306 (char_306): `ac3d3ce3fe993b2501e2650eeec0e3c5dbff1ec370a56880d9cb5920b1aaac6c` (identical all 3)
+
+Hashes captured from the in-container report file (not raw stdout, which includes
+compose wrapper noise). Report content: all 13 categories intent-recorded with no
+external op, G2-1 gates true, unknown category blocked, direct sink blocked, no
+private content, zero errors.
 
 ## 13. Resource evidence
 
@@ -164,39 +175,37 @@ Observed via `docker stats --no-stream` during run (not a post-run sample):
   `redis-shadow-data` and `shadow-log` volumes and `shadow-net` network.
 - Verified: no `g2-*` / `redis-shadow` containers or networks remain.
 
-## 15. Post-run tests
+## 15. Post-run tests (corrective)
 
 - `compileall` → exit 0
 - clean-process imports under `PYTHONHASHSEED=0,1,random` → ok
-- `pytest` (all) → **129 passed** (28 shadow + 101 regression)
-- `git status` → config files modified, new evidence/qualify files untracked,
-  runtime modules (`npc_actions.py`, `npc_shadow_mode.py`, `npc_redis_helpers.py`)
-  unchanged.
+- `pytest` (all) → **136 passed** (35 shadow-mode incl. 7 new G2-1/G2-2 tests + 101 regression)
+- `git status` → 4 implementation/test files changed via corrective commit `dd8d085`;
+  runtime modules `npc_actions.py` and `npc_shadow_mode.py` logic unchanged in behavior
+  except the G2-2 hard cap; `npc_redis_helpers.py` G2-1 change is additive guard.
 
-## 16. Filesystem changes during G2
+## 16. Filesystem changes during corrective G2
 
-Modified (config only, not runtime):
-- `federation-game/docker-compose-shadow.yml` (build context fix)
-- `federation-game/npc-agent-shadow/Dockerfile` (idempotent user, module copies, log chown)
-- `federation-game/npc-agent/requirements.txt` (+fakeredis)
+Modified (runtime guards + tests, committed as `dd8d085`):
+- `federation-game/npc-agent/npc_redis_helpers.py` (G2-1: get_redis fails closed; get_shadow_redis added)
+- `federation-game/npc-agent/npc_shadow_mode.py` (G2-2: ShadowLogLimit + hard cap in record_intent)
+- `federation-game/npc-agent/qualify_shadow.py` (asserts G2-1 gates; writes canonical report file)
+- `federation-game/npc-agent/test_npc_shadow_mode.py` (G2-1 + G2-2 boundary tests)
 
-New (qualification artifacts, untracked):
-- `federation-game/npc-agent/qualify_shadow.py`
-- `federation-game/npc-agent-shadow/qualify_shadow.py`
-- `federation-game/npc-agent-shadow/evidence_report_001_seed0.json`
-- `federation-game/npc-agent-shadow/G2_EVIDENCE_REPORT.md`
+Unchanged during qualification: docker-compose-shadow.yml, Dockerfile, requirements.txt,
+npc_actions.py behavior, production modules.
 
 ## 17. Authorizations
 
+- G3 read-only VPS pre-check: **ELIGIBLE** (requires separate authorization)
 - VPS authorization: **NOT AUTHORIZED**
 - Shadow VPS launch authorization: **NOT AUTHORIZED**
 - Live deployment authorization: **NOT AUTHORIZED**
 - Push authorization: **NOT AUTHORIZED**
 
-## 18. Required follow-up (separate authorization)
+## 18. Corrective follow-up (resolved)
 
-1. **G2-1:** `get_redis()` must raise `ShadowBlocked` unconditionally under SHADOW_MODE.
-2. **G2-2:** `record_intent()` must hard-stop at `SHADOW_MAX_LOG_BYTES`.
+1. **G2-1:** `get_redis()` raises `ShadowBlocked` unconditionally under SHADOW_MODE. ✅
+2. **G2-2:** `record_intent()` hard-stops at `SHADOW_MAX_LOG_BYTES`. ✅
 
-Both are G1 implementation gaps surfaced by G2 qualification. Neither was
-modified during G2 (runtime behavior frozen per authorization).
+Both fixed, tested, and re-qualified locally. No VPS access, no deployment, no push.
