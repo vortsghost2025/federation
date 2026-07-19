@@ -52,9 +52,36 @@ future fail-closed Dagu pipeline *could* wrap the S3C CLI.
 
 > **Phase 2 authorization (this directive):** the directive authorizes installing
 > exactly ONE manual-only Dagu workflow (`steward-s3c-shadow-fixture`) that runs
-> only `fixture_shadow_apply` against synthetic data. As of the last edit to this
-> file, that install had **not yet run**; the Dagu count remains UNKNOWN until
-> Phase 2 completes. No schedule/trigger/auto-run is permitted.
+> only `fixture_shadow_apply` against synthetic data. No schedule/trigger/auto-run
+> is permitted.
+
+### Phase 2 preflight result — HARD STOP (install not performed)
+
+Read-only preflight against `federation-vps` (2026-07-08) found:
+
+- Dagu runs **only inside** container `dagu-x4sr-dagu-1`
+  (`ghcr.io/dagucloud/dagu:latest`). There is **no `dagu` binary on the host
+  PATH** and no host-side dagu at all. Any workflow must live in that container's
+  `/var/lib/dagu/dags`.
+- The Dagu container has **no Python** (`no-python`, `no-python3`, `no-node` —
+  only `sh`/`bash`). The host has `/usr/bin/python3`, but the Dagu scheduler
+  executes step commands **inside the container**, which cannot run
+  `python -m steward.s3ccli`.
+- The authorized Phase-2 workflow must invoke `fixture_shadow_apply` through the
+  S3C Python CLI. That requires a Python interpreter **in the Dagu execution
+  context**, which is absent.
+
+This matches the directive's explicit hard stop: *"Dagu runtime lacks
+Python/deps → cannot install."* Installing as specified would require one of the
+**forbidden** changes (add Python to the container, change the Dagu image, or
+bind-mount host Python) — none of which the directive permits.
+
+**Therefore NO Dagu workflow was created, edited, enabled, or scheduled.**
+The draft (`steward/s3c/dagu_draft.py`) remains illustrative and not
+schema-validated. Dagu workflow count is **UNKNOWN FROM THIS WORK BLOCK** and will
+stay that way unless/until a Python-capable Dagu execution context is
+authorized separately. No Federation/Redis/DB/Docker-runtime/NPC/cognition state
+was mutated; only this authorized report and the audit ledger were updated.
 
 ---
 
@@ -135,6 +162,9 @@ python -m unittest tests.unit.test_s3c   # 52 adversarial cases
 ## Status
 
 S3C is complete and locally verified. It is **held for human review** and must not
-be pushed or wired into any live pipeline until explicitly authorized. Phase 2
-(optional one-off manual Dagu fixture workflow) is authorized by the directive but
-had not been installed as of the last edit.
+be pushed or wired into any live pipeline until explicitly authorized.
+
+Phase 2 (one-off manual Dagu fixture workflow) was **authorized but BLOCKED at
+preflight**: the Dagu execution context (container `dagu-x4sr-dagu-1`) has no
+Python, so the S3C Python CLI cannot run as a Dagu step without a forbidden
+container/image/runtime change. No Dagu workflow was installed.
