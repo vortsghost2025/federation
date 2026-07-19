@@ -67,6 +67,12 @@ class QualificationAdapter:
     def set_fault(self, fault: FaultKind) -> None:
         self.backend.set_fault(fault)
 
+    def close(self) -> None:
+        """Best-effort backend teardown (closes SQLite handles, etc.)."""
+        closer = getattr(self.backend, "close", None)
+        if callable(closer):
+            closer()
+
     def persist(self, outcome: WriteOutcome) -> PersistReceipt:
         """Persist a governed outcome.
 
