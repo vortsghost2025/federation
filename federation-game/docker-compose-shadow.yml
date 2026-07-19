@@ -43,8 +43,8 @@ services:
 
   npc-agent-shadow-001:
     build:
-      context: ./npc-agent-shadow
-      dockerfile: Dockerfile
+      context: ./npc-agent
+      dockerfile: ../npc-agent-shadow/Dockerfile
     restart: "no"
     networks:
       - shadow-net
@@ -86,8 +86,8 @@ services:
 
   npc-agent-shadow-306:
     build:
-      context: ./npc-agent-shadow
-      dockerfile: Dockerfile
+      context: ./npc-agent
+      dockerfile: ../npc-agent-shadow/Dockerfile
     restart: "no"
     networks:
       - shadow-net

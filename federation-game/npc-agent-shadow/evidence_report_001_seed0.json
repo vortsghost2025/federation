@@ -1,0 +1,84 @@
+{
+  "categories_tested": [
+    {
+      "category": "send_message",
+      "intent_recorded": true,
+      "no_external_op": true
+    },
+    {
+      "category": "create_artifact",
+      "intent_recorded": true,
+      "no_external_op": true
+    },
+    {
+      "category": "write_code",
+      "intent_recorded": true,
+      "no_external_op": true
+    },
+    {
+      "category": "create_institution",
+      "intent_recorded": true,
+      "no_external_op": true
+    },
+    {
+      "category": "propose_role",
+      "intent_recorded": true,
+      "no_external_op": true
+    },
+    {
+      "category": "submit_to_institution",
+      "intent_recorded": true,
+      "no_external_op": true
+    },
+    {
+      "category": "request_capability",
+      "intent_recorded": true,
+      "no_external_op": true
+    },
+    {
+      "category": "operator_ack",
+      "intent_recorded": true,
+      "no_external_op": true
+    },
+    {
+      "category": "rest",
+      "intent_recorded": true,
+      "no_external_op": true
+    },
+    {
+      "category": "read_artifacts",
+      "intent_recorded": true,
+      "no_external_op": true
+    },
+    {
+      "category": "investigate",
+      "intent_recorded": true,
+      "no_external_op": true
+    },
+    {
+      "category": "self_improve",
+      "intent_recorded": true,
+      "no_external_op": true
+    },
+    {
+      "category": "reflect",
+      "intent_recorded": true,
+      "no_external_op": true
+    }
+  ],
+  "char_id": "char_001",
+  "direct_sinks_blocked": [
+    {
+      "blocked": true,
+      "sink": "_store_thread_message"
+    }
+  ],
+  "errors": [],
+  "intent_log_path": "/shadow-log/intents-001.jsonl",
+  "private_content_excluded": true,
+  "provider": "mock",
+  "redis_keys_namespaced": true,
+  "shadow_instance_id": "shadow-001",
+  "shadow_ns": "shadow:shadow-001",
+  "unknown_category_blocked": true
+}

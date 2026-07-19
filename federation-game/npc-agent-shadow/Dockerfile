@@ -5,7 +5,7 @@
 FROM python:3.11-slim
 
 # Create a non-root user.
-RUN groupadd -r shadow && useradd -r -g shadow -u 10001 shadow
+RUN groupadd -r shadow 2>/dev/null || true && useradd -r -g shadow -u 10001 shadow 2>/dev/null || true
 
 WORKDIR /app
 
@@ -20,10 +20,16 @@ COPY npc_shadow_mode.py \
      npc_loop_control.py \
      npc_llm_client.py \
      npc_agent.py \
+     fourth_wall.py \
+     npc_context.py \
+     qualify_shadow.py \
      /app/
 
 # Dedicated writable volume for the append-only intent log.
 VOLUME ["/shadow-log"]
+
+# Ensure the non-root shadow user can write the intent log volume.
+RUN mkdir -p /shadow-log && chown -R shadow:shadow /shadow-log
 
 # Drop all capabilities, no new privileges, read-only root filesystem.
 USER shadow
