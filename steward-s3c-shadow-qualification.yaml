@@ -1,0 +1,67 @@
+# Steward S3C Shadow Qualification — Dagu workflow (VERIFY-ONLY, shadow-only).
+#
+# MANUAL ONLY. No schedule, interval, startup, or event trigger.
+# It runs the COMPLETE synthetic S3C replay corpus against the in-process
+# qualification backend and proves the shadow pipeline end to end:
+#   - approved -> committed, denied -> denied (capability + approval gating)
+#   - interlock fail-closed on forbidden-live capabilities
+#   - idempotent replay (no duplicate mutation)
+#   - transaction rollback via fault injection (local, not persisted)
+#   - nested secret redaction
+#   - path traversal / simulated symlink-reparse rejection
+#   - cross-process determinism across two PYTHONHASHSEED values
+#   - canonical output hash comparison
+#   - readiness == READY_FOR_SHADOW_ONLY, never READY_FOR_LIVE
+#   - temp bundle / SQLite cleanup
+#
+# It does NOT touch live Federation, Redis, Postgres, SSH, the Docker socket,
+# NPC inbox, cognition, or any credentials. This is a qualification job, not a
+# repair job. It must never reach READY_FOR_LIVE.
+
+name: steward-s3c-shadow-qualification
+type: graph
+# Intentionally absent: schedule, scheduler, timezone, retry policy, mailOn.
+# Dagu treats a workflow with no schedule as manual-only.
+
+env:
+  - STEWARD_HOME: /opt/steward
+  - PYTHONPATH: /opt/steward
+  - DAGU_HOME: /var/lib/dagu
+  - STEWARD_QUALIFICATION: "1"
+  - STEWARD_SHADOW_ONLY: "1"
+
+steps:
+  - id: assert_python_runtime
+    run: python3 --version
+
+  - id: qualify_shadow_seed0
+    run: python3 /var/lib/dagu/dags/steward-s3c-qualify.py
+    working_dir: /opt/steward
+    env:
+      - PYTHONHASHSEED: "0"
+    depends: [assert_python_runtime]
+
+  - id: qualify_shadow_seed1
+    run: python3 /var/lib/dagu/dags/steward-s3c-qualify.py
+    working_dir: /opt/steward
+    env:
+      - PYTHONHASHSEED: "1"
+    depends: [qualify_shadow_seed0]
+
+  - id: assert_readiness_shadow_only
+    run: >-
+      python3 -c "import os,sys;
+      p='/var/lib/dagu/dags/steward_qual_result.sha256';
+      h=open(p).read().strip();
+      print('OUTPUT_SHA256='+h);
+      ok='READY_FOR_SHADOW_ONLY' in open(p).read();
+      print('VERIFIED_READY_FOR_SHADOW_ONLY' if ok else 'NOT_SHADOW_ONLY');
+      sys.exit(0 if ok else 1)"
+    depends: [qualify_shadow_seed1]
+
+  - id: cleanup_temp_artifacts
+    run: sh -c "rm -f /tmp/steward_fixture_* /tmp/s3c_* /var/lib/dagu/dags/steward_qual_result.sha256 /tmp/smoke.log /tmp/probe*.log /tmp/g.log 2>/dev/null; echo cleanup-done"
+    depends: [assert_readiness_shadow_only]
+
+# Dagu-level guardrail (best-effort; not a substitute for the interlock).
+timeout_sec: 300
