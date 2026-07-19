@@ -18,6 +18,7 @@ from npc_llm_client import call_llm
 from npc_context import most_common_topic_word, normalize_topic_label
 from npc_decisions import _is_repetitive_artifact, _acknowledge_inbox
 from npc_loop_control import record_deferral, record_completed_work
+import npc_shadow_mode as sm
 from npc_redis_helpers import (
     get_redis,
     _partner_id,
@@ -68,6 +69,38 @@ def execute_decision(decision: dict, r, contacts: dict):
     partner_id = _partner_id()
 
     logger.info("[%s] Decision: %s — %s", CHAR_ID, cat, desc[:80])
+
+    # ── SHADOW_MODE dispatcher gate (fail closed) ──
+    # Every write-capable category becomes an intent record; no external
+    # operation is performed. Unknown/new categories are blocked by default.
+    if sm.SHADOW:
+        sm.tick()
+        ok, reason = sm.check_limits()
+        if not ok:
+            logger.warning("[%s] Shadow limit reached: %s", CHAR_ID, reason)
+            sm.record_intent(cat, decision, {"action_taken": "shadow_terminated", "reason": reason})
+            res = sm.shadow_result(cat, decision)
+            res["shadow_terminated"] = True
+            res["reason"] = reason
+            return res
+        if sm.category_blocked(cat):
+            # Unknown or newly added category: record intent, block entirely.
+            sm.record_intent(cat, decision, {"action_taken": "shadow_blocked_unknown"})
+            res = sm.shadow_result(cat, decision)
+            res["shadow_blocked_unknown"] = True
+            return res
+        # Every known category becomes intent-only under shadow mode. Decision
+        # generation / loop-control state is recorded to the dedicated shadow
+        # store by the loop-control module; execute_decision performs no sink
+        # write and no external operation. Provider is redirected to the mock so
+        # no real model call can occur in the fall-through paths.
+        _PROVIDER = sm.get_provider()
+        intent = sm.record_intent(cat, decision)
+        res = sm.shadow_result(cat, decision)
+        res["intent"] = intent
+        return res
+    else:
+        _PROVIDER = None
 
     result = {
         "char_id": CHAR_ID,
@@ -177,7 +210,7 @@ def execute_decision(decision: dict, r, contacts: dict):
             record_deferral(r, CHAR_ID, dedup_topic or title)
         else:
             content_prompt = f"Write the full content of this artifact:\n\n{desc}\n\nOutput only the content."
-            llm_result = call_llm("You are a creative writer.", content_prompt, r=r, call_label="artifact")
+            llm_result = (_PROVIDER or call_llm)("You are a creative writer.", content_prompt, r=r, call_label="artifact")
             artifact_content = _enforce_fourth_wall(llm_result.get("content") or desc)
             artifact = {
                 "artifact_id": str(uuid.uuid4()),
@@ -227,7 +260,7 @@ def execute_decision(decision: dict, r, contacts: dict):
 
     elif cat == "write_code":
         code_prompt = f"Generate Python code for: {desc}\n\nOutput ONLY valid Python code."
-        llm_result = call_llm("You are a Python developer. Output only code.", code_prompt, r=r, call_label="code")
+        llm_result = (_PROVIDER or call_llm)("You are a Python developer. Output only code.", code_prompt, r=r, call_label="code")
         gen_code = llm_result.get("content", "")
         if gen_code:
             artifact = {

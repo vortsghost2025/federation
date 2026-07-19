@@ -9,6 +9,15 @@ import redis
 
 logger = logging.getLogger("npc_redis_helpers")
 
+# SHADOW_MODE sink-level guard (defense in depth). Imported lazily-capable;
+# npc_shadow_mode has no dependency on this module, so a top import is safe.
+try:
+    import npc_shadow_mode as _sm
+    _ShadowBlocked = _sm.ShadowBlocked
+except Exception:  # pragma: no cover - module always present in this package
+    _sm = None
+    _ShadowBlocked = Exception
+
 CHAR_ID = os.environ.get("CHAR_ID", "")
 PAIR_IDS = {"char_001", "char_306"}
 PAIR_STATE_TTL = int(os.environ.get("PAIR_STATE_TTL", str(86400 * 30)))
@@ -84,6 +93,14 @@ def _is_pseudo_framing_disagreement(text: str) -> bool:
 
 
 def get_redis():
+    if _sm is not None and getattr(_sm, "SHADOW", False):
+        # Sink-level defense in depth: a direct helper call must not reach
+        # production Redis. The configured URL must NOT look like production.
+        if _sm._looks_like_production_url(REDIS_URL):
+            raise _ShadowBlocked(
+                f"get_redis() blocked: REDIS_URL '{REDIS_URL}' is production. "
+                "Shadow must use a dedicated shadow Redis only."
+            )
     return redis.from_url(REDIS_URL, decode_responses=True, socket_connect_timeout=5, socket_timeout=5)
 
 
@@ -268,6 +285,8 @@ def _pair_thread_id(r, partner_id: str = "", char_id: str = "") -> str:
 
 
 def _store_thread_message(r, msg: dict, thread_id: str, char_id: str = "") -> None:
+    if _sm is not None and getattr(_sm, "SHADOW", False):
+        _sm.assert_shadow_blocked("direct_message")
     cid = char_id or CHAR_ID
     if r is None or not thread_id:
         return
@@ -467,6 +486,8 @@ def _message_cooldown_remaining(r, partner_id: str = "", char_id: str = "") -> i
 
 
 def _sync_pair_workspace(r, decision: dict, result: dict, npc_name: str = "", char_id: str = "") -> None:
+    if _sm is not None and getattr(_sm, "SHADOW", False):
+        _sm.assert_shadow_blocked("pair_workspace")
     cid = char_id or CHAR_ID
     name = npc_name or os.environ.get("NPC_NAME", cid)
     pid = _partner_id(cid)
@@ -831,6 +852,8 @@ def _log_llm_call(r, call_label, model, system_prompt, user_prompt, response, su
 
 
 def _session_append(r, entry: dict, char_id: str = "") -> None:
+    if _sm is not None and getattr(_sm, "SHADOW", False):
+        _sm.assert_shadow_blocked("session_append")
     cid = char_id or CHAR_ID
     if r is None or not entry:
         return
@@ -866,6 +889,8 @@ def _acknowledge_inbox(r, partner_id: str = None, char_id: str = "") -> int:
 
 
 def _acknowledge_operator_directive(r, directive_id: str = "", char_id: str = "", status: str = "complete", attribution: dict | None = None) -> bool:
+    if _sm is not None and getattr(_sm, "SHADOW", False):
+        _sm.assert_shadow_blocked("operator_ack")
     """Archive exactly one moderator directive by its message id.
 
     This is the message-specific replacement for the sender-wide
@@ -933,6 +958,8 @@ def _acknowledge_operator_directive(r, directive_id: str = "", char_id: str = ""
 
 
 def _record_operator_ack_history(r, directive_id: str = "", status: str = "complete", attribution: dict | None = None, cid: str = "") -> None:
+    if _sm is not None and getattr(_sm, "SHADOW", False):
+        _sm.assert_shadow_blocked("operator_ack_history")
     """Bounded forensic audit LIST for operator acknowledgements.
 
     The single `operator_ack:{cid}` record is overwritten on every ack and
