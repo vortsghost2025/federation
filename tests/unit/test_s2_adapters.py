@@ -404,5 +404,86 @@ class TestS21Hardening(unittest.TestCase):
             self.assertNotIn("password", inspect.signature(fn).parameters)
 
 
+class TestCrossProcessDeterminism(unittest.TestCase):
+    """EVID-005: same normalized snapshot serialized in two separate Python
+    processes, with different input dict insertion order, must be byte-identical
+    and carry a stable SHA-256."""
+
+    _RUNNER = (
+        "import sys, json, hashlib\n"
+        "sys.path.insert(0, '.')\n"
+        "from steward.adapters.base import snapshot_from\n"
+        "order = json.loads(sys.argv[1])\n"
+        "data = {k: order[k] for k in order}\n"
+        "snap = snapshot_from(source='redis', observed_at='2026-07-19T00:00:00Z',\n"
+        "                      data=data, availability='available', version='1.0',\n"
+        "                      provenance='test')\n"
+        "out = snap.to_json(redact=True)\n"
+        "print(json.dumps({'sha256': hashlib.sha256(out.encode('utf-8')).hexdigest(),\n"
+        "                   'bytes': out}, sort_keys=True))\n"
+    )
+
+    def _serialize_in_subprocess(self, insertion_order):
+        import subprocess
+        import sys
+        import json
+
+        res = subprocess.run(
+            [sys.executable, "-c", self._RUNNER, json.dumps(insertion_order)],
+            capture_output=True, text=True, cwd=".",
+        )
+        self.assertEqual(res.returncode, 0, res.stderr)
+        return json.loads(res.stdout.strip())
+
+    def test_cross_process_byte_determinism(self):
+        order_a = {"alpha": 1, "beta": 2, "gamma": 3, "delta": 4}
+        order_b = {"delta": 4, "gamma": 3, "beta": 2, "alpha": 1}
+        doc_a = self._serialize_in_subprocess(order_a)
+        doc_b = self._serialize_in_subprocess(order_b)
+        self.assertEqual(doc_a["sha256"], doc_b["sha256"])
+        self.assertEqual(doc_a["bytes"], doc_b["bytes"])
+        # Pin the deterministic hash so unintended drift is caught.
+        self.assertEqual(
+            doc_a["sha256"],
+            "ac34d3e51a9c508c88492503d3ea8a16111ba377cfd1285c82b443b621389869",
+        )
+
+    _FINDING_RUNNER = (
+        "import sys, json\n"
+        "sys.path.insert(0, '.')\n"
+        "from steward.schema import make_finding\n"
+        "ev = json.loads(sys.argv[1])\n"
+        "f = make_finding(check_id='chk_x', observed_at='2026-07-19T00:00:00Z',\n"
+        "                  severity='info', summary='s', evidence=ev,\n"
+        "                  dedupe_key='dk', required_capability='steward:incident:create')\n"
+        "print(json.dumps({'finding_id': f.finding_id, 'digest': f.finding_id[4:]},\n"
+        "                  sort_keys=True))\n"
+    )
+
+    def _finding_in_subprocess(self, evidence):
+        import subprocess
+        import sys
+        import json
+
+        res = subprocess.run(
+            [sys.executable, "-c", self._FINDING_RUNNER, json.dumps(evidence)],
+            capture_output=True, text=True, cwd=".",
+        )
+        self.assertEqual(res.returncode, 0, res.stderr)
+        return json.loads(res.stdout.strip())
+
+    def test_cross_process_finding_determinism(self):
+        ev_a = {"host": "h1", "metric": "cpu", "value": 91}
+        ev_b = {"value": 91, "metric": "cpu", "host": "h1"}
+        doc_a = self._finding_in_subprocess(ev_a)
+        doc_b = self._finding_in_subprocess(ev_b)
+        self.assertEqual(doc_a["finding_id"], doc_b["finding_id"])
+        self.assertEqual(doc_a["digest"], doc_b["digest"])
+        self.assertEqual(
+            doc_a["digest"],
+            "b958e9c2418b73c1e275ffc17106ce00d68a2a9a2fe599cd26c3df1ffb207042",
+        )
+
+
 if __name__ == "__main__":
     unittest.main()

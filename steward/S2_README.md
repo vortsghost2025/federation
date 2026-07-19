@@ -84,13 +84,30 @@ container, or VPS-configuration mutation occurred.
 
 Specifically:
 
-- The S2.1 hardening commits are **local only** and are **not pushed** to origin.
-- The Dagu container on the VPS remains bound to loopback (`127.0.0.1`) with
-  **0 workflows**; no DAG was imported or activated.
+- No push was performed during this work block according to the complete command
+  and audit trail. The branch has no configured upstream and no local
+  remote-tracking ref. These local facts do not independently prove that no
+  similarly named remote branch exists.
+- The Dagu workflow count is **UNKNOWN FROM THIS WORK BLOCK**. The local S2 Dagu
+  draft was not installed. (A host path was inventoried read-only but was not
+  proven to be the Docker volume mountpoint, so workflow count is not asserted.)
+- The canonical `S:\federation` checkout was not accessed or mutated during this
+  corrective work block. Its last separately verified state was HEAD
+  `9a5487e246f45c2780a35a6e4e9fb90a95028a37`, with five protected modified files
+  and two stashes.
 - The Hostinger panel's five projects (cronicle-gyag, dozzle-wz9k, dockge-txpu,
-  autobase-nm2c, litellm-lite) remain present as empty Compose projects — read-only
-  inventory only, no provisioning change.
+  autobase-nm2c, litellm-lite) were inventoried read-only as empty Compose
+  projects; no provisioning change was made. Their presence is not asserted as a
+  Federation-infrastructure fact beyond that read-only inventory.
 - The `prf-*` audit todos were reviewed and classified; they were not mutated.
   Their verified completion corresponds to canonical commit `909ea76` in
   `npc-agent/npc_redis_helpers.py`, not `simulation_engine.py`.
 - `npc_agent_current.py` (unknown-provenance untracked artifact) was left untouched.
+
+### Test-count reconciliation
+
+- S1 tests (`test_checks.py`): 27
+- Original S2 tests (at `bc75e367`): 28
+- S2.1 tests added: 12 (the earlier report's "16" was an overcount)
+- Final total: 27 + 40 = 67 committed S2 tests + 2 cross-process determinism
+  tests added in this corrective block = 69
