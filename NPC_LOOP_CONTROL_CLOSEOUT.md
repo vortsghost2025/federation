@@ -14,8 +14,10 @@ provenance/qualification claims and records the bounded corrective pass.
 - recovery commit:             abaf07c075bdacf257c74a22adbed1ef8259eaa5
 - implementation commit:       118fcc9beeb1ee24cb7a4affcf395e48c55e249f
 - prior doc-only commit:       d360fe0b6736bc4c308ca4ff897e473965b7d631
-- corrective impl commit:      93073bcf495ae533d5687fb04f6623378c726ac1
-- corrective doc commit:       8fe6a5376eaf538d0b6839b9084c2e0228143302  (this file)
+- corrective impl commit (SHA-256 determinism): 93073bcf495ae533d5687fb04f6623378c726ac1
+- corrective doc commit:                    8fe6a5376eaf538d0b6839b9084c2e0228143302
+- npc_actions provenance fix commit:       1bdbb8f1d6bd72b5328da8c67f76735338982188
+- provenance closeout doc commit:          af16b285e7ceba870baa150999667f8971efe88b
 
 git diff --name-status 984864c..HEAD (current):
   A federation-game/npc-agent/institutions.py
@@ -51,35 +53,24 @@ hashes at each commit. Full 64-char hashes below.
   status: base == VPS (deployed base recovered); impl MODIFIED_FROM_VERIFIED_DEPLOYED_BASE
           (import + enforce wrap, 2 lines).
 
-### npc_actions.py  — PROVENANCE GAP (disclosed)
+### npc_actions.py  — PROVENANCE GAP RESOLVED (this corrective pass)
   VPS deployed : 045559459009c0ed34460bf979c20dc8a1b5022f3e3c54da79eef73e7264294f
-  base blob    : c2fdf2dfea3aaa2234bf3e5dd4d8536137c2e13f53b6e3f6a71803ff616c0249  (!= VPS)
-  recovery blob: c2fdf2dfea3aaa2234bf3e5dd4d8536137c2e13f53b6e3f6a71803ff616c0249  (!= VPS)
-  impl blob    : 803ab78e4d1693dccb49c40217f4f8fc25aa8a72103884dab2817da726f46e06  (!= VPS)
-  head blob    : 803ab78e4d1693dccb49c40217f4f8fc25aa8a72103884dab2817da726f46e06  (!= VPS)
-  status: PROVENANCE GAP. The local base (c2fdf2df...) is NOT byte-identical to the
-          deployed VPS file (04555945...). The recovery commit did NOT capture the
-          deployed npc_actions.py; it carried a locally-diverged copy that already
-          existed in the worktree. Therefore the patch for this file cannot be proven
-          to start from the authoritative deployed source.
-
-  IMPACT ASSESSMENT (bounded): My delta to npc_actions.py (base -> impl, +15/-2) is
-  purely additive and cannot alter deployed semantics:
-    1. `from npc_loop_control import record_deferral, record_completed_work`
-       - new imports, only used by my added calls.
-    2. `record_deferral(r, CHAR_ID, dedup_topic or title)` inside the existing dedup
-       branch - COMPOSES WITH (does not replace) the existing `_is_repetitive_artifact`
-       dedup gate.
-    3. `artifact_content = _enforce_fourth_wall(llm_result.get("content") or desc)`
-       - the artifact-content safety fix (Task 1, Phase 1). Purely additive; the
-       prior line was `_enforce_fourth_wall(llm_result.get("content", desc))`.
-    4. `record_completed_work(r, CHAR_ID, "create_artifact", title)` after success.
-    5. `attribution=decision.get("operator_attribution") or {}` on the operator-ack
-       call. NOTE: this kwarg was ALREADY present in the local base (not added by me);
-       my delta only added an explanatory comment. So it is repo drift, not my change.
-  The deployed `operator_attribution` kwarg is real and present in VPS too, but the
-  surrounding function body in my base differs from VPS in ways NOT covered by my
-  delta, so byte-identity to deployed is unproven for this file.
+  recovered pre-edit (commit 1bdbb8f, blob): 045559459009c0ed34460bf979c20dc8a1b5022f3e3c54da79eef73e7264294f  (= VPS)
+  corrected post-edit (commit 1bdbb8f, blob): 8d974b77b9d5fc39bbf1d7de43cd6782db076e045676f04557217df95708108d
+  head blob    : 8d974b77b9d5fc39bbf1d7de43cd6782db076e045676f04557217df95708108d
+  status: RESOLVED. The branch's npc_actions.py was REPLACED with the exact deployed
+          VPS file (SHA-256 verified byte-identical to 04555945...) and the four
+          intended loop-control hunks were replayed. git diff --no-index against the
+          deployed file shows ONLY the four intended hunks (no other changes):
+            1. +from npc_loop_control import record_deferral, record_completed_work
+            2. +record_deferral(r, CHAR_ID, dedup_topic or title)  (in dedup branch,
+               composes with the existing _is_repetitive_artifact gate)
+            3. artifact_content = _enforce_fourth_wall(llm_result.get("content") or desc)
+            4. +record_completed_work(r, CHAR_ID, "create_artifact", title)
+          Unchanged: operator acknowledgement, attribution kwarg, moderator repair,
+          provider routing, fourth-wall enforcement.
+          The previously-divergent local base (c2fdf2df...) is superseded. The
+          deployed copy is preserved locally as npc_actions_deployed.py for provenance.
 
 ### Unmodified recovered modules (recovery commit == VPS, UNCHANGED_FROM_DEPLOYED)
   npc_context.py       815d06f6...
@@ -189,11 +180,11 @@ cluster/network behavior, but covers every op the implementation uses.
 
 ## 7. Limitations
 
-- PROVENANCE GAP: npc_actions.py base/recovery blob (c2fdf2df...) is not
-  byte-identical to deployed VPS (04555945...). The deployed source of this file
-  was never captured into Git. The loop-control patch on this file is additive and
-  safe, but it is NOT proven to descend from the authoritative deployed source.
-  (npc_agent.py and npc_decisions.py ARE proven: their base == VPS.)
+- PROVENANCE GAP RESOLVED: npc_actions.py was replaced with the byte-identical
+  deployed VPS file (04555945...) and the 4 intended hunks replayed; git diff
+  --no-index confirms no extra changes. All three edited modules
+  (npc_agent.py, npc_decisions.py, npc_actions.py) are now proven to descend from
+  deployed source.
 - Cross-process determinism is now EXACT via SHA-256 (no Python hash()). Verified
   by test_13b/test_13c asserting the exact selected topic and complete decision.
 - Runtime execution relies on sibling modules only at import (no live calls during
@@ -202,18 +193,17 @@ cluster/network behavior, but covers every op the implementation uses.
 ## 8. Final layered verdict
 
 Local implementation:                 PASS
-Authoritative provenance:             PARTIAL
-    npc_agent.py: PASS (base == VPS)
-    npc_decisions.py: PASS (base == VPS)
-    npc_actions.py: GAP (base != VPS; additive patch, not byte-proven to deployed)
+Authoritative provenance:             PASS
+    npc_agent.py:    PASS (base == VPS ed599569...)
+    npc_decisions.py: PASS (base == VPS fc99706b...)
+    npc_actions.py:  PASS (resolved: replaced with byte-identical VPS 04555945...,
+                           4 intended hunks replayed; git diff --no-index clean)
 Compile:                              PASS
 Clean-process imports:                PASS (real import, 4/4 modules, 3 seeds)
 New tests:                            PASS (17/17, 3 seeds)
 Existing regression tests:            PASS (84/84; prior 8 failures repaired -> 0 failed)
 Cross-process exact determinism:      PASS (SHA-256; exact topic + decision asserted)
 Fake-Redis fidelity:                  PASS (11/11 ops; no private content)
-Eligible for separately authorized shadow deployment: CONDITIONAL
-    Blocked until npc_actions.py deployed source is byte-recovered and the patch is
-    re-based on it (or the divergence is formally waived by an authorized reviewer).
+Eligible for separately authorized shadow deployment: YES (provenance now complete)
 Live deployment authorization:        NOT AUTHORIZED
 Push authorization:                   NOT AUTHORIZED
