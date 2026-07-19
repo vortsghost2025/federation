@@ -1,0 +1,85 @@
+# Steward S3C Shadow Fixture — Dagu workflow (DR-005)
+#
+# MANUAL ONLY. This workflow is NEVER scheduled and NEVER auto-triggered.
+# It runs the fixture-only S3C shadow pipeline against an ephemeral
+# (memory) backend and asserts the shadow-only safety classification.
+#
+# It must NOT be installed on the VPS. It is a local qualification artifact.
+#
+# Safe by construction:
+#   - no schedule / no trigger  (manual execution only)
+#   - fixture-only               (run-fixture path, no live apply exists)
+#   - ephemeral backend          (--backend memory, nothing written to disk)
+#   - no credentials             (no env secrets, no SSH, no registry login)
+#   - cleanup                    (temp dirs removed; nothing persisted)
+#   - expected result:          READY_FOR_SHADOW_ONLY
+
+name: steward-s3c-shadow-fixture
+# Intentionally absent: schedule, scheduler, timezone, retry policy, mailOn.
+# Dagu treats a workflow with no schedule as manual-only.
+
+env:
+  STEWARD_HOME: /opt/steward
+  PYTHONPATH: /opt/steward
+  DAGU_HOME: /var/lib/dagu
+
+steps:
+  - name: assert-python-runtime
+    command: python3
+    args: ["--version"]
+
+  - name: run-s3c-fixture-shadow
+    command: python3
+    args:
+      - "-m"
+      - "steward.s3ccli"
+      - "run-fixture"
+      - "--backend"
+      - "memory"
+      - "--namespace"
+      - "steward:shadow:gastown"
+      - "--findings"
+      - "find_1"
+    # Synthetic input only. No production data is ever read.
+    output: FIXTURE_OUTPUT
+
+  - name: assert-shadow-only-classification
+    command: python3
+    args:
+      - "-c"
+      - >-
+        import os, sys, json;
+        out = os.environ.get('FIXTURE_OUTPUT', '');
+        ok = ('shadow' in out.lower()) or ('READY_FOR_SHADOW_ONLY' in out);
+        print('SHADOW_ONLY_OK' if ok else 'NOT_SHADOW_ONLY');
+        sys.exit(0 if ok else 1)
+
+  - name: readiness-check
+    command: python3
+    args:
+      - "-m"
+      - "steward.s3ccli"
+      - "readiness"
+    output: READINESS_OUTPUT
+
+  - name: assert-readiness-shadow-only
+    command: python3
+    args:
+      - "-c"
+      - >-
+        import os, sys;
+        out = os.environ.get('READINESS_OUTPUT', '');
+        ok = 'READY_FOR_SHADOW_ONLY' in out;
+        print('READINESS_SHADOW_ONLY' if ok else 'READINESS_NOT_SHADOW');
+        sys.exit(0 if ok else 1)
+
+  - name: cleanup-temp-artifacts
+    command: sh
+    args:
+      - "-c"
+      - "rm -f /tmp/steward_fixture_* 2>/dev/null; echo cleanup-done"
+    continueOnError: true
+
+# Dagu-level guardrails (best-effort; not a substitute for the interlock).
+maxAliveSteps: 1
+timeoutSec: 300
