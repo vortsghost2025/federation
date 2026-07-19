@@ -534,6 +534,36 @@ class TestDaguDraft(unittest.TestCase):
         self.assertIn("NOT SCHEMA-VALIDATED", d["status"])
         self.assertIn("UNKNOWN", d["dagu_workflow_count"])
 
+    def test_051_determinism_same_inputs_identical_bundle_hash(self):
+        # Determinism by construction: identical inputs must produce identical
+        # aggregate bundle hash across repeated runs in the same process.
+        fids = ["find_zeta", "find_alpha", "find_mu"]
+        b1 = run_fixture(finding_ids=fids, approve_all=True)
+        b2 = run_fixture(finding_ids=fids, approve_all=True)
+        self.assertEqual(b1.sha256, b2.sha256)
+        self.assertEqual(b1.manifest.run_id, b2.manifest.run_id)
+        self.assertEqual(
+            [a["action_id"] for a in b1.actions],
+            [a["action_id"] for a in b2.actions],
+        )
+
+    def test_052_action_and_run_ids_are_content_derived_not_random(self):
+        # action_id must derive from identity fields (not os.urandom/uuid4).
+        # run_id must derive from the canonical manifest digest.
+        fids = ["find_alpha", "find_mu"]
+        b = run_fixture(finding_ids=fids, approve_all=True)
+        # re-run with same inputs -> run_id stable
+        b2 = run_fixture(finding_ids=fids, approve_all=True)
+        self.assertEqual(b.manifest.run_id, b2.manifest.run_id)
+        # action_id stable per finding
+        self.assertEqual(
+            {a["source_finding_id"]: a["action_id"] for a in b.actions},
+            {a["source_finding_id"]: a["action_id"] for a in b2.actions},
+        )
+        # run_id must be the manifest digest, never contain random marker
+        self.assertTrue(b.manifest.run_id.startswith("run_"))
+        self.assertNotIn("urandom", b.manifest.run_id)
+
 
 if __name__ == "__main__":
     unittest.main()
