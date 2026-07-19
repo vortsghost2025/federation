@@ -1,0 +1,8 @@
+# Evidence-only files — never ship in the runtime image or deploy copy set.
+# These are byte-identical snapshots of deployed source for provenance auditing
+# only. They are not executable modules and must not sit beside npc_agent.py.
+npc_actions_deployed.py
+*_deployed.py
+import_smoke.py
+test_*.py
+**/__pycache__/

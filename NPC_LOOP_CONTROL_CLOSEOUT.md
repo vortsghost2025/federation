@@ -71,6 +71,10 @@ hashes at each commit. Full 64-char hashes below.
           provider routing, fourth-wall enforcement.
           The previously-divergent local base (c2fdf2df...) is superseded. The
           deployed copy is preserved locally as npc_actions_deployed.py for provenance.
+          That file is EVIDENCE-ONLY: excluded from the runtime image by
+          federation-game/npc-agent/.dockerignore, never imported by any module,
+          and never in the deploy copy set. It must not sit beside the executable
+          modules in any deployed container.
 
 ### Unmodified recovered modules (recovery commit == VPS, UNCHANGED_FROM_DEPLOYED)
   npc_context.py       815d06f6...
