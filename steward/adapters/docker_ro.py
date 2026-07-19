@@ -34,6 +34,12 @@ FORBIDDEN_DOCKER_SUBCOMMANDS = frozenset(
     }
 )
 
+# Legitimate flags for the allowlisted read-only subcommands. Any other
+# argument beginning with "-" is rejected to prevent option injection.
+ALLOWED_DOCKER_FLAGS = frozenset(
+    {"--format", "--no-stream", "--tail", "--since", "--until", "--filter"}
+)
+
 
 class RefusedDockerCommandError(Exception):
     """Raised when a Docker subcommand is outside the read-only allowlist."""
@@ -46,6 +52,17 @@ def _check_subcommand(subcommand: str) -> str:
     if sc not in ALLOWED_DOCKER_SUBCOMMANDS:
         raise RefusedDockerCommandError(f"refused non-info docker subcommand: {subcommand}")
     return sc
+
+
+def _check_args(args: List[str]) -> None:
+    """Reject option injection via values starting with '-' (except allowlisted
+    read-only flags)."""
+    for i, a in enumerate(args):
+        if i == 0:
+            continue  # subcommand validated by _check_subcommand
+        s = str(a)
+        if s.startswith("-") and s not in ALLOWED_DOCKER_FLAGS:
+            raise RefusedDockerCommandError(f"refused docker argument (option injection): {a!r}")
 
 
 def run(
@@ -68,6 +85,7 @@ def run(
         )
     try:
         _check_subcommand(args[0])
+        _check_args(args)
     except RefusedDockerCommandError as exc:
         return unknown_snapshot(
             source=source, observed_at=observed_at,

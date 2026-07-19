@@ -92,6 +92,46 @@ def redact_value(value: Any) -> Any:
         if _value_is_sensitive_str(value):
             return REDACTED
         return value
+    if isinstance(value, (bytes, bytearray)):
+        # Bytes are never safe to echo verbatim -- decode and redact. If the
+        # decoded text matches a credential pattern it is masked; otherwise we
+        # still avoid dumping raw bytes by returning a normalized redaction.
+        try:
+            decoded = bytes(value).decode("utf-8", "replace")
+        except Exception:
+            decoded = ""
+        if _value_is_sensitive_str(decoded):
+            return REDACTED
+        return REDACTED
+    return value
+
+
+def redact_credentials_strong(value: Any) -> Any:
+    """Always-on credential masking. Unlike ``redact_value`` (which can be
+    toggled off via --no-redact for structural reasons), this pass MUST run on
+    any value leaving the process so raw secrets are never emitted."""
+    if isinstance(value, dict):
+        out = {}
+        for k, v in value.items():
+            if _key_is_sensitive(k):
+                out[k] = REDACTED
+            else:
+                out[k] = redact_credentials_strong(v)
+        return out
+    if isinstance(value, (list, tuple)):
+        return [redact_credentials_strong(v) for v in value]
+    if isinstance(value, str):
+        if _value_is_sensitive_str(value):
+            return REDACTED
+        return value
+    if isinstance(value, (bytes, bytearray)):
+        try:
+            decoded = bytes(value).decode("utf-8", "replace")
+        except Exception:
+            decoded = ""
+        if _value_is_sensitive_str(decoded):
+            return REDACTED
+        return REDACTED
     return value
 
 

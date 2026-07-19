@@ -4,6 +4,12 @@
 # It is intentionally NOT installed on the VPS Dagu instance. The Dagu
 # instance (dagu-x4sr-dagu-1) MUST remain at 0 workflows.
 #
+# SCHEMA STATUS (S2.1-007): The structure (top-level `schedule:` + `steps:`
+# with `name:`/`run:`/`preconditions:`) is compatible with the Dagu v2.x DAG
+# YAML schema. It has NOT been validated against the running Dagu v2.10.7
+# server (installation is forbidden), so it remains an ILLUSTRATIVE DRAFT,
+# not a proven-deployable DAG.
+#
 # Boundary enforced by this draft:
 #   * Every step runs the S2 read-only CLI (snapshot / check-live).
 #   * No writes to Federation world state, Redis, Postgres, NPC inbox, or Docker.

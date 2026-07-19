@@ -75,3 +75,22 @@ determinism, and the S1-engine purity boundary.
 - Not S4–S6 (no autonomous action, no scheduling, no escalation).
 - Not a Dagu workflow (Dagu stays at 0 workflows).
 - Not a push/deploy (local commits only, when authorized).
+
+## S2.1 Local Audit Note (security hardening of committed adapters)
+
+Authorized local source, test, documentation, commit, worktree, and audit-ledger
+writes occurred. No live Federation, Redis, Dagu, Docker-runtime, database,
+container, or VPS-configuration mutation occurred.
+
+Specifically:
+
+- The S2.1 hardening commits are **local only** and are **not pushed** to origin.
+- The Dagu container on the VPS remains bound to loopback (`127.0.0.1`) with
+  **0 workflows**; no DAG was imported or activated.
+- The Hostinger panel's five projects (cronicle-gyag, dozzle-wz9k, dockge-txpu,
+  autobase-nm2c, litellm-lite) remain present as empty Compose projects — read-only
+  inventory only, no provisioning change.
+- The `prf-*` audit todos were reviewed and classified; they were not mutated.
+  Their verified completion corresponds to canonical commit `909ea76` in
+  `npc-agent/npc_redis_helpers.py`, not `simulation_engine.py`.
+- `npc_agent_current.py` (unknown-provenance untracked artifact) was left untouched.

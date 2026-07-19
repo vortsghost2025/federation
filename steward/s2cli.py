@@ -29,7 +29,7 @@ from .collectors import (
     collect_redis_snapshot,
     load_frozen_snapshot,
 )
-from .redact import redact_value
+from .redact import redact_credentials_strong, redact_value
 
 # Source -> collector factory. Each returns an ObservationSnapshot.
 SOURCES = ("redis", "http", "docker", "npc", "semantic-loop", "host")
@@ -39,8 +39,11 @@ def _emit(snapshots: List[ObservationSnapshot], redact: bool) -> None:
     out = []
     for s in snapshots:
         d = s.to_dict()
+        # Structural key-redaction can be toggled off by --no-redact, but
+        # credential-pattern masking is ALWAYS applied before output leaves.
         if redact:
             d = redact_value(d)
+        d = redact_credentials_strong(d)
         out.append(d)
     sys.stdout.write(json.dumps(out, sort_keys=True, indent=2) + "\n")
 
@@ -94,9 +97,12 @@ def _cmd_snapshot(argv: List[str]) -> int:
 
     if ns.save:
         payload = [s.to_dict() for s in snaps]
-        out = redact_value(payload) if redact else payload
+        if redact:
+            payload = redact_value(payload)
+        # Always mask credentials, even when --no-redact was given.
+        payload = redact_credentials_strong(payload)
         with open(ns.save, "w", encoding="utf-8") as fh:
-            json.dump(out, fh, sort_keys=True, indent=2)
+            json.dump(payload, fh, sort_keys=True, indent=2)
     _emit(snaps, redact)
     return 0
 
@@ -143,6 +149,8 @@ def _cmd_check_live(argv: List[str]) -> int:
     }
     if redact:
         out = redact_value(out)
+    # Always mask credentials, even when --no-redact was given.
+    out = redact_credentials_strong(out)
     text = json.dumps(out, sort_keys=True, indent=2)
     if ns.save:
         with open(ns.save, "w", encoding="utf-8") as fh:

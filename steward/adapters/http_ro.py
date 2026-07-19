@@ -58,6 +58,30 @@ def fetch(
             detail=str(exc), provenance=provenance,
         )
 
+    # Defense-in-depth SSRF guard (also enforced in collectors.live_http).
+    # Plain string checks only -- adapters must not import urllib (kept in collectors).
+    scheme_end = url.find("://")
+    if scheme_end == -1:
+        return unknown_snapshot(
+            source=source, observed_at=observed_at,
+            detail="refused URL without scheme (http/https only)",
+            provenance=provenance,
+        )
+    scheme = url[:scheme_end].lower()
+    if scheme not in ("http", "https"):
+        return unknown_snapshot(
+            source=source, observed_at=observed_at,
+            detail=f"refused scheme (http/https only): {scheme!r}",
+            provenance=provenance,
+        )
+    rest = url[scheme_end + 3:]
+    if "@" in rest.split("/", 1)[0]:
+        return unknown_snapshot(
+            source=source, observed_at=observed_at,
+            detail="refused URL with embedded credentials",
+            provenance=provenance,
+        )
+
     opts = {"timeout": timeout, "max_bytes": max_bytes}
     try:
         resp = requester(upper, url, opts)
