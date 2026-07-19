@@ -1,0 +1,34 @@
+# DRAFT — NOT INSTALLED. DO NOT PLACE IN DAGU DAG DIRECTORY.
+#
+# This is a local design artifact for Steward S2 (read-only live adapters).
+# It is intentionally NOT installed on the VPS Dagu instance. The Dagu
+# instance (dagu-x4sr-dagu-1) MUST remain at 0 workflows.
+#
+# Boundary enforced by this draft:
+#   * Every step runs the S2 read-only CLI (snapshot / check-live).
+#   * No writes to Federation world state, Redis, Postgres, NPC inbox, or Docker.
+#   * No credentials, private URLs, or VPS IPs are embedded here.
+#   * All output is redacted by the S2 layer before display.
+#   * Never invokes S3 (the steward: world-writer) or any mutation step.
+#
+# If ever activated (only with explicit future authorization), this DAG would
+# produce observability snapshots and run S1 checks against live normalized
+# data, emitting a read-only report. It would still perform zero mutations.
+
+schedule: ""
+steps:
+  - name: snapshot-redis
+    run: python -m steward.s2cli snapshot redis --from-file ${S2_FROZEN_SNAPSHOT:-/dev/null}
+    preconditions: []
+
+  - name: snapshot-docker
+    run: python -m steward.s2cli snapshot docker --from-file ${S2_FROZEN_SNAPSHOT:-/dev/null}
+    preconditions: []
+
+  - name: check-live-all
+    run: python -m steward.s2cli check-live all --from-file ${S2_FROZEN_SNAPSHOT:-/dev/null}
+    preconditions: []
+
+  - name: emit-readonly-report
+    run: echo "Steward S2 read-only observation report (no mutations performed)"
+    preconditions: []
