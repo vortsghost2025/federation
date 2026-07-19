@@ -1,12 +1,12 @@
 # FEDERATION — Agent Quick-Reference Index
-**Last updated:** 2026-06-08
+**Last updated:** 2026-07-19 (FastAPI + split-routes layout verified against code)
 **Purpose:** 2-second lookup for any agent. No hunting, no guessing.
 
 ---
 
 ## ⚡ 30-SECOND SUMMARY
 
-Federation is a **consciousness simulation** running on a VPS. Backend = Python/Flask + Redis + PostgreSQL. Frontend = vanilla JS single-file pages. LLM calls routed through `nvidia_nim_client.py` → `llm_router.py`. NPCs think via `npc_cognition.py`. Spatial map uses Voronoi territories + sector grid. Worker runs autonomous ticks every 60s.
+Federation is a **consciousness simulation** running on a VPS. Backend = **Python/FastAPI** + Redis + PostgreSQL. Frontend = vanilla JS single-file pages. LLM calls routed through `nvidia_nim_client.py` → `llm_router.py`. NPCs think via `npc_cognition.py`. Spatial map uses Voronoi territories + sector grid. Worker runs autonomous ticks every 60s (`TICK_INTERVAL`, default 60).
 
 ---
 
@@ -61,49 +61,57 @@ ssh -i "$env:USERPROFILE\.ssh\id_ed25519" root@187.77.3.56 "cp /tmp/FILE.py /doc
 
 ## 📁 PROJECT STRUCTURE
 
+> **Last verified against code:** 2026-07-19. Backend is **FastAPI** (not Flask). `main.py` is a thin composition entrypoint that mounts 26 split route modules from `backend/routes/`. Do not rely on older flat-file mental models.
+
 ```
 S:/federation/                          ← Repo root
 ├── federation-game/
-│   ├── backend/                        ← Python backend (Flask + Redis + Postgres)
-│   │   ├── main.py                     ← Flask app + routes (entry point)
+│   ├── backend/                        ← Python backend (FastAPI + Redis + Postgres)
+│   │   ├── main.py                     ← FastAPI app + router mounting (entry point, L304 app=FastAPI)
 │   │   ├── llm_router.py               ← LLM routing: task_class → NIM → Ollama → OpenRouter
 │   │   ├── nvidia_nim_client.py        ← NVIDIA NIM API client (primary LLM provider)
 │   │   ├── npc_cognition.py            ← NPC thinking: LLM calls, response parsing, moods/decisions
 │   │   ├── npc_autonomy.py             ← NPC autonomy: simulation_tick(), _call_llm()
-│   │   ├── npc_memory.py               ← NPC memory: imports route_call from llm_router
+│   │   ├── npc_memory.py               ← NPC memory: imports route_call from llm_router (kwargs-correct)
 │   │   ├── npc_chat.py                 ← NPC chat: call_openrouter()
 │   │   ├── tick_engine.py              ← Autonomous tick: _run_autonomous_tick_background()
-│   │   ├── worker.py                   ← Cron worker: runs ticks every 60s
+│   │   ├── worker.py                   ← Cron worker: runs ticks every TICK_INTERVAL (default 60s)
 │   │   ├── simulation_engine.py        ← Core simulation engine
 │   │   ├── spatial_state.py            ← Spatial mode: territory, Voronoi, NPC placement
 │   │   ├── spatial_models.py           ← Spatial dataclasses: Sector, FactionHome, FactionTerritory
 │   │   ├── spatial_queries.py          ← Spatial lookup queries
 │   │   ├── spatial_seed.py             ← Initial sector/faction seed data
 │   │   ├── state.py                    ← World state (3-file split with state_constants + state_helpers)
-│   │   ├── state_constants.py          ← State constants/defaults
-│   │   ├── state_helpers.py            ← State helper functions
-│   │   ├── map_endpoints.py            ← Map API endpoints
+│   │   ├── map_endpoints.py            ← Map API endpoints (legacy; map routes live in routes/spatial.py)
 │   │   ├── faction_*.py                ← Faction AI, diplomacy, dynamics, tech
 │   │   ├── event_cascade.py            ← Event cascade propagation
-│   │   ├── routes/                     ← Route modules (core.py, events.py, npcs.py, simulation.py)
-│   │   ├── alembic/                    ← DB migrations
-│   │   └── data/                       ← Seed data JSON
+│   │   ├── routes/                     ← 26 split route modules (see below)
+│   │   ├── alembic/                    ← DB migrations (True)
+│   │   └── data/                       ← Seed data JSON (incl. events.py)
 │   ├── frontend/                       ← Vanilla JS frontend
 │   │   ├── index.html                  ← Main dashboard
 │   │   ├── index.js                    ← Main JS (choice_token, self-recovery)
-│   │   ├── starmap.html                ← Starmap page
-│   │   ├── starmap.js                  ← Starmap rendering (Voronoi, NPC positions)
-│   │   ├── starmap.css                 ← Starmap styles
-│   │   ├── simulation.html             ← Simulation page
-│   │   ├── simulation.js               ← Simulation rendering
+│   │   ├── starmap.html / starmap.js / starmap.css ← Starmap + 3D cosmic scale-of-reality pass
+│   │   ├── simulation.html / simulation.js ← Simulation rendering
 │   │   ├── earth.js                    ← Earth/starmap hybrid (calls /state)
 │   │   └── fed-fetch.js                ← Shared fetch error module
-│   └── docker-compose.yml              ← Backend + worker + redis + postgres + nginx
+│   ├── docker-compose.yml              ← Local/dev stack
+│   └── docker-compose-vps.yml          ← Main VPS stack description
 ├── .horizon/                           ← Agent coordination (HORIZON_STATUS, DECISIONS, OWNERSHIP)
 ├── docs/                               ← Design docs, specs, notes
 ├── session/bridge/                     ← Plan packs (P001, P002, P003 completed)
 └── AGENTS.md                           ← Agent behavior rules (Ramsingh Synthesis Loop, visual rule)
 ```
+
+### Route modules mounted in main.py (26 routers)
+`core, timeline, consciousness, history, political, technology, rivals, spatial, events, quests, world, npcs, cognition, narrator, simulation, factions, websocket, error_reports, npc_logs, agents, universe, map, institutions, councilor_needs, decrees, admin`
+
+Key endpoints:
+- `GET /state`, `POST /choose/{choice_id}`, `GET /event` (core + events modules)
+- `GET /simulation/status`, `POST /simulation/autonomous/tick`, `GET /simulation/autonomous/status`
+- `GET /api/map/state`, `GET /api/map/sectors`
+- `GET /npcs/...`, `GET /quests/...`, `GET /factions/...`
+
 
 ---
 
@@ -254,17 +262,20 @@ worker.py (every 60s)
 
 ---
 
-## 🔧 KNOWN ISSUES & FIXES (DEPLOYED)
+## 🔧 KNOWN ISSUES & FIXES (current as of 2026-07-19)
 
-| Issue | Fix | Status |
-|-------|-----|--------|
-| Race condition on faction choices | Event tokens (UUID) instead of asyncio locks | ✅ Deployed |
-| `/api/simulation/state` 404 | Missing endpoint — being fixed by GLM | 🔧 In progress |
-| NPC sub-endpoints 404 | Missing routes — investigating | 🔧 Open |
-| `_ASYNC_EXECUTOR` bug (line 1324) | Referenced but never initialized | ⚠️ Known |
-| Dead code: `_call_cloudflare/together/gemini/grok` | Should be stripped | ⚠️ Known |
-| `MODEL_CHAIN` / NIM fallback indentation bug | Fixed in commit `8ffbce4`; NIM model chain now iterates correctly and falls through to Ollama/OpenRouter as intended | ✅ Fixed |
-| `npc_memory.py` signature mismatch | Import fixed, call signature still needs adaptation | ⚠️ Partial |
+> Resolved items removed: `_ASYNC_EXECUTOR` (no longer present), `npc_memory.py` signature (now kwargs-correct at L146), `/event` + `/api/simulation/state` 404s (live in `routes/events.py:58` and `routes/core.py:65`), dead `_call_*` LLM funcs (absent), `MODEL_CHAIN` fallback (fixed in `8ffbce4`).
+
+| Issue | Type | Status |
+|-------|------|--------|
+| OpenRouter paid models fail | External — HTTP 402, all 3 keys have no credits for paid models | ⚠️ Blocker (billing) |
+| Gemini fails | External — HTTP 429 "Prepayment credits depleted", silenced 1hr via Redis key | ⚠️ Blocker (billing) |
+| `routes/core.py` doc comment (L3–7) | Stale: says `/event`+`/choose` "depend on event constants / to be moved to data/events.py" — extraction already done (`data/events.py` exists, `routes/events.py` live) | 📝 Doc rot only |
+| Hardcoded simulation credentials | README "What Still Needs Work": real auth instead of hardcoded sim creds | 🔧 Open |
+| Headless box monitoring | README "What Still Needs Work" | 🔧 Open |
+| Root cleanup pass 2 | README: stale files outside `federation-game/` | 🔧 Open |
+
+**Note:** The two LLM blockers are account/billing issues, not code defects. The router falls through NIM → Ollama → OpenRouter; when paid OpenRouter/Gemini are exhausted it relies on free NIM/Ollama tiers. Verify fallback behavior before assuming cognition is dead.
 
 ---
 
