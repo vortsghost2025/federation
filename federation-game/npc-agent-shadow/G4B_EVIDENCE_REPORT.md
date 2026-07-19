@@ -111,13 +111,13 @@ NO docker socket | NO host prod mount | non-root USER shadow (agents) / user 999
 - PROOF: no G4B containers / networks / volumes remain.
 
 ## Evidence commit
-- <SHA_PLACEHOLDER>
+- e62da06b5bd4e42502f894f8139026814889f28f
 
 ## Pushed HEAD
-- <HEAD_PLACEHOLDER>
+- e62da06b5bd4e42502f894f8139026814889f28f
 
 ## Local HEAD equals remote HEAD
-- <MATCH_PLACEHOLDER>
+- MATCH
 
 ## Google Drive continuity
 - Updated: C:\Users\seand\Google Drive\AI_AGENT_CONTINUITY\PROJECTS\Federation
