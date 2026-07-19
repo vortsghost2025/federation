@@ -17,7 +17,6 @@ from fourth_wall import _enforce_fourth_wall
 from npc_llm_client import call_llm
 from npc_context import most_common_topic_word, normalize_topic_label
 from npc_decisions import _is_repetitive_artifact, _acknowledge_inbox
-from npc_loop_control import record_deferral, record_completed_work
 from npc_redis_helpers import (
     get_redis,
     _partner_id,
@@ -174,11 +173,10 @@ def execute_decision(decision: dict, r, contacts: dict):
             dedup_topic = most_common_topic_word([title])
             if dedup_topic:
                 r.set(f"npc_dedup_topic:{CHAR_ID}", dedup_topic, ex=600)
-            record_deferral(r, CHAR_ID, dedup_topic or title)
         else:
             content_prompt = f"Write the full content of this artifact:\n\n{desc}\n\nOutput only the content."
             llm_result = call_llm("You are a creative writer.", content_prompt, r=r, call_label="artifact")
-            artifact_content = _enforce_fourth_wall(llm_result.get("content") or desc)
+            artifact_content = _enforce_fourth_wall(llm_result.get("content", desc))
             artifact = {
                 "artifact_id": str(uuid.uuid4()),
                 "char_id": CHAR_ID,
@@ -217,7 +215,6 @@ def execute_decision(decision: dict, r, contacts: dict):
             result["action_taken"] = "artifact_created"
             result["artifact_title"] = title
             logger.info("[%s] Created artifact: %s", CHAR_ID, title)
-            record_completed_work(r, CHAR_ID, "create_artifact", title)
             _session_append(r, {
                 "kind": "artifact_created",
                 "actor": NPC_NAME,
