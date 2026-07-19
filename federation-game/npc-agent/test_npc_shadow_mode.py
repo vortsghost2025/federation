@@ -115,14 +115,37 @@ def test_direct_sink_blocked(shadow_env, fake_r):
 
 
 def test_direct_get_redis_production_blocked(shadow_env):
-    # If REDIS_URL pointed at production, get_redis must refuse.
+    # Under SHADOW_MODE get_redis must refuse unconditionally (fail closed),
+    # regardless of whether REDIS_URL looks like production.
     import npc_redis_helpers as rh
-    rh.REDIS_URL = "redis://redis:6379/0"
-    try:
-        with pytest.raises(ShadowBlocked):
-            rh.get_redis()
-    finally:
-        rh.REDIS_URL = "redis://redis-shadow:6379/0"
+    for url in ("redis://redis-shadow:6379/0", "redis://redis:6379/0", "redis://10.0.0.9:6379"):
+        rh.REDIS_URL = url
+        try:
+            with pytest.raises(ShadowBlocked):
+                rh.get_redis()
+        finally:
+            rh.REDIS_URL = "redis://redis-shadow:6379/0"
+
+
+def test_get_shadow_redis_rejects_production(shadow_env):
+    import npc_redis_helpers as rh
+    # A production-style endpoint must be refused by the shadow accessor.
+    with pytest.raises(ShadowBlocked):
+        rh.get_shadow_redis(url="redis://redis:6379/0")
+    # An injected fake client is always accepted.
+    fake = fakeredis.FakeStrictRedis(decode_responses=True)
+    assert rh.get_shadow_redis(fake_client=fake) is fake
+    # A validated shadow endpoint is accepted.
+    client = rh.get_shadow_redis(url="redis://redis-shadow:6379/0")
+    assert client is not None
+
+
+def test_get_shadow_redis_requires_shadow(monkeypatch):
+    import npc_redis_helpers as rh
+    monkeypatch.setenv("SHADOW_MODE", "false")
+    sm.configure()
+    with pytest.raises(ShadowBlocked):
+        rh.get_shadow_redis(url="redis://redis-shadow:6379/0")
 
 
 # ── 4. Malformed SHADOW_MODE ──
@@ -171,14 +194,138 @@ def test_production_service_endpoint_rejected(monkeypatch):
     monkeypatch.delenv("EXTRA_URL", raising=False)
 
 
-# ── 7. Intent-log size limit ──
+# ── 7. Intent-log size limit (hard boundary) ──
 def test_intent_log_size_cap(monkeypatch, shadow_env):
-    monkeypatch.setenv("SHADOW_MAX_LOG_BYTES", "200")
+    # Hard cap: the on-disk log must never exceed SHADOW_MAX_LOG_BYTES.
+    cap = 200
+    monkeypatch.setenv("SHADOW_MAX_LOG_BYTES", str(cap))
     sm.configure()
     sm.validate_config()
+    accepted = 0
     for _ in range(50):
-        sm.record_intent("send_message", _decision("send_message"))
-    assert sm._log_bytes > 200  # cap enforced by dropping further records
+        try:
+            sm.record_intent("send_message", _decision("send_message"))
+            accepted += 1
+        except sm.ShadowLogLimit:
+            break
+    # File size must never exceed the cap.
+    size = sm._log_bytes if hasattr(sm, "_log_bytes") else 0
+    if sm.SHADOW_LOG_PATH and os.path.exists(sm.SHADOW_LOG_PATH):
+        size = max(size, os.path.getsize(sm.SHADOW_LOG_PATH))
+    assert size <= cap, f"log exceeded cap: {size} > {cap}"
+    assert accepted >= 1  # at least the first record fit
+
+
+def test_log_cap_exact_boundary(monkeypatch, shadow_env, tmp_path):
+    # Fill the log until exactly the boundary, then one more must raise.
+    cap = 100
+    monkeypatch.setenv("SHADOW_MAX_LOG_BYTES", str(cap))
+    sm.SHADOW_LOG_PATH = str(tmp_path / "intents.log")
+    sm._log_bytes = 0
+    sm._intent_count = 0
+    sm.configure()
+    sm.validate_config()
+    # Record small fixed-size records until near the cap.
+    payload = {"category": "send_message", "description": "x", "topic": "t"}
+    filled = 0
+    while True:
+        try:
+            sm.record_intent("send_message", payload)
+            filled += 1
+        except sm.ShadowLogLimit:
+            break
+        if filled > 1000:
+            break
+    assert sm._log_bytes <= cap
+    # A further append must raise ShadowLogLimit (post-cap).
+    with pytest.raises(sm.ShadowLogLimit):
+        sm.record_intent("send_message", payload)
+
+
+def test_log_cap_one_byte_over(monkeypatch, shadow_env, tmp_path):
+    # Each record larger than remaining space must be rejected, never truncated.
+    cap = 60
+    monkeypatch.setenv("SHADOW_MAX_LOG_BYTES", str(cap))
+    sm.SHADOW_LOG_PATH = str(tmp_path / "intents.log")
+    sm._log_bytes = 0
+    sm._intent_count = 0
+    sm.configure()
+    sm.validate_config()
+    big = {"category": "send_message", "description": "a" * 50, "topic": "t"}
+    # First may or may not fit; if it fits, second must raise without writing.
+    try:
+        sm.record_intent("send_message", big)
+    except sm.ShadowLogLimit:
+        pass
+    before = sm._log_bytes
+    with pytest.raises(sm.ShadowLogLimit):
+        sm.record_intent("send_message", big)
+    assert sm._log_bytes == before  # nothing appended past the cap
+
+
+def test_log_cap_oversized_single_record(monkeypatch, shadow_env, tmp_path):
+    # A single record larger than the whole cap must be refused outright.
+    cap = 40
+    monkeypatch.setenv("SHADOW_MAX_LOG_BYTES", str(cap))
+    sm.SHADOW_LOG_PATH = str(tmp_path / "intents.log")
+    sm._log_bytes = 0
+    sm._intent_count = 0
+    sm.configure()
+    sm.validate_config()
+    huge = {"category": "send_message", "description": "z" * 200, "topic": "t"}
+    with pytest.raises(sm.ShadowLogLimit):
+        sm.record_intent("send_message", huge)
+    assert sm._log_bytes == 0
+
+
+def test_log_cap_repeated_post_cap(monkeypatch, shadow_env, tmp_path):
+    # Repeated attempts after the cap must keep raising, never grow the log.
+    cap = 80
+    monkeypatch.setenv("SHADOW_MAX_LOG_BYTES", str(cap))
+    sm.SHADOW_LOG_PATH = str(tmp_path / "intents.log")
+    sm._log_bytes = 0
+    sm._intent_count = 0
+    sm.configure()
+    sm.validate_config()
+    payload = {"category": "send_message", "description": "m", "topic": "t"}
+    for _ in range(500):
+        try:
+            sm.record_intent("send_message", payload)
+        except sm.ShadowLogLimit:
+            break
+    frozen = sm._log_bytes
+    assert frozen <= cap
+    for _ in range(20):
+        with pytest.raises(sm.ShadowLogLimit):
+            sm.record_intent("send_message", payload)
+    assert sm._log_bytes == frozen
+
+
+def test_log_cap_concurrent_append(monkeypatch, shadow_env, tmp_path):
+    # Concurrent appends must not exceed the cap (best-effort serialized guard).
+    import threading
+    cap = 120
+    monkeypatch.setenv("SHADOW_MAX_LOG_BYTES", str(cap))
+    sm.SHADOW_LOG_PATH = str(tmp_path / "intents.log")
+    sm._log_bytes = 0
+    sm._intent_count = 0
+    sm.configure()
+    sm.validate_config()
+    payload = {"category": "send_message", "description": "c", "topic": "t"}
+
+    def worker():
+        for _ in range(200):
+            try:
+                sm.record_intent("send_message", payload)
+            except sm.ShadowLogLimit:
+                return
+
+    threads = [threading.Thread(target=worker) for _ in range(4)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+    assert sm._log_bytes <= cap, f"concurrent append exceeded cap: {sm._log_bytes}"
 
 
 # ── 8. Private-content exclusion ──

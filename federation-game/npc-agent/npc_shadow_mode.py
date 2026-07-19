@@ -69,6 +69,10 @@ class ShadowBlocked(Exception):
     """Raised when a protected sink is invoked under SHADOW_MODE."""
 
 
+class ShadowLogLimit(Exception):
+    """Raised when the append-only intent log would exceed SHADOW_MAX_LOG_BYTES."""
+
+
 def _parse_bool(value):
     if value is None:
         return False
@@ -196,8 +200,26 @@ def record_intent(category, decision=None, extra=None):
             if k in ("target", "title", "action_taken", "shadow_intent_recorded"):
                 entry[k] = v
     payload = json.dumps(entry, default=str)
+    encoded = payload.encode("utf-8")
+    # Hard boundary: never exceed SHADOW_MAX_LOG_BYTES. Check before appending.
+    if _log_bytes + len(encoded) > SHADOW_MAX_LOG_BYTES:
+        # Emit at most one small sanitized marker when space permits.
+        marker = json.dumps({
+            "instance": _SANITIZED,
+            "category": "log_limit_reached",
+            "tick": _tick_count,
+            "ts": int(time.time()),
+        }, default=str)
+        if _log_bytes + len(marker.encode("utf-8")) <= SHADOW_MAX_LOG_BYTES:
+            try:
+                with open(SHADOW_LOG_PATH, "a", encoding="utf-8") as fh:
+                    fh.write(marker + "\n")
+            except OSError:
+                pass
+            _log_bytes += len(marker.encode("utf-8"))
+        raise ShadowLogLimit("Shadow intent log cap reached; write refused.")
     _intent_count += 1
-    _log_bytes += len(payload.encode("utf-8"))
+    _log_bytes += len(encoded)
     _intents.append(entry)
     if SHADOW_LOG_PATH:
         try:
@@ -205,9 +227,6 @@ def record_intent(category, decision=None, extra=None):
                 fh.write(payload + "\n")
         except OSError as e:
             logger.warning("Shadow intent log write failed: %s", e)
-    # Enforce log-size cap (fail closed: stop recording, keep run safe).
-    if _log_bytes > SHADOW_MAX_LOG_BYTES:
-        logger.warning("Shadow intent log cap reached; further intents dropped.")
     return entry
 
 

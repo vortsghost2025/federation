@@ -93,15 +93,37 @@ def _is_pseudo_framing_disagreement(text: str) -> bool:
 
 
 def get_redis():
+    """Production Redis client. Fails closed under SHADOW_MODE.
+
+    Defense in depth: any direct call to this helper while shadow mode is
+    enabled must never return a usable production client.
+    """
     if _sm is not None and getattr(_sm, "SHADOW", False):
-        # Sink-level defense in depth: a direct helper call must not reach
-        # production Redis. The configured URL must NOT look like production.
-        if _sm._looks_like_production_url(REDIS_URL):
-            raise _ShadowBlocked(
-                f"get_redis() blocked: REDIS_URL '{REDIS_URL}' is production. "
-                "Shadow must use a dedicated shadow Redis only."
-            )
+        raise _ShadowBlocked(
+            "get_redis() blocked: SHADOW_MODE is enabled; use get_shadow_redis() "
+            "with the dedicated shadow endpoint or an injected fake client."
+        )
     return redis.from_url(REDIS_URL, decode_responses=True, socket_connect_timeout=5, socket_timeout=5)
+
+
+def get_shadow_redis(url=None, fake_client=None):
+    """Dedicated shadow Redis client. Accepts ONLY the validated shadow endpoint
+    or an injected fake client. Never falls back to production Redis.
+
+    Under SHADOW_MODE this is the only sanctioned Redis accessor. Any attempt to
+    point it at a production URL raises ShadowBlocked.
+    """
+    if _sm is not None and not getattr(_sm, "SHADOW", False):
+        raise _ShadowBlocked("get_shadow_redis() requires SHADOW_MODE to be enabled.")
+    if fake_client is not None:
+        return fake_client
+    endpoint = url or os.environ.get("SHADOW_REDIS_URL") or REDIS_URL
+    if _sm is not None and _sm._looks_like_production_url(endpoint):
+        raise _ShadowBlocked(
+            f"get_shadow_redis() blocked: endpoint '{endpoint}' looks like "
+            "production; shadow must use a dedicated shadow Redis only."
+        )
+    return redis.from_url(endpoint, decode_responses=True, socket_connect_timeout=5, socket_timeout=5)
 
 
 def _trunc(s, n=400):
