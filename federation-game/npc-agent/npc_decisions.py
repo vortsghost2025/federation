@@ -61,6 +61,7 @@ from npc_context import (
     cosmic_horizon, recent_artifact_dedup_count, dedup_blocked_topic,
     think_about_world
 )
+from npc_loop_control import enforce as _enforce_loop_control
 
 logging.basicConfig(
     level=logging.INFO,
@@ -1092,7 +1093,9 @@ Respond in this exact JSON format (no markdown, no explanation):
                     "reasoning": "Loop-break forced fallback at 3-in-a-row",
                     "description": f"'{banned}' blocked after {streak_after}-in-a-row streak; resting to break the loop",
                 }
-        return decision
+        # Deterministic final enforcement layer (composes with the dedup gate
+        # and prompt constraints above; never replaces them).
+        return _enforce_loop_control(decision, r, CHAR_ID)
     except (json.JSONDecodeError, ValueError) as e:
         logger.warning("Failed to parse LLM decision: %s | raw: %s", e, str(raw)[:200])
         return {"category": "rest", "reasoning": f"parse error: {e}", "description": "resting"}

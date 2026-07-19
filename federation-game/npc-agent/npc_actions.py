@@ -17,6 +17,7 @@ from fourth_wall import _enforce_fourth_wall
 from npc_llm_client import call_llm
 from npc_context import most_common_topic_word, normalize_topic_label
 from npc_decisions import _is_repetitive_artifact, _acknowledge_inbox
+from npc_loop_control import record_deferral, record_completed_work
 from npc_redis_helpers import (
     get_redis,
     _partner_id,
@@ -173,10 +174,17 @@ def execute_decision(decision: dict, r, contacts: dict):
             dedup_topic = most_common_topic_word([title])
             if dedup_topic:
                 r.set(f"npc_dedup_topic:{CHAR_ID}", dedup_topic, ex=600)
+            # Compose with (do NOT replace) the dedup gate: record the same
+            # deferral into the dedicated deterministic loop-control namespace.
+            record_deferral(r, CHAR_ID, dedup_topic or title)
         else:
             content_prompt = f"Write the full content of this artifact:\n\n{desc}\n\nOutput only the content."
             llm_result = call_llm("You are a creative writer.", content_prompt, r=r, call_label="artifact")
-            artifact_content = _enforce_fourth_wall(llm_result.get("content", desc))
+            # Use the generated content when present and truthy; otherwise fall
+            # back to the decision description. `.get("content", desc)` would NOT
+            # cover the case where the key exists with a None/"" value, so we use
+            # `or desc` to guarantee non-empty body text.
+            artifact_content = _enforce_fourth_wall(llm_result.get("content") or desc)
             artifact = {
                 "artifact_id": str(uuid.uuid4()),
                 "char_id": CHAR_ID,
@@ -196,6 +204,9 @@ def execute_decision(decision: dict, r, contacts: dict):
                 r.delete(f"npc_dedup_topic:{CHAR_ID}")
             except Exception:
                 pass
+            # Reset deterministic loop-control state only after genuinely
+            # different completed work (handled inside record_completed_work).
+            record_completed_work(r, CHAR_ID, "create_artifact", title)
             try:
                 partner_id_local = _partner_id()
                 r.rpush(
@@ -685,12 +696,14 @@ def execute_decision(decision: dict, r, contacts: dict):
         acked_total += _acknowledge_inbox(r, ack_target)
 
     if is_terminal_operator_response:
-        # Patch B: archive ONLY the one directive by its exact id.
+        # Patch B: archive ONLY the one directive by its exact id. Pass the
+        # attribution object explicitly — no shared/global state.
         operator_acked = _acknowledge_operator_directive(
             r,
             decision["operator_directive_id"],
             char_id=CHAR_ID,
             status=decision["operator_response_status"],
+            attribution=decision.get("operator_attribution") or {},
         )
         if operator_acked:
             result["operator_directive_acked"] = decision["operator_directive_id"]

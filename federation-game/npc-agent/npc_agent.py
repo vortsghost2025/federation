@@ -77,6 +77,10 @@ def main():
     logger.info("Starting cognition loop every %ds for %s (%s)", TICK_INTERVAL, NPC_NAME, CHAR_ID)
 
     tick = 0
+    # Bounded exception handling: a caught per-tick exception (inside this try)
+    # is logged and the loop sleeps before the NEXT tick — it does not end the
+    # loop. This does NOT rule out process termination, OOM, container failure,
+    # or errors raised outside this guarded block.
     while True:
         try:
             tick += 1
