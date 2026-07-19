@@ -1,0 +1,20 @@
+{
+  "checks": {
+    "dockerfile_pins_digest": true,
+    "workflow_no_schedule": true,
+    "workflow_no_trigger": true,
+    "workflow_no_creds": true,
+    "workflow_fixture_only": true,
+    "manifest_excludes_pycache": true,
+    "manifest_excludes_git": true,
+    "manifest_excludes_drafts": true,
+    "manifest_excludes_db": true,
+    "no_forbidden_filenames": true,
+    "no_live_connector_imports": true,
+    "no_canonical_prod_paths": true
+  },
+  "forbidden_filenames_found": [],
+  "live_connector_imports_found": [],
+  "leaks_found": [],
+  "all_passed": true
+}
