@@ -15,7 +15,7 @@ import traceback
 import fakeredis
 import npc_shadow_mode as sm
 import npc_actions as na
-from npc_redis_helpers import get_redis, _store_thread_message
+from npc_redis_helpers import get_redis, get_shadow_redis, _store_thread_message
 
 
 def main():
@@ -28,12 +28,32 @@ def main():
         "shadow_ns": sm.SHADOW_NS,
         "char_id": os.environ.get("CHAR_ID"),
         "provider": os.environ.get("SHADOW_PROVIDER"),
+        "g2_get_redis_fails_closed": False,
+        "g2_get_shadow_redis_rejects_production": False,
         "categories_tested": [],
         "unknown_category_blocked": False,
         "direct_sinks_blocked": [],
         "intent_log_path": sm.SHADOW_LOG_PATH,
         "errors": [],
     }
+
+    # G2-1: get_redis() must fail closed under SHADOW_MODE (no usable client).
+    try:
+        get_redis()
+        report["errors"].append("get_redis() returned a client under SHADOW_MODE")
+    except sm.ShadowBlocked:
+        report["g2_get_redis_fails_closed"] = True
+    except Exception as e:
+        report["errors"].append(f"get_redis() unexpected: {e}")
+
+    # G2-1: get_shadow_redis() must reject a production URL.
+    try:
+        get_shadow_redis(url="redis://redis:6379/0")
+        report["errors"].append("get_shadow_redis() accepted production URL")
+    except sm.ShadowBlocked:
+        report["g2_get_shadow_redis_rejects_production"] = True
+    except Exception as e:
+        report["errors"].append(f"get_shadow_redis() unexpected: {e}")
 
     # Representative decision payloads per KNOWN category (names match
     # npc_shadow_mode._SHADOW_WRITE_CATEGORIES / _SHADOW_SAFE_CATEGORIES).
@@ -111,6 +131,13 @@ def main():
     path = sm.SHADOW_LOG_PATH
     try:
         with open(path, "a", encoding="utf-8") as fh:
+            fh.write(out + "\n")
+    except Exception:
+        pass
+    # Canonical deterministic report file (for cross-seed hash proof).
+    report_path = os.environ.get("SHADOW_REPORT_PATH", "/shadow-log/report.json")
+    try:
+        with open(report_path, "w", encoding="utf-8") as fh:
             fh.write(out + "\n")
     except Exception:
         pass

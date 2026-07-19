@@ -10,6 +10,7 @@ RUN groupadd -r shadow 2>/dev/null || true && useradd -r -g shadow -u 10001 shad
 WORKDIR /app
 
 # Copy only the runtime modules required for shadow cognition.
+# All modules live inside the isolated npc-agent-shadow build context.
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
@@ -22,6 +23,9 @@ COPY npc_shadow_mode.py \
      npc_agent.py \
      fourth_wall.py \
      npc_context.py \
+     npc_memory_bridge.py \
+     cosmic_monitor.py \
+     institutions.py \
      qualify_shadow.py \
      /app/
 

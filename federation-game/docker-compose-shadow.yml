@@ -26,6 +26,9 @@ services:
   redis-shadow:
     image: redis:7-alpine
     restart: "no"
+    # Run as the image's built-in non-root redis user directly so the
+    # entrypoint does not need setpriv (which no-new-privileges blocks).
+    user: "999:1000"
     networks:
       - shadow-net
     volumes:
@@ -42,9 +45,10 @@ services:
     pids_limit: 64
 
   npc-agent-shadow-001:
+    image: federation-npc-shadow:a998ac2
     build:
-      context: ./npc-agent
-      dockerfile: ../npc-agent-shadow/Dockerfile
+      context: ./npc-agent-shadow
+      dockerfile: Dockerfile
     restart: "no"
     networks:
       - shadow-net
@@ -82,12 +86,15 @@ services:
     mem_limit: 256m
     cpus: 1.0
     pids_limit: 128
+    # Idle placeholder; qualification is invoked via `docker exec` per seed.
+    command: ["tail", "-f", "/dev/null"]
     # No Docker socket, no host mounts, no project mounts.
 
   npc-agent-shadow-306:
+    image: federation-npc-shadow:a998ac2
     build:
-      context: ./npc-agent
-      dockerfile: ../npc-agent-shadow/Dockerfile
+      context: ./npc-agent-shadow
+      dockerfile: Dockerfile
     restart: "no"
     networks:
       - shadow-net
@@ -124,3 +131,5 @@ services:
     mem_limit: 256m
     cpus: 1.0
     pids_limit: 128
+    # Idle placeholder; qualification is invoked via `docker exec` per seed.
+    command: ["tail", "-f", "/dev/null"]

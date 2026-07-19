@@ -1,0 +1,11 @@
+# Evidence / tests / deployed copies excluded from the shadow runtime image.
+npc_actions_deployed.py
+*_deployed.py
+test_*.py
+import_smoke.py
+G2_EVIDENCE_REPORT.md
+G4A_STAGING_EVIDENCE.md
+**/*.md
+**/__pycache__/
+*.bak
+.env
