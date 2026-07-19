@@ -14,8 +14,8 @@ provenance/qualification claims and records the bounded corrective pass.
 - recovery commit:             abaf07c075bdacf257c74a22adbed1ef8259eaa5
 - implementation commit:       118fcc9beeb1ee24cb7a4affcf395e48c55e249f
 - prior doc-only commit:       d360fe0b6736bc4c308ca4ff897e473965b7d631
-- corrective impl commit:      <TBD-after-commit>
-- corrective doc commit:       <TBD-after-commit>  (this file)
+- corrective impl commit:      93073bcf495ae533d5687fb04f6623378c726ac1
+- corrective doc commit:       8fe6a5376eaf538d0b6839b9084c2e0228143302  (this file)
 
 git diff --name-status 984864c..HEAD (current):
   A federation-game/npc-agent/institutions.py
