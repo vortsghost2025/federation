@@ -287,5 +287,122 @@ class TestNoLiveIoInAdapters(unittest.TestCase):
             self.assertEqual(bad, [], msg=f"forbidden nodes in {rel}: {bad}")
 
 
+class TestS21Hardening(unittest.TestCase):
+    """S2.1-008: adversarial validation of the hardened read-only boundaries."""
+
+    def test_http_adapter_rejects_non_http_scheme(self):
+        from steward.adapters import http_ro
+
+        snap = http_ro.fetch(
+            lambda m, u, o: None, "file:///etc/passwd", method="GET", observed_at=OBS,
+        )
+        self.assertEqual(snap.availability, Availability.UNKNOWN.value)
+        self.assertIn("scheme", snap.status_detail.lower())
+
+    def test_http_adapter_rejects_embedded_credentials(self):
+        from steward.adapters import http_ro
+
+        snap = http_ro.fetch(
+            lambda m, u, o: None, "https://user:pass@host/x", method="GET", observed_at=OBS,
+        )
+        self.assertEqual(snap.availability, Availability.UNKNOWN.value)
+
+    def test_http_adapter_allows_clean_https(self):
+        from steward.adapters import http_ro
+
+        captured = {}
+
+        def fake(m, u, o):
+            captured["m"] = m
+            captured["u"] = u
+            return {"status_code": 200, "headers": {}, "body": "ok", "elapsed_ms": 1}
+
+        snap = http_ro.fetch(fake, "https://example.com/health", method="GET", observed_at=OBS)
+        self.assertEqual(snap.availability, Availability.AVAILABLE.value)
+        self.assertEqual(captured["u"], "https://example.com/health")
+
+    def test_collectors_http_target_blocked_networks(self):
+        from steward import collectors
+
+        # metadata IP, loopback, private ranges must be refused.
+        blocked = (
+            "http://169.254.169.254/latest/meta-data/",
+            "http://127.0.0.1:8080/health",
+            "http://10.0.0.5/health",
+            "http://192.168.1.1/health",
+            "ftp://example.com/x",
+            "file:///etc/passwd",
+        )
+        for url in blocked:
+            self.assertFalse(
+                collectors._http_target_allowed(url, allowed_hosts=None),
+                msg=f"should refuse {url}",
+            )
+            # live_http must also raise for http(s) blocked targets.
+            if url.startswith(("http://", "https://")):
+                with self.assertRaises(ValueError):
+                    collectors.live_http("GET", url, {})
+
+    def test_docker_adapter_rejects_option_injection(self):
+        from steward.adapters import docker_ro
+
+        snap = docker_ro.run(lambda a: "ok", ["ps", "--evil-flag"], observed_at=OBS)
+        self.assertEqual(snap.availability, Availability.UNKNOWN.value)
+        self.assertIn("option injection", snap.status_detail.lower())
+
+    def test_docker_adapter_allows_known_flags(self):
+        from steward.adapters import docker_ro
+
+        out = []
+        snap = docker_ro.run(
+            lambda a: out.append(a) or "NAME\n",
+            ["ps", "--format", "{{.Names}}", "--no-stream"], observed_at=OBS,
+        )
+        self.assertEqual(snap.availability, Availability.AVAILABLE.value)
+        self.assertEqual(out[0], ["ps", "--format", "{{.Names}}", "--no-stream"])
+
+    def test_collectors_docker_rejects_option_injection(self):
+        from steward import collectors
+
+        with self.assertRaises(ValueError):
+            collectors.live_docker(["ps", "-r"])
+
+    def test_redis_client_never_takes_password(self):
+        from steward import collectors
+        import inspect
+
+        sig = inspect.signature(collectors._get_redis_client)
+        self.assertNotIn("password", sig.parameters)
+
+    def test_redact_masks_bytes_values(self):
+        from steward.redact import redact_value
+
+        data = {"token": b"supersecretvalue"}
+        out = redact_value(data)
+        self.assertEqual(out["token"], "***REDACTED***")
+
+    def test_redact_masks_bytes_in_list(self):
+        from steward.redact import redact_value
+
+        out = redact_value([b"secretbytes"])
+        self.assertEqual(out[0], "***REDACTED***")
+
+    def test_s2cli_always_masks_credentials_even_with_no_redact(self):
+        from steward import s2cli
+        from steward.redact import redact_credentials_strong
+
+        snap_like = [{"source": "http", "data": {"Authorization": "Bearer abc123"}}]
+        # Simulate the always-on pass applied regardless of --no-redact.
+        out = redact_credentials_strong(snap_like)
+        self.assertEqual(out[0]["data"]["Authorization"], "***REDACTED***")
+
+    def test_collectors_redis_signature_has_no_password(self):
+        from steward import collectors
+        import inspect
+
+        for fn in (collectors.collect_redis_snapshot, collectors.collect_redis_key_health):
+            self.assertNotIn("password", inspect.signature(fn).parameters)
+
+
 if __name__ == "__main__":
     unittest.main()
