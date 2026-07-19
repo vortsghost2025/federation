@@ -1,0 +1,26 @@
+{
+  "observed_at": "2026-07-18T23:00:00Z",
+  "pairs": [
+    {
+      "pair_key": "npc_pair:char_001__char_306:state",
+      "convergence_resolved": true,
+      "shared_goal": "deep-signal",
+      "resolved_shared_goal": "deep-signal",
+      "fallback_question": "What happens next in the Federation?",
+      "recent_actions": [
+        "Continue monitoring trade routes.",
+        "Propose next objective."
+      ],
+      "char_ids": ["char_001", "char_306"]
+    },
+    {
+      "pair_key": "npc_pair:char_002__char_007:state",
+      "convergence_resolved": false,
+      "shared_goal": "explore",
+      "resolved_shared_goal": "explore",
+      "fallback_question": "What happens next in the Federation?",
+      "recent_actions": ["What happens next in the Federation?"],
+      "char_ids": ["char_002", "char_007"]
+    }
+  ]
+}

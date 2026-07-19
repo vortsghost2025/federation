@@ -1,0 +1,18 @@
+{
+  "actors": [
+    {
+      "char_id": "char_001",
+      "last_heartbeat_ts": "2026-07-18T22:40:00Z",
+      "observed_at": "2026-07-18T23:00:00Z",
+      "expected_interval_seconds": 300,
+      "age_factor": 3.0
+    },
+    {
+      "char_id": "char_306",
+      "last_heartbeat_ts": null,
+      "observed_at": "2026-07-18T23:00:00Z",
+      "expected_interval_seconds": 300,
+      "age_factor": 3.0
+    }
+  ]
+}

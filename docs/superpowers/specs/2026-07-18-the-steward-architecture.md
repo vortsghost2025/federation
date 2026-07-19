@@ -195,7 +195,7 @@ All checks share the contract: **observe, record, flag — never mutate.**
   "occurrence_count": 12,
   "recommended_action": "Assign investigation work order; consider post-resolution topic transition.",
   "required_capability": "steward:work_order:create",
-  "approval_required": true,
+  "approval_required": false,
   "source_versions": {
     "engine": "steward@0.1.0",
     "backend_observed": "npc_redis_helpers.py@<sha256-when-known>"
