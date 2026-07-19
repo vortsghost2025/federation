@@ -1,14 +1,25 @@
 {
-  "report": "Steward Dagu Python Runtime - DR-006 Qualification",
-  "generated_at": "2026-07-19T23:55:00.000000+00:00",
-  "repo_root": "C:/Users/seand/.copilot/copilot-worktrees/federation/steward-dagu-runtime",
-  "branch": "feature/steward-dagu-python-runtime",
+  "report": "Steward Dagu Python Runtime - DR-006 Container Runtime Qualification (EVIDENCE-ONLY CLOSEOUT)",
+  "generated_at": "2026-07-19T18:05:00.000000+00:00",
+  "correction_note": "Evidence-only closeout. No rebuild, deploy, push, history rewrite, or VPS modification performed.",
+
+  "full_unabridged_values": {
+    "deployed_dagu_image_digest": "sha256:5e715705e0c96e462417303f3e2fbbadc7f9cd15d153764c89fd1442e80a1d66",
+    "final_runtime_branch_head": "ab401aec948618afe3053edb1ab4c9319077f05f",
+    "exact_s3c_base_sha": "363c9a7cdc714532fbbe5f9e7983f1ded875a530",
+    "local_replacement_image_id": "sha256:6283b9337c53a44960ef59bbb2dbd6120b06fab11732d3d0b17671c3b9400020",
+    "exported_image_sha256": "N/A (no docker save / tar export produced in this work block)",
+    "workflow_sha256": "5e48d5cf711449d4a7cd5ad8f82ac6d7907769cc23e16b8e72ca19c39e24bc12",
+    "execution_run_1_readiness_sha256": "2929EB29FDBF47A1E154DE87AEF22B6834D98F23B9CD6A193C8C6E2780B80DCB",
+    "execution_run_2_readiness_sha256": "2929EB29FDBF47A1E154DE87AEF22B6834D98F23B9CD6A193C8C6E2780B80DCB"
+  },
+
   "starting_head": "8478d1f40aa8f0a6477e2fc4c6059f1a186f95dc",
   "s3c_base_sha": "363c9a7cdc714532fbbe5f9e7983f1ded875a530",
   "deployed_digest": "sha256:5e715705e0c96e462417303f3e2fbbadc7f9cd15d153764c89fd1442e80a1d66",
+
   "qualification_layers": {
     "source_qualification": {
-      "description": "Static + in-tree behavioral checks run against the source tree on the dev host (no Docker). Covers DR-003/004/007.",
       "docker_required": false,
       "results": {
         "source_selftest": "PASS (9/9 checks, DR-004)",
@@ -18,7 +29,6 @@
       }
     },
     "container_runtime_qualification": {
-      "description": "Actual image build + disposable container run against the real Dagu v2.10.7 base. Covers DR-002/005/006 Q3-Q8.",
       "docker_required": true,
       "docker_daemon": "available (Docker Desktop started locally; NOT installed/configured/enabled-K8s)",
       "build": {
@@ -37,7 +47,18 @@
         "name": "steward-dagu-qualification-8478d1f",
         "volume": "steward-dagu-qualification-8478d1f (temp, /var/lib/dagu)",
         "host_binding": "127.0.0.1:18080->8080/tcp",
-        "resource_limits": "mem 512m, cpus 1.0",
+        "resource_limits_applied": {
+          "memory_bytes": 536870912,
+          "memory_human": "512MiB",
+          "nanocpu": 1000000000,
+          "cpu_human": "1.0",
+          "user": "0 (entrypoint remaps to dagu uid 1000)",
+          "privileged": false,
+          "capabilities": "default (no --cap-add, no --cap-drop)",
+          "mounts": "single temp named volume steward-dagu-qualification-8478d1f -> /var/lib/dagu; no host bind",
+          "port_binding": "127.0.0.1:18080->8080/tcp",
+          "network": "bridge (default isolated; no project network attached)"
+        },
         "result": "SUCCESS",
         "dagu_version": "2.10.7",
         "health_endpoint": "HTTP 200 {\"status\":\"healthy\",\"version\":\"2.10.7\"}",
@@ -55,16 +76,8 @@
         "creds_present": false
       },
       "workflow_execution": {
-        "run_1": {
-          "exit": 0,
-          "readiness_classification": "READY_FOR_SHADOW_ONLY",
-          "readiness_sha256": "2929EB29FDBF47A1E154DE87AEF22B6834D98F23B9CD6A193C8C6E2780B80DCB"
-        },
-        "run_2": {
-          "exit": 0,
-          "readiness_classification": "READY_FOR_SHADOW_ONLY",
-          "readiness_sha256": "2929EB29FDBF47A1E154DE87AEF22B6834D98F23B9CD6A193C8C6E2780B80DCB"
-        },
+        "run_1": {"exit": 0, "readiness_classification": "READY_FOR_SHADOW_ONLY", "readiness_sha256": "2929EB29FDBF47A1E154DE87AEF22B6834D98F23B9CD6A193C8C6E2780B80DCB"},
+        "run_2": {"exit": 0, "readiness_classification": "READY_FOR_SHADOW_ONLY", "readiness_sha256": "2929EB29FDBF47A1E154DE87AEF22B6834D98F23B9CD6A193C8C6E2780B80DCB"},
         "determinism": "BYTE-IDENTICAL across both runs (shared SHA-256)",
         "ready_for_live": false,
         "sqlite_created": false,
@@ -93,18 +106,51 @@
       }
     }
   },
+
   "regression": {
-    "total": "192 passed, 2 skipped, 0 failed",
-    "skipped_tests": [
-      {"test": "tests/unit/test_dr_runtime.py::test_symlink_rejected_in_manifest", "reason": "symlink creation requires privilege on this host (Windows OSError 1314)"},
-      {"test": "tests/unit/test_s3a.py symlink test @379", "reason": "symlink privilege unavailable on this platform"}
+    "per_suite_reconciled": {
+      "S1_checks": "27 passed, 0 skipped",
+      "S2_adapters": "42 passed, 0 skipped",
+      "S2.1_Dagu_runtime_tests": "13 passed, 1 skipped",
+      "S3A": "43 passed, 1 skipped",
+      "S3B": "15 passed, 0 skipped",
+      "S3C": "52 passed, 0 skipped"
+    },
+    "total_passed": 192,
+    "total_skipped": 2,
+    "total_failed": 0,
+    "arithmetic_check": "27+42+13+43+15+52 = 192 passed; skips 1+1 = 2",
+    "exact_skipped_test_names": [
+      "tests/unit/test_dr_runtime.py::test_symlink_rejected_in_manifest (line 208) - 'symlink creation requires privilege on this host'",
+      "tests/unit/test_s3a.py::<symlink test> (line 379) - 'symlink privilege unavailable on this platform'"
     ],
     "skipped_coverage": "Equivalent non-skipped guard added: test_symlink_rejected_in_manifest_mocked (patched os.walk + Path.is_symlink, proves reparse/junction/symlink escape rejection; gen_manifest.py now skips symlinked entries explicitly)."
   },
+
+  "vps_limit_comparison": {
+    "tested_limits": {"memory_bytes": 536870912, "memory_human": "512MiB", "nanocpu": 1000000000, "cpu_human": "1.0"},
+    "vps_dagu_limits": {"memory_bytes": 134217728, "memory_human": "128MiB", "cpu_human": "0.50"},
+    "classification": "UNKNOWN",
+    "classification_rationale": "The image was qualified at 512MiB / 1.0 CPU, which is STRICTLY HIGHER than the VPS Dagu limits of 128MiB / 0.50 CPU. Local success at higher limits does NOT prove the image fits within the tighter VPS limits. A VPS-limit re-run (--memory=128m --cpus=0.50) is required to prove compatibility and is NOT authorized in this block. Note: the workflow is manual-only and short-lived (memory backend, ~seconds), so over-limit risk is low but UNPROVEN.",
+    "verdict": "requires separate VPS-limit validation before canary"
+  },
+
+  "no_push_statement": "No push was performed during this work block according to the complete command and audit trail. The branch has no configured upstream and no local remote-tracking ref. These local facts do not independently prove that no similarly named remote branch exists.",
+
+  "vps_statement": "The VPS Dagu instance was not modified. Its workflow count is unknown from this work block.",
+
+  "verdicts": {
+    "local_container_runtime_qualification": "PASS (image builds, Dagu starts, Python works, fixture workflow runs twice deterministically, disposable resources removed, non-root, no live connectors, no creds)",
+    "vps_canary_readiness": "READY FOR SEPARATE AUTHORIZATION AFTER EVIDENCE CORRECTION (all local evidence corrected; only the VPS-limit fit remains UNKNOWN and must be validated in the canary itself, not pre-proven)",
+    "live_vps_deployment_authorization": "NOT AUTHORIZED in this block. Push not authorized. VPS canary not started."
+  },
+
   "notes": [
-    "Two distinct qualification layers are reported: SOURCE qualification (static/in-tree, no Docker) and CONTAINER RUNTIME qualification (real build + disposable run). Both PASS.",
+    "Two distinct qualification layers are reported: SOURCE qualification (static/in-tree, no Docker) and CONTAINER RUNTIME qualification (real build + disposable run). Both PASS locally.",
     "Docker Desktop was STARTED locally only (daemon merely stopped). No install/configure, no K8s enable, no registry sign-in, no push, no VPS modification.",
     "The qualification image is preserved locally for review but NOT pushed and NOT deployed.",
-    "All container evidence is from a disposable container + temp volume; nothing was written to the VPS or to any running project container."
+    "All container evidence is from a disposable container + temp volume; nothing was written to the VPS or to any running project container.",
+    "Per-suite arithmetic reconciled: 27+42+13+43+15+52 = 192 passed, 2 skipped. Earlier abbreviated per-suite numbers (S3A 38, S3C 49) were corrected here.",
+    "Exported-image SHA-256: N/A (no docker save was executed). The content-addressable image ID is recorded instead."
   ]
 }
