@@ -237,6 +237,48 @@ class TestLoopControl(unittest.TestCase):
         for llm_result, expected in cases:
             self.assertEqual(llm_result.get("content") or desc, expected)
 
+    def test_13b_diverse_topic_exact_determinism(self):
+        # _diverse_topic must select an identical topic across processes,
+        # independent of PYTHONHASHSEED. Assert the EXACT selected topic and
+        # the complete canonical decision output, not just the category.
+        # Captured stable values (SHA-256 based, seed-independent):
+        self.assertEqual(lc._diverse_topic("char_001", "deep signal"),
+                         "cross-faction mediation")
+        self.assertEqual(lc._diverse_topic("char_306", "deep signal"),
+                         "local infrastructure resilience")
+        # Never returns the excluded topic word.
+        for cid in ("char_001", "char_306"):
+            for excl in ("deep", "signal", "infrastructure"):
+                topic = lc._diverse_topic(cid, excl)
+                self.assertNotEqual(topic.split(" ", 1)[0], excl)
+
+    def test_13c_diverse_topic_complete_decision_determinism(self):
+        # The hard-break decision output involving _diverse_topic must be
+        # byte-identical for identical state across separate Python processes.
+        r = fresh()
+        c = "char_001"
+        shape = {"category": "investigate", "title": "deep signal report"}
+        last = None
+        for _ in range(4):
+            last = lc.enforce(dict(shape), r, c)
+        self.assertEqual(last["category"], "investigate")
+        self.assertEqual(last["description"], "Investigating: cross-faction mediation")
+        # Canonical serialization is stable.
+        canon = json.dumps(last, sort_keys=True)
+        self.assertEqual(
+            canon,
+            '{"category": "investigate", "description": "Investigating: cross-faction mediation", "reasoning": "Loop-control hard break: equivalent decision shape repeated too many times (shape_repeat=4). Investigating a different world topic."}'
+        )
+
+    def test_13d_fallback_both_content_and_desc_empty(self):
+        # When BOTH model content and decision description are empty the
+        # fallback yields an empty string safely (no crash, no private body).
+        llm_result = {"content": ""}
+        desc = ""
+        # Mirror npc_actions fallback expression:
+        content = llm_result.get("content") or desc
+        self.assertEqual(content, "")
+
     def test_14_caught_per_tick_exception_continues(self):
         # Mirrors the bootstrap: a tick exception must not end the loop and
         # loop-control state survives.

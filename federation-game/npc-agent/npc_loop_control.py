@@ -34,6 +34,7 @@ Thresholds:
 
 from __future__ import annotations
 
+import hashlib
 import json
 import time
 
@@ -224,11 +225,25 @@ def record_completed_work(r, char_id: str, category: str, topic: str) -> None:
         _safe_delete(r, _shape_key(char_id))
 
 
+def _stable_index(char_id: str, modulus: int) -> int:
+    """Stable, seed-independent integer in [0, modulus) from a sanitized ID.
+
+    Uses SHA-256 over the UTF-8 char_id instead of Python's randomized
+    built-in ``hash()``, so the result is byte-identical across processes
+    regardless of PYTHONHASHSEED.
+    """
+    digest = hashlib.sha256((char_id or "").encode("utf-8")).hexdigest()
+    # Take the first 8 hex chars (32 bits) as an unsigned integer.
+    return int(digest[:8], 16) % modulus
+
+
 def _diverse_topic(char_id: str, exclude: str) -> str:
     """Deterministically pick a different world topic than the trapped one."""
     excl = (exclude or "").strip().lower()
-    for i in range(len(DIVERSE_TOPICS)):
-        cand = DIVERSE_TOPICS[(hash(char_id) % len(DIVERSE_TOPICS) + i) % len(DIVERSE_TOPICS)]
+    n = len(DIVERSE_TOPICS)
+    base = _stable_index(char_id, n)
+    for i in range(n):
+        cand = DIVERSE_TOPICS[(base + i) % n]
         if (cand.split(" ", 1)[0] if cand else "") != excl:
             return cand
     return DIVERSE_TOPICS[0]
