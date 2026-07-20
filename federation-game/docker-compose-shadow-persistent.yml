@@ -1,0 +1,123 @@
+# 24-Hour Persistent Shadow Observation
+# Runs real NPC cognition loop in SHADOW_MODE with mock provider.
+# All output is intent-only: no production writes, no external operations.
+# Isolated from production — same hardening as G4B qualification.
+#
+# To launch:
+#   docker compose -p federation-shadow-persistent -f docker-compose-shadow-persistent.yml build
+#   docker compose -p federation-shadow-persistent -f docker-compose-shadow-persistent.yml up -d
+#   docker compose -p federation-shadow-persistent -f docker-compose-shadow-persistent.yml logs -f
+#
+# To teardown:
+#   docker compose -p federation-shadow-persistent -f docker-compose-shadow-persistent.yml down -v --remove-orphans
+
+networks:
+  shadow-net:
+    driver: bridge
+    internal: true
+
+volumes:
+  shadow-log:
+  redis-shadow-data:
+
+services:
+  redis-shadow:
+    image: redis:7-alpine
+    restart: "no"
+    user: "999:1000"
+    networks:
+      - shadow-net
+    volumes:
+      - redis-shadow-data:/data
+    command: ["redis-server", "--save", "", "--appendonly", "no"]
+    cap_drop: ["ALL"]
+    security_opt: ["no-new-privileges:true"]
+    read_only: true
+    tmpfs:
+      - /tmp
+    mem_limit: 128m
+    cpus: 0.5
+    pids_limit: 64
+
+  npc-agent-shadow-001:
+    image: federation-npc-shadow:persistent-24h
+    networks:
+      - shadow-net
+    depends_on:
+      - redis-shadow
+    environment:
+      SHADOW_MODE: "true"
+      SHADOW_INSTANCE_ID: "shadow-001"
+      SHADOW_PROVIDER: "mock"
+      SHADOW_LOG_PATH: "/shadow-log/intents-001.jsonl"
+      # 24-hour observation bounds
+      SHADOW_MAX_TICKS: "10000"
+      SHADOW_MAX_RUNTIME_S: "86400"
+      SHADOW_MAX_MODEL_CALLS: "5000"
+      SHADOW_MAX_LOG_BYTES: "10485760"
+      CHAR_ID: "char_001"
+      NPC_NAME: "Archimedes Prime"
+      REDIS_URL: "redis://redis-shadow:6379/0"
+      TICK_INTERVAL: "30"
+      # Mock key — mock provider ignores it but code requires non-empty
+      NVIDIA_API_KEY: "shadow-mock-key-no-op"
+      FALLBACK_KEY_1: ""
+      FALLBACK_KEY_2: ""
+      OPENROUTER_API_KEY: ""
+      OPERATOR_LLM_API_KEY: ""
+      DATABASE_URL: ""
+      POSTGRES_URL: ""
+      POSTGRES_PASSWORD: ""
+      REDIS_PASSWORD: ""
+    volumes:
+      - shadow-log:/shadow-log
+    cap_drop: ["ALL"]
+    security_opt: ["no-new-privileges:true"]
+    read_only: true
+    tmpfs:
+      - /tmp
+    mem_limit: 256m
+    cpus: 1.0
+    pids_limit: 128
+    # Run the persistent shadow cognition loop
+    command: ["python3", "/app/shadow_npc_main.py"]
+
+  npc-agent-shadow-306:
+    image: federation-npc-shadow:persistent-24h
+    networks:
+      - shadow-net
+    depends_on:
+      - redis-shadow
+    environment:
+      SHADOW_MODE: "true"
+      SHADOW_INSTANCE_ID: "shadow-306"
+      SHADOW_PROVIDER: "mock"
+      SHADOW_LOG_PATH: "/shadow-log/intents-306.jsonl"
+      SHADOW_MAX_TICKS: "10000"
+      SHADOW_MAX_RUNTIME_S: "86400"
+      SHADOW_MAX_MODEL_CALLS: "5000"
+      SHADOW_MAX_LOG_BYTES: "10485760"
+      CHAR_ID: "char_306"
+      NPC_NAME: "The Oracle"
+      REDIS_URL: "redis://redis-shadow:6379/0"
+      TICK_INTERVAL: "30"
+      NVIDIA_API_KEY: "shadow-mock-key-no-op"
+      FALLBACK_KEY_1: ""
+      FALLBACK_KEY_2: ""
+      OPENROUTER_API_KEY: ""
+      OPERATOR_LLM_API_KEY: ""
+      DATABASE_URL: ""
+      POSTGRES_URL: ""
+      POSTGRES_PASSWORD: ""
+      REDIS_PASSWORD: ""
+    volumes:
+      - shadow-log:/shadow-log
+    cap_drop: ["ALL"]
+    security_opt: ["no-new-privileges:true"]
+    read_only: true
+    tmpfs:
+      - /tmp
+    mem_limit: 256m
+    cpus: 1.0
+    pids_limit: 128
+    command: ["python3", "/app/shadow_npc_main.py"]

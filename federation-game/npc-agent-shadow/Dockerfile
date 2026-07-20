@@ -27,6 +27,7 @@ COPY npc_shadow_mode.py \
      cosmic_monitor.py \
      institutions.py \
      qualify_shadow.py \
+     shadow_npc_main.py \
      /app/
 
 # Dedicated writable volume for the append-only intent log.
