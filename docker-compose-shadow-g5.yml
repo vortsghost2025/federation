@@ -1,0 +1,118 @@
+# G5 Behavioral Shadow Qualification
+# Build context: npc-agent-shadow-g5-0db35db/ (isolated from production)
+# Image tag: federation-npc-shadow:g5-0db35db
+# Project: federation-shadow-g5
+
+networks:
+  shadow-net:
+    driver: bridge
+    internal: true
+
+volumes:
+  shadow-log:
+  redis-shadow-data:
+
+services:
+  redis-shadow:
+    image: redis:7-alpine
+    restart: "no"
+    user: "999:1000"
+    networks:
+      - shadow-net
+    volumes:
+      - redis-shadow-data:/data
+    command: ["redis-server", "--save", "", "--appendonly", "no"]
+    cap_drop: ["ALL"]
+    security_opt: ["no-new-privileges:true"]
+    read_only: true
+    tmpfs:
+      - /tmp
+    mem_limit: 128m
+    cpus: 0.5
+    pids_limit: 64
+
+  npc-agent-shadow-001:
+    build:
+      context: ./npc-agent-shadow-g5-0db35db
+      dockerfile: Dockerfile
+    image: federation-npc-shadow:g5-0db35db
+    restart: "no"
+    networks:
+      - shadow-net
+    depends_on:
+      - redis-shadow
+    environment:
+      SHADOW_MODE: "true"
+      SHADOW_INSTANCE_ID: "shadow-g5-001"
+      SHADOW_PROVIDER: "mock"
+      SHADOW_LOG_PATH: "/shadow-log/intents-001.jsonl"
+      SHADOW_MAX_TICKS: "200"
+      SHADOW_MAX_RUNTIME_S: "3600"
+      SHADOW_MAX_MODEL_CALLS: "50"
+      SHADOW_MAX_LOG_BYTES: "10485760"
+      CHAR_ID: "char_001"
+      NPC_NAME: "Archimedes Prime"
+      REDIS_URL: "redis://redis-shadow:6379/0"
+      NVIDIA_API_KEY: ""
+      FALLBACK_KEY_1: ""
+      FALLBACK_KEY_2: ""
+      OPENROUTER_API_KEY: ""
+      OPERATOR_LLM_API_KEY: ""
+      DATABASE_URL: ""
+      POSTGRES_URL: ""
+      POSTGRES_PASSWORD: ""
+      REDIS_PASSWORD: ""
+    volumes:
+      - shadow-log:/shadow-log
+    cap_drop: ["ALL"]
+    security_opt: ["no-new-privileges:true"]
+    read_only: true
+    tmpfs:
+      - /tmp
+    mem_limit: 256m
+    cpus: 1.0
+    pids_limit: 128
+    command: ["tail", "-f", "/dev/null"]
+
+  npc-agent-shadow-306:
+    build:
+      context: ./npc-agent-shadow-g5-0db35db
+      dockerfile: Dockerfile
+    image: federation-npc-shadow:g5-0db35db
+    restart: "no"
+    networks:
+      - shadow-net
+    depends_on:
+      - redis-shadow
+    environment:
+      SHADOW_MODE: "true"
+      SHADOW_INSTANCE_ID: "shadow-g5-306"
+      SHADOW_PROVIDER: "mock"
+      SHADOW_LOG_PATH: "/shadow-log/intents-306.jsonl"
+      SHADOW_MAX_TICKS: "200"
+      SHADOW_MAX_RUNTIME_S: "3600"
+      SHADOW_MAX_MODEL_CALLS: "50"
+      SHADOW_MAX_LOG_BYTES: "10485760"
+      CHAR_ID: "char_306"
+      NPC_NAME: "The Oracle"
+      REDIS_URL: "redis://redis-shadow:6379/0"
+      NVIDIA_API_KEY: ""
+      FALLBACK_KEY_1: ""
+      FALLBACK_KEY_2: ""
+      OPENROUTER_API_KEY: ""
+      OPERATOR_LLM_API_KEY: ""
+      DATABASE_URL: ""
+      POSTGRES_URL: ""
+      POSTGRES_PASSWORD: ""
+      REDIS_PASSWORD: ""
+    volumes:
+      - shadow-log:/shadow-log
+    cap_drop: ["ALL"]
+    security_opt: ["no-new-privileges:true"]
+    read_only: true
+    tmpfs:
+      - /tmp
+    mem_limit: 256m
+    cpus: 1.0
+    pids_limit: 128
+    command: ["tail", "-f", "/dev/null"]
