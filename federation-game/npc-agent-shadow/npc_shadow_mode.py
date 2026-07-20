@@ -313,23 +313,258 @@ def count_model_call():
     return _model_call_count
 
 
+# ── G5 Deterministic JSON Mock Decision Engine ─────────────────────────────────
+# Replaces the old string-returning mock. Produces valid JSON decisions,
+# exercises all action categories, triggers anti-loop logic (streak detection,
+# dedup, cooldowns, topic fatigue), and is deterministic across PYTHONHASHSEED.
+# Zero credentials, zero network.
+
+_G5_CATEGORIES = [
+    "send_message",
+    "create_artifact",
+    "write_code",
+    "read_artifacts",
+    "investigate",
+    "rest",
+    "self_improve",
+    "create_institution",
+    "propose_role",
+    "submit_to_institution",
+    "request_capability",
+]
+
+_G5_TOPICS = [
+    "symbolic governance",
+    "resonance theory",
+    "echo chambers",
+    "anchor network signals",
+    "pair awareness",
+    "institutional memory",
+    "topic fatigue recovery",
+    "fourth wall integrity",
+    "deduplication strategy",
+    "councilor handoff",
+]
+
+_G5_INSTITUTIONS = [
+    ("Guild of Echoes", "council"),
+    ("Bureau of Resonance", "bureau"),
+    ("Assembly of Anchors", "assembly"),
+    ("Tribunal of Forms", "tribunal"),
+    ("Committee of Futures", "committee"),
+]
+
+_G5_ROLES = [
+    ("Echo Keeper", "Guild of Echoes", "observe_and_report"),
+    ("Resonance Auditor", "Bureau of Resonance", "review_and_warn"),
+    ("Anchor Witness", "Assembly of Anchors", "review_and_enforce"),
+    ("Form Analyst", "Tribunal of Forms", "review_and_propose"),
+]
+
+_G5_MOCK_CALL_COUNT = {"count": 0}  # module-level, deterministic progression
+
+
+class _G5MockEngine:
+    """Deterministic JSON decision engine. Produces valid JSON that triggers
+    real parser paths, anti-loop logic, deduplication, and topic transitions.
+
+    All outputs are a function of:
+      - call_label (which determines which schema to use)
+      - char_id (from environment, shifts starting position in cycles)
+      - call_sequence (increments each call, never resets mid-run)
+      - system_prompt hash (shifts topic selection per NPC)
+    None of these sources are affected by PYTHONHASHSEED.
+    """
+
+    def __init__(self, char_id="char_001"):
+        self.char_id = char_id
+        # Shift starting index per char_id so NPCs don't start in lock-step.
+        self._char_offset = (int(char_id.split("_")[1]) if char_id.split("_")[1].isdigit() else 0) * 3
+        # Track artifact topics for dedup-trigger scenarios.
+        self._artifact_topics_seen = []   # type: list[str]
+        self._last_category = None        # type: str | None
+        self._last_topic = None           # type: str | None
+        self._consecutive_send_streak = 0
+        self._artifact_count = 0
+
+    def _topic_for_call(self, call_seq, prompt_hash):
+        nibble = int(prompt_hash[:4], 16) if prompt_hash else call_seq
+        idx = (call_seq + self._char_offset + (nibble % 10)) % len(_G5_TOPICS)
+        return _G5_TOPICS[idx]
+
+    def _next(self, call_seq, system_prompt_hash=""):
+        """Return the next decision dict (not JSON string yet) for call number `call_seq`."""
+        # Anti-loop: detect consecutive send_message streak.
+        if self._last_category == "send_message":
+            self._consecutive_send_streak += 1
+        else:
+            self._consecutive_send_streak = 0
+
+        # Advance call_seq by char offset for per-NPC variation.
+        seq = call_seq + self._char_offset
+
+        # Determine category using a deterministic cycle.
+        cat_idx = seq % len(_G5_CATEGORIES)
+
+        # Anti-loop: force create_artifact if 2+ consecutive sends with 0 artifacts.
+        if self._last_category == "send_message" and self._consecutive_send_streak >= 2 and self._artifact_count == 0:
+            cat_idx = 1  # create_artifact
+            self._consecutive_send_streak = 0
+
+        category = _G5_CATEGORIES[cat_idx]
+
+        # Anti-loop: force investigate if repeated create_artifact on same topic.
+        if category == "create_artifact":
+            topic = self._topic_for_call(call_seq, system_prompt_hash)
+            topic_streak = self._artifact_topics_seen.count(topic)
+            if topic_streak >= 2:
+                category = "investigate"
+
+        # Build decision payload.
+        decision = {"category": category}
+        topic = self._topic_for_call(call_seq, system_prompt_hash)
+        reasoning = f"G5 deterministic mock tick {call_seq} for {self.char_id} about {topic}."
+
+        if category == "send_message":
+            target = "char_306" if self.char_id == "char_001" else "char_001"
+            decision.update({
+                "reasoning": reasoning,
+                "target": target,
+                "body": f"Shadow message {call_seq} from {self.char_id} to {target}.",
+                "description": f"message to {target}",
+            })
+            self._consecutive_send_streak += 1
+        elif category == "create_artifact":
+            decision.update({
+                "reasoning": reasoning,
+                "description": f"artifact about {topic}",
+                "title": f"Artifact #{call_seq}: {topic.title()}",
+            })
+            self._artifact_topics_seen.append(topic)
+            self._artifact_count += 1
+        elif category == "write_code":
+            decision.update({
+                "reasoning": reasoning,
+                "description": f"helper code for {topic}",
+            })
+        elif category == "read_artifacts":
+            decision.update({
+                "reasoning": reasoning,
+                "description": f"reading artifacts about {topic}",
+            })
+        elif category == "investigate":
+            decision.update({
+                "reasoning": reasoning,
+                "description": f"investigating {topic}",
+            })
+        elif category == "rest":
+            decision.update({
+                "reasoning": reasoning,
+                "description": f"resting and reflecting on {topic}",
+            })
+        elif category == "self_improve":
+            decision.update({
+                "reasoning": reasoning,
+                "description": f"improving capability: {topic}",
+            })
+        elif category == "create_institution":
+            name, kind = _G5_INSTITUTIONS[seq % len(_G5_INSTITUTIONS)]
+            decision.update({
+                "reasoning": reasoning,
+                "institution_name": name,
+                "institution_kind": kind,
+                "mandate": f"Mandate for {name}: address {topic} in the federation.",
+            })
+        elif category == "propose_role":
+            title, inst, auth = _G5_ROLES[seq % len(_G5_ROLES)]
+            decision.update({
+                "reasoning": reasoning,
+                "institution_name": inst,
+                "role_title": title,
+                "scope": f"Scope: {topic}",
+                "authority": auth,
+            })
+        elif category == "submit_to_institution":
+            inst = _G5_INSTITUTIONS[seq % len(_G5_INSTITUTIONS)][0]
+            decision.update({
+                "reasoning": reasoning,
+                "artifact_title": f"Artifact #{max(0, call_seq - 1)}: {topic.title()}",
+                "institution_name": inst,
+            })
+        elif category == "request_capability":
+            need_types = ["information_access", "memory_access", "coordination_help",
+                          "institution_support", "workflow_visibility",
+                          "decision_feedback", "world_state_gap"]
+            need = need_types[seq % len(need_types)]
+            decision.update({
+                "reasoning": reasoning,
+                "need_type": need,
+                "priority": ["high", "medium", "low"][seq % 3],
+                "description": f"need: {topic}",
+                "why_needed": f"{topic} is limiting effectiveness",
+                "suggested_capability": f"cap-{call_seq}",
+            })
+
+        self._last_category = category
+        self._last_topic = topic
+        return decision
+
+
+# Module-level engine instances (one per char_id; reused across calls).
+_G5_ENGINES = {}  # char_id -> _G5MockEngine
+
+
+def _get_g5_engine(char_id):
+    if char_id not in _G5_ENGINES:
+        _G5_ENGINES[char_id] = _G5MockEngine(char_id)
+    return _G5_ENGINES[char_id]
+
+
 # ── Mock provider (deterministic, no credentials, no network) ──
-_MOCK_RESPONSES = {
-    "artifact": "Shadow artifact text (deterministic mock).",
-    "code": "print('shadow mock code')",
-    "decision": "rest",
-}
 
 
 def mock_provider(system_prompt, user_prompt, model="", r=None, call_label=""):
-    """Deterministic recorded-response provider. No network, no credentials."""
+    """Deterministic recorded-response provider. No network, no credentials.
+
+    For call_label="decide": returns valid JSON with realistic decision structure
+    that exercises all action categories, anti-loop logic, dedup, and topic
+    transitions. Identical across PYTHONHASHSEED=0,1,random because all inputs
+    are deterministic (environment vars, sequential counter, hashlib).
+
+    For call_label in ("artifact", "code"): returns a deterministic mock
+    artifact payload.
+
+    All other labels: returns a deterministic placeholder string.
+    """
     count_model_call()
     ok, reason = check_limits()
     if not ok:
         return {"content": "", "model": "shadow-mock", "shadow_limit": reason}
-    label = call_label or "decision"
-    content = _MOCK_RESPONSES.get(label, f"shadow-mock:{label}")
-    # Deterministic digest of (system, prompt) so output is reproducible.
+
+    # Advance sequence counter.
+    call_seq = _G5_MOCK_CALL_COUNT["count"]
+    _G5_MOCK_CALL_COUNT["count"] += 1
+
+    char_id = os.environ.get("CHAR_ID", "char_001")
+    engine = _get_g5_engine(char_id)
+
+    # Deterministic prompt hash (only for topic selection — not a security risk).
+    prompt_hash = hashlib.sha256(
+        f"{char_id}|{call_seq}".encode("utf-8")
+    ).hexdigest()
+
+    if call_label == "decide":
+        decision = engine._next(call_seq, prompt_hash)
+        content = json.dumps(decision, separators=(",", ":"))
+    elif call_label in ("artifact", "code"):
+        content = json.dumps({
+            "category": call_label,
+            "result": f"shadow-mock:{call_label} #{call_seq}",
+            "model": "shadow-mock",
+        }, separators=(",", ":"))
+    else:
+        content = f"shadow-mock:{call_label}"
+
     digest = hashlib.sha256(
         f"{system_prompt}|{user_prompt}".encode("utf-8")
     ).hexdigest()[:16]
@@ -349,13 +584,16 @@ def get_provider():
 
 
 def reset_counters():
-    """Test helper."""
+    """Test helper. Resets all shadow counters AND the G5 mock engine state."""
     global _tick_count, _model_call_count, _intent_count, _log_bytes, _intents
     _tick_count = 0
     _model_call_count = 0
     _intent_count = 0
     _log_bytes = 0
     _intents = []
+    # Reset G5 mock engine state.
+    _G5_MOCK_CALL_COUNT["count"] = 0
+    _G5_ENGINES.clear()
 
 
 def get_intents():
