@@ -331,6 +331,8 @@ _G5_CATEGORIES = [
     "propose_role",
     "submit_to_institution",
     "request_capability",
+    "reflect",        # 12th — SAFE, exercises metacognitive self-examination
+    "operator_ack",   # 13th — WRITE, exercises moderator acknowledgement flow
 ]
 
 _G5_TOPICS = [
@@ -503,6 +505,20 @@ class _G5MockEngine:
                 "description": f"need: {topic}",
                 "why_needed": f"{topic} is limiting effectiveness",
                 "suggested_capability": f"cap-{call_seq}",
+            })
+        elif category == "reflect":
+            decision.update({
+                "reasoning": reasoning,
+                "description": f"reflecting on {topic}",
+                "depth": ["surface", "moderate", "deep"][seq % 3],
+                "focus_area": ["pattern recognition", "strategy adjustment", "value alignment"][seq % 3],
+            })
+        elif category == "operator_ack":
+            decision.update({
+                "reasoning": reasoning,
+                "description": f"acknowledging operator about {topic}",
+                "ack_level": ["received", "understood", "acting"][seq % 3],
+                "correlation_id": f"ack-{self.char_id}-{call_seq}",
             })
 
         self._last_category = category
