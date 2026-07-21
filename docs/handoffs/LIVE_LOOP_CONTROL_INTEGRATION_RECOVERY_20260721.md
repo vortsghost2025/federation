@@ -65,7 +65,7 @@ The ≥3 branch remains reachable when the proposed artifact's topic differs fro
 ## Answer to Seven Diagnostic Questions
 
 1. **Can npc_loopctrl:defer and npc_loopctrl:topic ever change if record_* calls are not installed?**  
-   No. Both keys are written exclusively inside `record_deferral()` and `record_completed_work()`. Without those calls installed, both counters remain at 0 in production.
+   `record_deferral` writes `npc_loopctrl:defer` and `npc_loopctrl:topic`. `record_completed_work` may conditionally delete defer, topic, and shape state. Without the `record_*` hooks in live `npc_actions.py`, the module's deferral state is not maintained.
 
 2. **Would a Layered patch without npc_actions changes address artifact_deferred_dedup, or only repeated decision shapes?**  
    Only repeated decision shapes. The dedup deferral fires *before* the LLM runs; the module's defer-streak counters are invisible to that path because `record_deferral()` is absent. The dedup-the-same-topic loop would remain unaddressed.
@@ -88,7 +88,7 @@ The ≥3 branch remains reachable when the proposed artifact's topic differs fro
 
 ---
 
-## Authorized Coherent Candidate Patch (not yet applied)
+## Proposed Coherent Candidate Patch — NOT AUTHORIZED
 
 Scope: isolated worktree `fix/live-loop-control-integration-20260721` only.
 
@@ -148,20 +148,14 @@ Co-authored-by: Copilot App <223556219+Copilot@users.noreply.github.com>"
 git push -u origin fix/live-loop-control-integration-20260721
 ```
 
-**Proposed VPS deployment and rollback commands (not executed):**
+Deployment remains out of scope and unauthorized. Before any future deployment, a separate authorization must define:
 
-```bash
-# Deploy: scp patched files to VPS and restart only the dedicated-agent service
-# Exact service name to be confirmed from: ssh federation-vps "docker compose config --services"
-scp federation-game/npc-agent/npc_decisions.py root@187.77.3.56:/docker/federation-game/npc-agent/
-scp federation-game/npc-agent/npc_actions.py   root@187.77.3.56:/docker/federation-game/npc-agent/
-scp federation-game/npc-agent/npc_loop_control.py root@187.77.3.56:/docker/federation-game/npc-agent/
-ssh federation-vps "docker compose restart <AGENT_SERVICE_NAME>"
+- exact compose project directory
+- actual compose service names
+- complete deployed file manifest
+- backup hashes
+- atomic installation method
+- synthetic canary procedure
+- complete rollback procedure
 
-# Rollback:
-scp C:\Users\seand\AppData\Local\Temp\federation-live-source-snapshot\20260720-231250\npc-agent__npc_decisions.py root@187.77.3.56:/docker/federation-game/npc-agent/
-scp C:\Users\seand\AppData\Local\Temp\federation-live-source-snapshot\20260720-231250\npc-agent__npc_actions.py   root@187.77.3.56:/docker/federation-game/npc-agent/
-ssh federation-vps "docker compose restart <AGENT_SERVICE_NAME>"
-```
-
-Replace `<AGENT_SERVICE_NAME>` with the actual service confirmed from `docker compose config --services` on the VPS before any deployment.
+No raw VPS address, SCP command, restart command, Redis deletion, or protected councilor instruction belongs in this recovery handoff.
