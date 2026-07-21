@@ -1083,7 +1083,7 @@ Respond in this exact JSON format (no markdown, no explanation):
                     "reasoning": "Loop-break forced fallback at 3-in-a-row",
                     "description": f"'{banned}' blocked after {streak_after}-in-a-row streak; resting to break the loop",
                 }
-            elif streak_after >= 2 and chosen == banned:
+            if streak_after >= 2 and chosen == banned:
                 logger.warning(
                     "[%s] loop_break ignored by LLM (streak=%d banned=%s chosen=%s); forcing read_artifacts",
                     CHAR_ID, streak_after, banned, chosen,
@@ -1093,18 +1093,7 @@ Respond in this exact JSON format (no markdown, no explanation):
                     "reasoning": "Loop-break forced fallback (overrode banned category post-parse)",
                     "description": f"'{banned}' was just banned for this turn due to {streak_after}-in-a-row streak; reading instead of repeating",
                 }
-                logger.warning(
-                    "[%s] loop_break ignored by LLM at 3-in-a-row; forcing rest",
-                    CHAR_ID,
-                )
-                return {
-                    "category": "rest",
-                    "reasoning": "Loop-break forced fallback at 3-in-a-row",
-                    "description": f"'{banned}' blocked after {streak_after}-in-a-row streak; resting to break the loop",
-                }
-        # Deterministic final enforcement layer (composes with the dedup gate
-        # and prompt constraints above; never replaces them).
-        return _enforce_loop_control(decision, r, CHAR_ID)
+            return _enforce_loop_control(decision, r, CHAR_ID)
     except (json.JSONDecodeError, ValueError) as e:
         logger.warning("Failed to parse LLM decision: %s | raw: %s", e, str(raw)[:200])
         return {"category": "rest", "reasoning": f"parse error: {e}", "description": "resting"}
