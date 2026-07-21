@@ -198,25 +198,22 @@ def execute_decision(decision: dict, r, contacts: dict):
                 r.delete(f"npc_dedup_topic:{CHAR_ID}")
             except Exception:
                 pass
+            result["action_taken"] = "artifact_created"
+            result["artifact_title"] = title
             record_completed_work(r, CHAR_ID, "create_artifact", title)
             try:
                 partner_id_local = _partner_id()
-                r.rpush(
-                    f"npc_session:{partner_id_local}",
-                    json.dumps({
-                        "kind": "artifact_published_by_partner",
-                        "actor": NPC_NAME,
-                        "from": CHAR_ID,
-                        "title": title,
-                        "chars": len(artifact_content),
-                        "ts": ts,
-                    }, default=str),
-                )
+                r.rpush(f"npc_session:{partner_id_local}", json.dumps({
+                "kind": "artifact_published_by_partner",
+                "actor": NPC_NAME,
+                "from": CHAR_ID,
+                "title": title,
+                "chars": len(artifact_content),
+                "ts": ts,
+                }, default=str))
                 r.ltrim(f"npc_session:{partner_id_local}", -SESSION_CAP, -1)
             except Exception:
                 pass
-            result["action_taken"] = "artifact_created"
-            result["artifact_title"] = title
             logger.info("[%s] Created artifact: %s", CHAR_ID, title)
             _session_append(r, {
                 "kind": "artifact_created",
