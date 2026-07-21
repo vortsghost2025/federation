@@ -198,7 +198,6 @@ def execute_decision(decision: dict, r, contacts: dict):
                 r.delete(f"npc_dedup_topic:{CHAR_ID}")
             except Exception:
                 pass
-            record_completed_work(r, CHAR_ID, "create_artifact", title)
             try:
                 partner_id_local = _partner_id()
                 r.rpush(
@@ -217,6 +216,7 @@ def execute_decision(decision: dict, r, contacts: dict):
                 pass
             result["action_taken"] = "artifact_created"
             result["artifact_title"] = title
+            record_completed_work(r, CHAR_ID, "create_artifact", title)
             logger.info("[%s] Created artifact: %s", CHAR_ID, title)
             _session_append(r, {
                 "kind": "artifact_created",
