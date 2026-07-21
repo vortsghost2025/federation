@@ -81,7 +81,7 @@ The ≥3 branch remains reachable when the proposed artifact's topic differs fro
 
 6. **Is either ≥3 path unreachable?**  
    - Inline ≥3 (chosen==banned): **YES** — unreachable due to ≥2 early return in the same block.  
-   - Module ≥3 (any create_artifact, ≥2 streak, topic differs from blocked): **Reachable** — but only if `record_deferral()` is installed and populating the defer streak.
+   - Module ≥3 (any create_artifact, ≥3 streak, topic differs from blocked): **Reachable** — but only if `record_deferral()` is installed and populating the defer streak.
 
 7. **Which smallest patch addresses the observed dedup deferral loop?**  
    Restore `record_deferral()` in `npc_actions.py` artifact_deferred_dedup branch and `record_completed_work()` after `artifact_created`, add the npc_loop_control import and tail-call to `npc_decisions.py`, and fix only the inline post-parse ordering (evaluate ≥3 before ≥2, or use if/elif). Do NOT reorder `npc_loop_control.enforce()`.
