@@ -35,6 +35,11 @@ def _stable_id(prefix: str, payload: Dict) -> str:
     return f"{prefix}_{digest}"
 
 
+# Cap on the per-councilor source artifact list so it cannot grow unbounded
+# on the (space-constrained) deployment disk. Keeps the most recent entries.
+ARTIFACT_SOURCE_CAP = 5000
+
+
 def sync_artifacts_to_simulation(r, councilor_id: str) -> int:
     """Read councilor artifacts and publish them to main simulation stream.
     
@@ -74,6 +79,13 @@ def sync_artifacts_to_simulation(r, councilor_id: str) -> int:
             except Exception as e:
                 logger.warning(f"Failed to parse artifact: {e}")
         
+        # Trim the source list so it cannot grow forever on a constrained disk.
+        # LTRIM -CAP -1 keeps the most recent CAP entries (newest at the tail).
+        try:
+            r.ltrim(f"npc_artifacts:{councilor_id}", -ARTIFACT_SOURCE_CAP, -1)
+        except Exception:
+            logger.warning(f"Failed to cap artifact list for {councilor_id}")
+
         logger.info(f"Synced {synced} artifacts from {councilor_id} to simulation")
         return synced
         

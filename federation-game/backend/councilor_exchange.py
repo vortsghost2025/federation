@@ -32,6 +32,7 @@ SUPPORTED_COUNCILORS = ("char_001", "char_306")
 VALID_LIMIT_MIN = 1
 VALID_LIMIT_MAX = 200
 
+REDIS_URL_ENV = "REDIS_URL"
 REDIS_HOST_ENV = "FEDERATION_REDIS_HOST"
 REDIS_PORT_ENV = "FEDERATION_REDIS_PORT"
 REDIS_DB_ENV = "FEDERATION_REDIS_DB"
@@ -108,10 +109,16 @@ def _get_redis_client(injected=None):
     try:
         import redis  # local import: no Redis at module load
 
+        # Honor REDIS_URL (the repo-wide convention) when present; this is what
+        # the deployment environment sets. Fall back to host/port only if it is
+        # missing, so local/test setups without REDIS_URL still work.
+        url = os.environ.get(REDIS_URL_ENV)
+        if url:
+            return redis.Redis.from_url(url, decode_responses=True)
         host = os.environ.get(REDIS_HOST_ENV, "localhost")
         port = int(os.environ.get(REDIS_PORT_ENV, "6379"))
         db = int(os.environ.get(REDIS_DB_ENV, "0"))
-        return redis.Redis(host=host, port=port, db=db)
+        return redis.Redis(host=host, port=port, db=db, decode_responses=True)
     except Exception as exc:  # pragma: no cover - defensive
         raise StoreUnavailableError("Exchange ledger store is unavailable") from exc
 

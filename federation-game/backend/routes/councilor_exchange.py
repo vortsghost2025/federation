@@ -5,10 +5,12 @@ Exposes a single authenticated, read-only endpoint:
     GET /simulation/operator/councilor-exchange
 
 Authentication is owned entirely by the `require_operator` dependency
-(Gate A). This router never validates or reads the operator key; it only
-receives the authorization result. Request validation (view / char_id /
-limit) is performed manually so FastAPI never emits a 422 for contract
-inputs — the contract requires 400/401/403/503 instead.
+(Gate A). This router never validates or reads any operator secret; it only
+receives the authorization result. `require_operator` grants access by
+source-network trust (Tailscale + internal Docker), not by a shared key, so
+callers need no credential. Request validation (view / char_id / limit) is
+performed manually so FastAPI never emits a 422 for contract inputs — the
+contract requires 400/401/503 instead.
 
 No Redis connection is created by this router; the helper builds or accepts
 a client internally, and only after authorization succeeds.
