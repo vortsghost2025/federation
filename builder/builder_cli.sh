@@ -59,9 +59,15 @@ ok = state.reject('$DRAFT_ID', '$REASON', '$BY')
 print(json.dumps({"rejected": ok, "id": '$DRAFT_ID'}))
 PY
         ;;
+    show-cognition)
+        if [ "$#" -lt 2 ]; then echo "Usage: $0 show-cognition <char_id>"; exit 1; fi
+        CHAR="$2"
+        # Use redis discovery to fetch cognition hash
+        docker exec federation-game-redis-1 redis-cli hgetall "npc_cognition:${CHAR}"
+        ;;
     *)
         echo "Unknown command: $1"
-        echo "Commands: status, list-pending, approve, reject"
+        echo "Commands: status, list-pending, approve, reject, show-cognition"
         exit 1
         ;;
-esac
+ esac
