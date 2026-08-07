@@ -131,6 +131,70 @@ def _draft_create_area(state: BuilderState, evidence: List[Dict[str, Any]]) -> N
     logger.info("drafted new area creation request %s", draft_id)
 
 
+# Degradation / runway thresholds
+DEGRADATION_THRESHOLDS = {
+    "stability": {"min": 60, "label": "Stability"},
+    "resource_abundance": {"min": 50, "label": "Resource Abundance"},
+    "morale": {"min": 55, "label": "Morale"},
+    "tension_level": {"max": 60, "label": "Tension Level"},
+    "threat_level": {"max": 40, "label": "Threat Level"},
+    "anomaly_activity": {"max": 30, "label": "Anomaly Activity"},
+}
+
+
+def _load_world_state(redis_client) -> Dict[str, Any]:
+    try:
+        data = redis_client.hgetall("world_state")
+        if isinstance(data, dict):
+            result = {}
+            for k, v in data.items():
+                key = k.decode("utf-8") if isinstance(k, bytes) else k
+                val_str = v.decode("utf-8") if isinstance(v, bytes) else v
+                try:
+                    result[key] = int(float(val_str))
+                except (ValueError, TypeError):
+                    result[key] = val_str
+            return result
+    except Exception as exc:
+        logger.warning("world_state read failed: %s", exc)
+    return {}
+
+
+def _check_degradation(state: BuilderState, world_state: Dict[str, Any], redis_client) -> None:
+    degraded: List[str] = []
+    for key, cfg in DEGRADATION_THRESHOLDS.items():
+        val = world_state.get(key)
+        if val is None:
+            continue
+        if "min" in cfg and val < cfg["min"]:
+            degraded.append(f"{cfg['label']}={val}")
+        elif "max" in cfg and val > cfg["max"]:
+            degraded.append(f"{cfg['label']}={val}")
+    if degraded:
+        draft_id = f"draft_degrad_{uuid.uuid4().hex[:12]}"
+        now_iso = datetime.now(timezone.utc).isoformat(timespec="seconds")
+        evidence = [
+            {"source": "world_state", "metrics": world_state},
+            {"degraded_metrics": degraded},
+        ]
+        draft = {
+            "id": draft_id,
+            "kind": "capability_request",
+            "created_at": now_iso,
+            "rationale": f"Degradation/runway metrics elevated ({', '.join(degraded)}). Suggest stabilization.",
+            "evidence": evidence,
+            "proposed_action": {
+                "capability_key": "stabilize_infrastructure",
+                "title": "Stabilize critical infrastructure",
+                "objective": "Address elevated degradation and runway drift before cascade failure",
+                "requested_change": "Initiate infrastructure repair and resource rebalancing",
+            },
+            "status": "pending",
+        }
+        state.add_pending(draft)
+        logger.info("drafted degradation/stabilization request %s (metrics: %s)", draft_id, ", ".join(degraded))
+
+
 def run_once() -> None:
     redis_client = get_redis()
     if redis_client is None:
@@ -143,11 +207,18 @@ def run_once() -> None:
     if not events:
         logger.debug("no new events")
         return
-    # Apply rule
-    if not _has_recent_area_found(events):
-        _draft_create_area(state, events)
+    # Degradation / runway rule (autonomous)
+    world_state = _load_world_state(redis_client)
+    if world_state:
+        _check_degradation(state, world_state, redis_client)
+    # Apply area rule
+    if not events:
+        logger.debug("no new events")
     else:
-        logger.debug("recent area_found present – no draft needed")
+        if not _has_recent_area_found(events):
+            _draft_create_area(state, events)
+        else:
+            logger.debug("recent area_found present – no draft needed")
 
 
 def main() -> None:

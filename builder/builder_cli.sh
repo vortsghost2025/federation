@@ -59,6 +59,14 @@ ok = state.reject('$DRAFT_ID', '$REASON', '$BY')
 print(json.dumps({"rejected": ok, "id": '$DRAFT_ID'}))
 PY
         ;;
+    show-state)
+        if [ "$#" -lt 2 ]; then echo "Usage: $0 show-state <char_id>"; exit 1; fi
+        CHAR="$2"
+        echo "=== Cognition ==="
+        docker exec federation-game-redis-1 redis-cli hgetall "npc_cognition:${CHAR}"
+        echo "=== Latest Decision ==="
+        docker exec federation-game-redis-1 redis-cli zrevrange "npc_decisions:${CHAR}" 0 0 | head -1
+        ;;
     show-cognition)
         if [ "$#" -lt 2 ]; then echo "Usage: $0 show-cognition <char_id>"; exit 1; fi
         CHAR="$2"
@@ -67,7 +75,7 @@ PY
         ;;
     *)
         echo "Unknown command: $1"
-        echo "Commands: status, list-pending, approve, reject, show-cognition"
+        echo "Commands: status, list-pending, approve, reject, show-cognition, show-state"
         exit 1
         ;;
  esac
