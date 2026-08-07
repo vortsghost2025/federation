@@ -1,0 +1,47 @@
+{
+  "last_run_iso": "2026-08-07T01:27:57Z",
+  "requests": {
+    "capreq_be4afd302ff5": {
+      "acceptance_001": {
+        "evidence": "",
+        "result": null
+      },
+      "acceptance_306": {
+        "evidence": "",
+        "result": null
+      },
+      "clarification_questions": [],
+      "detected_at": "2026-08-07T00:08:09Z",
+      "last_checked_at": "2026-08-07T01:14:04Z",
+      "status": "submitted"
+    },
+    "capreq_bf130d245446": {
+      "acceptance_001": {
+        "evidence": "",
+        "result": null
+      },
+      "acceptance_306": {
+        "evidence": "",
+        "result": null
+      },
+      "clarification_questions": [],
+      "detected_at": "2026-08-07T00:08:09Z",
+      "last_checked_at": "2026-08-07T01:14:04Z",
+      "status": "submitted"
+    },
+    "capreq_ec8b5e0a5f32": {
+      "acceptance_001": {
+        "evidence": "",
+        "result": null
+      },
+      "acceptance_306": {
+        "evidence": "",
+        "result": null
+      },
+      "clarification_questions": [],
+      "detected_at": "2026-08-07T00:08:09Z",
+      "last_checked_at": "2026-08-07T01:14:04Z",
+      "status": "submitted"
+    }
+  }
+}
