@@ -158,10 +158,10 @@ class EventCollector:
     def _dedup_key(self, event: dict) -> str:
         char_id = event.get("char_id", "")
         ts = event.get("ts", 0.0)
-        # Use the JSON itself as a last-resort fingerprint; avoids
-        # counting a re-polled item twice within the same _collected_ts
-        # window. The full event isn't hashable so fall back to a tuple.
-        return f"{char_id}:{ts}"
+        # Use a hash of the serialized event to avoid collisions when
+        # multiple events share the same timestamp.
+        payload = json.dumps(event, sort_keys=True)
+        return f"{char_id}:{ts}:{hash(payload)}"
 
     def run_once(self) -> int:
         if self._open_file is None:

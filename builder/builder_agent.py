@@ -202,19 +202,16 @@ def run_once() -> None:
         return
     # Load persisted state
     state = BuilderState(STATE_PATH)
+    # Degradation / runway rule (autonomous) – always evaluate
+    world_state = _load_world_state(redis_client)
+    if world_state:
+        _check_degradation(state, world_state, redis_client)
     # Pull new events from files (decisions only – builder does not read redis directly)
     events = _load_new_events(state)
     if not events:
         logger.debug("no new events")
-        return
-    # Degradation / runway rule (autonomous)
-    world_state = _load_world_state(redis_client)
-    if world_state:
-        _check_degradation(state, world_state, redis_client)
-    # Apply area rule
-    if not events:
-        logger.debug("no new events")
     else:
+        # Area rule
         if not _has_recent_area_found(events):
             _draft_create_area(state, events)
         else:
