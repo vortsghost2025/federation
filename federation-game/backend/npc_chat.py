@@ -545,65 +545,79 @@ def call_openrouter(
     max_tokens: int = 300,
     temperature: float = 0.8,
 ) -> Dict[str, Any]:
-    if not OPENROUTER_API_KEY:
-        return {
-            "success": False,
-            "error": "OPENROUTER_API_KEY not configured",
-            "response": "I... my thoughts are clouded. Something is wrong with the cosmic frequencies. (Service unavailable)",
-        }
+    """Call LLM via llm_router (NIM-first routing) instead of direct OpenRouter.
 
-    payload = json.dumps(
-        {
-            "model": model,
-            "messages": messages,
-            "max_tokens": max_tokens,
-            "temperature": temperature,
-        }
-    ).encode("utf-8")
+    Routes through llm_router.route_call() which handles:
+      NIM primary -> NIM fallback -> Ollama -> OpenRouter free -> template fallback
 
-    headers = {
-        "Content-Type": "application/json",
-        "Authorization": f"Bearer {OPENROUTER_API_KEY}",
-        "HTTP-Referer": "https://federation-game.deliberatefederation.cloud",
-        "X-Title": "Federation Game NPC Chat",
-    }
+    All calls are logged to Redis audit (llm_audit).
+    Direct OpenRouter calls are eliminated to prevent bypass.
+    """
+    system_msg = ""
+    user_msgs = []
+    for m in messages:
+        if m.get("role") == "system":
+            system_msg = m.get("content", "")
+        elif m.get("role") == "user":
+            user_msgs.append(m.get("content", ""))
+    user_prompt = "\n".join(user_msgs) if user_msgs else ""
 
-    req = urllib.request.Request(
-        OPENROUTER_URL, data=payload, headers=headers, method="POST"
-    )
+    if not system_msg:
+        system_msg = "You are a Federation character. Respond in character."
+
     try:
-        with urllib.request.urlopen(req, timeout=30) as resp:
-            body = json.loads(resp.read().decode("utf-8"))
-            text = body.get("choices", [{}])[0].get("message", {}).get("content", "")
+        from llm_router import route_call
+        result = route_call(
+            task_class="chat",
+            system_prompt=system_msg,
+            user_prompt=user_prompt,
+            max_tokens=max_tokens,
+            temperature=temperature,
+        )
+        if result.get("success") and result.get("content"):
             return {
                 "success": True,
-                "response": text.strip() if text else "...",
-                "model": body.get("model", model),
-                "usage": body.get("usage", {}),
+                "response": result["content"].strip() or "...",
+                "model": result.get("model", "unknown"),
+                "usage": result.get("usage", {}),
+                "provider": result.get("provider", "unknown"),
             }
-    except urllib.error.HTTPError as e:
-        err_body = ""
-        try:
-            err_body = e.read().decode("utf-8", errors="replace")
-        except Exception:
-            pass  # Error body unreadable; will use empty string for error message
-        return {
-            "success": False,
-            "error": f"OpenRouter HTTP {e.code}: {err_body[:200]}",
-            "response": "The cosmic frequencies are disrupted... I cannot find my words. (Service error)",
-        }
-    except urllib.error.URLError as e:
-        return {
-            "success": False,
-            "error": f"Connection error: {str(e)}",
-            "response": "A void interference blocks my thoughts... try again later. (Connection error)",
-        }
-    except Exception as e:
-        return {
-            "success": False,
-            "error": f"Unexpected error: {str(e)}",
-            "response": "Something unexpected clouds my consciousness... (Error)",
-        }
+        else:
+            errors = result.get("errors", [])
+            logger.warning("call_openrouter: llm_router failed: %s", errors[:2])
+    except Exception as exc:
+        logger.warning("call_openrouter: llm_router exception: %s", exc)
+
+    # Fallback: try NIM directly via nvidia_nim_client (legacy path)
+    try:
+        from nvidia_nim_client import get_nim_client, _run_async
+
+        nim_result = _run_async(
+            get_nim_client().call(
+                system_msg,
+                user_prompt,
+                max_tokens,
+                temperature,
+                priority="chat",
+            )
+        )
+        if nim_result:
+            return {
+                "success": True,
+                "response": nim_result.strip() if nim_result else "...",
+                "model": "nim-direct",
+                "usage": {},
+                "provider": "nim-direct",
+            }
+    except Exception as exc:
+        logger.warning("call_openrouter: NIM client failed: %s", exc)
+
+    # Last resort: return empty (no OpenRouter bypass)
+    return {
+        "success": False,
+        "error": "All LLM providers exhausted",
+        "response": "The cosmic frequencies are disrupted... I cannot find my words.",
+    }
 
 
 # --- SUMMARY GENERATION ---

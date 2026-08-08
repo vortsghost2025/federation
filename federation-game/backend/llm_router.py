@@ -7,7 +7,7 @@ Supports Ollama, Cloudflare Workers AI, Together AI, NVIDIA NIM,
 Google Gemini, Grok/xAI, and OpenRouter — with automatic fallback.
 
 Design principles:
-- Multi-provider: Ollama(3B/7B) → Cloudflare → Together → NIM → Gemini → Grok → OpenRouter
+- Multi-provider: Ollama(3B/7B) → Cloudflare → Together → NIM → OpenRouter → Gemini → Grok
 - Key rotation for NIM (up to 8 keys, round-robin with least-recently-used)
 - Per-provider rate limit awareness (Redis-backed call tracking)
 - Per-provider circuit breaker (3 consecutive failures → 5 min cooldown)
@@ -18,7 +18,7 @@ Design principles:
 
 Fallback chain (route_call):
   Ollama(3B) → Cloudflare → Together → NIM primary → NIM fallback
-  → Gemini → Grok → OpenRouter → template fallback
+  → OpenRouter → Gemini → Grok → template fallback
 
 Redis keys:
 llm_call_log:{provider} — ZSET (score=timestamp) of recent calls
@@ -34,10 +34,13 @@ import logging
 import os
 import random
 import threading
+import copy
 import time
-import urllib.request
 import urllib.error
+import urllib.parse
+import urllib.request
 from typing import Any, Dict, List, Optional, Tuple
+from collections import OrderedDict
 
 import redis
 
@@ -70,13 +73,26 @@ for _i in range(1, 9):
 _NVIDIA_KEY = os.environ.get("NVIDIA_API_KEY", "")
 if _NVIDIA_KEY and _NVIDIA_KEY not in NIM_KEYS:
     NIM_KEYS.append(_NVIDIA_KEY)
+NIM_DISABLED = os.environ.get("NIM_DISABLED", "").strip() == "1"
 NIM_BASE_URL = "https://integrate.api.nvidia.com/v1/chat/completions"
 NIM_RATE_LIMIT_PER_KEY = 40  # requests per minute per key
 NIM_RATE_LIMIT_WINDOW = 60  # seconds
 
-# OpenRouter — single key
+# OpenRouter — multi-key rotation
 OPENROUTER_API_KEY = os.environ.get("OPENROUTER_API_KEY", "")
 OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1/chat/completions"
+_OR_KEY_1 = os.environ.get("OPENROUTER_API_KEY_1", "")
+_OR_KEY_2 = os.environ.get("OPENROUTER_API_KEY_2", "")
+OPENROUTER_KEYS = [k for k in [OPENROUTER_API_KEY, _OR_KEY_1, _OR_KEY_2] if k]
+_or_key_index = 0
+
+def _get_openrouter_key() -> str:
+    global _or_key_index
+    if not OPENROUTER_KEYS:
+        return ""
+    key = OPENROUTER_KEYS[_or_key_index % len(OPENROUTER_KEYS)]
+    _or_key_index += 1
+    return key
 
 # ── Ollama (Local GPU via Tailscale) ──────────────────────────────────
 # HARDENED: concurrency=1, queue=3, cooldown=60s on 500s, tags cache 60s
@@ -194,9 +210,38 @@ GEMINI_BASE_URL = os.environ.get(
     "GEMINI_BASE_URL", "https://generativelanguage.googleapis.com/v1beta"
 )
 GEMINI_TIMEOUT = int(os.environ.get("GEMINI_TIMEOUT", "20"))
+_GEMINI_ALLOWED_RAW = os.environ.get("GEMINI_ALLOWED_TASKS", "assistant,worker,specialist,narrator,npc_memory,leader")
+GEMINI_ALLOWED_TASKS = frozenset(
+    t.strip()
+    for t in _GEMINI_ALLOWED_RAW.split(",")
+    if t.strip()
+)
+GEMINI_MAX_CALLS_PER_DAY = int(os.environ.get("GEMINI_MAX_CALLS_PER_DAY", "500") or "500")
+GEMINI_MAX_CALLS_PER_MONTH = int(
+    os.environ.get("GEMINI_MAX_CALLS_PER_MONTH", "10000") or "10000"
+)
+GEMINI_MONTHLY_USD_CAP = float(os.environ.get("GEMINI_MONTHLY_USD_CAP", "10.0") or "10.0")
+GEMINI_NOTIFY_THRESHOLDS = tuple(
+    sorted(
+        {
+            float(x.strip())
+            for x in os.environ.get("GEMINI_NOTIFY_THRESHOLDS", "0.5,0.8,1.0").split(",")
+            if x.strip()
+        }
+    )
+)
+GEMINI_NOTIFY_INTERVAL_SECONDS = int(
+    os.environ.get("GEMINI_NOTIFY_INTERVAL_SECONDS", "3600") or "3600"
+)
+GEMINI_PRICE_PER_MTOKEN = {
+    "gemini-2.0-flash": {"input": 0.10, "output": 0.40},
+    "gemini-2.5-flash": {"input": 0.30, "output": 2.50},
+    "gemini-2.5-flash-lite": {"input": 0.10, "output": 0.40},
+}
 _gemini_available: Optional[bool] = None
 _gemini_last_check: float = 0.0
 GEMINI_CHECK_INTERVAL = 300.0
+GEMINI_DEPLETED_COOLDOWN = 3600.0
 _gemini_calls = 0
 _gemini_failures = 0
 
@@ -271,6 +316,10 @@ def _call_ollama(
     max_tokens: int = 200,
     temperature: float = 0.8,
     heavy: bool = False,
+    task_class: str = "",
+    char_id: str = "",
+    source: str = "",
+    system_path: str = "",
 ) -> Tuple[bool, str, float]:
     """Call Ollama via OpenAI-compatible API with backpressure. Returns (success, content, latency_ms).
 
@@ -282,21 +331,38 @@ def _call_ollama(
         Only for high-significance events. Requires OLLAMA_HEAVY_ENABLED=1.
     """
     global _ollama_calls, _ollama_failures, _ollama_available
+    model = OLLAMA_HEAVY_MODEL if heavy else OLLAMA_MODEL
+
+    def _early_failure(message: str) -> Tuple[bool, str, float]:
+        _record_call(
+            "ollama",
+            None,
+            model,
+            task_class,
+            False,
+            0,
+            message,
+            char_id=char_id,
+            source=source,
+            system_path=system_path,
+            is_final=False,
+        )
+        return False, message, 0
 
     if not _check_ollama_available():
-        return False, "Ollama not available", 0
+        return _early_failure("Ollama not available")
 
     # Block heavy calls unless explicitly enabled
     if heavy and not OLLAMA_HEAVY_ENABLED:
         logger.debug(
             "Ollama: heavy call requested but OLLAMA_HEAVY_ENABLED=0, skipping"
         )
-        return False, "Ollama heavy model disabled", 0
+        return _early_failure("Ollama heavy model disabled")
 
     # Check lane availability (backpressure)
     if not _ollama_lane.is_available():
         logger.debug("Ollama: lane cooling down, skipping")
-        return False, "Ollama lane cooling down", 0
+        return _early_failure("Ollama lane cooling down")
 
     if not _ollama_lane.try_acquire():
         logger.debug(
@@ -304,9 +370,8 @@ def _call_ollama(
             OLLAMA_MAX_ACTIVE,
             OLLAMA_MAX_QUEUE,
         )
-        return False, "Ollama lane full", 0
+        return _early_failure("Ollama lane full")
 
-    model = OLLAMA_HEAVY_MODEL if heavy else OLLAMA_MODEL
     queue_start = time.time()
 
     payload_dict = {
@@ -342,7 +407,18 @@ def _call_ollama(
             content = message.get("content") or ""
             if not isinstance(content, str):
                 content = str(content)
-            _record_call("ollama", None, model, "", True, latency_ms)
+            _record_call(
+                "ollama",
+                None,
+                model,
+                task_class,
+                True,
+                latency_ms,
+                char_id=char_id,
+                source=source,
+                system_path=system_path,
+                is_final=False,
+            )
             _record_provider_result("ollama", True)
             logger.info(
                 "Ollama: provider=ollama model=%s timeout=%d queued_ms=%d success=True -> %d chars (%dms)",
@@ -367,7 +443,19 @@ def _call_ollama(
             pass
         err_msg = f"Ollama HTTP {e.code}: {err_body}"
         logger.debug(err_msg)
-        _record_call("ollama", None, model, "", False, latency_ms, err_msg)
+        _record_call(
+            "ollama",
+            None,
+            model,
+            task_class,
+            False,
+            latency_ms,
+            err_msg,
+            char_id=char_id,
+            source=source,
+            system_path=system_path,
+            is_final=False,
+        )
         _record_provider_result("ollama", False)
         logger.warning(
             "Ollama: provider=ollama model=%s timeout=%d queued_ms=%d success=Fallback is_500=%s (%dms)",
@@ -394,7 +482,19 @@ def _call_ollama(
         )
         err_msg = f"Ollama error: {err_str[:200]}"
         logger.debug(err_msg)
-        _record_call("ollama", None, model, "", False, latency_ms, err_msg)
+        _record_call(
+            "ollama",
+            None,
+            model,
+            task_class,
+            False,
+            latency_ms,
+            err_msg,
+            char_id=char_id,
+            source=source,
+            system_path=system_path,
+            is_final=False,
+        )
         _record_provider_result("ollama", False)
         logger.warning(
             "Ollama: provider=ollama model=%s timeout=%d queued_ms=%d success=Fallback is_500=%s (%dms)",
@@ -456,14 +556,44 @@ def _check_together_available() -> bool:
 # ── Google Gemini ──────────────────────────────────────────────────
 
 
+def _mark_gemini_depleted():
+    global _gemini_available, _gemini_last_check
+    _gemini_available = False
+    _gemini_last_check = time.time()
+    try:
+        r = _get_redis()
+        r.set("llm:gemini_depleted_until", str(_gemini_last_check + GEMINI_DEPLETED_COOLDOWN), ex=int(GEMINI_DEPLETED_COOLDOWN) + 60)
+    except Exception:
+        pass
+
+
 def _check_gemini_available() -> bool:
     global _gemini_available, _gemini_last_check
     now = time.time()
     if (
         _gemini_available is not None
+        and not _gemini_available
+        and (now - _gemini_last_check) < GEMINI_DEPLETED_COOLDOWN
+    ):
+        return False
+    try:
+        r = _get_redis()
+        depleted_until = r.get("llm:gemini_depleted_until")
+        if depleted_until:
+            if now < float(depleted_until):
+                _gemini_available = False
+                _gemini_last_check = now
+                return False
+            else:
+                r.delete("llm:gemini_depleted_until")
+    except Exception:
+        pass
+    if (
+        _gemini_available is not None
+        and _gemini_available
         and (now - _gemini_last_check) < GEMINI_CHECK_INTERVAL
     ):
-        return _gemini_available
+        return True
     if not GEMINI_API_KEY:
         _gemini_available = False
         _gemini_last_check = now
@@ -471,6 +601,244 @@ def _check_gemini_available() -> bool:
     _gemini_available = True
     _gemini_last_check = now
     return True
+
+
+def _build_gemini_payload(
+    messages: List[Dict],
+    max_tokens: int,
+    temperature: float,
+) -> Dict[str, Any]:
+    """Translate OpenAI-style messages into Gemini generateContent payload."""
+    system_parts: List[str] = []
+    contents: List[Dict[str, Any]] = []
+
+    for message in messages:
+        text = message.get("content", "")
+        if text is None:
+            continue
+        if not isinstance(text, str):
+            text = str(text)
+        text = text.strip()
+        if not text:
+            continue
+
+        role = str(message.get("role", "user") or "user").lower()
+        if role == "system":
+            system_parts.append(text)
+            continue
+
+        contents.append(
+            {
+                "role": "model" if role == "assistant" else "user",
+                "parts": [{"text": text}],
+            }
+        )
+
+    if not contents:
+        contents = [{"role": "user", "parts": [{"text": ""}]}]
+
+    payload: Dict[str, Any] = {
+        "contents": contents,
+        "generationConfig": {
+            "maxOutputTokens": max_tokens,
+            "temperature": temperature,
+        },
+    }
+    if system_parts:
+        payload["systemInstruction"] = {
+            "parts": [{"text": "\n\n".join(system_parts)}]
+        }
+    return payload
+
+
+def _extract_gemini_text(body: Dict[str, Any]) -> str:
+    """Extract text from Gemini generateContent responses."""
+    candidates = body.get("candidates") or []
+    if candidates:
+        content = candidates[0].get("content") or {}
+        parts = content.get("parts") or []
+        texts: List[str] = []
+        for part in parts:
+            text = part.get("text")
+            if text is None:
+                continue
+            texts.append(text if isinstance(text, str) else str(text))
+        if texts:
+            return "".join(texts).strip()
+
+    prompt_feedback = body.get("promptFeedback") or {}
+    block_reason = prompt_feedback.get("blockReason")
+    if block_reason:
+        return f"blocked: {block_reason}"
+    return ""
+
+
+def _normalize_gemini_model_name(model: str) -> str:
+    model = str(model or "")
+    return model[7:] if model.startswith("models/") else model
+
+
+def _extract_gemini_usage(body: Dict[str, Any]) -> Dict[str, int]:
+    usage = body.get("usageMetadata") or {}
+    input_tokens = int(usage.get("promptTokenCount") or 0)
+    output_tokens = int(usage.get("candidatesTokenCount") or 0)
+    total_tokens = int(usage.get("totalTokenCount") or (input_tokens + output_tokens))
+    return {
+        "input_tokens": input_tokens,
+        "output_tokens": output_tokens,
+        "total_tokens": total_tokens,
+    }
+
+
+def _estimate_gemini_usd(model: str, input_tokens: int, output_tokens: int) -> float:
+    pricing = GEMINI_PRICE_PER_MTOKEN.get(_normalize_gemini_model_name(model))
+    if not pricing:
+        return 0.0
+    return round(
+        (input_tokens / 1_000_000.0) * pricing["input"]
+        + (output_tokens / 1_000_000.0) * pricing["output"],
+        6,
+    )
+
+
+def _gemini_budget_keys(now: Optional[float] = None) -> Dict[str, str]:
+    now = now or time.time()
+    day = time.strftime("%Y-%m-%d", time.gmtime(now))
+    month = time.strftime("%Y-%m", time.gmtime(now))
+    return {
+        "day": day,
+        "month": month,
+        "daily_calls": f"llm_budget:gemini:daily:{day}:calls",
+        "monthly_calls": f"llm_budget:gemini:monthly:{month}:calls",
+        "monthly_input_tokens": f"llm_budget:gemini:monthly:{month}:input_tokens",
+        "monthly_output_tokens": f"llm_budget:gemini:monthly:{month}:output_tokens",
+        "monthly_total_tokens": f"llm_budget:gemini:monthly:{month}:total_tokens",
+        "monthly_usd": f"llm_budget:gemini:monthly:{month}:usd",
+    }
+
+
+def _send_budget_notification(title: str, body: str, dedupe_key: str = "") -> None:
+    notify_urls = os.environ.get("NOTIFICATION_URLS", "")
+    if not notify_urls:
+        return
+    try:
+        r = _get_redis()
+        if dedupe_key:
+            key = f"llm_budget:notify:{dedupe_key}"
+            if r.get(key):
+                return
+            r.set(key, "1", ex=GEMINI_NOTIFY_INTERVAL_SECONDS)
+    except Exception:
+        pass
+
+    try:
+        import apprise
+
+        apobj = apprise.Apprise()
+        for url in [u.strip() for u in notify_urls.split(",") if u.strip()]:
+            try:
+                apobj.add(url)
+            except Exception:
+                continue
+        apobj.notify(title=title, body=body)
+    except Exception as e:
+        logger.warning("Failed to send Gemini budget notification: %s", e)
+
+
+def _check_gemini_budget(task_class: str, model: str) -> Tuple[bool, str]:
+    if GEMINI_ALLOWED_TASKS and task_class not in GEMINI_ALLOWED_TASKS:
+        return False, f"Gemini disabled for task_class={task_class}"
+
+    try:
+        r = _get_redis()
+        keys = _gemini_budget_keys()
+        daily_calls = int(r.get(keys["daily_calls"]) or 0)
+        monthly_calls = int(r.get(keys["monthly_calls"]) or 0)
+        monthly_usd = float(r.get(keys["monthly_usd"]) or 0.0)
+    except Exception:
+        return True, ""
+
+    if GEMINI_MAX_CALLS_PER_DAY > 0 and daily_calls >= GEMINI_MAX_CALLS_PER_DAY:
+        _send_budget_notification(
+            "⚠️ Gemini daily call cap reached",
+            (
+                f"Task class: {task_class}\nModel: {_normalize_gemini_model_name(model)}\n"
+                f"Daily calls: {daily_calls}/{GEMINI_MAX_CALLS_PER_DAY}\n"
+                "Gemini fallback is blocked until the next UTC day."
+            ),
+            dedupe_key=f"gemini-daily-cap:{keys['day']}",
+        )
+        return False, f"Gemini daily call cap reached ({daily_calls}/{GEMINI_MAX_CALLS_PER_DAY})"
+
+    if GEMINI_MAX_CALLS_PER_MONTH > 0 and monthly_calls >= GEMINI_MAX_CALLS_PER_MONTH:
+        _send_budget_notification(
+            "⚠️ Gemini monthly call cap reached",
+            (
+                f"Task class: {task_class}\nModel: {_normalize_gemini_model_name(model)}\n"
+                f"Monthly calls: {monthly_calls}/{GEMINI_MAX_CALLS_PER_MONTH}\n"
+                "Gemini fallback is blocked until the next UTC month."
+            ),
+            dedupe_key=f"gemini-monthly-cap:{keys['month']}",
+        )
+        return False, f"Gemini monthly call cap reached ({monthly_calls}/{GEMINI_MAX_CALLS_PER_MONTH})"
+
+    if GEMINI_MONTHLY_USD_CAP > 0 and monthly_usd >= GEMINI_MONTHLY_USD_CAP:
+        _send_budget_notification(
+            "⚠️ Gemini monthly USD cap reached",
+            (
+                f"Task class: {task_class}\nModel: {_normalize_gemini_model_name(model)}\n"
+                f"Estimated spend: ${monthly_usd:.4f}/${GEMINI_MONTHLY_USD_CAP:.2f}\n"
+                "Gemini fallback is blocked until the next UTC month."
+            ),
+            dedupe_key=f"gemini-usd-cap:{keys['month']}",
+        )
+        return False, f"Gemini monthly USD cap reached (${monthly_usd:.4f}/${GEMINI_MONTHLY_USD_CAP:.2f})"
+
+    return True, ""
+
+
+def _record_gemini_usage(model: str, task_class: str, body: Dict[str, Any]) -> None:
+    usage = _extract_gemini_usage(body)
+    usd = _estimate_gemini_usd(model, usage["input_tokens"], usage["output_tokens"])
+
+    try:
+        r = _get_redis()
+        keys = _gemini_budget_keys()
+        pipe = r.pipeline()
+        pipe.incr(keys["daily_calls"])
+        pipe.expire(keys["daily_calls"], 86400 * 3)
+        pipe.incr(keys["monthly_calls"])
+        pipe.expire(keys["monthly_calls"], 86400 * 40)
+        pipe.incrby(keys["monthly_input_tokens"], usage["input_tokens"])
+        pipe.expire(keys["monthly_input_tokens"], 86400 * 40)
+        pipe.incrby(keys["monthly_output_tokens"], usage["output_tokens"])
+        pipe.expire(keys["monthly_output_tokens"], 86400 * 40)
+        pipe.incrby(keys["monthly_total_tokens"], usage["total_tokens"])
+        pipe.expire(keys["monthly_total_tokens"], 86400 * 40)
+        pipe.incrbyfloat(keys["monthly_usd"], usd)
+        pipe.expire(keys["monthly_usd"], 86400 * 40)
+        pipe.execute()
+
+        if GEMINI_MONTHLY_USD_CAP > 0:
+            monthly_usd = float(r.get(keys["monthly_usd"]) or 0.0)
+            for threshold in GEMINI_NOTIFY_THRESHOLDS:
+                if threshold <= 0:
+                    continue
+                threshold_value = GEMINI_MONTHLY_USD_CAP * threshold
+                if monthly_usd >= threshold_value:
+                    pct = int(round(threshold * 100))
+                    _send_budget_notification(
+                        f"⚠️ Gemini spend at {pct}% of cap",
+                        (
+                            f"Task class: {task_class or 'unknown'}\n"
+                            f"Model: {_normalize_gemini_model_name(model)}\n"
+                            f"Estimated monthly spend: ${monthly_usd:.4f}/${GEMINI_MONTHLY_USD_CAP:.2f}\n"
+                            f"This call used input={usage['input_tokens']} output={usage['output_tokens']} total={usage['total_tokens']} tokens."
+                        ),
+                        dedupe_key=f"gemini-threshold:{keys['month']}:{pct}",
+                    )
+    except Exception as e:
+        logger.debug("Failed to record Gemini usage: %s", e)
 
 
 # ── Grok/xAI ───────────────────────────────────────────────────────
@@ -490,9 +858,65 @@ def _check_grok_available() -> bool:
     return True
 
 
-# ── Model Selection per Task Class ──────────────────────────────────
-# Each task class has a primary model on NIM, a fallback on NIM,
-# and a secondary fallback on OpenRouter.
+# ── OpenRouter Free Model Pool ─────────────────────────────────────
+
+# Instead of a single model per task class, we maintain a pool of free `:free` models.
+# The router tries each model in the pool until one succeeds.
+# Circuit breaker is per-model (key: llm_circuit_breaker:or_free:{model_id})
+# to avoid one bad model blocking the entire free tier.
+
+# Tier 1: High-context, high-quality (leader, narrator, npc_memory)
+OR_FREE_POOL_LARGE = [
+    "meta-llama/llama-3.3-70b-instruct:free",
+    "nvidia/nemotron-3-super-120b-a12b:free",
+    "nvidia/nemotron-3-ultra-550b-a55b:free",
+    "nousresearch/hermes-3-llama-3.1-405b:free",
+    "qwen/qwen3-next-80b-a3b-instruct:free",
+    "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free",
+    "google/gemma-4-31b-it:free",
+]
+
+# Tier 2: Mid-context, balanced (specialist, assistant)
+OR_FREE_POOL_MID = [
+    "meta-llama/llama-3.3-70b-instruct:free",
+    "nvidia/nemotron-3-super-120b-a12b:free",
+    "google/gemma-4-26b-a4b-it:free",
+    "nvidia/nemotron-3-nano-30b-a3b:free",
+    "nvidia/nemotron-nano-9b-v2:free",
+    "openai/gpt-oss-120b:free",
+    "cohere/north-mini-code:free",
+]
+
+# Tier 3: Low-context, fast/cheap (worker)
+OR_FREE_POOL_SMALL = [
+    "meta-llama/llama-3.2-3b-instruct:free",
+    "nvidia/nemotron-nano-9b-v2:free",
+    "liquid/lfm-2.5-1.2b-instruct:free",
+    "nvidia/nemotron-3-nano-30b-a3b:free",
+    "cognitivecomputations/dolphin-mistral-24b-venice-edition:free",
+]
+
+_or_free_pool_index = 0
+
+def _get_or_free_model(pool: list) -> str:
+    """Round-robin select next model from pool, skipping circuit-open models."""
+    global _or_free_pool_index
+    if not pool:
+        return ""
+    tried = 0
+    while tried < len(pool):
+        model = pool[_or_free_pool_index % len(pool)]
+        _or_free_pool_index += 1
+        # Check per-model circuit breaker
+        cb_key = f"or_free_model:{model}"
+        if not _is_circuit_open(cb_key):
+            return model
+        tried += 1
+    # All models circuit-open — return first anyway (will fail, then template)
+    return pool[0]
+
+
+# ── Task-class config ──────────────────────────────────────────────
 
 TASK_MODELS = {
     "leader": {
@@ -512,7 +936,14 @@ TASK_MODELS = {
         },
         "fallback_openrouter": {
             "provider": "openrouter",
-            "model": "meta-llama/llama-3.3-70b-instruct:free",
+            "models": OR_FREE_POOL_LARGE,
+            "max_tokens": 300,
+            "temperature": 0.85,
+            "timeout": 30,
+        },
+        "fallback_openrouter_paid": {
+            "provider": "openrouter",
+            "model": "meta-llama/llama-3.3-70b-instruct",
             "max_tokens": 300,
             "temperature": 0.85,
             "timeout": 30,
@@ -535,7 +966,14 @@ TASK_MODELS = {
         },
         "fallback_openrouter": {
             "provider": "openrouter",
-            "model": "meta-llama/llama-3.2-3b-instruct:free",
+            "models": OR_FREE_POOL_MID,
+            "max_tokens": 200,
+            "temperature": 0.8,
+            "timeout": 30,
+        },
+        "fallback_openrouter_paid": {
+            "provider": "openrouter",
+            "model": "meta-llama/llama-3.2-3b-instruct",
             "max_tokens": 200,
             "temperature": 0.8,
             "timeout": 30,
@@ -558,7 +996,14 @@ TASK_MODELS = {
         },
         "fallback_openrouter": {
             "provider": "openrouter",
-            "model": "meta-llama/llama-3.2-3b-instruct:free",
+            "models": OR_FREE_POOL_SMALL,
+            "max_tokens": 100,
+            "temperature": 0.7,
+            "timeout": 15,
+        },
+        "fallback_openrouter_paid": {
+            "provider": "openrouter",
+            "model": "meta-llama/llama-3.2-3b-instruct",
             "max_tokens": 100,
             "temperature": 0.7,
             "timeout": 15,
@@ -581,7 +1026,14 @@ TASK_MODELS = {
         },
         "fallback_openrouter": {
             "provider": "openrouter",
-            "model": "meta-llama/llama-3.3-70b-instruct:free",
+            "models": OR_FREE_POOL_LARGE,
+            "max_tokens": 500,
+            "temperature": 0.9,
+            "timeout": 30,
+        },
+        "fallback_openrouter_paid": {
+            "provider": "openrouter",
+            "model": "meta-llama/llama-3.3-70b-instruct",
             "max_tokens": 500,
             "temperature": 0.9,
             "timeout": 30,
@@ -590,24 +1042,31 @@ TASK_MODELS = {
     "assistant": {
         "primary": {
             "provider": "nim",
-            "model": "meta/llama-3.3-70b-instruct",
-            "max_tokens": 300,
-            "temperature": 0.6,
-            "timeout": 25,
-        },
-        "fallback_nim": {
-            "provider": "nim",
             "model": "meta/llama-3.1-8b-instruct",
             "max_tokens": 300,
             "temperature": 0.6,
-            "timeout": 20,
+            "timeout": 10,
+        },
+        "fallback_nim": {
+            "provider": "nim",
+            "model": "nvidia/llama-3.1-nemotron-nano-8b-v1",
+            "max_tokens": 300,
+            "temperature": 0.6,
+            "timeout": 10,
         },
         "fallback_openrouter": {
             "provider": "openrouter",
-            "model": "meta-llama/llama-3.3-70b-instruct:free",
+            "models": OR_FREE_POOL_MID,
             "max_tokens": 300,
             "temperature": 0.6,
-            "timeout": 30,
+            "timeout": 12,
+        },
+        "fallback_openrouter_paid": {
+            "provider": "openrouter",
+            "model": "meta-llama/llama-3.2-3b-instruct",
+            "max_tokens": 300,
+            "temperature": 0.6,
+            "timeout": 12,
         },
     },
     "npc_memory": {
@@ -627,7 +1086,14 @@ TASK_MODELS = {
         },
         "fallback_openrouter": {
             "provider": "openrouter",
-            "model": "meta-llama/llama-3.3-70b-instruct:free",
+            "models": OR_FREE_POOL_LARGE,
+            "max_tokens": 400,
+            "temperature": 0.8,
+            "timeout": 30,
+        },
+        "fallback_openrouter_paid": {
+            "provider": "openrouter",
+            "model": "meta-llama/llama-3.3-70b-instruct",
             "max_tokens": 400,
             "temperature": 0.8,
             "timeout": 30,
@@ -708,6 +1174,13 @@ def _check_rate_limit(provider: str, key: Optional[str] = None) -> bool:
         return True
 
 
+_VALID_AUDIT_SOURCES = {"cognition", "thought", "narrator", "assistant", "unknown", "dialogue"}
+
+
+def _normalize_audit_source(source: str) -> str:
+    return source if source in _VALID_AUDIT_SOURCES else "unknown"
+
+
 def _record_call(
     provider: str,
     key: Optional[str] = None,
@@ -716,8 +1189,18 @@ def _record_call(
     success: bool = True,
     latency_ms: float = 0,
     error: str = "",
+    char_id: str = "",
+    source: str = "",
+    system_path: str = "",
+    is_final: bool = True,
 ):
-    """Record an LLM call in Redis for rate limiting and auditing."""
+    """Record an LLM call in Redis for rate limiting and auditing.
+
+    Attribution fields (Phase 1):
+      char_id:  which NPC triggered this call (empty if unknown)
+      source:   cognition | thought | narrator | assistant | unknown
+      is_final: True = final route_call result, False = provider sub-call
+    """
     r = _get_redis()
     now = time.time()
 
@@ -743,7 +1226,12 @@ def _record_call(
             "task_class": task_class,
             "success": success,
             "latency_ms": round(latency_ms, 1),
+            "char_id": char_id,
+            "source": _normalize_audit_source(source),
+            "is_final": is_final,
         }
+        if system_path:
+            audit_entry["system_path"] = system_path
         if error:
             audit_entry["error"] = error[:200]
 
@@ -768,6 +1256,47 @@ def _record_call(
             r.zremrangebyrank(f"llm_errors:{provider}", 0, -101)
         except Exception:
             pass
+
+
+def _record_final_route_call(
+    provider: str,
+    model: str,
+    task_class: str,
+    success: bool,
+    latency_ms: float,
+    content: str = "",
+    error: str = "",
+    char_id: str = "",
+    source: str = "",
+    system_path: str = "",
+) -> None:
+    """Record the final route_call outcome without touching rate counters."""
+    try:
+        r = _get_redis()
+        now = time.time()
+        audit_entry = {
+            "ts": now,
+            "provider": provider,
+            "model": model,
+            "task_class": task_class,
+            "success": success,
+            "latency_ms": round(latency_ms, 1),
+            "char_id": char_id,
+            "source": _normalize_audit_source(source),
+            "is_final": True,
+        }
+        if system_path:
+            audit_entry["system_path"] = system_path
+        if content:
+            audit_entry["content_preview"] = content[:100]
+        if error:
+            audit_entry["error"] = error[:200]
+
+        r.zadd("llm_audit", {json.dumps(audit_entry): now})
+        r.expire("llm_audit", 86400 * 7)
+        r.zremrangebyrank("llm_audit", 0, -501)
+    except Exception:
+        pass
 
 
 def _is_circuit_open(provider: str) -> bool:
@@ -840,12 +1369,16 @@ def _call_provider(
     messages: List[Dict],
     max_tokens: int = 200,
     temperature: float = 0.8,
-    timeout: int = 12,
+    timeout: int = 20,
+    task_class: str = "",
+    char_id: str = "",
+    source: str = "",
+    system_path: str = "",
 ) -> Tuple[bool, str, float]:
     """Make a single API call to a provider. Returns (success, content, latency_ms).
 
     Args:
-        provider: "nim" or "openrouter"
+        provider: "nim", "gemini", or "openrouter"
         model: Model ID string
         messages: List of {"role": ..., "content": ...} dicts
         max_tokens: Max response tokens
@@ -855,63 +1388,102 @@ def _call_provider(
     Returns:
         Tuple of (success: bool, content: str, latency_ms: float)
     """
-    payload = json.dumps(
-        {
-            "model": model,
-            "messages": messages,
-            "max_tokens": max_tokens,
-            "temperature": temperature,
-        }
-    ).encode("utf-8")
+    global _gemini_calls, _gemini_failures
+
+    def _early_failure(message: str, key_for_rate: Optional[str] = None) -> Tuple[bool, str, float]:
+        _record_call(
+            provider,
+            key_for_rate,
+            model,
+            task_class,
+            False,
+            0,
+            message,
+            char_id=char_id,
+            source=source,
+            system_path=system_path,
+            is_final=False,
+        )
+        return False, message, 0
+
+    payload_dict: Dict[str, Any] = {
+        "model": model,
+        "messages": messages,
+        "max_tokens": max_tokens,
+        "temperature": temperature,
+    }
 
     if provider == "nim":
+        if NIM_DISABLED:
+            logger.info("NIM disabled by env; skipping hosted NIM tier")
+            return _early_failure("NIM disabled by env (NIM_DISABLED=1)")
         key = _get_nim_key()
         if not key:
-            return False, "No NIM API keys configured", 0
+            return _early_failure("No NIM API keys configured")
         if not _check_rate_limit("nim", key):
-            return False, "NIM rate limit exceeded", 0
+            return _early_failure("NIM rate limit exceeded", key)
         headers = {
             "Content-Type": "application/json",
             "Authorization": f"Bearer {key}",
         }
         url = NIM_BASE_URL
 
+    elif provider == "gemini":
+        if not GEMINI_API_KEY:
+            return _early_failure("No Gemini API key configured")
+        if not _check_rate_limit("gemini"):
+            return _early_failure("Gemini rate limit exceeded")
+        headers = {"Content-Type": "application/json"}
+        model_path = model if model.startswith("models/") else f"models/{model}"
+        url = (
+            f"{GEMINI_BASE_URL.rstrip('/')}/{urllib.parse.quote(model_path, safe='/')}:generateContent"
+            f"?key={urllib.parse.quote(GEMINI_API_KEY, safe='')}"
+        )
+        payload_dict = _build_gemini_payload(messages, max_tokens, temperature)
+
     elif provider == "openrouter":
-        if not OPENROUTER_API_KEY:
-            return False, "No OpenRouter API key configured", 0
+        or_key = _get_openrouter_key()
+        if not or_key:
+            return _early_failure("No OpenRouter API key configured")
         if not _check_rate_limit("openrouter"):
-            return False, "OpenRouter rate limit exceeded", 0
+            return _early_failure("OpenRouter rate limit exceeded")
         headers = {
             "Content-Type": "application/json",
-            "Authorization": f"Bearer {OPENROUTER_API_KEY}",
+            "Authorization": f"Bearer {or_key}",
             "HTTP-Referer": "https://federation-game.deliberatefederation.cloud",
             "X-Title": "Federation Game LLM Router",
         }
         url = OPENROUTER_BASE_URL
 
     else:
-        return False, f"Unknown provider: {provider}", 0
+        return _early_failure(f"Unknown provider: {provider}")
 
+    payload = json.dumps(payload_dict).encode("utf-8")
     req = urllib.request.Request(url, data=payload, headers=headers, method="POST")
     start = time.time()
 
     try:
         with urllib.request.urlopen(req, timeout=timeout) as resp:
             body = json.loads(resp.read().decode("utf-8"))
-            # Defensive content extraction — NIM reasoning models may return
-            # null "content" with actual text in "reasoning_content"
-            raw_content = None
-            try:
-                choices = body.get("choices") or [{}]
-                message = choices[0].get("message") or {}
-                raw_content = message.get("content")
-                # If content is null/empty, try reasoning_content (NIM reasoning models)
-                if not raw_content:
-                    reasoning = message.get("reasoning_content")
-                    if reasoning and isinstance(reasoning, str):
-                        raw_content = reasoning
-            except (IndexError, KeyError, TypeError, AttributeError):
+            if provider == "gemini":
+                raw_content = _extract_gemini_text(body)
+                _gemini_calls += 1
+                _record_gemini_usage(model, task_class, body)
+            else:
+                # Defensive content extraction — NIM reasoning models may return
+                # null "content" with actual text in "reasoning_content"
                 raw_content = None
+                try:
+                    choices = body.get("choices") or [{}]
+                    message = choices[0].get("message") or {}
+                    raw_content = message.get("content")
+                    # If content is null/empty, try reasoning_content (NIM reasoning models)
+                    if not raw_content:
+                        reasoning = message.get("reasoning_content")
+                        if reasoning and isinstance(reasoning, str):
+                            raw_content = reasoning
+                except (IndexError, KeyError, TypeError, AttributeError):
+                    raw_content = None
             # Final safety: ensure content is always a string
             if raw_content is None:
                 raw_content = ""
@@ -923,12 +1495,21 @@ def _call_provider(
                 provider,
                 key if provider == "nim" else None,
                 model,
-                "",
+                task_class,
                 True,
                 latency_ms,
+                char_id=char_id,
+                source=source,
+                system_path=system_path,
+                is_final=False,
             )
             return True, content, latency_ms
     except urllib.error.HTTPError as e:
+        if provider == "gemini":
+            _gemini_calls += 1
+            _gemini_failures += 1
+            if e.code == 429:
+                _mark_gemini_depleted()
         latency_ms = (time.time() - start) * 1000
         err_body = ""
         try:
@@ -940,41 +1521,103 @@ def _call_provider(
             provider,
             key if provider == "nim" else None,
             model,
-            "",
+            task_class,
             False,
             latency_ms,
             error_msg,
+            char_id=char_id,
+            source=source,
+            system_path=system_path,
+            is_final=False,
         )
         return False, error_msg, latency_ms
     except urllib.error.URLError as e:
+        if provider == "gemini":
+            _gemini_calls += 1
+            _gemini_failures += 1
         latency_ms = (time.time() - start) * 1000
         error_msg = f"URL Error: {str(e.reason)[:200]}"
         _record_call(
             provider,
             key if provider == "nim" else None,
             model,
-            "",
+            task_class,
             False,
             latency_ms,
             error_msg,
+            char_id=char_id,
+            source=source,
+            system_path=system_path,
+            is_final=False,
         )
         return False, error_msg, latency_ms
     except Exception as e:
+        if provider == "gemini":
+            _gemini_calls += 1
+            _gemini_failures += 1
         latency_ms = (time.time() - start) * 1000
         error_msg = f"Exception: {str(e)[:200]}"
         _record_call(
             provider,
             key if provider == "nim" else None,
             model,
-            "",
+            task_class,
             False,
             latency_ms,
             error_msg,
+            char_id=char_id,
+            source=source,
+            system_path=system_path,
+            is_final=False,
         )
         return False, error_msg, latency_ms
 
 
 # ── Public API: Route Call ──────────────────────────────────────────
+
+
+# ── Prompt cache (in-memory, LRU) ───────────────────────────────────
+# Caches only successful route_call results. Keyed on everything that can
+# change the output: task_class, char_id, source, prompts, sampling params,
+# fallback toggles, and a route-config version salt. api_key / system_path are
+# intentionally excluded (legacy-compat / attribution-only; they do not change
+# generated content). char_id in the key guarantees councilor outputs are never
+# reused across characters (e.g. Archimedes char_001 vs Oracle char_306).
+ROUTE_CACHE_VERSION = "2026-07-15"
+_PROMPT_CACHE_TTL = 600          # seconds (soft; enforced via LRU cap below)
+_PROMPT_CACHE_MAX = 2000         # max entries; LRU eviction
+_PROMPT_CACHE_LOCK = threading.Lock()
+_PROMPT_CACHE = OrderedDict()    # key -> deep-copied result dict
+
+
+def _prompt_cache_key(
+    task_class, system_prompt, user_prompt, max_tokens, temperature,
+    allow_ollama, allow_gemini, char_id, source,
+):
+    payload = "|".join(
+        repr(x) for x in (
+            task_class, char_id, source, system_prompt, user_prompt,
+            max_tokens, temperature, allow_ollama, allow_gemini,
+            ROUTE_CACHE_VERSION,
+        )
+    )
+    return hashlib.sha256(payload.encode("utf-8")).hexdigest()
+
+
+def _prompt_cache_get(key):
+    with _PROMPT_CACHE_LOCK:
+        if key not in _PROMPT_CACHE:
+            return None
+        _PROMPT_CACHE.move_to_end(key)          # LRU touch
+        return copy.deepcopy(_PROMPT_CACHE[key])
+
+
+def _prompt_cache_put(key, result):
+    with _PROMPT_CACHE_LOCK:
+        _PROMPT_CACHE[key] = copy.deepcopy(result)
+        _PROMPT_CACHE.move_to_end(key)
+        while len(_PROMPT_CACHE) > _PROMPT_CACHE_MAX:
+            _PROMPT_CACHE.popitem(last=False)   # evict oldest
 
 
 def route_call(
@@ -983,11 +1626,17 @@ def route_call(
     user_prompt: str,
     max_tokens: Optional[int] = None,
     temperature: Optional[float] = None,
+    allow_ollama: bool = True,
+    allow_gemini: bool = True,
+    char_id: str = "",
+    source: str = "",
+    system_path: str = "",
+    api_key: Optional[str] = None,
 ) -> Dict:
     """Route an LLM call through the multi-provider tiered system.
 
     Fallback chain (ALL priority modes):
-      NIM primary → NIM fallback → Ollama(3B) → OpenRouter free → template fallback
+      NIM primary → NIM fallback → Ollama(3B) → OpenRouter free → Gemini → template fallback
 
     Args:
         task_class: One of "leader", "specialist", "worker", "narrator"
@@ -995,6 +1644,12 @@ def route_call(
         user_prompt: User message
         max_tokens: Override default max_tokens for this task class
         temperature: Override default temperature
+        allow_ollama: Whether local Ollama may be used in the fallback chain
+        allow_gemini: Whether Gemini may be used as the last-resort fallback
+        char_id: Optional NPC id for llm_audit attribution
+        source: Optional source for llm_audit attribution
+        system_path: Optional call-site path for llm_audit attribution
+        api_key: Legacy compatibility parameter; routing uses configured keys
 
     Returns:
     Dict with keys:
@@ -1017,10 +1672,36 @@ def route_call(
         "attempts": 0,
         "errors": [],
     }
+    if not source and task_class in ("assistant", "narrator"):
+        source = task_class
+    # ── Prompt cache lookup ───────────────────────────────────────
+    # On a hit we return a deep copy and skip the provider chain entirely.
+    # A cache hit intentionally skips llm_audit (no real call was made).
+    _cache_key = _prompt_cache_key(
+        task_class, system_prompt, user_prompt, max_tokens, temperature,
+        allow_ollama, allow_gemini, char_id, source,
+    )
+    _cached = _prompt_cache_get(_cache_key)
+    if _cached is not None:
+        return _cached
+
 
     config = TASK_MODELS.get(task_class)
     if not config:
-        result["errors"].append(f"Unknown task class: {task_class}")
+        error = f"Unknown task class: {task_class}"
+        result["errors"].append(error)
+        _record_final_route_call(
+            "",
+            "",
+            task_class,
+            False,
+            0,
+            error=error,
+            char_id=char_id,
+            source=source,
+            system_path=system_path,
+        )
+        if result.get("success"): _prompt_cache_put(_cache_key, result)
         return result
 
     messages = [
@@ -1042,6 +1723,7 @@ def route_call(
     # 2. NIM fallback model (from TASK_MODELS)
     # 3. Ollama local (3B via Tailscale)
     # 4. OpenRouter free (from TASK_MODELS)
+    # 5. Gemini fallback (global or task override; budget-guarded)
     nim_tiers = [
         ("primary", config.get("primary")),
         ("fallback_nim", config.get("fallback_nim")),
@@ -1071,7 +1753,16 @@ def route_call(
         result["attempts"] += 1
 
         ok, content, latency = _call_provider(
-            provider, model, messages, tier_mt, tier_temp, tier_timeout
+            provider,
+            model,
+            messages,
+            tier_mt,
+            tier_temp,
+            tier_timeout,
+            task_class=task_class,
+            char_id=char_id,
+            source=source,
+            system_path=system_path,
         )
 
         _record_provider_result(provider, ok)
@@ -1082,20 +1773,18 @@ def route_call(
             result["provider"] = provider
             result["model"] = model
             result["latency_ms"] = latency
-            try:
-                r = _get_redis()
-                audit_entry = {
-                    "ts": time.time(),
-                    "provider": provider,
-                    "model": model,
-                    "task_class": task_class,
-                    "success": True,
-                    "latency_ms": round(latency, 1),
-                    "content_preview": content[:100],
-                }
-                r.zadd("llm_audit", {json.dumps(audit_entry): time.time()})
-            except Exception:
-                pass
+            _record_final_route_call(
+                provider,
+                model,
+                task_class,
+                True,
+                latency,
+                content,
+                char_id=char_id,
+                source=source,
+                system_path=system_path,
+            )
+            if result.get("success"): _prompt_cache_put(_cache_key, result)
             return result
         else:
             result["errors"].append(f"{provider}/{model}: {content[:150]}")
@@ -1108,49 +1797,191 @@ def route_call(
             )
 
     # ── Ollama local fallback ─────────────────────────────────────────
-    if _check_ollama_available() and not _is_circuit_open("ollama"):
+    if allow_ollama and _check_ollama_available() and not _is_circuit_open("ollama"):
         result["attempts"] += 1
-        ok, content, latency = _call_ollama(messages, mt, temp)
+        ok, content, latency = _call_ollama(
+            messages,
+            mt,
+            temp,
+            task_class=task_class,
+            char_id=char_id,
+            source=source,
+            system_path=system_path,
+        )
         if ok and content:
             result["success"] = True
             result["content"] = content
             result["provider"] = "ollama"
             result["model"] = OLLAMA_MODEL
             result["latency_ms"] = latency
-            try:
-                r = _get_redis()
-                audit_entry = {
-                    "ts": time.time(),
-                    "provider": "ollama",
-                    "model": OLLAMA_MODEL,
-                    "task_class": task_class,
-                    "success": True,
-                    "latency_ms": round(latency, 1),
-                    "content_preview": content[:100],
-                }
-                r.zadd("llm_audit", {json.dumps(audit_entry): time.time()})
-            except Exception:
-                pass
+            _record_final_route_call(
+                "ollama",
+                OLLAMA_MODEL,
+                task_class,
+                True,
+                latency,
+                content,
+                char_id=char_id,
+                source=source,
+                system_path=system_path,
+            )
+            if result.get("success"): _prompt_cache_put(_cache_key, result)
             return result
         else:
             result["errors"].append(f"ollama/{OLLAMA_MODEL}: {content[:150]}")
             result["latency_ms"] += latency
 
-    # ── OpenRouter free fallback (last resort) ────────────────────────
+    # ── OpenRouter free fallback (pool rotation) ─────────────────────
     or_config = config.get("fallback_openrouter")
     if or_config:
         provider = or_config["provider"]
-        model = or_config["model"]
         tier_mt = max_tokens if max_tokens is not None else or_config["max_tokens"]
         tier_temp = (
             temperature if temperature is not None else or_config["temperature"]
         )
         tier_timeout = or_config.get("timeout", 25)
+        pool = or_config.get("models", [])
+        # Legacy: if config still has single "model" key, use a 1-element pool
+        if not pool and or_config.get("model"):
+            pool = [or_config["model"]]
 
-        if not _is_circuit_open(provider):
+        # Try up to 3 models from the pool (skip circuit-open ones)
+        max_or_tries = min(3, len(pool))
+        or_tries = 0
+        while or_tries < max_or_tries and pool:
+            model = _get_or_free_model(pool)
+            or_tries += 1
+            cb_key = f"or_free_model:{model}"
+
+            if _is_circuit_open(cb_key):
+                continue
+
+            # Also check overall openrouter circuit (rate limit, key issues)
+            if _is_circuit_open(provider):
+                break
+
             result["attempts"] += 1
             ok, content, latency = _call_provider(
-                provider, model, messages, tier_mt, tier_temp, tier_timeout
+                provider,
+                model,
+                messages,
+                tier_mt,
+                tier_temp,
+                tier_timeout,
+                task_class=task_class,
+                char_id=char_id,
+                source=source,
+                system_path=system_path,
+            )
+            # Record per-model circuit breaker
+            _record_provider_result(cb_key, ok)
+            # Also record at provider level for rate-limit tracking
+            _record_provider_result(provider, ok)
+            if ok and content:
+                result["success"] = True
+                result["content"] = content
+                result["provider"] = provider
+                result["model"] = model
+                result["latency_ms"] = latency
+                _record_final_route_call(
+                    provider,
+                    model,
+                    task_class,
+                    True,
+                    latency,
+                    content,
+                    char_id=char_id,
+                    source=source,
+                    system_path=system_path,
+                )
+                if result.get("success"): _prompt_cache_put(_cache_key, result)
+                return result
+            else:
+                result["errors"].append(f"{provider}/{model}: {content[:150]}")
+                result["latency_ms"] += latency
+
+    # ── OpenRouter paid fallback (requires credits) ──────────────────
+    or_paid_config = config.get("fallback_openrouter_paid")
+    if or_paid_config:
+        pp = or_paid_config["provider"]
+        pmodel = or_paid_config["model"]
+        pmt = max_tokens if max_tokens is not None else or_paid_config["max_tokens"]
+        ptemp = (
+            temperature if temperature is not None else or_paid_config["temperature"]
+        )
+        ptimeout = or_paid_config.get("timeout", 25)
+
+        if not _is_circuit_open("openrouter_paid"):
+            result["attempts"] += 1
+            ok, content, latency = _call_provider(
+                pp,
+                pmodel,
+                messages,
+                pmt,
+                ptemp,
+                ptimeout,
+                task_class=task_class,
+                char_id=char_id,
+                source=source,
+                system_path=system_path,
+            )
+            _record_provider_result("openrouter_paid", ok)
+            if ok and content:
+                result["success"] = True
+                result["content"] = content
+                result["provider"] = pp
+                result["model"] = pmodel
+                result["latency_ms"] = latency
+                _record_final_route_call(
+                    pp,
+                    pmodel,
+                    task_class,
+                    True,
+                    latency,
+                    content,
+                    char_id=char_id,
+                    source=source,
+                    system_path=system_path,
+                )
+                if result.get("success"): _prompt_cache_put(_cache_key, result)
+                return result
+            else:
+                result["errors"].append(f"{pp}/{pmodel}: {content[:150]}")
+                result["latency_ms"] += latency
+
+    # ── Gemini fallback (budget-guarded last resort) ──────────────────
+    gemini_config = config.get("fallback_gemini") or {
+        "provider": "gemini",
+        "model": GEMINI_MODEL,
+        "max_tokens": mt,
+        "temperature": temp,
+        "timeout": GEMINI_TIMEOUT,
+    }
+    if allow_gemini and gemini_config and _check_gemini_available():
+        provider = gemini_config["provider"]
+        model = gemini_config["model"]
+        tier_mt = max_tokens if max_tokens is not None else gemini_config["max_tokens"]
+        tier_temp = (
+            temperature if temperature is not None else gemini_config["temperature"]
+        )
+        tier_timeout = gemini_config.get("timeout", GEMINI_TIMEOUT)
+
+        allowed, reason = _check_gemini_budget(task_class, model)
+        if not allowed:
+            result["errors"].append(reason)
+        elif not _is_circuit_open(provider):
+            result["attempts"] += 1
+            ok, content, latency = _call_provider(
+                provider,
+                model,
+                messages,
+                tier_mt,
+                tier_temp,
+                tier_timeout,
+                task_class=task_class,
+                char_id=char_id,
+                source=source,
+                system_path=system_path,
             )
             _record_provider_result(provider, ok)
             if ok and content:
@@ -1159,20 +1990,18 @@ def route_call(
                 result["provider"] = provider
                 result["model"] = model
                 result["latency_ms"] = latency
-                try:
-                    r = _get_redis()
-                    audit_entry = {
-                        "ts": time.time(),
-                        "provider": provider,
-                        "model": model,
-                        "task_class": task_class,
-                        "success": True,
-                        "latency_ms": round(latency, 1),
-                        "content_preview": content[:100],
-                    }
-                    r.zadd("llm_audit", {json.dumps(audit_entry): time.time()})
-                except Exception:
-                    pass
+                _record_final_route_call(
+                    provider,
+                    model,
+                    task_class,
+                    True,
+                    latency,
+                    content,
+                    char_id=char_id,
+                    source=source,
+                    system_path=system_path,
+                )
+                if result.get("success"): _prompt_cache_put(_cache_key, result)
                 return result
             else:
                 result["errors"].append(f"{provider}/{model}: {content[:150]}")
@@ -1183,6 +2012,18 @@ def route_call(
         task_class,
         "; ".join(result["errors"][:3]),
     )
+    _record_final_route_call(
+        result.get("provider", ""),
+        result.get("model", ""),
+        task_class,
+        False,
+        result.get("latency_ms", 0),
+        error="; ".join(result["errors"][:3]),
+        char_id=char_id,
+        source=source,
+        system_path=system_path,
+    )
+    if result.get("success"): _prompt_cache_put(_cache_key, result)
     return result
 
 
@@ -1191,49 +2032,30 @@ def route_assistant_call(
     user_prompt: str,
     max_tokens: Optional[int] = None,
     temperature: Optional[float] = None,
+    source: str = "",
+    system_path: str = "",
 ) -> Dict:
-    """Route the human-facing assistant through Ollama first, then assistant chain."""
-    narrator_config = TASK_MODELS.get("assistant", {}).get("primary", {})
-    mt = max_tokens if max_tokens is not None else narrator_config.get("max_tokens", 300)
-    temp = temperature if temperature is not None else narrator_config.get("temperature", 0.7)
-    messages = [
-        {"role": "system", "content": system_prompt},
-        {"role": "user", "content": user_prompt},
-    ]
-    errors = []
-    attempts = 0
-    latency_ms = 0
+    """Route the human-facing assistant through bounded cloud providers only.
 
-    if _check_ollama_available() and not _is_circuit_open("ollama"):
-        attempts += 1
-        ok, content, latency = _call_ollama(messages, mt, temp)
-        latency_ms += latency
-        if ok and content:
-            return {
-                "success": True,
-                "content": content,
-                "provider": "ollama",
-                "model": OLLAMA_MODEL,
-                "task_class": "assistant",
-                "latency_ms": latency_ms,
-                "attempts": attempts,
-                "errors": errors,
-            }
-        errors.append(f"ollama failed: {content[:150]}")
-    else:
-        errors.append("ollama unavailable or circuit breaker open")
-
-    fallback = route_call(
+    The live chat UI has its own timeout and should not burn time on the local
+    Ollama fallback path. Use the assistant task's fast NIM/OpenRouter chain and
+    avoid long last-resort providers that outlive the browser request.
+    """
+    attribution = {}
+    if source:
+        attribution["source"] = source
+    if system_path:
+        attribution["system_path"] = system_path
+    return route_call(
         task_class="assistant",
         system_prompt=system_prompt,
         user_prompt=user_prompt,
         max_tokens=max_tokens,
         temperature=temperature,
+        allow_ollama=False,
+        allow_gemini=False,
+        **attribution,
     )
-    fallback["attempts"] = attempts + fallback.get("attempts", 0)
-    fallback["latency_ms"] = latency_ms + fallback.get("latency_ms", 0)
-    fallback["errors"] = errors + fallback.get("errors", [])
-    return fallback
 
 
 def route_call_batch(
@@ -1256,6 +2078,9 @@ def route_call_batch(
             user_prompt=call["user_prompt"],
             max_tokens=call.get("max_tokens"),
             temperature=call.get("temperature"),
+            char_id=call.get("char_id", ""),
+            source=call.get("source", ""),
+            system_path=call.get("system_path", ""),
         )
         results.append(result)
         # Small delay between calls to respect rate limits
@@ -1272,7 +2097,8 @@ def get_router_stats() -> Dict:
     now = time.time()
     stats = {
         "nim_keys_available": len(NIM_KEYS),
-        "openrouter_configured": bool(OPENROUTER_API_KEY),
+        "openrouter_configured": bool(OPENROUTER_KEYS),
+        "openrouter_keys_available": len(OPENROUTER_KEYS),
         "ollama_available": _check_ollama_available(),
         "ollama_model": OLLAMA_MODEL,
         "ollama_heavy_model": OLLAMA_HEAVY_MODEL,
@@ -1294,10 +2120,19 @@ def get_router_stats() -> Dict:
         "gemini_available": _check_gemini_available(),
         "gemini_calls": _gemini_calls,
         "gemini_failures": _gemini_failures,
+        "gemini_allowed_tasks": sorted(GEMINI_ALLOWED_TASKS),
+        "gemini_daily_call_cap": GEMINI_MAX_CALLS_PER_DAY,
+        "gemini_monthly_call_cap": GEMINI_MAX_CALLS_PER_MONTH,
+        "gemini_monthly_usd_cap": GEMINI_MONTHLY_USD_CAP,
         "grok_available": _check_grok_available(),
         "grok_calls": _grok_calls,
         "grok_failures": _grok_failures,
         "task_classes": list(TASK_MODELS.keys()),
+        "or_free_pools": {
+            "large": OR_FREE_POOL_LARGE,
+            "mid": OR_FREE_POOL_MID,
+            "small": OR_FREE_POOL_SMALL,
+        },
         "recent_calls": {},
         "recent_errors": {},
     }
@@ -1336,5 +2171,25 @@ def get_router_stats() -> Dict:
             stats["recent_errors"][provider] = len(errors)
         except Exception:
             stats["recent_errors"][provider] = -1
+
+    try:
+        keys = _gemini_budget_keys()
+        stats["gemini_budget"] = {
+            "daily_calls": int(r.get(keys["daily_calls"]) or 0),
+            "monthly_calls": int(r.get(keys["monthly_calls"]) or 0),
+            "monthly_input_tokens": int(r.get(keys["monthly_input_tokens"]) or 0),
+            "monthly_output_tokens": int(r.get(keys["monthly_output_tokens"]) or 0),
+            "monthly_total_tokens": int(r.get(keys["monthly_total_tokens"]) or 0),
+            "monthly_usd_estimate": round(float(r.get(keys["monthly_usd"]) or 0.0), 6),
+        }
+    except Exception:
+        stats["gemini_budget"] = {
+            "daily_calls": -1,
+            "monthly_calls": -1,
+            "monthly_input_tokens": -1,
+            "monthly_output_tokens": -1,
+            "monthly_total_tokens": -1,
+            "monthly_usd_estimate": -1.0,
+        }
 
     return stats

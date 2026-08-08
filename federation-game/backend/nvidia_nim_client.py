@@ -39,6 +39,7 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 
 NIM_BASE_URL = "https://integrate.api.nvidia.com/v1"
+NIM_DISABLED = os.environ.get("NIM_DISABLED", "").strip() == "1"
 
 # Comma-separated NIM API keys from env
 _NIM_KEYS_ENV = os.environ.get("NIM_API_KEYS", "")
@@ -203,12 +204,48 @@ OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1/chat/completions"
 OPENROUTER_TIMEOUT = int(os.environ.get("OPENROUTER_TIMEOUT", "25"))
 _openrouter_key_index: int = 0
 
-# OpenRouter free models per priority class
+# OpenRouter free model pools per priority class (lists, not single models)
 OPENROUTER_MODELS = {
-    "local": "meta-llama/llama-3.3-70b-instruct:free",
-    "cloud": "meta-llama/llama-3.3-70b-instruct:free",
-    "heavy": "meta-llama/llama-3.3-70b-instruct:free",
+    "local": [
+        "meta-llama/llama-3.3-70b-instruct:free",
+        "nvidia/nemotron-3-super-120b-a12b:free",
+        "nvidia/nemotron-nano-9b-v2:free",
+        "nvidia/nemotron-3-nano-30b-a3b:free",
+        "google/gemma-4-26b-a4b-it:free",
+    ],
+    "cloud": [
+        "meta-llama/llama-3.3-70b-instruct:free",
+        "nvidia/nemotron-3-ultra-550b-a55b:free",
+        "nousresearch/hermes-3-llama-3.1-405b:free",
+        "qwen/qwen3-next-80b-a3b-instruct:free",
+        "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free",
+    ],
+    "heavy": [
+        "meta-llama/llama-3.3-70b-instruct:free",
+        "nvidia/nemotron-3-super-120b-a12b:free",
+        "nvidia/nemotron-3-ultra-550b-a55b:free",
+        "nousresearch/hermes-3-llama-3.1-405b:free",
+        "qwen/qwen3-next-80b-a3b-instruct:free",
+    ],
 }
+OPENROUTER_PAID_MODELS = {
+    "local": "meta-llama/llama-3.3-70b-instruct",
+    "cloud": "meta-llama/llama-3.3-70b-instruct",
+    "heavy": "meta-llama/llama-3.3-70b-instruct",
+}
+
+# Round-robin index for OR free pool rotation
+_or_nim_pool_idx = 0
+
+def _get_or_free_model_nim(priority: str) -> str:
+    """Round-robin select next free model for nvidia_nim_client fallback."""
+    global _or_nim_pool_idx
+    pool = OPENROUTER_MODELS.get(priority, OPENROUTER_MODELS["local"])
+    if isinstance(pool, list):
+        model = pool[_or_nim_pool_idx % len(pool)]
+        _or_nim_pool_idx += 1
+        return model
+    return pool if isinstance(pool, str) else "meta-llama/llama-3.3-70b-instruct:free"
 
 
 # ---------------------------------------------------------------------------
@@ -607,7 +644,7 @@ class NimClient:
         if not key:
             return None
 
-        model = OPENROUTER_MODELS.get(priority, "meta-llama/llama-3.3-70b-instruct:free")
+        model = _get_or_free_model_nim(priority)
 
         try:
             from openai import AsyncOpenAI
@@ -655,6 +692,69 @@ class NimClient:
         except Exception as exc:
             self._openrouter_failures += 1
             logger.warning("OpenRouter: error: %s", str(exc)[:100])
+        return None
+
+    async def _call_openrouter_paid(
+        self,
+        system_prompt: str,
+        user_prompt: str,
+        max_tokens: int = 80,
+        temperature: float = 0.8,
+        priority: str = "local",
+    ) -> Optional[str]:
+        """Call OpenRouter paid models (requires credits). Returns content string or None."""
+        key = self._get_openrouter_key()
+        if not key:
+            return None
+
+        model = OPENROUTER_PAID_MODELS.get(priority, "meta-llama/llama-3.3-70b-instruct")
+
+        try:
+            from openai import AsyncOpenAI
+
+            or_client = AsyncOpenAI(
+                base_url="https://openrouter.ai/api/v1",
+                api_key=key,
+                timeout=httpx.Timeout(float(OPENROUTER_TIMEOUT), connect=5.0),
+                max_retries=1,
+            )
+            resp = await asyncio.wait_for(
+                or_client.chat.completions.create(
+                    model=model,
+                    messages=[
+                        {"role": "system", "content": system_prompt},
+                        {"role": "user", "content": user_prompt},
+                    ],
+                    max_tokens=min(max_tokens, 512),
+                    temperature=temperature,
+                    stream=False,
+                    extra_headers={
+                        "HTTP-Referer": "https://federation-game.deliberatefederation.cloud",
+                        "X-Title": "Federation Game LLM Router",
+                    },
+                ),
+                timeout=float(OPENROUTER_TIMEOUT) + 5.0,
+            )
+            content = resp.choices[0].message.content
+            if content:
+                content = content.strip().strip('"').strip("'")
+                if len(content) > 500:
+                    content = content[:500]
+                self._openrouter_calls += 1
+                logger.info(
+                    "OpenRouter paid: model=%s chars=%d success=True",
+                    model,
+                    len(content),
+                )
+                return content
+            self._openrouter_failures += 1
+            return None
+        except asyncio.TimeoutError:
+            self._openrouter_failures += 1
+            logger.warning("OpenRouter paid: timed out (%ds)", OPENROUTER_TIMEOUT)
+        except Exception as exc:
+            self._openrouter_failures += 1
+            logger.warning("OpenRouter paid: error: %s", str(exc)[:100])
         return None
 
     # ------------------------------------------------------------------
@@ -792,11 +892,14 @@ class NimClient:
         result = None
 
         # Tier 1: NIM cloud -- primary for ALL call types
-        result = await self._call_nim(
-            system_prompt, user_prompt, max_tokens, temperature
-        )
-        if result is not None:
-            return result
+        if NIM_DISABLED:
+            logger.info("NIM disabled by env; skipping hosted NIM tier")
+        else:
+            result = await self._call_nim(
+                system_prompt, user_prompt, max_tokens, temperature
+            )
+            if result is not None:
+                return result
 
         # Tier 2: Ollama local -- fallback to local GPU
         heavy = (priority == "heavy")
@@ -808,6 +911,13 @@ class NimClient:
 
         # Tier 3: OpenRouter free -- last resort
         result = await self._call_openrouter(
+            system_prompt, user_prompt, max_tokens, temperature, priority=priority
+        )
+        if result is not None:
+            return result
+
+        # Tier 3.5: OpenRouter paid (requires credits)
+        result = await self._call_openrouter_paid(
             system_prompt, user_prompt, max_tokens, temperature, priority=priority
         )
         return result

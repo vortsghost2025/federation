@@ -60,7 +60,7 @@ p{margin:0 0 8px 0}
 .muted{color:#8798ad}
 .timeline{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px}
 .glyph{border:1px solid #22344c;border-radius:999px;background:#101827;color:#e8edf5;padding:8px 11px;min-width:44px;text-align:center;font-size:1.15rem;cursor:pointer}
-.glyph.blue{background:#112033;border-color:#29527e}.glyph.green{background:#112a20;border-color:#28704b}.glyph.amber{background:#2d2410;border-color:#9a7222}.glyph.red{background:#351719;border-color:#aa3a42}
+.glyph.blue{background:#112033;border-color:#29527e}.glyph.green{background:#112a20;border-color:#28704b}.glyph.amber{background:#2d2410;border-color:#9a7222}.glyph.red{background:#351719;border-color:#aa3a42}.glyph.purple{background:#251035;border-color:#7e29b0}
 .tick-detail{display:none;margin-top:10px;padding:12px 14px;background:#0a0e16;border-left:4px solid #7aa7ff;border-radius:8px;color:#d6e2f0;font-size:1.05rem}
 .tick-detail.show{display:block}
 .comm-panel,.timeline-panel{padding:20px 24px;background:#0e121c;border:1px solid #26384f;border-radius:18px;margin-bottom:16px}
@@ -116,6 +116,32 @@ p{margin:0 0 8px 0}
 .empty-card{padding:30px;background:#0e121c;border:1px solid #1a2430;border-radius:14px;color:#5a6a80;font-style:italic;font-size:1.1rem;text-align:center}
 .copy-msg{display:inline-block;color:#7be095;font-size:0.95rem;margin-left:10px;opacity:0;transition:opacity 0.3s}
 .copy-msg.show{opacity:1}
+.btn:disabled{opacity:0.4;cursor:default}
+
+/* ── Institutions panel ── */
+.inst-card{padding:22px 26px;background:#0e121c;border:1px solid #26384f;border-radius:18px;margin-bottom:16px;box-shadow:0 0 0 1px #00000044}
+.inst-card h3{font-size:1.6rem;margin:0 0 6px 0;color:#eaf0fa;font-weight:700}
+.inst-kind{display:inline-block;background:#1a2430;border:1px solid #2a3a4a;color:#9bb8d0;padding:2px 10px;border-radius:4px;font-size:0.9rem;text-transform:uppercase;letter-spacing:0.05em;margin-left:10px}
+.inst-mandate{color:#8da3ba;font-size:1.05rem;line-height:1.45;margin:8px 0 12px 0}
+.inst-roles{padding:10px 14px;background:#0a0e16;border-radius:8px;margin-bottom:10px}
+.inst-role-row{padding:6px 0;border-bottom:1px solid #121a24;display:grid;grid-template-columns:1fr auto;gap:8px;align-items:center;font-size:1.05rem}
+.inst-role-row:last-child{border-bottom:none}
+.inst-role-title{color:#e0e8f0;font-weight:700}
+.inst-role-holder{color:#7be095;font-family:monospace;font-size:0.95rem}
+.inst-role-auth{color:#5a6a80;font-size:0.85rem;font-style:italic}
+.inst-kpis{display:flex;flex-wrap:wrap;gap:8px 28px;padding:10px 14px;background:#0a0e16;border-radius:8px;font-size:1.1rem;margin-top:8px}
+.inst-kpis .lbl{color:#5a6a80}.inst-kpis .num{color:#eef2f8;font-weight:700}
+.wf-card{padding:16px 20px;background:#0e121c;border:1px solid #1a2638;border-radius:14px;margin-bottom:10px}
+.wf-card.active{border-left:4px solid #f1c40f}
+.wf-card.completed{border-left:4px solid #2ecc71}
+.wf-proposal{font-size:1.2rem;color:#eaf0fa;font-weight:700;margin-bottom:6px}
+.wf-meta{color:#8da3ba;font-size:1.0rem;display:flex;flex-wrap:wrap;gap:8px 18px}
+.wf-events{margin-top:10px;padding:10px 14px;background:#0a0e16;border-radius:8px}
+.wf-event{padding:5px 0;border-bottom:1px solid #121a24;font-size:0.95rem;color:#9bb8d0;display:grid;grid-template-columns:auto 1fr auto;gap:8px;align-items:center}
+.wf-event:last-child{border-bottom:none}
+.wf-event .state{font-weight:700;color:#e0e8f0;text-transform:uppercase;font-size:0.85rem;background:#1a2430;padding:2px 8px;border-radius:3px}
+.wf-event .actor{color:#7be095;font-family:monospace;font-size:0.85rem}
+.wf-event .time{color:#5a6a80;font-family:monospace;font-size:0.85rem}
 </style>
 </head>
 <body>
@@ -140,6 +166,8 @@ p{margin:0 0 8px 0}
 <a href="/" style="color:#7a8aa0;text-decoration:none;padding:6px 14px;border-radius:4px;font-size:0.95rem">Simulator</a>
 <a href="/simulation.html" style="color:#7a8aa0;text-decoration:none;padding:6px 14px;border-radius:4px;font-size:0.95rem">Live Sim</a>
 <a href="/adult.html" style="color:#7a8aa0;text-decoration:none;padding:6px 14px;border-radius:4px;font-size:0.95rem">Control</a>
+  <a href="/council-chat.html" style="color:#7a8aa0;text-decoration:none;padding:6px 14px;border-radius:4px;font-size:0.95rem">Council Chat</a>
+  <a href="/spectator.html?mode=institutions" style="color:#7a8aa0;text-decoration:none;padding:6px 14px;border-radius:4px;font-size:0.95rem">Institutions</a>
 <a href="/worldguide.html" style="color:#7a8aa0;text-decoration:none;padding:6px 14px;border-radius:4px;font-size:0.95rem">World Guide</a>
 <a href="/earth.html" style="color:#7a8aa0;text-decoration:none;padding:6px 14px;border-radius:4px;font-size:0.95rem">Earth</a>
 <a href="/spectator.html" style="color:#e8edf5;text-decoration:none;padding:6px 14px;border-radius:4px;font-size:0.95rem;background:#27384f;font-weight:700">Spectator</a>
@@ -171,6 +199,7 @@ p{margin:0 0 8px 0}
 
 <div class="tab-row" style="margin-bottom:12px">
   <button class="tab active" data-mode="both">Simple behavior view</button>
+  <button class="tab" data-mode="institutions">Institutions</button>
   <span class="spacer"></span>
   <button class="tab" data-mode="detail">⚙ Detailed mode</button>
 </div>
@@ -185,6 +214,17 @@ const REFRESH_MS = 30000;
 let timer = null;
 let lastData = null;
 let viewMode = 'both';
+
+(function(){
+  const p = new URLSearchParams(location.search);
+  if(p.get('mode')==='institutions') viewMode = 'institutions';
+  if(p.get('mode')==='detail') viewMode = 'detail';
+  if(viewMode==='institutions'){
+    document.querySelectorAll('[data-mode]').forEach(b=>{
+      b.classList.toggle('active', b.dataset.mode==='institutions');
+    });
+  }
+})();
 
 const CATEGORY_LABELS = {
   read_artifacts: "Reading memory/artifacts",
@@ -201,7 +241,10 @@ const CATEGORY_LABELS = {
   advance_goal: "Pursuing a goal",
   confront_rival: "Engaging a rival",
   help_ally: "Helping an ally",
-  seek_resources: "Seeking resources",
+   seek_resources: "Seeking resources",
+   create_institution: "Founding a new institution",
+   propose_role: "Proposing a new institutional role",
+   submit_to_institution: "Submitting artifact for review",
 };
 
 const CATEGORY_GLYPH = {
@@ -219,8 +262,11 @@ const CATEGORY_GLYPH = {
   advance_goal: "🎯",
   confront_rival: "⚔",
   help_ally: "🛡",
-  seek_resources: "⛏",
-  unknown: "•",
+   seek_resources: "⛏",
+   create_institution: "🏛",
+   propose_role: "⚜",
+   submit_to_institution: "📋",
+   unknown: "•",
 };
 
 const CATEGORY_COLOR = {
@@ -237,7 +283,10 @@ const CATEGORY_COLOR = {
   explore: "amber",
   advance_goal: "amber",
   confront_rival: "amber",
-  seek_resources: "amber",
+   seek_resources: "amber",
+   create_institution: "purple",
+   propose_role: "purple",
+   submit_to_institution: "green",
 };
 
 /* helpers */
@@ -272,8 +321,11 @@ function categoryFromAction(action){
   if(/artifact_(created|deferred)|created artifact|published artifact/.test(s)) return 'create_artifact';
   if(/message_(sent|deferred)|sent message|direct note|answering partner/.test(s)) return 'send_message';
   if(/read.*artifact|artifact_read|read_artifacts/.test(s)) return 'read_artifacts';
-  if(/investigation|investigat/.test(s)) return 'investigate';
-  if(/code_(executed|failed)|wrote code|write_code/.test(s)) return 'write_code';
+   if(/investigation|investigat/.test(s)) return 'investigate';
+   if(/institution_created|institution_founded|create_institution/.test(s)) return 'create_institution';
+   if(/role_proposed|propose_role/.test(s)) return 'propose_role';
+   if(/artifact_submitted|submit_to_institution|submitted.*review/.test(s)) return 'submit_to_institution';
+   if(/code_(executed|failed)|wrote code|write_code/.test(s)) return 'write_code';
   if(/self_improvement|self_improve/.test(s)) return 'self_improve';
   if(/reflection|rest/.test(s)) return 'rest';
   if(/error|failed|fail/.test(s)) return 'error';
@@ -305,8 +357,11 @@ function inferCategoryFromLog(log){
   if(/Created artifact/i.test(response)) return 'create_artifact';
   if(/Sent message|message_sent/i.test(response)) return 'send_message';
   if(/Read artifacts|artifact_read/i.test(response)) return 'read_artifacts';
-  if(/investigat/i.test(response)) return 'investigate';
-  if(/self[-_ ]?improv/i.test(response)) return 'self_improve';
+   if(/investigat/i.test(response)) return 'investigate';
+   if(/institution_(created|founded)|create_institution|Proposed new institution/i.test(response)) return 'create_institution';
+   if(/role_proposed|propose_role|Proposed role/i.test(response)) return 'propose_role';
+   if(/artifact_submitted|submit_to_institution|submitted.*review/i.test(response)) return 'submit_to_institution';
+   if(/self[-_ ]?improv/i.test(response)) return 'self_improve';
   if(!log.success || /error|fail|timeout/i.test(response)) return 'error';
   return 'unknown';
 }
@@ -386,6 +441,9 @@ function deriveBehaviorSignal(decisions){
     explore: ['curious'],
     help_ally: ['cooperative'],
     seek_resources: ['practical'],
+    create_institution: ['foundational','governance-oriented'],
+    propose_role: ['structural','governance-oriented'],
+    submit_to_institution: ['formal','institutional'],
   };
   const labels = {};
   for(const cat in counts){(weights[cat]||[]).forEach(l => { labels[l] = (labels[l]||0)+counts[cat]; });}
@@ -411,6 +469,9 @@ function behaviorStateSentence(npc){
   }
   if(d.category === 'send_message') return `${name} is communicating with another NPC and building the relationship thread.`;
   if(d.category === 'react_to_events') return `${name} is responding to recent world events.`;
+  if(d.category === 'create_institution') return `${name} is founding a new institution — a governance milestone.`;
+  if(d.category === 'propose_role') return `${name} is proposing a new role within an institution.`;
+  if(d.category === 'submit_to_institution') return `${name} is submitting an artifact for institutional review.`;
   return `${name} is ${doing}.`;
 }
 
@@ -665,6 +726,28 @@ function renderBehaviorCard(npc){
   `;
 }
 
+function renderFoundedAreas(areas){
+  if(!areas || !areas.length){
+    return '<div class="exchange-row muted">No areas founded yet. They can use create_area to establish sectors on the shared map.</div>';
+  }
+  const dangerLabel = (d) => {
+    const n = Number(d) || 0;
+    if(n <= 2) return 'low';
+    if(n <= 5) return 'medium';
+    if(n <= 8) return 'high';
+    return 'severe';
+  };
+  return areas.map(a => {
+    const ts = a.created_at ? new Date(a.created_at).toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'}) : '';
+    return `<div class="exchange-row">
+      <strong>${esc(a.name || a.area_id)}</strong>
+      <span class="muted"> · ${esc(a.region_type || 'unknown')} · danger ${dangerLabel(a.danger_level)}</span>
+      <br><span class="muted">founded by ${esc(a.founded_by || '?')}${ts ? ' · '+esc(ts) : ''}</span>
+      <br><code style="font-size:11px; opacity:0.7">${esc(a.area_id)}</code>
+    </div>`;
+  }).join('');
+}
+
 function renderPairStoryPanel(npcs){
   const pair = pairStory();
   if(!pair) return '';
@@ -698,6 +781,10 @@ function renderPairStoryPanel(npcs){
       <div class="behavior-section">
         <div class="behavior-label">Recent story beats</div>
         <div class="exchange-list">${beatRows}</div>
+      </div>
+      <div class="behavior-section">
+        <div class="behavior-label">Areas they have founded</div>
+        <div class="exchange-list" id="founded-areas-list">${renderFoundedAreas(pair.founded_areas || [])}</div>
       </div>
     </section>
   `;
@@ -875,6 +962,7 @@ function render(){
   if(viewMode==='001') return renderSingle(npcs.find(n=>n.char_id==='char_001')||npcs[0]);
   if(viewMode==='306') return renderSingle(npcs.find(n=>n.char_id==='char_306')||npcs[1]||npcs[0]);
   if(viewMode==='detail') return renderDetail(lastData);
+  if(viewMode==='institutions') return renderInstitutions();
   return renderBoth(npcs);
 }
 
@@ -942,11 +1030,192 @@ function updateSystemLine(data){
   $('system-line').innerHTML = `${esc(pieces.join('. '))}.<small>Page refreshed ${esc(new Date().toLocaleTimeString())}. Detailed raw logs are collapsed under Debug.</small>`;
 }
 
+let instData = null;
+
+let instCompletedOffset = 0;
+const INST_PAGE_SIZE = 20;
+
+async function loadInstitutions(offset){
+  if(offset === undefined) offset = instCompletedOffset;
+  try{
+    const [instRes, activeRes, doneRes, healthRes] = await Promise.all([
+      fetch('/api/institutions'),
+      fetch('/api/institutions/workflows/active'),
+      fetch('/api/institutions/workflows/completed?limit='+INST_PAGE_SIZE+'&offset='+offset),
+      fetch('/api/institutions/health')
+    ]);
+    const institutions = instRes.ok ? await instRes.json() : {institutions:[]};
+    const active = activeRes.ok ? await activeRes.json() : {active:[]};
+    const completed = doneRes.ok ? await doneRes.json() : {completed:[],total:0,offset:0,limit:INST_PAGE_SIZE};
+    const health = healthRes.ok ? await healthRes.json() : null;
+    instData = {institutions: institutions.institutions||[], active: active.active||[], completed: completed.completed||[], completedTotal: completed.total||0, completedOffset: completed.offset||0, health};
+  }catch(e){
+    instData = {institutions:[],active:[],completed:[],completedTotal:0,completedOffset:0,error:e.message};
+  }
+}
+
+function renderInstRoleBadge(authority){
+  if(!authority) return '';
+  const colors = {
+    review_and_warn: '#f1c40f',
+    review_and_propose: '#2ecc71',
+    veto: '#e74c3c',
+    observe: '#5a6a80'
+  };
+  const c = colors[authority] || '#5a6a80';
+  return `<span style="color:${c};font-size:0.85rem;font-style:italic">${esc(authority.replace(/_/g,' '))}</span>`;
+}
+
+function renderInstitutionCard(inst){
+  const roles = inst.roles || [];
+  const members = inst.members || [];
+  const roleRows = roles.map(r => `
+    <div class="inst-role-row">
+      <div><span class="inst-role-title">${esc(r.title||'')}</span> ${renderInstRoleBadge(r.authority)}</div>
+      <div><span class="inst-role-holder">${esc(r.holder||'')}</span></div>
+    </div>
+  `).join('');
+
+  return `
+    <div class="inst-card">
+      <h3>${esc(inst.name||'Unnamed')}<span class="inst-kind">${esc(inst.kind||'')}</span></h3>
+      <div class="inst-mandate">${esc(inst.mandate||'No mandate defined.')}</div>
+      ${roles.length ? `<div class="inst-roles"><div class="behavior-label" style="margin-bottom:6px">Roles</div>${roleRows}</div>` : ''}
+      <div class="inst-kpis">
+        <div><span class="lbl">Members</span><span class="num">${members.length}</span></div>
+        <div><span class="lbl">Active</span><span class="num" style="color:#f1c40f">${inst.active_workflows||0}</span></div>
+        <div><span class="lbl">Completed</span><span class="num" style="color:#2ecc71">${inst.completed_workflows||0}</span></div>
+        <div><span class="lbl">Status</span><span class="num">${esc(inst.status||'?')}</span></div>
+        <div><span class="lbl">Created</span><span class="num" style="font-family:monospace;font-size:0.9rem">${esc((inst.created_at||'').slice(0,10))}</span></div>
+      </div>
+    </div>
+  `;
+}
+
+function renderWorkflowCard(wf, isActive){
+  const cls = isActive ? 'active' : 'completed';
+  const events = wf.events || [];
+  const eventRows = events.map(e => `
+    <div class="wf-event">
+      <span class="state">${esc(e.transition||e.state||'?')}</span>
+      <span class="actor">${esc(e.actor_id||e.triggered_by||'')}</span>
+      <span class="time">${esc((e.ts||e.timestamp||'').slice(11,19))}</span>
+    </div>
+  `).join('');
+  const startedAt = (wf.started_at||wf.created_at||'').slice(0,19).replace('T',' ');
+  const endedAt = wf.completed_at ? (wf.completed_at||'').slice(0,19).replace('T',' ') : '';
+
+  return `
+    <div class="wf-card ${cls}">
+      <div class="wf-proposal">${esc(wf.proposal_title||wf.title||wf.kind||'Untitled workflow')}</div>
+      <div class="wf-meta">
+        <span>ID: ${esc(wf.id||'?').slice(0,12)}…</span>
+        <span>Kind: ${esc(wf.kind||'?')}</span>
+        <span>State: <strong>${esc(wf.state||'?')}</strong></span>
+        <span>Started: ${esc(startedAt)}</span>
+        ${endedAt ? `<span>Ended: ${esc(endedAt)}</span>` : ''}
+        ${(wf.artifact_count||0) > 0 ? `<span>Artifacts: ${wf.artifact_count}</span>` : ''}
+      </div>
+      ${events.length ? `<div class="wf-events">${eventRows}</div>` : ''}
+    </div>
+  `;
+}
+
+function renderInstHealth(h){
+  if(!h) return '';
+  const dot = h.redis ? '<span class="icon icon-green"></span>' : '<span class="icon icon-red"></span>';
+  return `<div class="strip" style="margin-bottom:12px">
+    <div>${dot}<span class="lbl">Institutions</span><span class="num">${h.institutions||0}</span></div>
+    <div><span class="lbl">Roles</span><span class="num">${h.roles||0}</span></div>
+    <div><span class="lbl">Active</span><span class="num" style="color:#f1c40f">${h.active_workflows||0}</span></div>
+    <div><span class="lbl">Completed</span><span class="num" style="color:#2ecc71">${h.completed_workflows||0}</span></div>
+    <div><span class="lbl">Redis</span><span class="num" style="color:${h.redis?'#2ecc71':'#e74c3c'}">${h.redis?'OK':'DOWN'}</span></div>
+  </div>`;
+}
+
+function instPaginate(dir){
+  instCompletedOffset += dir * INST_PAGE_SIZE;
+  if(instCompletedOffset < 0) instCompletedOffset = 0;
+  loadInstitutions(instCompletedOffset).then(()=>{ $('content').innerHTML = renderInstitutions(); });
+}
+
+async function instTrigger(){
+  const cid = prompt('Councilor ID (e.g. char_001):');
+  if(!cid) return;
+  const aid = prompt('Artifact ID:') || 'manual_'+Date.now();
+  const title = prompt('Proposal title:') || 'Manual proposal';
+  try{
+    const r = await fetch('/api/institutions/workflows/trigger', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({councilor_id:cid,artifact_id:aid,title,artifact_kind:'proposal',body:'Triggered from spectator'})});
+    const j = await r.json();
+    alert(r.ok ? 'Triggered: '+JSON.stringify(j) : 'Error: '+JSON.stringify(j));
+    loadInstitutions(instCompletedOffset).then(()=>{ $('content').innerHTML = renderInstitutions(); });
+  }catch(e){alert('Error: '+e.message);}
+}
+
+async function instRebuildCounters(){
+  if(!confirm('Rebuild all institution counters?')) return;
+  try{
+    const r = await fetch('/api/institutions/rebuild-counters',{method:'POST'});
+    const j = await r.json();
+    alert('Result: '+JSON.stringify(j));
+    loadInstitutions(instCompletedOffset).then(()=>{ $('content').innerHTML = renderInstitutions(); });
+  }catch(e){alert('Error: '+e.message);}
+}
+
+function renderInstitutions(){
+  if(!instData) return '<div class="empty-card">Loading institutions…</div>';
+  if(instData.error) return `<div class="empty-card">Error: ${esc(instData.error)}</div>`;
+
+  const healthHtml = renderInstHealth(instData.health);
+  const instCards = (instData.institutions||[]).map(renderInstitutionCard).join('');
+  const activeCards = (instData.active||[]).map(wf => renderWorkflowCard(wf, true)).join('');
+  const completedCards = (instData.completed||[]).map(wf => renderWorkflowCard(wf, false)).join('');
+  const autonomyActive = (instData.active||[]).filter(wf => /proposal_review|analysis_review/.test(wf.type||wf.wf_type||''));
+  const autonomyHtml = autonomyActive.length
+    ? autonomyActive.map(wf => `<div class="r-item"><span class="val-purple">🏛</span> <span class="r-action">${esc(wf.title||wf.type||'workflow')}</span> <span class="muted">${esc(wf.status||'active')} · ${esc(wf.source_councilor_id||'?')}</span></div>`).join('')
+    : '<div class="muted" style="padding:4px 0">No autonomy workflows in progress yet.</div>';
+  const off = instData.completedOffset || 0;
+  const total = instData.completedTotal || 0;
+  const hasPrev = off > 0;
+  const hasNext = (off + INST_PAGE_SIZE) < total;
+  const pageLabel = total > 0 ? `${off+1}–${Math.min(off+INST_PAGE_SIZE,total)} of ${total}` : '0';
+
+  return `
+    ${healthHtml}
+    <div style="display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap">
+      <button class="btn" onclick="instTrigger()">Trigger Workflow</button>
+      <button class="btn" onclick="instRebuildCounters()">Rebuild Counters</button>
+    </div>
+    <section class="comm-panel">
+      <h2>Institutions</h2>
+      ${instCards || '<div class="empty-card">No institutions seeded yet.</div>'}
+    </section>
+    <section class="comm-panel" style="margin-top:14px">
+      <h2>Active workflows <span style="color:#f1c40f;font-size:1.1rem">${instData.active.length}</span></h2>
+      ${activeCards || '<div class="empty-card">No active workflows right now.</div>'}
+    </section>
+    <section class="comm-panel" style="margin-top:14px">
+      <h2>Councilor autonomy <span style="color:#7e29b0;font-size:1.1rem">${autonomyActive.length}</span></h2>
+      ${autonomyHtml}
+    </section>
+    <section class="comm-panel" style="margin-top:14px">
+      <h2>Completed workflows <span style="color:#2ecc71;font-size:1.1rem">${instData.completedTotal}</span></h2>
+      ${completedCards || '<div class="empty-card">No completed workflows yet.</div>'}
+      <div style="display:flex;gap:8px;align-items:center;margin-top:10px;padding:8px 12px;background:#0a0e16;border-radius:6px">
+        <button class="btn" ${hasPrev?'':'disabled'} onclick="instPaginate(-1)">Prev</button>
+        <span style="color:#8da3ba;font-size:1rem">${pageLabel}</span>
+        <button class="btn" ${hasNext?'':'disabled'} onclick="instPaginate(1)">Next</button>
+      </div>
+    </section>
+  `;
+}
+
 async function load(){
   try{
     const r = await fetch('/spectator/agency', {headers:{Accept:'application/json'}});
     if(!r.ok) throw new Error('HTTP '+r.status);
     lastData = await r.json();
+    if(viewMode === 'institutions') await loadInstitutions(instCompletedOffset);
     $('content').innerHTML = render();
     updateStrip(lastData);
     updateSystemLine(lastData);
@@ -998,6 +1267,10 @@ document.querySelectorAll('[data-mode]').forEach(btn=>{
       timer = null;
       load();
       timer = setInterval(load, 15000);
+    } else     if(viewMode==='institutions'){
+      instCompletedOffset = 0;
+      loadInstitutions(0).then(()=>{ $('content').innerHTML = renderInstitutions(); });
+      timer = setInterval(()=>{ loadInstitutions(instCompletedOffset).then(()=>{ $('content').innerHTML = renderInstitutions(); }); }, 15000);
     } else {
       if(timer) clearInterval(timer);
       timer = null;
@@ -1030,10 +1303,21 @@ $('copy-btn').onclick = ()=>{
   });
 };
 
-$('refresh-btn').onclick = load;
+$('refresh-btn').onclick = ()=>{
+  if(viewMode==='institutions'){
+    loadInstitutions(instCompletedOffset).then(()=>{ $('content').innerHTML = renderInstitutions(); });
+  } else {
+    load();
+  }
+};
 
-load();
-timer = setInterval(load, REFRESH_MS);
+if(viewMode==='institutions'){
+  loadInstitutions(0).then(()=>{ $('content').innerHTML = renderInstitutions(); });
+  timer = setInterval(()=>{ loadInstitutions(instCompletedOffset).then(()=>{ $('content').innerHTML = renderInstitutions(); }); }, 15000);
+} else {
+  load();
+  timer = setInterval(load, REFRESH_MS);
+}
 </script>
 </body>
 </html>

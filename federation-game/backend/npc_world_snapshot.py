@@ -138,10 +138,16 @@ def build_world_snapshot() -> dict:
     return snapshot
 
 
+def write_world_snapshot(r) -> dict:
+    """Build and persist the councilor-facing world snapshot."""
+    snapshot = build_world_snapshot()
+    r.set("npc_world_snapshot:global", json.dumps(snapshot))
+    return snapshot
+
+
 if __name__ == "__main__":
     import redis
     r = redis.Redis(host='redis', port=6379, db=0)
-    snapshot = build_world_snapshot()
-    r.set("npc_world_snapshot:global", json.dumps(snapshot))
+    snapshot = write_world_snapshot(r)
     print(f"World snapshot written to Redis at {snapshot['generated_at']}")
     print(f"Contains: {len(snapshot['sectors'])} sectors, {len(snapshot['factions'])} factions, {len(snapshot['npcs'])} NPCs")

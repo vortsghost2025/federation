@@ -123,7 +123,7 @@ def send_notification(title, body):
 
 def check_significant_events(history_data, political_data):
     """Check tick responses for Tier-1 significant events.
-    Returns list of (emoji, title, detail) tuples."""
+    Returns list of (emoji, title, detail, significance) tuples."""
     events = []
 
     # ── Era transition ─────────────────────────────────
@@ -135,6 +135,7 @@ def check_significant_events(history_data, political_data):
                 "\U0001f3db\ufe0f",
                 "Era Transition",
                 f"The Federation has entered the {era}",
+                1.0,
             )
         )
 
@@ -146,6 +147,7 @@ def check_significant_events(history_data, political_data):
                 "\u26a0\ufe0f",
                 "Coherence Collapse",
                 f"Reality coherence at {coherence:.2f} — stability failing",
+                1.0,
             )
         )
 
@@ -180,6 +182,7 @@ def check_significant_events(history_data, political_data):
                     "\u2694\ufe0f",
                     "Rival Hostile Action",
                     readable,
+                    0.9,
                 )
             )
             break
@@ -193,6 +196,7 @@ def check_significant_events(history_data, political_data):
                 "\U0001f500",
                 "Timeline Branch Point",
                 f"{event_name} — the timeline has diverged",
+                0.95,
             )
         )
 
@@ -206,6 +210,7 @@ def check_significant_events(history_data, political_data):
                 "\U0001f525",
                 "Chaosbringer Activity",
                 f"{agent}: {action}",
+                0.85,
             )
         )
 
@@ -215,13 +220,13 @@ def check_significant_events(history_data, political_data):
             phase = item.get("phase", "")
             if phase == "enacted":
                 law_name = item.get("law_name", item.get("name", "Unknown Law"))
-                events.append(("\u2696\ufe0f", "Law Passed", f"{law_name}"))
+                events.append(("\u2696\ufe0f", "Law Passed", f"{law_name}", 0.7))
             elif phase == "political_event":
                 desc = item.get("description", item.get("event_type", "Political event"))
-                events.append(("\U0001f3a4", "Political Event", desc[:100]))
+                events.append(("\U0001f3a4", "Political Event", desc[:100], 0.5))
             elif phase == "vote" and item.get("passed"):
                 law_title = item.get("law_title", "Unknown")
-                events.append(("\U0001f5f3\ufe0f", "Council Vote", f"{law_title}: {item.get('for', 0)}-{item.get('against', 0)}"))
+                events.append(("\U0001f5f3\ufe0f", "Council Vote", f"{law_title}: {item.get('for', 0)}-{item.get('against', 0)}", 0.6))
 
     return events
 
@@ -245,18 +250,91 @@ def check_npc_broadcasts():
                 char_name = evt.get("source_char_name", "Unknown")
                 desc = evt.get("description", "")
                 evt_type = evt.get("event_type", "decision")
-                # Choose emoji by significance tier
                 if sig >= 0.8:
-                    emoji = "\U0001f514"  # Critical
+                    emoji = "\U0001f514"
                 elif sig >= 0.6:
-                    emoji = "\U0001f4e2"  # Notable
+                    emoji = "\U0001f4e2"
                 else:
-                    emoji = "\U0001f4ac"  # Routine
+                    emoji = "\U0001f4ac"
                 vis_tag = f"[{vis}] " if vis == "faction" else ""
-                events.append((emoji, "NPC Decision", f"{vis_tag}{char_name}: {desc}"))
+                events.append((emoji, "NPC Decision", f"{vis_tag}{char_name}: {desc}", sig))
     except Exception as e:
         log.warning(f"Failed to query npc_broadcast_events: {e}")
     return events
+
+
+def run_councilor_sync():
+    """Populate councilor context and bridge outputs into shared Redis.
+
+    This keeps the two persistent councilor agents connected to the main
+    simulation without requiring ad hoc manual scripts on the VPS.
+    """
+    try:
+        from npc_world_snapshot import write_world_snapshot
+
+        snapshot = write_world_snapshot(r)
+        log.info(
+            " Councilor snapshot: %s sectors, %s factions, %s NPCs",
+            len(snapshot.get("sectors", [])),
+            len(snapshot.get("factions", [])),
+            len(snapshot.get("npcs", [])),
+        )
+    except ImportError:
+        log.warning(" Councilor snapshot module not available")
+    except Exception as e:
+        log.warning(f" Councilor snapshot failed: {e}")
+
+    try:
+        from councilor_bridge import run_bridge_tick
+
+        bridge_result = run_bridge_tick(r)
+        log.info(
+            " Councilor bridge: %s artifacts synced, %s messages routed",
+            bridge_result.get("artifacts_synced", 0),
+            bridge_result.get("messages_routed", 0),
+        )
+        if bridge_result.get("errors"):
+            log.warning(" Councilor bridge errors: %s", bridge_result["errors"])
+    except ImportError:
+        log.warning(" Councilor bridge module not available")
+    except Exception as e:
+        log.warning(f" Councilor bridge failed: {e}")
+
+    try:
+        from institutions import run_institution_tick
+
+        institution_result = run_institution_tick(r)
+        log.info(
+            " Institutions: seeded %s institutions, %s roles; advanced %s workflows (%s active, %s completed)",
+            institution_result.get("institutions_seeded", 0),
+            institution_result.get("roles_seeded", 0),
+            institution_result.get("workflows_advanced", 0),
+            institution_result.get("active_workflows", 0),
+            institution_result.get("completed_workflows", 0),
+        )
+    except ImportError:
+        log.warning(" Institutions module not available")
+    except Exception as e:
+        log.warning(f" Institutions tick failed: {e}")
+
+    try:
+        from npc_autonomy import evaluate_decree_opportunity
+
+        decree_result = evaluate_decree_opportunity(r)
+        if decree_result:
+            log.info(
+                " Decree evaluated: %s issued %s %s%d",
+                decree_result.get("char_id", "?"),
+                decree_result.get("metric", "?"),
+                "+" if decree_result.get("delta", 0) > 0 else "",
+                decree_result.get("delta", 0),
+            )
+        else:
+            log.info(" No decree needed — world state within thresholds")
+    except ImportError:
+        pass
+    except Exception as e:
+        log.warning(f" Decree evaluation failed: {e}")
 
 
 # ── Faction display map for notifications ────────────────────
@@ -319,18 +397,23 @@ def build_notification(game_events, npc_events):
 
     # ── If we have crisis readout data, build a narrative ──
     if cr and cr.get("classification"):
-        return _build_narrative_notification(cr, all_events)
+        narrative = _build_narrative_notification(cr, all_events)
+        if narrative is not None:
+            return narrative
+        # Narrative suppressed (STABLE/MODERATE) — fall through to event-list path
 
     # ── Fallback: old-style event list ──
     if not all_events:
         return None
-    all_events = all_events[:5]
+    all_events.sort(key=lambda e: e[3] if len(e) > 3 else 0.5, reverse=True)
+    all_events = all_events[:8]
     title = (
         f"\U0001f30c Federation Update "
         f"({len(all_events)} event{'s' if len(all_events) > 1 else ''})"
     )
     lines = []
-    for emoji, evt_title, detail in all_events:
+    for item in all_events:
+        emoji, evt_title, detail = item[0], item[1], item[2]
         lines.append(f"{emoji} {evt_title}: {detail}")
     body = "\n".join(lines)
     return title, body
@@ -716,6 +799,9 @@ def run_tick():
         except Exception as e:
             log.warning(f" Spatial tick failed: {e}")
 
+    # ── Councilor bridge + snapshot ─────────────────────
+    run_councilor_sync()
+
     # ── Auto-save ──────────────────────────────────────
     resp, err = _call_endpoint("/state/save", "Auto-save", 30, retries=0)
     if err is None:
@@ -798,7 +884,7 @@ def run_tick():
             total = len(game_events + npc_events)
             if total > 0:
                 log.info(
-                    f"  Throttled: {total} events but notification suppressed (10-min dedupe)"
+                    f"  Notification suppressed: {total} events (below significance threshold)"
                 )
             else:
                 log.info("  No significant events this tick")
@@ -866,6 +952,19 @@ def main():
 
     # Initialize Apprise notification targets (direct library — no API container)
     init_apprise()
+
+    # ── One-time backfill: populate workflow:effects_pending from legacy effect_pending=1 flags ──
+    try:
+        from institutions import backfill_effects_pending_set
+        backfill_result = backfill_effects_pending_set(r)
+        if backfill_result.get("migrated"):
+            log.info("[startup] backfill: migrated %d workflows into workflow:effects_pending", backfill_result["migrated"])
+        elif backfill_result.get("skipped") == "already_completed":
+            log.info("[startup] backfill: marker present, skipping")
+    except ImportError:
+        log.warning(" Institutions module not available for backfill")
+    except Exception as e:
+        log.warning(f" Backfill failed: {e}")
 
     while running:
         try:

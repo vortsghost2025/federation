@@ -11,11 +11,11 @@
    *   - Reporting API events (deprecation, intervention, csp-violation)
    *   - Fetch failures (patches global fetch)
    *
-   * Sends to backend /api/error-reports for agent querying.
+   * Sends to backend /error-reports for agent querying.
    * Batches reports to avoid flooding.
    * ------------------------------------------------------------------ */
 
-  var REPORT_URL = '/api/error-reports';
+  var REPORT_URL = '/error-reports';
   var _queue = [];
   var _flushing = false;
 

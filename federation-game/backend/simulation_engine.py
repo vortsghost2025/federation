@@ -133,7 +133,7 @@ VALID_CATEGORIES = {
     "self_improve",
 }
 
-SIM_EFFECTS_TTL = 7 * 86400
+SIM_EFFECTS_TTL = 172800
 FACTION_METRIC_TTL = 86400
 NPC_FACTION_CONTEXT_TTL = 300
 TICK_LOG_TTL = 30 * 86400
@@ -848,7 +848,9 @@ def _apply_event_effect_to_world(r, effect, ts: float) -> Dict:
                 "delta": round(delta, 4),
                 "ts": int(ts),
             }
-            r.zadd(f"sim_effects:{int(ts)}", {json.dumps(effect_record): ts})
+            key = f"sim_effects:{int(ts)}"
+            r.zadd(key, {json.dumps(effect_record): ts})
+            r.expire(key, SIM_EFFECTS_TTL)
 
     except Exception as exc:
         result["error"] = str(exc)
@@ -1753,6 +1755,12 @@ def evolve_npc_relationships(npc_list: List[Dict], r) -> int:
                 delta[cid][target_id] += DECAY_RATE
 
     # e) Persistence
+    # MIN_NEW_EDGE_DELTA lets an NPC that has NO existing edges still form a
+    # first relationship when a real signal arrives (voting +/-0.15, treaties
+    # +/-0.05, quests +/-0.1). Without this floor, an NPC with an empty
+    # relationship set could never bootstrap its first edge because the
+    # computed value sits at neutral (50.0) and was previously suppressed.
+    MIN_NEW_EDGE_DELTA = 0.05
     updated_pairs = 0
     pipe = r.pipeline(transaction=False)
     for cid in char_ids:
@@ -1764,17 +1772,19 @@ def evolve_npc_relationships(npc_list: List[Dict], r) -> int:
                 continue
             old = merged.get(target_id, DECAY_TOWARD)
             new_val = max(MIN_VAL, min(MAX_VAL, round(old + d, 2)))
-            if (
-                abs(new_val - DECAY_TOWARD) < 0.01
-                and target_id not in existing_rels[cid]
-            ):
+            is_new_edge = target_id not in existing_rels[cid]
+            # Suppress a brand-new edge ONLY when it carries no real signal
+            # (delta at/under the floor and value at neutral).
+            if is_new_edge and abs(d) < MIN_NEW_EDGE_DELTA:
                 continue
             merged[target_id] = new_val
             pipe.hset(rel_key, target_id, str(new_val))
             has_changes = True
             updated_pairs += 1
         if has_changes:
-            pipe.expire(rel_key, 604800)
+            # Keep relationships permanent — no expiry, matching the
+            # persist_npc_traits_to_redis persistence contract.
+            pipe.persist(rel_key)
     if updated_pairs > 0:
         pipe.execute()
 

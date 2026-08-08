@@ -7,7 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Share+Tech+Mono&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="simulation.css">
+<link rel="stylesheet" href="simulation.css?v=2">
 
 </head>
 <body>
@@ -60,17 +60,29 @@
 <a href="adult.html">Control</a>
 <a href="worldguide.html">World Guide</a>
 <a href="earth.html">Earth</a>
+<a href="spectator.html">Spectator</a>
 <button class="help-btn" onclick="toggleHelp()" aria-label="How to read this page" title="How to read this page">?</button>
 <button class="rm-toggle-btn" id="rm-toggle" onclick="toggleReadableMode()" aria-label="Toggle readable mode" title="Toggle readable mode">Aa</button>
 </nav>
 </div>
 </header>
 
+<!-- FEDERATION STATUS BRIEF -->
+<div id="fed-brief">
+<div class="brief-row">
+<span class="brief-state-badge" id="brief-state-badge" aria-live="polite">INITIALIZING</span>
+<span class="brief-meta" id="brief-meta">Loading simulation...</span>
+</div>
+<div class="brief-headline" id="brief-headline">Connecting to Federation systems...</div>
+<div class="brief-developments" id="brief-developments"></div>
+<div class="brief-watch" id="brief-watch"></div>
+</div>
+
 <!-- SITUATION SUMMARY BAR -->
 <div id="situation">
 <div class="sit-card" id="sit-current">
 <div class="sit-card-label">Current Situation</div>
-<div class="sit-card-value" id="sit-current-text">Loading world state...</div>
+<div class="sit-card-value" id="sit-current-text" aria-live="polite">Loading world state...</div>
 </div>
 <div class="sit-card sit-risk" id="sit-risk">
 <div class="sit-card-label">Main Risk</div>
@@ -175,7 +187,7 @@
 <section id="center" class="panel">
 <div id="human-briefing" class="human-briefing">
 <div class="hb-label">10-Second Briefing</div>
-<div class="hb-headline" id="hb-headline">Loading the current story...</div>
+<div class="hb-headline" id="hb-headline" aria-live="polite">Loading the current story...</div>
 <div class="hb-grid">
 <div class="hb-card"><div class="hb-card-label">What is this?</div><div class="hb-card-text" id="hb-what">A living AI society is running without player control.</div></div>
 <div class="hb-card"><div class="hb-card-label">What changed?</div><div class="hb-card-text" id="hb-changed">Waiting for NPC decisions and events.</div></div>
@@ -205,11 +217,11 @@
 </div>
 <div id="quick-status" class="qs-panel" style="display:none">
 <div class="qs-header">&#x1F4CA; Quick Status <span class="qs-tick" id="qs-tick"></span></div>
-<div class="qs-body" id="qs-body"></div>
+<div class="qs-body" id="qs-body" aria-live="polite"></div>
 </div>
 <div id="rm-summary" class="rm-summary" style="display:none">
 <div class="rm-summary-header">&#x1F4CB; What Is Happening? <span class="rm-summary-tick" id="rm-summary-tick"></span></div>
-<div class="rm-summary-body" id="rm-summary-body"></div>
+<div class="rm-summary-body" id="rm-summary-body" aria-live="polite"></div>
 </div>
 <div class="rm-prog-bar" id="rm-prog-bar" style="display:none">
 <button class="rm-prog-btn active" data-rm-panel="rm-panel-summary" onclick="switchRMPanel('rm-panel-summary')">&#x1F4CB; Summary</button>
@@ -297,12 +309,8 @@
 <div class="bottom-triggers" id="era-triggers"></div>
 <div class="bottom-pending" id="pending-items">What Is Unresolved: <strong>&#8212;</strong></div>
 </footer>
-</div>
 
-    <script src="fed-fetch.js"></script>
-    <script src="error-reporter.js"></script>
-    <script src="simulation.js"></script>
-
+<!-- FEDERATION INTELLIGENCE DRAWER -->
 <div class="ai-chat" id="ai-chat">
 <div class="ai-chat-label">Federation Intelligence</div>
 <div class="ai-chat-messages" id="ai-chat-messages"></div>
@@ -318,7 +326,14 @@
 <span class="ai-chat-suggestion" onclick="aiChatAsk(this.textContent)">What are the NPCs planning?</span>
 <span class="ai-chat-suggestion" onclick="aiChatAsk(this.textContent)">Which NPC should I watch?</span>
 </div>
-<a href="/spectator.html" class="btn">Open Spectator View</a>
+<a href="/spectator.html">Open Spectator View</a>
 </div>
+</div>
+
+    <script src="fed-fetch.js"></script>
+    <script src="error-reporter.js"></script>
+    <script src="simulation.js?v=2"></script>
+
+<div id="ai-chat-toggle" onclick="toggleChatDrawer()" aria-label="Toggle Federation Intelligence" role="button" tabindex="0">FI</div>
 </body>
 </html>

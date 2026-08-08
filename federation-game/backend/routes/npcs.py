@@ -193,7 +193,7 @@ async def npc_evaluate_decisions(char_id: str):
     from npc_autonomy import evaluate_decision_options, get_mood
 
     mood = get_mood(char_id)
-    options = evaluate_decision_options(
+    options, _need_reflection = evaluate_decision_options(
         char_id, character.name, archetype, affiliation, mood=mood
     )
     return {
