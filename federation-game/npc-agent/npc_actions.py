@@ -507,6 +507,25 @@ def execute_decision(decision: dict, r, contacts: dict):
                             "body": f"proposed '{inst_name}' but similar to existing '{similar_exists}'",
                         })
 
+                # 4. Reroute to productive work when a guard rejects, so the
+                #    councilor never stays locked on an impossible creation.
+                if _rejected:
+                    rerouted = {
+                        "category": "create_artifact",
+                        "reasoning": (
+                            f"create_institution rerouted: '{inst_name}' rejected "
+                            "(cap reached or similar exists); producing an artifact "
+                            "advancing the shared work instead"
+                        ),
+                        "description": (
+                            f"Institution '{inst_name}' could not be founded right now, "
+                            f"so write a concise artifact that advances the shared topic: "
+                            f"{_compact_text(desc, 120) or 'the current shared goal'}"
+                        ),
+                    }
+                    logger.info("[%s] create_institution rerouted to create_artifact", CHAR_ID)
+                    return execute_decision(rerouted, r, contacts)
+
                 # ── Create institution (passes all guards) ──
                 if not _rejected:
                     r.sadd("institution:index", inst_id)
