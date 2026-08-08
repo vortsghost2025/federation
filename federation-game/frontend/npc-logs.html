@@ -106,7 +106,8 @@ function npcId(log) {
 }
 
 function entryType(log) {
-  return log.type || log.category || '';
+  const d = entryDetails(log);
+  return log.type || log.category || d.category || log.entry_type || '';
 }
 
 function entryDetails(log) {

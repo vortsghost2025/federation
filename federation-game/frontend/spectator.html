@@ -131,6 +131,7 @@ p{margin:0 0 8px 0}
 .inst-role-auth{color:#5a6a80;font-size:0.85rem;font-style:italic}
 .inst-kpis{display:flex;flex-wrap:wrap;gap:8px 28px;padding:10px 14px;background:#0a0e16;border-radius:8px;font-size:1.1rem;margin-top:8px}
 .inst-kpis .lbl{color:#5a6a80}.inst-kpis .num{color:#eef2f8;font-weight:700}
+.collapse-body:not(.show){display:none}.collapse-header::before{content:'▶ ';font-size:0.8rem;color:#5a6a80;display:inline-block;transition:transform .15s}.collapse-header.open::before{transform:rotate(90deg)}
 .wf-card{padding:16px 20px;background:#0e121c;border:1px solid #1a2638;border-radius:14px;margin-bottom:10px}
 .wf-card.active{border-left:4px solid #f1c40f}
 .wf-card.completed{border-left:4px solid #2ecc71}
@@ -208,6 +209,8 @@ p{margin:0 0 8px 0}
 
 </div>
 
+<script src="fed-fetch.js"></script>
+<script src="error-reporter.js"></script>
 <script>
 const $ = id => document.getElementById(id);
 const REFRESH_MS = 30000;
@@ -762,7 +765,12 @@ function renderPairStoryPanel(npcs){
     return `<div class="exchange-row"><strong>${esc(n.name)}</strong> — ${esc(focus)}</div>`;
   }).filter(Boolean).join('');
   const beatRows = beats.length
-    ? beats.map(entry => `<div class="exchange-row"><strong>${esc(entry.actor_name || entry.actor || 'Someone')}</strong> <span class="muted">· ${ago(entry.ts)}</span><br>${esc(entry.summary || '')}</div>`).join('')
+    ? beats.map(entry => {
+        const ref = entry.open_question_ref
+          ? `<div class="muted" style="font-size:.8em">Open question: ${esc(entry.open_question_ref)} · Source: ${esc(entry.open_question_source || '—')}</div>`
+          : '';
+        return `<div class="exchange-row"><strong>${esc(entry.actor_name || entry.actor || 'Someone')}</strong> <span class="muted">· ${ago(entry.ts)}</span><br>${esc(entry.summary || '')}</div>${ref}`;
+      }).join('')
     : '<div class="exchange-row muted">No shared beats recorded yet.</div>';
 
   return `
@@ -1039,16 +1047,17 @@ async function loadInstitutions(offset){
   if(offset === undefined) offset = instCompletedOffset;
   try{
     const [instRes, activeRes, doneRes, healthRes] = await Promise.all([
-      fetch('/api/institutions'),
-      fetch('/api/institutions/workflows/active'),
-      fetch('/api/institutions/workflows/completed?limit='+INST_PAGE_SIZE+'&offset='+offset),
-      fetch('/api/institutions/health')
+      fedFetch('inst', '/api/institutions'),
+      fedFetch('active', '/api/institutions/workflows/active'),
+      fedFetch('done', '/api/institutions/workflows/completed?limit='+INST_PAGE_SIZE+'&offset='+offset),
+      fedFetch('health', '/api/institutions/health')
     ]);
-    const institutions = instRes.ok ? await instRes.json() : {institutions:[]};
-    const active = activeRes.ok ? await activeRes.json() : {active:[]};
-    const completed = doneRes.ok ? await doneRes.json() : {completed:[],total:0,offset:0,limit:INST_PAGE_SIZE};
-    const health = healthRes.ok ? await healthRes.json() : null;
-    instData = {institutions: institutions.institutions||[], active: active.active||[], completed: completed.completed||[], completedTotal: completed.total||0, completedOffset: completed.offset||0, health};
+    const institutions = instRes || {institutions:[]};
+    const active = activeRes || {active:[]};
+    const completed = doneRes || {completed:[],total:0,offset:0,limit:INST_PAGE_SIZE};
+    const health = healthRes;
+    const statusOrder = {active:0, proposed:1};
+    instData = {institutions: (institutions.institutions||[]).sort((a,b) => (statusOrder[a.status] ?? 2) - (statusOrder[b.status] ?? 2)), active: active.active||[], completed: completed.completed||[], completedTotal: completed.total||0, completedOffset: completed.offset||0, health};
   }catch(e){
     instData = {institutions:[],active:[],completed:[],completedTotal:0,completedOffset:0,error:e.message};
   }
@@ -1111,7 +1120,7 @@ function renderWorkflowCard(wf, isActive){
       <div class="wf-meta">
         <span>ID: ${esc(wf.id||'?').slice(0,12)}…</span>
         <span>Kind: ${esc(wf.kind||'?')}</span>
-        <span>State: <strong>${esc(wf.state||'?')}</strong></span>
+        <span>State: <strong>${esc(wf.status||'?')}</strong></span>
         <span>Started: ${esc(startedAt)}</span>
         ${endedAt ? `<span>Ended: ${esc(endedAt)}</span>` : ''}
         ${(wf.artifact_count||0) > 0 ? `<span>Artifacts: ${wf.artifact_count}</span>` : ''}
@@ -1124,10 +1133,16 @@ function renderWorkflowCard(wf, isActive){
 function renderInstHealth(h){
   if(!h) return '';
   const dot = h.redis ? '<span class="icon icon-green"></span>' : '<span class="icon icon-red"></span>';
+  const insts = instData ? instData.institutions : [];
+  const nActive = insts.filter(i => i.status === 'active').length;
+  const nProposed = insts.filter(i => i.status === 'proposed').length;
+  const nOther = insts.filter(i => i.status !== 'active' && i.status !== 'proposed').length;
   return `<div class="strip" style="margin-bottom:12px">
-    <div>${dot}<span class="lbl">Institutions</span><span class="num">${h.institutions||0}</span></div>
+    <div>${dot}<span class="lbl">Active</span><span class="num" style="color:#2ecc71">${nActive}</span></div>
+    <div><span class="lbl">Proposed</span><span class="num" style="color:#f1c40f">${nProposed}</span></div>
+    ${nOther ? `<div><span class="lbl">Other</span><span class="num" style="color:#5a6a80">${nOther}</span></div>` : ''}
     <div><span class="lbl">Roles</span><span class="num">${h.roles||0}</span></div>
-    <div><span class="lbl">Active</span><span class="num" style="color:#f1c40f">${h.active_workflows||0}</span></div>
+    <div><span class="lbl">Active WFs</span><span class="num" style="color:#f1c40f">${h.active_workflows||0}</span></div>
     <div><span class="lbl">Completed</span><span class="num" style="color:#2ecc71">${h.completed_workflows||0}</span></div>
     <div><span class="lbl">Redis</span><span class="num" style="color:${h.redis?'#2ecc71':'#e74c3c'}">${h.redis?'OK':'DOWN'}</span></div>
   </div>`;
@@ -1139,27 +1154,29 @@ function instPaginate(dir){
   loadInstitutions(instCompletedOffset).then(()=>{ $('content').innerHTML = renderInstitutions(); });
 }
 
-async function instTrigger(){
+ async function instTrigger(){
+  var btn = document.querySelector('[onclick="instTrigger()"]');
+  var restore = btnSpinner(btn, 'Triggering…');
   const cid = prompt('Councilor ID (e.g. char_001):');
-  if(!cid) return;
+  if(!cid){ restore(); return; }
   const aid = prompt('Artifact ID:') || 'manual_'+Date.now();
   const title = prompt('Proposal title:') || 'Manual proposal';
-  try{
-    const r = await fetch('/api/institutions/workflows/trigger', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({councilor_id:cid,artifact_id:aid,title,artifact_kind:'proposal',body:'Triggered from spectator'})});
-    const j = await r.json();
-    alert(r.ok ? 'Triggered: '+JSON.stringify(j) : 'Error: '+JSON.stringify(j));
+  try {
+    const j = await fedFetch('trigger', '/api/institutions/workflows/trigger', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({councilor_id:cid,artifact_id:aid,title,artifact_kind:'proposal',body:'Triggered from spectator'})});
+    alert(j ? 'Triggered: '+JSON.stringify(j) : 'Error: request failed');
     loadInstitutions(instCompletedOffset).then(()=>{ $('content').innerHTML = renderInstitutions(); });
-  }catch(e){alert('Error: '+e.message);}
+  } finally { restore(); }
 }
 
 async function instRebuildCounters(){
   if(!confirm('Rebuild all institution counters?')) return;
-  try{
-    const r = await fetch('/api/institutions/rebuild-counters',{method:'POST'});
-    const j = await r.json();
-    alert('Result: '+JSON.stringify(j));
+  var btn = document.querySelector('[onclick="instRebuildCounters()"]');
+  var restore = btnSpinner(btn, 'Rebuilding…');
+  try {
+    const j = await fedFetch('rebuild', '/api/institutions/rebuild-counters', {method:'POST'});
+    alert(j ? 'Result: '+JSON.stringify(j) : 'Error: request failed');
     loadInstitutions(instCompletedOffset).then(()=>{ $('content').innerHTML = renderInstitutions(); });
-  }catch(e){alert('Error: '+e.message);}
+  } finally { restore(); }
 }
 
 function renderInstitutions(){
@@ -1167,8 +1184,16 @@ function renderInstitutions(){
   if(instData.error) return `<div class="empty-card">Error: ${esc(instData.error)}</div>`;
 
   const healthHtml = renderInstHealth(instData.health);
-  const instCards = (instData.institutions||[]).map(renderInstitutionCard).join('');
-  const activeCards = (instData.active||[]).map(wf => renderWorkflowCard(wf, true)).join('');
+
+  const allInsts = instData.institutions || [];
+  const activeInsts = allInsts.filter(i => i.status === 'active');
+  const proposedInsts = allInsts.filter(i => i.status === 'proposed');
+  const otherInsts = allInsts.filter(i => i.status !== 'active' && i.status !== 'proposed');
+  const activeCards = activeInsts.map(renderInstitutionCard).join('');
+  const proposedCards = proposedInsts.map(renderInstitutionCard).join('');
+  const otherCards = otherInsts.map(renderInstitutionCard).join('');
+
+  const wfActiveCards = (instData.active||[]).map(wf => renderWorkflowCard(wf, true)).join('');
   const completedCards = (instData.completed||[]).map(wf => renderWorkflowCard(wf, false)).join('');
   const autonomyActive = (instData.active||[]).filter(wf => /proposal_review|analysis_review/.test(wf.type||wf.wf_type||''));
   const autonomyHtml = autonomyActive.length
@@ -1187,12 +1212,23 @@ function renderInstitutions(){
       <button class="btn" onclick="instRebuildCounters()">Rebuild Counters</button>
     </div>
     <section class="comm-panel">
-      <h2>Institutions</h2>
-      ${instCards || '<div class="empty-card">No institutions seeded yet.</div>'}
+      <h2>Active Institutions <span style="color:#2ecc71;font-size:1.1rem">${activeInsts.length}</span></h2>
+      ${activeCards || '<div class="empty-card">No active institutions.</div>'}
     </section>
     <section class="comm-panel" style="margin-top:14px">
+      <h2 class="collapse-header" style="cursor:pointer;user-select:none" onclick="const b=this.nextElementSibling;this.classList.toggle('open');b.classList.toggle('show')">
+        Proposed Institutions <span style="color:#f1c40f;font-size:1.1rem">${proposedInsts.length}</span>
+        <span style="font-size:0.85rem;color:#5a6a80;margin-left:8px">click to expand</span>
+      </h2>
+      <div class="collapse-body">${proposedCards || '<div class="empty-card">No proposed institutions.</div>'}</div>
+    </section>
+    ${otherCards ? `<section class="comm-panel" style="margin-top:14px">
+      <h2>Other <span style="color:#5a6a80;font-size:1.1rem">${otherInsts.length}</span></h2>
+      ${otherCards}
+    </section>` : ''}
+    <section class="comm-panel" style="margin-top:14px">
       <h2>Active workflows <span style="color:#f1c40f;font-size:1.1rem">${instData.active.length}</span></h2>
-      ${activeCards || '<div class="empty-card">No active workflows right now.</div>'}
+      ${wfActiveCards || '<div class="empty-card">No active workflows right now.</div>'}
     </section>
     <section class="comm-panel" style="margin-top:14px">
       <h2>Councilor autonomy <span style="color:#7e29b0;font-size:1.1rem">${autonomyActive.length}</span></h2>
@@ -1211,22 +1247,20 @@ function renderInstitutions(){
 }
 
 async function load(){
-  try{
-    const r = await fetch('/spectator/agency', {headers:{Accept:'application/json'}});
-    if(!r.ok) throw new Error('HTTP '+r.status);
-    lastData = await r.json();
-    if(viewMode === 'institutions') await loadInstitutions(instCompletedOffset);
-    $('content').innerHTML = render();
-    updateStrip(lastData);
-    updateSystemLine(lastData);
-    $('live-text').textContent = 'live';
-    $('live-pill').querySelector('.icon').className = 'icon icon-green';
-    wireExpandToggles();
-  } catch(e){
-    $('content').innerHTML = '<div class="empty-card">Error: '+esc(e.message)+'</div>';
+  lastData = await fedFetch('agency', '/spectator/agency', {headers:{Accept:'application/json'}});
+  if(!lastData){
+    $('content').innerHTML = '<div class="empty-card">Error: connection failed</div>';
     $('live-text').textContent='error';
     $('live-pill').querySelector('.icon').className='icon icon-red';
+    return;
   }
+  if(viewMode === 'institutions') await loadInstitutions(instCompletedOffset);
+  $('content').innerHTML = render();
+  updateStrip(lastData);
+  updateSystemLine(lastData);
+  $('live-text').textContent = 'live';
+  $('live-pill').querySelector('.icon').className = 'icon icon-green';
+  wireExpandToggles();
 }
 
 function wireExpandToggles(){

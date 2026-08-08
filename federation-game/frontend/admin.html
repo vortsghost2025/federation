@@ -182,7 +182,10 @@ function renderPair(p) {
     journalHtml = recent.map(function(j) {
       const ts = j.ts ? new Date(j.ts * 1000).toLocaleTimeString() : '';
       const summary = (j.summary || '').slice(0, 140);
-      return '<div class="journal-entry"><span class="ts">[' + esc(ts) + ']</span> ' + esc(summary) + '</div>';
+      const ref = j.open_question_ref
+        ? '<div class="muted" style="font-size:.8em">Open question: ' + esc(j.open_question_ref) + ' · Source: ' + esc(j.open_question_source || '—') + '</div>'
+        : '';
+      return '<div class="journal-entry"><span class="ts">[' + esc(ts) + ']</span> ' + esc(summary) + '</div>' + ref;
     }).join('');
   } else {
     journalHtml = '<span class="empty-state">No journal entries</span>';
