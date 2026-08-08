@@ -51,10 +51,18 @@ def try_start_tick(tick_id):
 
         if current and not current.isdigit():
             current = None
-        if last_heartbeat and not last_heartbeat.isdigit():
-            last_heartbeat = None
-        if started_at and not started_at.isdigit():
-            started_at = None
+        def _parse_ts(v):
+            if not v:
+                return None
+            try:
+                return float(v)
+            except (TypeError, ValueError):
+                return None
+
+        parsed_hb = _parse_ts(last_heartbeat)
+        parsed_sa = _parse_ts(started_at)
+        last_heartbeat = str(parsed_hb) if parsed_hb is not None else None
+        started_at = str(parsed_sa) if parsed_sa is not None else None
 
         stale = (
             not last_heartbeat
@@ -124,10 +132,18 @@ def watchdog_status():
         active_tick = r.get(_ACTIVE_TICK_KEY)
         last_heartbeat = r.get(_LAST_HEARTBEAT_KEY)
         started_at = r.get(_STARTED_AT_KEY)
-        if last_heartbeat and not last_heartbeat.isdigit():
-            last_heartbeat = None
-        if started_at and not started_at.isdigit():
-            started_at = None
+        def _parse_ts(v):
+            if not v:
+                return None
+            try:
+                return float(v)
+            except (TypeError, ValueError):
+                return None
+
+        parsed_hb = _parse_ts(last_heartbeat)
+        parsed_sa = _parse_ts(started_at)
+        last_heartbeat = str(parsed_hb) if parsed_hb is not None else None
+        started_at = str(parsed_sa) if parsed_sa is not None else None
         last_heartbeat = float(last_heartbeat) if last_heartbeat else None
         started_at = float(started_at) if started_at else None
         return {

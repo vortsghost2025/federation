@@ -69,7 +69,97 @@ if (score >= 4) return 'critical';
 if (score >= 3) return 'severe';
 if (score >= 2) return 'high';
 if (score >= 1) return 'elevated';
-return 'nominal';
+  return 'nominal';
+}
+
+/* ═══ UNIFIED VERDICT (single source of truth) ═══ */
+function getMetrics(status) {
+  var ws = (status && (status.world_state || status.worldState)) || status || {};
+  var out = {}, mKeys = ['tension','resources','threat','stability','morale','anomaly'];
+  for (var i = 0; i < mKeys.length; i++) {
+    var k = mKeys[i], af = METRIC_FIELD_MAP[k] || k;
+    out[k] = ws[af] != null ? ws[af] : (ws[k] != null ? ws[k] : 50);
+  }
+  return out;
+}
+
+function computeVerdict(status) {
+  status = status || {};
+  var m = getMetrics(status);
+  var cascade = status.cascade_summary || status.cascadeSummary || {};
+  var temp = cascade.temperature != null ? cascade.temperature : (cascade.cascade_temperature != null ? cascade.cascade_temperature : 0);
+  var cascadePct = temp > 1.5 ? temp : (temp * 100);
+  m.cascade = cascadePct;
+
+  var score = Math.max(
+    sevScore('morale', m.morale),
+    sevScore('stability', m.stability),
+    sevScore('threat', m.threat),
+    sevScore('tension', m.tension),
+    sevScore('anomaly', m.anomaly),
+    sevScore('cascade', cascadePct)
+  );
+  var state = score >= 4 ? 'crisis' : (score >= 3 ? 'unstable' : (score >= 2 ? 'watch' : 'stable'));
+  var labelMap = {stable:'STABLE', watch:'WATCH', unstable:'UNSTABLE', crisis:'CRISIS'};
+  var label = labelMap[state];
+  var severityClass = 'state-' + state;
+
+  var parts = [];
+  if (m.resources > 75) parts.push('resource-rich'); else if (m.resources < 25) parts.push('resource-scarce');
+  if (m.stability > 75) parts.push('socially stable'); else if (m.stability < 30) parts.push('socially unstable');
+  if (m.morale > 75) parts.push('high morale'); else if (m.morale < 25) parts.push('morale collapsing');
+  if (m.tension > 70) parts.push('high tension'); else if (m.tension < 25) parts.push('peaceful');
+  if (m.threat > 70) parts.push('under threat');
+  if (m.anomaly > 70) parts.push('anomaly activity elevated');
+  if (cascadePct > 80) parts.push('cascade chains spreading'); else if (cascadePct < 30) parts.push('experiencing calm events');
+
+  var recentEvents = status.recent_events || [];
+  var topEvent = null;
+  for (var ei = recentEvents.length - 1; ei >= 0; ei--) {
+    var ev = recentEvents[ei];
+    if (ev && ev.event_type && ev.event_type !== 'routine') { topEvent = ev; break; }
+  }
+  if (!topEvent && recentEvents.length > 0) topEvent = recentEvents[recentEvents.length - 1];
+  var headline = topEvent && topEvent.description ? topEvent.description
+    : (parts.length ? 'The Federation is ' + parts.join(', ') + '.' : 'The Federation is in a balanced state.');
+
+  var riskOrder = [
+    {k:'morale',dir:'low'},{k:'stability',dir:'low'},{k:'threat',dir:'high'},
+    {k:'tension',dir:'high'},{k:'anomaly',dir:'high'},{k:'cascade',dir:'high'}
+  ];
+  var worstRisk = null, worstScore = -1;
+  for (var r = 0; r < riskOrder.length; r++) {
+    var rk = riskOrder[r], si = severityInfo(rk.k, m[rk.k]);
+    var sc = si.cls.indexOf('critical')!==-1 ? 4 : (si.cls.indexOf('severe')!==-1 ? 3 : (si.cls.indexOf('breach')!==-1 ? 3 : (si.cls.indexOf('overheating')!==-1 ? 3 : (si.cls.indexOf('high')!==-1 ? 2 : (si.cls.indexOf('unstable')!==-1 ? 2 : (si.cls.indexOf('hot')!==-1 ? 2 : 0))))));
+    if (sc > worstScore) { worstScore = sc; worstRisk = rk.k; }
+  }
+  var mainRisk = 'No active risks detected';
+  if (worstRisk) {
+    var rsi = severityInfo(worstRisk, m[worstRisk]);
+    var rName = worstRisk.charAt(0).toUpperCase() + worstRisk.slice(1);
+    if (worstRisk === 'cascade') rName = 'Cascade Temperature';
+    mainRisk = rName + ' is ' + rsi.label + ' (' + Math.round(m[worstRisk]) + (worstRisk === 'cascade' ? '%' : '') + ')';
+  }
+
+  var careMap = {
+    crisis: 'Active crisis pressure. Systems may cascade-fail without intervention.',
+    unstable: 'Conditions are unstable. Small NPC choices can now trigger larger faction cascades.',
+    watch: 'Watch key pressures \u2014 stability, morale, and threat shifts matter now.',
+    stable: 'The important story is who gains trust, who loses patience, and who starts a cascade.'
+  };
+
+  var watchItems = [];
+  if (m.morale < 40) watchItems.push('Morale ' + Math.round(m.morale));
+  if (m.stability < 40) watchItems.push('Stability ' + Math.round(m.stability));
+  if (m.threat > 60) watchItems.push('Threat ' + Math.round(m.threat));
+  if (m.tension > 60) watchItems.push('Tension ' + Math.round(m.tension));
+  if (m.anomaly > 60) watchItems.push('Anomaly ' + Math.round(m.anomaly));
+  if (cascadePct > 70) watchItems.push('Cascade ' + Math.round(cascadePct) + '%');
+
+  return {
+    state: state, label: label, severityClass: severityClass,
+    headline: headline, mainRisk: mainRisk, careText: careMap[state], watchItems: watchItems
+  };
 }
 
 /* ═══ NEW: TOP BANNER (replaces updateTopRibbon) ═══ */
@@ -77,13 +167,8 @@ function updateTopBanner(status) {
 if (!status) return;
 var ws = status.world_state || status.worldState || status;
 
-/* Extract metric values */
-var metrics = {};
-var mKeys = ['tension','resources','threat','stability','morale','anomaly'];
-for (var i = 0; i < mKeys.length; i++) {
-var k = mKeys[i], af = METRIC_FIELD_MAP[k] || k;
-metrics[k] = ws[af] != null ? ws[af] : (ws[k] != null ? ws[k] : 50);
-}
+/* Extract metric values (single source via getMetrics) */
+var metrics = getMetrics(status);
 
 /* Row 1: Degradation vs Runway */
 var moraleInv = 100 - (metrics.morale || 0);
@@ -174,62 +259,73 @@ lastTickTime = Date.now();
 
 function updateTimeSince(){if(!lastTickTime)return;var elapsed=(Date.now()-lastTickTime)/1000;var el=document.getElementById('time-since');if(el)el.textContent=formatTime(elapsed)}
 
+/* ═══ FEDERATION STATUS BRIEF ═══ */
+function updateFedBrief() {
+  var status = lastData.status;
+  if (!status) return;
+  var ws = status.world_state || status.worldState || status;
+  var v = computeVerdict(status);
+
+  var badge = document.getElementById('brief-state-badge');
+  if (badge) {
+    badge.textContent = v.label;
+    badge.className = 'brief-state-badge ' + v.severityClass;
+  }
+
+  var meta = document.getElementById('brief-meta');
+  if (meta) {
+    var tick = status.tick_count || ws.tick_count || '\u2014';
+    var metaText = 'Tick '+tick;
+    if (status.last_tick_timestamp) metaText += ' \u00b7 '+formatFedDateShort(status.last_tick_timestamp);
+    meta.textContent = metaText;
+  }
+
+  var headline = document.getElementById('brief-headline');
+  if (headline) headline.textContent = v.headline;
+
+  var devEl = document.getElementById('brief-developments');
+  if (devEl) {
+    var allEvents = (status.recent_events||[]).slice();
+    var evts = lastData.events;
+    if (evts) {
+      if (Array.isArray(evts)) allEvents = allEvents.concat(evts);
+      else { if(evts.world_events) allEvents=allEvents.concat(evts.world_events.slice(-5)); if(evts.cascade_events) allEvents=allEvents.concat(evts.cascade_events.slice(-3)) }
+    }
+    var devHtml='',shown=0,seen={};
+    for (var ei=allEvents.length-1;ei>=0&&shown<3;ei--) {
+      var ev=allEvents[ei]; if(!ev) continue;
+      var desc=ev.description||ev.text||ev.summary||'';
+      if(!desc||seen[desc]) continue; seen[desc]=true;
+      devHtml += '<span class="brief-dev-item">'+esc(desc.substring(0,100))+'</span>'; shown++;
+    }
+    devEl.innerHTML = devHtml;
+  }
+
+  var watchEl = document.getElementById('brief-watch');
+  if (watchEl) {
+    if (v.watchItems.length === 0) {
+      watchEl.innerHTML = '<span class="brief-watch-item">No active watch items</span>';
+    } else {
+      var wHtml='';
+      for (var wi=0;wi<Math.min(v.watchItems.length,3);wi++) wHtml += '<span class="brief-watch-item">\u25cf '+v.watchItems[wi]+'</span>';
+      watchEl.innerHTML = wHtml;
+    }
+  }
+}
+
 /* ═══ SITUATION SUMMARY ═══ */
 function updateSituation(status) {
 if (!status) return;
 var ws = status.world_state || status.worldState || status;
-var metrics = {};
-var mKeys = ['tension','resources','threat','stability','morale','anomaly'];
-for (var i=0;i<mKeys.length;i++) {
-var k=mKeys[i], af=METRIC_FIELD_MAP[k]||k;
-metrics[k] = ws[af]!=null ? ws[af] : (ws[k]!=null ? ws[k] : 50);
-}
+var metrics = getMetrics(status);
 var cascade = status.cascade_summary || status.cascadeSummary || {};
 var temp = cascade.temperature!=null ? cascade.temperature : (cascade.cascade_temperature!=null ? cascade.cascade_temperature : 0);
 var cascadePct = temp>1.5 ? temp : (temp*100);
 metrics.cascade = cascadePct;
+var v = computeVerdict(status);
 
-var parts = [];
-if (metrics.resources > 75) parts.push('resource-rich');
-else if (metrics.resources < 25) parts.push('resource-scarce');
-if (metrics.stability > 75) parts.push('socially stable');
-else if (metrics.stability < 30) parts.push('socially unstable');
-if (metrics.morale > 75) parts.push('high morale');
-else if (metrics.morale < 25) parts.push('morale collapsing');
-if (metrics.tension > 70) parts.push('high tension');
-else if (metrics.tension < 25) parts.push('peaceful');
-if (metrics.threat > 70) parts.push('under threat');
-if (metrics.anomaly > 70) parts.push('anomaly activity elevated');
-if (cascadePct > 80) parts.push('cascade chains spreading rapidly');
-else if (cascadePct < 30) parts.push('experiencing calm events');
-
-var sitText = parts.length ? 'The Federation is ' + parts.join(', ') + '.' : 'The Federation is in a balanced state.';
-document.getElementById('sit-current-text').textContent = sitText;
-
-var riskOrder = [
-{k:'morale',dir:'low'},{k:'stability',dir:'low'},{k:'threat',dir:'high'},
-{k:'tension',dir:'high'},{k:'anomaly',dir:'high'},{k:'cascade',dir:'high'}
-];
-var worstRisk = null; var worstScore = -1;
-for (var r=0;r<riskOrder.length;r++) {
-var rk=riskOrder[r], si=severityInfo(rk.k, metrics[rk.k]);
-var score = si.cls.indexOf('critical')!==-1 ? 4 : (si.cls.indexOf('severe')!==-1 ? 3 : (si.cls.indexOf('breach')!==-1 ? 3 : (si.cls.indexOf('overheating')!==-1 ? 3 : (si.cls.indexOf('high')!==-1 ? 2 : (si.cls.indexOf('unstable')!==-1 ? 2 : (si.cls.indexOf('hot')!==-1 ? 2 : 0))))));
-if (score > worstScore) { worstScore = score; worstRisk = rk.k; }
-}
-var riskText = '\u2014';
-if (worstRisk) {
-var rsi = severityInfo(worstRisk, metrics[worstRisk]);
-var rName = worstRisk.charAt(0).toUpperCase() + worstRisk.slice(1);
-if (worstRisk === 'cascade') rName = 'Cascade Temperature';
-riskText = rName + ' is ' + rsi.label + ' (' + Math.round(metrics[worstRisk]) + (worstRisk==='cascade'?'%':'') + ')';
-if (worstRisk==='morale') riskText += ' \u2014 social cohesion at risk';
-else if (worstRisk==='threat') riskText += ' \u2014 external danger escalating';
-else if (worstRisk==='stability') riskText += ' \u2014 institutions weakening';
-else if (worstRisk==='cascade') riskText += ' \u2014 reaction chains may overwhelm decisions';
-else if (worstRisk==='tension') riskText += ' \u2014 conflict likely';
-else if (worstRisk==='anomaly') riskText += ' \u2014 reality instability';
-}
-document.getElementById('sit-risk-text').innerHTML = riskText;
+document.getElementById('sit-current-text').textContent = v.headline;
+document.getElementById('sit-risk-text').innerHTML = v.mainRisk;
 
 var watchItems = [];
 var questData = lastData.quests || {};
@@ -268,7 +364,7 @@ watchItems.push({id:'tension', title:'Diplomatic Tensions', sevLabel:tnsi.label,
 
 var wlContainer = document.getElementById('watchlist-cards');
 if (!watchItems.length) {
-wlContainer.innerHTML = '<div class="sit-card-value" style="color:var(--green);font-size:0.875rem">&#10003; No immediate concerns \u2014 all systems nominal</div>';
+  wlContainer.innerHTML = '<div class="sit-card-value" style="color:var(--green);font-size:0.875rem">&#10003; No active watch items</div>';
 } else {
 var wHtml = '';
 for (var wi=0; wi<watchItems.length; wi++) {
@@ -450,19 +546,9 @@ async function apiFetch(endpoint, timeoutMs) {
 }
 
 async function quietJsonFetch(endpoint, timeoutMs) {
-  var controller = new AbortController();
-  var timer = setTimeout(function(){controller.abort()}, timeoutMs || 8000);
-  try {
-    var resp = await fetch(endpoint, {signal: controller.signal});
-    clearTimeout(timer);
-    if (!resp.ok) return {ok:false,status:resp.status,data:null};
-    var ct = resp.headers.get('content-type') || '';
-    if (ct.indexOf('text/html') !== -1) return {ok:false,status:0,data:null};
-    return {ok:true,status:resp.status,data:await resp.json()};
-  } catch(e) {
-    clearTimeout(timer);
-    return {ok:false,status:0,data:null,error:e};
-  }
+  var data = await fedFetch('qfetch', endpoint, { timeout: timeoutMs || 8000, retries: 1, retryDelay: 2000 });
+  if (data !== null) return {ok:true, status:200, data:data};
+  return {ok:false, status:0, data:null};
 }
 
 function normalizeNpcList(data) {
@@ -659,30 +745,21 @@ function renderHumanBriefing() {
   var care = document.getElementById('hb-care');
   if (!headline || !what || !changed || !care) return;
   var status = lastData.status || {};
-  var ws = status.world_state || status.worldState || status;
-  var threat = Number(ws.threat_level != null ? ws.threat_level : 30);
-  var stability = Number(ws.stability != null ? ws.stability : 65);
-  var morale = Number(ws.morale != null ? ws.morale : 55);
-  var tension = Number(ws.tension_level != null ? ws.tension_level : 50);
-  var anomaly = Number(ws.anomaly_activity != null ? ws.anomaly_activity : 20);
-  var crisisScore = threat * 1.2 + (100 - stability) * 0.8 + (100 - morale) * 0.6 + anomaly * 0.9 + tension * 0.7;
+  var v = computeVerdict(status);
   if (!lastData.status) headline.textContent = 'Federation is loading its living society.';
-  else if (crisisScore > 180 || threat > 70 || stability < 25) headline.textContent = 'Federation is under active crisis pressure.';
-  else if (crisisScore > 100 || threat > 45 || stability < 45 || tension > 55) headline.textContent = 'Federation is unstable. Watch the NPC decisions.';
-  else headline.textContent = 'Federation is alive and currently holding together.';
+  else headline.textContent = v.headline;
   var npcCount = normalizeNpcList(lastData.npcs).length || (lastData.npcDirectory ? lastData.npcDirectory.length : 47);
   what.textContent = npcCount + ' AI citizens, factions, and systems are thinking, reacting, and changing without direct player control.';
   var latestLog = lastData.npcRealityLogs && lastData.npcRealityLogs.length ? lastData.npcRealityLogs.slice().sort(function(a,b){return (b.score||0)-(a.score||0)})[0] : null;
   if (latestLog) {
     var s = summarizeNpcLog(latestLog);
-    changed.textContent = latestLog.actor + ': ' + s.summary;
+    var actor = latestLog.actor;
+    if (/^char_\d{3}$/.test(actor)) { var nm=npcNameMap(); actor = nm[actor] || actor; }
+    changed.textContent = actor + ': ' + s.summary;
   } else {
     changed.textContent = 'Waiting for the next NPC decision, conversation, or cognition trace.';
   }
-  if (threat > 55) care.textContent = 'Threat is rising. Small NPC choices can now turn into larger faction cascades.';
-  else if (stability < 45) care.textContent = 'Stability is weakened. Alliances, conflicts, and morale shifts matter more now.';
-  else if (anomaly > 45) care.textContent = 'Anomaly activity is elevated. Unknown forces may reshape the simulation.';
-  else care.textContent = 'The important story is who gains trust, who loses patience, and who starts a cascade.';
+  care.textContent = v.careText;
 }
 
 async function fetchNpcRealityEntriesFor(npc, entryType) {
@@ -1350,11 +1427,13 @@ if(!data||!data.quest_log)return;
 renderQuestHealth(data);
 var log=document.getElementById('quest-log');
 var entries=data.quest_log;if(!Array.isArray(entries))return;
+var nameMap=npcNameMap();
 /* Build narrative entries grouped by event type */
 var narrativeMap={active:[],completed:[],abandoned:[]};
 for(var i=0;i<entries.length;i++){
 var e=entries[i];var evt=String(e.event||'').toLowerCase();
-var narr={char:e.char_id||'Unknown',quest:e.quest_id||'',reason:e.reason||'',ts:e.timestamp||'',tType:''};
+var charName=nameMap[e.char_id]||e.char_id||'Unknown';
+var narr={char:charName,rawChar:e.char_id,quest:e.quest_id||'',reason:e.reason||'',ts:e.timestamp||'',tType:''};
 if(evt.indexOf('accept')!==-1||evt.indexOf('start')!==-1){narr.tType='active';narrativeMap.active.push(narr)}
 else if(evt.indexOf('complet')!==-1){narr.tType='completed';narrativeMap.completed.push(narr)}
 else if(evt.indexOf('abandon')!==-1||evt.indexOf('fail')!==-1){narr.tType='abandoned';narrativeMap.abandoned.push(narr)}
@@ -1416,8 +1495,10 @@ expandedQuestNpc=charId;
 detailArea.innerHTML='<div class="loading-pulse" style="color:var(--dim);padding:8px">Loading quest detail...</div>';
 var data=await apiFetch('/simulation/npc-quests/'+encodeURIComponent(charId),10000);
 if(!data){detailArea.innerHTML='<div style="color:var(--red);padding:8px">Failed to load quest detail</div>';return}
+var nameMap=npcNameMap();
+var displayName=nameMap[charId]||charId;
 var html='<div class="quest-detail">';
-html+='<div class="quest-detail-title">'+esc(charId)+' \u2014 Quest Status</div>';
+html+='<div class="quest-detail-title">'+esc(displayName)+' \u2014 Quest Status</div>';
 html+='<div class="quest-stats">';
 html+='<div class="quest-stat"><span class="quest-stat-val" style="color:var(--green)">'+(data.completed_count||0)+'</span><span class="quest-stat-label">Completed</span></div>';
 html+='<div class="quest-stat"><span class="quest-stat-val" style="color:var(--red)">'+(data.failed_count||0)+'</span><span class="quest-stat-label">Failed</span></div>';
@@ -1977,15 +2058,8 @@ function renderQuickStatus() {
   if (!status) { panel.style.display = 'none'; return; }
 
   var ws = status.world_state || status.worldState || status;
-  var metrics = {};
-  var mKeys = ['tension','resources','threat','stability','morale','anomaly'];
-  for (var i = 0; i < mKeys.length; i++) {
-    var k = mKeys[i], af = METRIC_FIELD_MAP[k] || k;
-    metrics[k] = ws[af] != null ? ws[af] : (ws[k] != null ? ws[k] : 50);
-  }
-  var cascade = status.cascade_summary || status.cascadeSummary || {};
-  var temp = cascade.temperature != null ? cascade.temperature : (cascade.cascade_temperature != null ? cascade.cascade_temperature : 0);
-  var cascadePct = temp > 1.5 ? temp : (temp * 100);
+  var metrics = getMetrics(status);
+  var v = computeVerdict(status);
 
   /* Tick display */
   var tick = '\u2014';
@@ -2028,7 +2102,7 @@ function renderQuickStatus() {
     html += '<div class="qs-row"><span class="qs-bad">&#x26A0; The Bad:</span> ' + badParts.join('. ') + '.</div>';
   }
   if (goodParts.length === 0 && badParts.length === 0) {
-    html += '<div class="qs-row"><span class="qs-neutral">&#x2014; All metrics are in mid-range. No immediate concerns.</span></div>';
+    html += '<div class="qs-row"><span class="qs-neutral">&#x2014; All metrics are in mid-range \u2014 current status: ' + v.label + '.</span></div>';
   }
   html += '</div>';
 
@@ -2195,7 +2269,7 @@ var results=await Promise.all([apiFetch('/simulation/status',8000),apiFetch('/si
 var status=results[0],factions=results[1],events=results[2];
 var anyOk=status||factions||events;
 if(!anyOk){fetchErrorCount++;if(fetchErrorCount>=3)showSignalLost(true)}else{fetchErrorCount=0;showSignalLost(false);if(status)lastData.status=status;if(factions)lastData.factions=factions;if(events)lastData.events=events}
-if(lastData.status){updateTopBanner(lastData.status);updateSituation(lastData.status)}renderQuickStatus();renderReadableSummary();renderSituationRoom();renderHumanBriefing();
+if(lastData.status){updateTopBanner(lastData.status);updateSituation(lastData.status);updateFedBrief()}renderQuickStatus();renderReadableSummary();renderSituationRoom();renderHumanBriefing();
 if(lastData.factions)renderFactions(lastData.factions);
 if(lastData.events)renderEvents(lastData.events);
 if(lastData.status)renderBottom(lastData.status);
@@ -2330,23 +2404,12 @@ function renderReadableSummary() {
     events.sort(function(a,b){ var ta=a.ts||a.timestamp||0; var tb=b.ts||b.timestamp||0; return (tb>ta?1:(tb<ta?-1:0)); });
   } else { events = []; }
   var factions = lastData.factions || {};
-  var threat = ws.threat_level != null ? ws.threat_level : 50;
-  var stability = ws.stability != null ? ws.stability : 50;
-  var morale = ws.morale != null ? ws.morale : 50;
-  var anomaly = ws.anomaly_activity != null ? ws.anomaly_activity : 0;
-  var tension = ws.tension_level != null ? ws.tension_level : 50;
-  var crisisScore = threat * 1.2 + (100 - stability) * 0.8 + (100 - morale) * 0.6 + anomaly * 0.9 + tension * 0.7;
-  var overallState, stateClass;
-  if (crisisScore > 180 || threat > 70 || stability < 25) { overallState = 'CRISIS'; stateClass = 'crisis'; }
-  else if (crisisScore > 100 || threat > 45 || stability < 45) { overallState = 'WARNING'; stateClass = 'warning'; }
-  else { overallState = 'STABLE'; stateClass = 'stable'; }
-  var risks = [];
-  if (threat > 50) risks.push('High Threat (' + Math.round(threat) + ')');
-  if (stability < 40) risks.push('Low Stability (' + Math.round(stability) + ')');
-  if (morale < 40) risks.push('Low Morale (' + Math.round(morale) + ')');
-  if (anomaly > 50) risks.push('Anomaly Activity (' + Math.round(anomaly) + ')');
-  if (tension > 50) risks.push('High Tension (' + Math.round(tension) + ')');
-  var mainRisk = risks.length > 0 ? risks[0] : 'No significant threats detected';
+  var m = getMetrics(status);
+  var v = computeVerdict(status);
+  var overallState = v.label;
+  var stateClass = v.state;
+  var mainRisk = v.mainRisk;
+  var threat = m.threat, anomaly = m.anomaly, stability = m.stability;
   var topEvents = events.slice(0, 3);
   var involvedNpcs = [];
   var involvedFactions = [];
@@ -2358,8 +2421,8 @@ function renderReadableSummary() {
   involvedNpcs = involvedNpcs.slice(0, 3);
   involvedFactions = involvedFactions.slice(0, 3);
   var consequence = 'Monitoring degradation and threat metrics.';
-  if (overallState === 'crisis') consequence = 'Immediate intervention may be required. Systems at risk of cascade failure.';
-  else if (overallState === 'warning') consequence = 'Conditions deteriorating. Watch for cascade triggers.';
+  if (v.state === 'crisis') consequence = 'Immediate intervention may be required. Systems at risk of cascade failure.';
+  else if (v.state === 'unstable' || v.state === 'watch') consequence = 'Conditions deteriorating. Watch for cascade triggers.';
   else if (threat > 40) consequence = 'External pressure increasing. Faction cohesion may weaken.';
   else if (anomaly > 40) consequence = 'Anomaly activity rising. Unknown events likely.';
   var tick = '\u2014';
@@ -2481,29 +2544,29 @@ async function aiChatSend() {
   input.value = "";
   aiChatBusy = true;
   var btn = document.getElementById("ai-chat-send");
-  if (btn) btn.disabled = true;
+  var restoreBtn = btnSpinner(btn, "Thinking…");
 
   aiChatHistory.push({role: "user", text: question});
   aiChatHistory.push({role: "thinking"});
   aiChatRender();
 
   try {
-    var ctl = new AbortController();
-    var timer = setTimeout(function(){ ctl.abort() }, 15000);
-    var r = await fetch("/map/assistant", {
-      method: "POST",
-      headers: {"Content-Type": "application/json", "Accept": "application/json"},
+    var data = await fedFetch('assistant', '/map/assistant', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json', 'Accept': 'application/json'},
       body: JSON.stringify({question: question}),
-      signal: ctl.signal
+      timeout: 45000,
+      retries: 0,
     });
-    clearTimeout(timer);
-    if (!r.ok) throw new Error("HTTP " + r.status);
-    var data = await r.json();
 
-    // Remove the "thinking" entry
     aiChatHistory = aiChatHistory.filter(function(m){ return m.role !== "thinking"; });
 
-    if (data.status === "ok") {
+    if (!data) {
+      aiChatHistory.push({
+        role: "error",
+        text: "Connection failed. The simulation may be offline."
+      });
+    } else if (data.status === "ok") {
       aiChatHistory.push({
         role: "assistant",
         text: data.answer || "No answer returned.",
@@ -2515,17 +2578,20 @@ async function aiChatSend() {
         text: data.answer || "The intelligence systems are offline."
       });
     }
-  } catch (e) {
-    aiChatHistory = aiChatHistory.filter(function(m){ return m.role !== "thinking"; });
-    aiChatHistory.push({
-      role: "error",
-      text: "Connection failed. The simulation may be offline."
-    });
+  } finally {
+    aiChatBusy = false;
+    restoreBtn();
+    aiChatRender();
   }
+}
 
-  aiChatBusy = false;
-  if (btn) btn.disabled = false;
-  aiChatRender();
+// Toggle chat drawer
+function toggleChatDrawer() {
+  var chat = document.getElementById("ai-chat");
+  var btn = document.getElementById("ai-chat-toggle");
+  if (!chat || !btn) return;
+  var isOpen = chat.classList.toggle("open");
+  btn.classList.toggle("open", isOpen);
 }
 
 // Enter key to send

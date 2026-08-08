@@ -906,6 +906,7 @@ function startAutoRefresh() {
     if (!state.paused) {
       loadWorldVitals();
       loadThreads();
+      loadAgencyNpcs();
     }
   }, state.slowRefreshMs);
 }
@@ -915,6 +916,7 @@ function bindUi() {
     loadScenes();
     loadThreads();
     loadWorldVitals();
+    loadAgencyNpcs();
   });
   $("read-btn").addEventListener("click", readAloud);
   $("pause-btn").addEventListener("click", (e) => {
@@ -1155,6 +1157,92 @@ function playActiveChannel() {
   speakQueueStep();
 }
 
+// ===== NPC Agency monitoring ============================================
+
+function moodClass(mood) {
+  if (!mood) return "default";
+  const m = String(mood).toLowerCase();
+  if (m.includes("upbeat") || m.includes("happy") || m.includes("hopeful") || m.includes("proud")) return "upbeat";
+  if (m.includes("neutral") || m.includes("calm") || m.includes("curious")) return "neutral";
+  if (m.includes("down") || m.includes("angry") || m.includes("fear") || m.includes("sad")) return "down";
+  return "default";
+}
+
+function renderAgencyNpcs(data) {
+  const grid = $("agency-grid");
+  if (!grid) return;
+  const npcs = data.agency_npcs || [];
+  if (!npcs.length) {
+    grid.innerHTML = `<p class="empty">No agency NPCs registered.</p>`;
+    return;
+  }
+  grid.innerHTML = npcs.map((npc) => {
+    const artifactsHtml = (npc.artifacts || []).slice(0, 3).map((a) => {
+      const title = typeof a === "string" ? a : (a.title || a.name || a.artifact_type || "artifact");
+      const preview = typeof a === "string" ? "" : (a.content || "").slice(0, 80);
+      return `<div class="agency-item"><span class="agency-item-meta">artifact</span> ${escapeHtml(title)}${preview ? `<br>${escapeHtml(preview)}` : ""}</div>`;
+    }).join("") || `<div class="agency-item empty">No artifacts yet.</div>`;
+
+    const inboxHtml = (npc.inbox || []).slice(0, 4).map((m) => {
+      const from = m.from_char_name || m.from_char_id || "someone";
+      const subject = m.subject || m.body?.slice(0, 60) || "(no subject)";
+      return `<div class="agency-inbox-msg"><span class="from">${escapeHtml(from)}</span><span class="subject">${escapeHtml(subject)}</span></div>`;
+    }).join("") || "";
+
+    const decisionsHtml = (npc.recent_decisions || []).slice(0, 3).map((d) => {
+      const text = d.action_desc || d.description || d.summary || JSON.stringify(d).slice(0, 80);
+      return `<div class="agency-item">${escapeHtml(text)}</div>`;
+    }).join("") || "";
+
+    const cogState = npc.cognition || {};
+    const cogKeys = Object.keys(cogState).filter((k) => k !== "char_id" && k !== "name" && k !== "mood");
+    const cogHtml = cogKeys.slice(0, 4).map((k) => {
+      const val = String(cogState[k]).slice(0, 80);
+      return `<div class="agency-item"><strong>${escapeHtml(k)}</strong>: ${escapeHtml(val)}</div>`;
+    }).join("") || "";
+
+    const mc = moodClass(npc.mood);
+
+    return `
+      <article class="agency-card mood-${mc}">
+        <h3>${escapeHtml(npc.name)}</h3>
+        <div class="agency-char-id">${escapeHtml(npc.char_id)}</div>
+        <div class="agency-stat-row">
+          <span>Mood: <strong>${escapeHtml(npc.mood || "unknown")}</strong></span>
+          <span>Messages: <strong>${escapeHtml(String(npc.unread_messages || 0))}</strong></span>
+        </div>
+        <div class="agency-block">
+          <h4>Recent decisions</h4>
+          ${decisionsHtml || `<div class="agency-item empty">No recent decisions.</div>`}
+        </div>
+        <div class="agency-block">
+          <h4>Cognition</h4>
+          ${cogHtml || `<div class="agency-item empty">No cognition state.</div>`}
+        </div>
+        <div class="agency-block">
+          <h4>Artifacts</h4>
+          ${artifactsHtml}
+        </div>
+        ${inboxHtml ? `<div class="agency-block"><h4>Inbox ${npc.unread_messages > 0 ? `<span class="agency-unread">${npc.unread_messages} unread</span>` : ""}</h4>${inboxHtml}</div>` : ""}
+      </article>
+    `;
+  }).join("");
+}
+
+async function loadAgencyNpcs() {
+  const grid = $("agency-grid");
+  try {
+    const response = await fetch("/spectator/agency", { headers: { Accept: "application/json" } });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    const data = await response.json();
+    renderAgencyNpcs(data);
+  } catch (err) {
+    if (grid) {
+      grid.innerHTML = `<p class="empty">Agency NPCs unavailable: ${escapeHtml(err.message)}</p>`;
+    }
+  }
+}
+
 // ===== Voice registry / picker UI =======================================
 
 function loadVoices() {
@@ -1273,4 +1361,5 @@ loadVoices();
 loadWorldVitals();
 loadThreads();
 loadScenes();
+loadAgencyNpcs();
 startAutoRefresh();

@@ -7,6 +7,7 @@ This module:
 3. Makes councilor work visible to the narrator/faction leaders
 """
 
+import hashlib
 import json
 import logging
 import time
@@ -16,6 +17,27 @@ from typing import Dict, List, Optional
 logger = logging.getLogger("councilor_bridge")
 
 COUNCILOR_IDS = {"char_001", "char_306"}  # Archimedes Prime, The Oracle
+ARTIFACT_DEDUPE_KEY = "federation_councilor_artifact_ids"
+MESSAGE_DEDUPE_KEY = "federation_councilor_routed_message_ids"
+
+
+def _stable_id(prefix: str, payload: Dict) -> str:
+    """Return a stable identifier for bridge dedupe.
+
+    Some older artifacts/messages do not carry an explicit id. In those cases
+    hash a normalized subset so repeated bridge ticks do not duplicate them.
+    """
+    explicit = payload.get("artifact_id") or payload.get("id") or payload.get("message_id")
+    if explicit:
+        return str(explicit)
+    raw = json.dumps(payload, sort_keys=True, ensure_ascii=True)
+    digest = hashlib.sha1(f"{prefix}:{raw}".encode("utf-8")).hexdigest()
+    return f"{prefix}_{digest}"
+
+
+# Cap on the per-councilor source artifact list so it cannot grow unbounded
+# on the (space-constrained) deployment disk. Keeps the most recent entries.
+ARTIFACT_SOURCE_CAP = 5000
 
 
 def sync_artifacts_to_simulation(r, councilor_id: str) -> int:
@@ -31,19 +53,39 @@ def sync_artifacts_to_simulation(r, councilor_id: str) -> int:
         for artifact_json in raw_artifacts:
             try:
                 artifact = json.loads(artifact_json)
-                artifact_id = artifact.get("artifact_id", str(uuid.uuid4()))
-                
+                artifact_id = _stable_id(councilor_id, artifact)
+                if not r.sadd(ARTIFACT_DEDUPE_KEY, artifact_id):
+                    continue
+                artifact["artifact_id"] = artifact_id
+
+                try:
+                    from institutions import annotate_artifact
+
+                    artifact = annotate_artifact(r, councilor_id, artifact)
+                except ImportError:
+                    artifact.setdefault("institution_id", "")
+                    artifact.setdefault("role_id", "")
+                    artifact.setdefault("workflow_id", "")
+                    artifact.setdefault("artifact_kind", "councilor_note")
+
                 # Mark as councilor artifact
                 artifact["councilor_id"] = councilor_id
                 artifact["councilor_name"] = artifact.get("author", councilor_id)
                 artifact["synced_at"] = int(time.time())
-                
+
                 r.lpush("federation_councilor_artifacts", json.dumps(artifact))
                 r.ltrim("federation_councilor_artifacts", 0, 999)  # Keep last 1000
                 synced += 1
             except Exception as e:
                 logger.warning(f"Failed to parse artifact: {e}")
         
+        # Trim the source list so it cannot grow forever on a constrained disk.
+        # LTRIM -CAP -1 keeps the most recent CAP entries (newest at the tail).
+        try:
+            r.ltrim(f"npc_artifacts:{councilor_id}", -ARTIFACT_SOURCE_CAP, -1)
+        except Exception:
+            logger.warning(f"Failed to cap artifact list for {councilor_id}")
+
         logger.info(f"Synced {synced} artifacts from {councilor_id} to simulation")
         return synced
         
@@ -78,10 +120,14 @@ def route_npc_messages_to_councilors(r) -> int:
                 try:
                     msg = json.loads(msg_json)
                     to = msg.get("to", "")
-                    
+
                     if to in COUNCILOR_IDS:
+                        message_id = _stable_id("msg", msg)
+                        if not r.sadd(MESSAGE_DEDUPE_KEY, message_id):
+                            continue
+                        msg["id"] = message_id
                         # Route to councilor inbox
-                        r.lpush(f"npc_messages:{to}:inbox", msg_json)
+                        r.lpush(f"npc_messages:{to}:inbox", json.dumps(msg))
                         routed += 1
                 except Exception:
                     pass
@@ -116,6 +162,33 @@ def get_councilor_artifacts_for_npc(r, npc_id: str) -> List[Dict]:
         return artifacts
     except Exception:
         return []
+
+
+def update_councilor_relationships(r, councilor_id: str, interaction: Dict) -> None:
+    """Update relationship tracking for councilor interactions.
+    
+    Called after a councilor interacts with another NPC.
+    Increments the relationship delta in Redis HASH.
+    """
+    try:
+        other_id = interaction.get("target_char_id") or interaction.get("to")
+        delta = interaction.get("relationship_delta", 0)
+        if other_id and delta:
+            r.hincrby(f"npc_relationships:{councilor_id}", other_id, delta)
+            logger.info(f"Updated relationship: {councilor_id} -> {other_id} by {delta}")
+    except Exception as e:
+        logger.warning(f"Failed to update relationships: {e}")
+
+
+def update_councilor_topic(r, councilor_id: str, topic: str) -> None:
+    """Update the last_topic field for a councilor.
+    
+    Used to track what the councilor is currently focused on.
+    """
+    try:
+        r.hset(f"npc_cognition:{councilor_id}", "last_topic", topic)
+    except Exception as e:
+        logger.warning(f"Failed to update topic: {e}")
 
 
 def broadcast_councilor_proposal(r, councilor_id: str, proposal: Dict) -> bool:

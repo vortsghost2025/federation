@@ -1301,6 +1301,7 @@ def build_mysterious_figures() -> List[Character]:
             wisdom=0.95,
             charisma=0.75,
             cunning=0.6,
+            affiliation="consciousness_collective",
             personality_type=CharacterArchetype.MYSTIC,
             status=CharacterStatus.HIDDEN,
             skills=["Perfect Prophecy", "Sight Beyond Sight", "Fate Reading"],

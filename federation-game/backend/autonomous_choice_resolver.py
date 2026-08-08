@@ -72,6 +72,7 @@ FALLBACK_IDEOLOGY = "stability"
 
 MAX_RESOLUTION_HISTORY = 200
 MAX_FACTION_HISTORY = 50
+SIM_EFFECTS_TTL = 172800
 
 
 IDEOLOGY_CHOICE_WEIGHTS = {
@@ -554,7 +555,9 @@ class AutonomousChoiceResolver:
                 "delta": round(delta, 4),
                 "ts": int(ts),
             }
-            r.zadd(f"sim_effects:{int(ts)}", {json.dumps(effect_record): ts})
+            key = f"sim_effects:{int(ts)}"
+            r.zadd(key, {json.dumps(effect_record): ts})
+            r.expire(key, SIM_EFFECTS_TTL)
 
             result["applied"] = True
             result["world_key"] = world_key
