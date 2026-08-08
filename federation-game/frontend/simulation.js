@@ -69,7 +69,97 @@ if (score >= 4) return 'critical';
 if (score >= 3) return 'severe';
 if (score >= 2) return 'high';
 if (score >= 1) return 'elevated';
-return 'nominal';
+  return 'nominal';
+}
+
+/* ═══ UNIFIED VERDICT (single source of truth) ═══ */
+function getMetrics(status) {
+  var ws = (status && (status.world_state || status.worldState)) || status || {};
+  var out = {}, mKeys = ['tension','resources','threat','stability','morale','anomaly'];
+  for (var i = 0; i < mKeys.length; i++) {
+    var k = mKeys[i], af = METRIC_FIELD_MAP[k] || k;
+    out[k] = ws[af] != null ? ws[af] : (ws[k] != null ? ws[k] : 50);
+  }
+  return out;
+}
+
+function computeVerdict(status) {
+  status = status || {};
+  var m = getMetrics(status);
+  var cascade = status.cascade_summary || status.cascadeSummary || {};
+  var temp = cascade.temperature != null ? cascade.temperature : (cascade.cascade_temperature != null ? cascade.cascade_temperature : 0);
+  var cascadePct = temp > 1.5 ? temp : (temp * 100);
+  m.cascade = cascadePct;
+
+  var score = Math.max(
+    sevScore('morale', m.morale),
+    sevScore('stability', m.stability),
+    sevScore('threat', m.threat),
+    sevScore('tension', m.tension),
+    sevScore('anomaly', m.anomaly),
+    sevScore('cascade', cascadePct)
+  );
+  var state = score >= 4 ? 'crisis' : (score >= 3 ? 'unstable' : (score >= 2 ? 'watch' : 'stable'));
+  var labelMap = {stable:'STABLE', watch:'WATCH', unstable:'UNSTABLE', crisis:'CRISIS'};
+  var label = labelMap[state];
+  var severityClass = 'state-' + state;
+
+  var parts = [];
+  if (m.resources > 75) parts.push('resource-rich'); else if (m.resources < 25) parts.push('resource-scarce');
+  if (m.stability > 75) parts.push('socially stable'); else if (m.stability < 30) parts.push('socially unstable');
+  if (m.morale > 75) parts.push('high morale'); else if (m.morale < 25) parts.push('morale collapsing');
+  if (m.tension > 70) parts.push('high tension'); else if (m.tension < 25) parts.push('peaceful');
+  if (m.threat > 70) parts.push('under threat');
+  if (m.anomaly > 70) parts.push('anomaly activity elevated');
+  if (cascadePct > 80) parts.push('cascade chains spreading'); else if (cascadePct < 30) parts.push('experiencing calm events');
+
+  var recentEvents = status.recent_events || [];
+  var topEvent = null;
+  for (var ei = recentEvents.length - 1; ei >= 0; ei--) {
+    var ev = recentEvents[ei];
+    if (ev && ev.event_type && ev.event_type !== 'routine') { topEvent = ev; break; }
+  }
+  if (!topEvent && recentEvents.length > 0) topEvent = recentEvents[recentEvents.length - 1];
+  var headline = topEvent && topEvent.description ? topEvent.description
+    : (parts.length ? 'The Federation is ' + parts.join(', ') + '.' : 'The Federation is in a balanced state.');
+
+  var riskOrder = [
+    {k:'morale',dir:'low'},{k:'stability',dir:'low'},{k:'threat',dir:'high'},
+    {k:'tension',dir:'high'},{k:'anomaly',dir:'high'},{k:'cascade',dir:'high'}
+  ];
+  var worstRisk = null, worstScore = -1;
+  for (var r = 0; r < riskOrder.length; r++) {
+    var rk = riskOrder[r], si = severityInfo(rk.k, m[rk.k]);
+    var sc = si.cls.indexOf('critical')!==-1 ? 4 : (si.cls.indexOf('severe')!==-1 ? 3 : (si.cls.indexOf('breach')!==-1 ? 3 : (si.cls.indexOf('overheating')!==-1 ? 3 : (si.cls.indexOf('high')!==-1 ? 2 : (si.cls.indexOf('unstable')!==-1 ? 2 : (si.cls.indexOf('hot')!==-1 ? 2 : 0))))));
+    if (sc > worstScore) { worstScore = sc; worstRisk = rk.k; }
+  }
+  var mainRisk = 'No active risks detected';
+  if (worstRisk) {
+    var rsi = severityInfo(worstRisk, m[worstRisk]);
+    var rName = worstRisk.charAt(0).toUpperCase() + worstRisk.slice(1);
+    if (worstRisk === 'cascade') rName = 'Cascade Temperature';
+    mainRisk = rName + ' is ' + rsi.label + ' (' + Math.round(m[worstRisk]) + (worstRisk === 'cascade' ? '%' : '') + ')';
+  }
+
+  var careMap = {
+    crisis: 'Active crisis pressure. Systems may cascade-fail without intervention.',
+    unstable: 'Conditions are unstable. Small NPC choices can now trigger larger faction cascades.',
+    watch: 'Watch key pressures \u2014 stability, morale, and threat shifts matter now.',
+    stable: 'The important story is who gains trust, who loses patience, and who starts a cascade.'
+  };
+
+  var watchItems = [];
+  if (m.morale < 40) watchItems.push('Morale ' + Math.round(m.morale));
+  if (m.stability < 40) watchItems.push('Stability ' + Math.round(m.stability));
+  if (m.threat > 60) watchItems.push('Threat ' + Math.round(m.threat));
+  if (m.tension > 60) watchItems.push('Tension ' + Math.round(m.tension));
+  if (m.anomaly > 60) watchItems.push('Anomaly ' + Math.round(m.anomaly));
+  if (cascadePct > 70) watchItems.push('Cascade ' + Math.round(cascadePct) + '%');
+
+  return {
+    state: state, label: label, severityClass: severityClass,
+    headline: headline, mainRisk: mainRisk, careText: careMap[state], watchItems: watchItems
+  };
 }
 
 /* ═══ NEW: TOP BANNER (replaces updateTopRibbon) ═══ */
@@ -77,13 +167,8 @@ function updateTopBanner(status) {
 if (!status) return;
 var ws = status.world_state || status.worldState || status;
 
-/* Extract metric values */
-var metrics = {};
-var mKeys = ['tension','resources','threat','stability','morale','anomaly'];
-for (var i = 0; i < mKeys.length; i++) {
-var k = mKeys[i], af = METRIC_FIELD_MAP[k] || k;
-metrics[k] = ws[af] != null ? ws[af] : (ws[k] != null ? ws[k] : 50);
-}
+/* Extract metric values (single source via getMetrics) */
+var metrics = getMetrics(status);
 
 /* Row 1: Degradation vs Runway */
 var moraleInv = 100 - (metrics.morale || 0);
@@ -179,27 +264,12 @@ function updateFedBrief() {
   var status = lastData.status;
   if (!status) return;
   var ws = status.world_state || status.worldState || status;
-  var metrics = {};
-  var mKeys = ['tension','resources','threat','stability','morale','anomaly'];
-  for (var i=0;i<mKeys.length;i++) { var k=mKeys[i], af=METRIC_FIELD_MAP[k]||k; metrics[k] = ws[af]!=null ? ws[af] : (ws[k]!=null ? ws[k] : 50); }
-
-  var moraleInv = 100 - (metrics.morale||0);
-  var stabilityInv = 100 - (metrics.stability||0);
-  var anomalyVal = metrics.anomaly||0;
-  var degScore = Math.max(sevScore('morale',metrics.morale), sevScore('stability',metrics.stability), sevScore('anomaly',metrics.anomaly));
-  var thScore = Math.max(sevScore('threat',metrics.threat), sevScore('tension',metrics.tension));
-  var overallScore = Math.max(degScore, thScore);
-
-  var cascade = status.cascade_summary || {};
-  var temp = cascade.temperature!=null ? cascade.temperature : (cascade.cascade_temperature!=null ? cascade.cascade_temperature : 0);
-  var cascadePct = temp>1.5 ? temp : (temp*100);
+  var v = computeVerdict(status);
 
   var badge = document.getElementById('brief-state-badge');
   if (badge) {
-    var labels = {critical:'CRITICAL',severe:'SEVERE',high:'HIGH',elevated:'ELEVATED',nominal:'NOMINAL'};
-    var sevCls = splitSevCls(overallScore);
-    badge.textContent = labels[sevCls] || 'NOMINAL';
-    badge.className = 'brief-state-badge state-'+(overallScore>=4||sevCls==='critical'?'critical':(overallScore>=2||sevCls==='severe'||sevCls==='high'?'unstable':'stable'));
+    badge.textContent = v.label;
+    badge.className = 'brief-state-badge ' + v.severityClass;
   }
 
   var meta = document.getElementById('brief-meta');
@@ -211,21 +281,7 @@ function updateFedBrief() {
   }
 
   var headline = document.getElementById('brief-headline');
-  if (headline) {
-    var parts = [];
-    if (metrics.resources>75) parts.push('resource-rich'); else if (metrics.resources<25) parts.push('resource-scarce');
-    if (metrics.stability>75) parts.push('socially stable'); else if (metrics.stability<30) parts.push('socially unstable');
-    if (metrics.morale>75) parts.push('high morale'); else if (metrics.morale<25) parts.push('morale collapsing');
-    if (metrics.tension>70) parts.push('high tension'); else if (metrics.tension<25) parts.push('peaceful');
-    if (metrics.threat>70) parts.push('under threat');
-    if (metrics.anomaly>70) parts.push('anomaly activity elevated');
-    if (cascadePct>80) parts.push('cascade chains spreading'); else if (cascadePct<30) parts.push('experiencing calm events');
-    var recentEvents = status.recent_events || [];
-    var topEvent = null;
-    for (var ei=recentEvents.length-1;ei>=0;ei--) { var ev=recentEvents[ei]; if(ev&&ev.event_type&&ev.event_type!=='routine'){topEvent=ev;break} }
-    if (!topEvent && recentEvents.length>0) topEvent = recentEvents[recentEvents.length-1];
-    headline.textContent = topEvent && topEvent.description ? topEvent.description : (parts.length ? 'The Federation is '+parts.join(', ')+'.' : 'The Federation is in a balanced state.');
-  }
+  if (headline) headline.textContent = v.headline;
 
   var devEl = document.getElementById('brief-developments');
   if (devEl) {
@@ -247,18 +303,11 @@ function updateFedBrief() {
 
   var watchEl = document.getElementById('brief-watch');
   if (watchEl) {
-    var watchItems=[];
-    if (metrics.morale<40) watchItems.push('Morale '+Math.round(metrics.morale));
-    if (metrics.stability<40) watchItems.push('Stability '+Math.round(metrics.stability));
-    if (metrics.threat>60) watchItems.push('Threat '+Math.round(metrics.threat));
-    if (metrics.tension>60) watchItems.push('Tension '+Math.round(metrics.tension));
-    if (metrics.anomaly>60) watchItems.push('Anomaly '+Math.round(metrics.anomaly));
-    if (cascadePct>70) watchItems.push('Cascade '+Math.round(cascadePct)+'%');
-    if (watchItems.length===0) {
-      watchEl.innerHTML = '<span class="brief-watch-item" style="color:var(--green);border-color:rgba(76,175,80,0.3)">All systems nominal</span>';
+    if (v.watchItems.length === 0) {
+      watchEl.innerHTML = '<span class="brief-watch-item">No active watch items</span>';
     } else {
       var wHtml='';
-      for (var wi=0;wi<Math.min(watchItems.length,3);wi++) wHtml += '<span class="brief-watch-item">\u25cf '+watchItems[wi]+'</span>';
+      for (var wi=0;wi<Math.min(v.watchItems.length,3);wi++) wHtml += '<span class="brief-watch-item">\u25cf '+v.watchItems[wi]+'</span>';
       watchEl.innerHTML = wHtml;
     }
   }
@@ -268,58 +317,15 @@ function updateFedBrief() {
 function updateSituation(status) {
 if (!status) return;
 var ws = status.world_state || status.worldState || status;
-var metrics = {};
-var mKeys = ['tension','resources','threat','stability','morale','anomaly'];
-for (var i=0;i<mKeys.length;i++) {
-var k=mKeys[i], af=METRIC_FIELD_MAP[k]||k;
-metrics[k] = ws[af]!=null ? ws[af] : (ws[k]!=null ? ws[k] : 50);
-}
+var metrics = getMetrics(status);
 var cascade = status.cascade_summary || status.cascadeSummary || {};
 var temp = cascade.temperature!=null ? cascade.temperature : (cascade.cascade_temperature!=null ? cascade.cascade_temperature : 0);
 var cascadePct = temp>1.5 ? temp : (temp*100);
 metrics.cascade = cascadePct;
+var v = computeVerdict(status);
 
-var parts = [];
-if (metrics.resources > 75) parts.push('resource-rich');
-else if (metrics.resources < 25) parts.push('resource-scarce');
-if (metrics.stability > 75) parts.push('socially stable');
-else if (metrics.stability < 30) parts.push('socially unstable');
-if (metrics.morale > 75) parts.push('high morale');
-else if (metrics.morale < 25) parts.push('morale collapsing');
-if (metrics.tension > 70) parts.push('high tension');
-else if (metrics.tension < 25) parts.push('peaceful');
-if (metrics.threat > 70) parts.push('under threat');
-if (metrics.anomaly > 70) parts.push('anomaly activity elevated');
-if (cascadePct > 80) parts.push('cascade chains spreading rapidly');
-else if (cascadePct < 30) parts.push('experiencing calm events');
-
-var sitText = parts.length ? 'The Federation is ' + parts.join(', ') + '.' : 'The Federation is in a balanced state.';
-document.getElementById('sit-current-text').textContent = sitText;
-
-var riskOrder = [
-{k:'morale',dir:'low'},{k:'stability',dir:'low'},{k:'threat',dir:'high'},
-{k:'tension',dir:'high'},{k:'anomaly',dir:'high'},{k:'cascade',dir:'high'}
-];
-var worstRisk = null; var worstScore = -1;
-for (var r=0;r<riskOrder.length;r++) {
-var rk=riskOrder[r], si=severityInfo(rk.k, metrics[rk.k]);
-var score = si.cls.indexOf('critical')!==-1 ? 4 : (si.cls.indexOf('severe')!==-1 ? 3 : (si.cls.indexOf('breach')!==-1 ? 3 : (si.cls.indexOf('overheating')!==-1 ? 3 : (si.cls.indexOf('high')!==-1 ? 2 : (si.cls.indexOf('unstable')!==-1 ? 2 : (si.cls.indexOf('hot')!==-1 ? 2 : 0))))));
-if (score > worstScore) { worstScore = score; worstRisk = rk.k; }
-}
-var riskText = '\u2014';
-if (worstRisk) {
-var rsi = severityInfo(worstRisk, metrics[worstRisk]);
-var rName = worstRisk.charAt(0).toUpperCase() + worstRisk.slice(1);
-if (worstRisk === 'cascade') rName = 'Cascade Temperature';
-riskText = rName + ' is ' + rsi.label + ' (' + Math.round(metrics[worstRisk]) + (worstRisk==='cascade'?'%':'') + ')';
-if (worstRisk==='morale') riskText += ' \u2014 social cohesion at risk';
-else if (worstRisk==='threat') riskText += ' \u2014 external danger escalating';
-else if (worstRisk==='stability') riskText += ' \u2014 institutions weakening';
-else if (worstRisk==='cascade') riskText += ' \u2014 reaction chains may overwhelm decisions';
-else if (worstRisk==='tension') riskText += ' \u2014 conflict likely';
-else if (worstRisk==='anomaly') riskText += ' \u2014 reality instability';
-}
-document.getElementById('sit-risk-text').innerHTML = riskText;
+document.getElementById('sit-current-text').textContent = v.headline;
+document.getElementById('sit-risk-text').innerHTML = v.mainRisk;
 
 var watchItems = [];
 var questData = lastData.quests || {};
@@ -358,7 +364,7 @@ watchItems.push({id:'tension', title:'Diplomatic Tensions', sevLabel:tnsi.label,
 
 var wlContainer = document.getElementById('watchlist-cards');
 if (!watchItems.length) {
-wlContainer.innerHTML = '<div class="sit-card-value" style="color:var(--green);font-size:0.875rem">&#10003; No immediate concerns \u2014 all systems nominal</div>';
+  wlContainer.innerHTML = '<div class="sit-card-value" style="color:var(--green);font-size:0.875rem">&#10003; No active watch items</div>';
 } else {
 var wHtml = '';
 for (var wi=0; wi<watchItems.length; wi++) {
@@ -739,17 +745,9 @@ function renderHumanBriefing() {
   var care = document.getElementById('hb-care');
   if (!headline || !what || !changed || !care) return;
   var status = lastData.status || {};
-  var ws = status.world_state || status.worldState || status;
-  var threat = Number(ws.threat_level != null ? ws.threat_level : 30);
-  var stability = Number(ws.stability != null ? ws.stability : 65);
-  var morale = Number(ws.morale != null ? ws.morale : 55);
-  var tension = Number(ws.tension_level != null ? ws.tension_level : 50);
-  var anomaly = Number(ws.anomaly_activity != null ? ws.anomaly_activity : 20);
-  var crisisScore = threat * 1.2 + (100 - stability) * 0.8 + (100 - morale) * 0.6 + anomaly * 0.9 + tension * 0.7;
+  var v = computeVerdict(status);
   if (!lastData.status) headline.textContent = 'Federation is loading its living society.';
-  else if (crisisScore > 180 || threat > 70 || stability < 25) headline.textContent = 'Federation is under active crisis pressure.';
-  else if (crisisScore > 100 || threat > 45 || stability < 45 || tension > 55) headline.textContent = 'Federation is unstable. Watch the NPC decisions.';
-  else headline.textContent = 'Federation is alive and currently holding together.';
+  else headline.textContent = v.headline;
   var npcCount = normalizeNpcList(lastData.npcs).length || (lastData.npcDirectory ? lastData.npcDirectory.length : 47);
   what.textContent = npcCount + ' AI citizens, factions, and systems are thinking, reacting, and changing without direct player control.';
   var latestLog = lastData.npcRealityLogs && lastData.npcRealityLogs.length ? lastData.npcRealityLogs.slice().sort(function(a,b){return (b.score||0)-(a.score||0)})[0] : null;
@@ -761,10 +759,7 @@ function renderHumanBriefing() {
   } else {
     changed.textContent = 'Waiting for the next NPC decision, conversation, or cognition trace.';
   }
-  if (threat > 55) care.textContent = 'Threat is rising. Small NPC choices can now turn into larger faction cascades.';
-  else if (stability < 45) care.textContent = 'Stability is weakened. Alliances, conflicts, and morale shifts matter more now.';
-  else if (anomaly > 45) care.textContent = 'Anomaly activity is elevated. Unknown forces may reshape the simulation.';
-  else care.textContent = 'The important story is who gains trust, who loses patience, and who starts a cascade.';
+  care.textContent = v.careText;
 }
 
 async function fetchNpcRealityEntriesFor(npc, entryType) {
@@ -2063,15 +2058,8 @@ function renderQuickStatus() {
   if (!status) { panel.style.display = 'none'; return; }
 
   var ws = status.world_state || status.worldState || status;
-  var metrics = {};
-  var mKeys = ['tension','resources','threat','stability','morale','anomaly'];
-  for (var i = 0; i < mKeys.length; i++) {
-    var k = mKeys[i], af = METRIC_FIELD_MAP[k] || k;
-    metrics[k] = ws[af] != null ? ws[af] : (ws[k] != null ? ws[k] : 50);
-  }
-  var cascade = status.cascade_summary || status.cascadeSummary || {};
-  var temp = cascade.temperature != null ? cascade.temperature : (cascade.cascade_temperature != null ? cascade.cascade_temperature : 0);
-  var cascadePct = temp > 1.5 ? temp : (temp * 100);
+  var metrics = getMetrics(status);
+  var v = computeVerdict(status);
 
   /* Tick display */
   var tick = '\u2014';
@@ -2114,7 +2102,7 @@ function renderQuickStatus() {
     html += '<div class="qs-row"><span class="qs-bad">&#x26A0; The Bad:</span> ' + badParts.join('. ') + '.</div>';
   }
   if (goodParts.length === 0 && badParts.length === 0) {
-    html += '<div class="qs-row"><span class="qs-neutral">&#x2014; All metrics are in mid-range. No immediate concerns.</span></div>';
+    html += '<div class="qs-row"><span class="qs-neutral">&#x2014; All metrics are in mid-range \u2014 current status: ' + v.label + '.</span></div>';
   }
   html += '</div>';
 
@@ -2416,23 +2404,12 @@ function renderReadableSummary() {
     events.sort(function(a,b){ var ta=a.ts||a.timestamp||0; var tb=b.ts||b.timestamp||0; return (tb>ta?1:(tb<ta?-1:0)); });
   } else { events = []; }
   var factions = lastData.factions || {};
-  var threat = ws.threat_level != null ? ws.threat_level : 50;
-  var stability = ws.stability != null ? ws.stability : 50;
-  var morale = ws.morale != null ? ws.morale : 50;
-  var anomaly = ws.anomaly_activity != null ? ws.anomaly_activity : 0;
-  var tension = ws.tension_level != null ? ws.tension_level : 50;
-  var crisisScore = threat * 1.2 + (100 - stability) * 0.8 + (100 - morale) * 0.6 + anomaly * 0.9 + tension * 0.7;
-  var overallState, stateClass;
-  if (crisisScore > 180 || threat > 70 || stability < 25) { overallState = 'CRISIS'; stateClass = 'crisis'; }
-  else if (crisisScore > 100 || threat > 45 || stability < 45) { overallState = 'WARNING'; stateClass = 'warning'; }
-  else { overallState = 'STABLE'; stateClass = 'stable'; }
-  var risks = [];
-  if (threat > 50) risks.push('High Threat (' + Math.round(threat) + ')');
-  if (stability < 40) risks.push('Low Stability (' + Math.round(stability) + ')');
-  if (morale < 40) risks.push('Low Morale (' + Math.round(morale) + ')');
-  if (anomaly > 50) risks.push('Anomaly Activity (' + Math.round(anomaly) + ')');
-  if (tension > 50) risks.push('High Tension (' + Math.round(tension) + ')');
-  var mainRisk = risks.length > 0 ? risks[0] : 'No significant threats detected';
+  var m = getMetrics(status);
+  var v = computeVerdict(status);
+  var overallState = v.label;
+  var stateClass = v.state;
+  var mainRisk = v.mainRisk;
+  var threat = m.threat, anomaly = m.anomaly, stability = m.stability;
   var topEvents = events.slice(0, 3);
   var involvedNpcs = [];
   var involvedFactions = [];
@@ -2444,8 +2421,8 @@ function renderReadableSummary() {
   involvedNpcs = involvedNpcs.slice(0, 3);
   involvedFactions = involvedFactions.slice(0, 3);
   var consequence = 'Monitoring degradation and threat metrics.';
-  if (overallState === 'crisis') consequence = 'Immediate intervention may be required. Systems at risk of cascade failure.';
-  else if (overallState === 'warning') consequence = 'Conditions deteriorating. Watch for cascade triggers.';
+  if (v.state === 'crisis') consequence = 'Immediate intervention may be required. Systems at risk of cascade failure.';
+  else if (v.state === 'unstable' || v.state === 'watch') consequence = 'Conditions deteriorating. Watch for cascade triggers.';
   else if (threat > 40) consequence = 'External pressure increasing. Faction cohesion may weaken.';
   else if (anomaly > 40) consequence = 'Anomaly activity rising. Unknown events likely.';
   var tick = '\u2014';

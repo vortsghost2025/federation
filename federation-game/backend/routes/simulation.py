@@ -129,6 +129,10 @@ async def autonomous_simulation_tick():
 
     Returns HTTP 202 immediately. The tick runs in a background thread.
     Poll /simulation/autonomous/status for results.
+
+    Canonical correlation id: a single tick_id is generated here and passed
+    into the engine. The same id is echoed by /simulation/autonomous/status
+    so callers can correlate POST -> running -> completed.
     """
     from tick_engine import (
         get_tick_redis,
@@ -137,26 +141,34 @@ async def autonomous_simulation_tick():
     )
     from fastapi.responses import JSONResponse
 
-    status = get_tick_redis(_AUTO_TICK_REDIS_KEY)
-    if status.get("running"):
+    pre_status = get_tick_redis(_AUTO_TICK_REDIS_KEY)
+    baseline_started_at = float(pre_status.get("last_start", 0.0) or 0.0)
+    if pre_status.get("running"):
         return JSONResponse(
             status_code=409,
             content={
                 "status": "already_running",
-                "started_at": status.get("last_start", 0.0),
+                "tick_id": pre_status.get("tick_id") or "",
+                "started_at": baseline_started_at,
             },
         )
 
     tick_id = f"auto_tick_{int(time.time() * 1000)}"
+    requested_at = time.time()
     thread = threading.Thread(
         target=run_autonomous_tick_background,
-        args=(game_state, FACTION_IDEOLOGY),
+        args=(game_state, FACTION_IDEOLOGY, tick_id),
         daemon=True,
     )
     thread.start()
     return JSONResponse(
         status_code=202,
-        content={"status": "started", "tick_id": tick_id},
+        content={
+            "status": "started",
+            "tick_id": tick_id,
+            "baseline_started_at": baseline_started_at,
+            "requested_at": requested_at,
+        },
     )
 
 
@@ -164,16 +176,29 @@ async def autonomous_simulation_tick():
 async def autonomous_tick_status():
     from tick_engine import get_tick_redis, set_tick_redis, _AUTO_TICK_REDIS_KEY
 
-    STALE_THRESHOLD_SECONDS = 300  # 5 minutes
-
     status = get_tick_redis(_AUTO_TICK_REDIS_KEY)
-    if status.get("running"):
-        elapsed = time.time() - status.get("last_start", 0.0)
-        if elapsed > STALE_THRESHOLD_SECONDS:
-            # Ghost tick — previous process was killed before finally block ran.
-            # Clear the stale state so the worker can start a fresh tick.
+    running = bool(status.get("running"))
+
+    if running:
+        # The tick_watchdog (1800s heartbeat + timeout) is the authority for
+        # whether a live tick is genuinely stale. The previous 300s threshold
+        # here was independent of that authority and could clear healthy ticks
+        # that legitimately take 304-465s.
+        try:
+            from tick_watchdog import watchdog_status
+
+            wd = watchdog_status() or {}
+        except Exception as exc:
+            logger.warning("watchdog_status unavailable in autonomous_tick_status: %s", exc)
+            wd = {"stale": False}
+
+        last_start = float(status.get("last_start", 0.0) or 0.0)
+        elapsed = time.time() - last_start if last_start else 0.0
+
+        if wd.get("stale"):
+            # Genuine stale lease confirmed by watchdog — safe to clear.
             logger.warning(
-                "Autonomous tick stuck for %.0fs — clearing stale state", elapsed
+                "Watchdog reports stale tick at %.0fs — clearing state", elapsed
             )
             set_tick_redis(
                 _AUTO_TICK_REDIS_KEY,
@@ -183,35 +208,92 @@ async def autonomous_tick_status():
                     "last_error": "stale_tick_cleared",
                 },
             )
-            result = {"status": "failed", "error": "stale_tick_cleared", "elapsed": elapsed}
+            result = {
+                "status": "failed",
+                "error": "stale_tick_cleared",
+                "elapsed": elapsed,
+                "tick_id": status.get("tick_id") or "",
+                "started_at": last_start,
+            }
         else:
             result = {
                 "status": "running",
-                "started_at": status.get("last_start", 0.0),
+                "started_at": last_start,
                 "elapsed": elapsed,
+                "watchdog_stale": False,
+                "tick_id": status.get("tick_id") or "",
             }
-    elif status.get("last_error"):
-        ls = status.get("last_start", 0.0) or 0.0
-        le = status.get("last_end", 0.0) or 0.0
-        result = {
-            "status": "failed",
-            "error": status["last_error"],
-            "started_at": ls,
-            "ended_at": le,
-            "duration": (le - ls) if ls and le else None,
-        }
-    elif status.get("last_result"):
-        ls = status.get("last_start", 0.0) or 0.0
-        le = status.get("last_end", 0.0) or 0.0
-        result = {
-            "status": "completed",
-            "started_at": ls,
-            "ended_at": le,
-            "duration": (le - ls) if ls and le else None,
-            "result": status["last_result"],
-        }
     else:
-        result = {"status": "idle"}
+        # Running is False — honor the most recent outcome.
+        # Prefer a valid completed last_result over an older last_error so a
+        # previous stale-clearing write cannot override a newer valid result.
+        last_result = status.get("last_result")
+        last_error = status.get("last_error")
+        ls = status.get("last_start", 0.0) or 0.0
+        le = status.get("last_end", 0.0) or 0.0
+
+        if last_result:
+            try:
+                if isinstance(last_result, str):
+                    parsed = json.loads(last_result)
+                else:
+                    parsed = last_result
+            except Exception:
+                parsed = None
+            op_tick_id = None
+            if isinstance(parsed, dict):
+                details = parsed.get("details") or {}
+                if isinstance(details, dict):
+                    inner = details.get("tick_id")
+                    if isinstance(inner, str) and inner.startswith("operator_"):
+                        op_tick_id = inner
+            if isinstance(parsed, dict) and parsed.get("status") == "completed":
+                completed_obj = {
+                    "status": "completed",
+                    "tick_id": status.get("tick_id") or "",
+                    "started_at": ls,
+                    "ended_at": le,
+                    "duration": (le - ls) if ls and le else None,
+                    "result": parsed,
+                }
+                if op_tick_id:
+                    completed_obj["operator_tick_id"] = op_tick_id
+                result = completed_obj
+            elif last_error:
+                failed_obj = {
+                    "status": "failed",
+                    "tick_id": status.get("tick_id") or "",
+                    "error": last_error,
+                    "started_at": ls,
+                    "ended_at": le,
+                    "duration": (le - ls) if ls and le else None,
+                }
+                if op_tick_id:
+                    failed_obj["operator_tick_id"] = op_tick_id
+                result = failed_obj
+            else:
+                completed_fallback = {
+                    "status": "completed",
+                    "tick_id": status.get("tick_id") or "",
+                    "started_at": ls,
+                    "ended_at": le,
+                    "duration": (le - ls) if ls and le else None,
+                    "result": parsed if parsed is not None else last_result,
+                }
+                if op_tick_id:
+                    completed_fallback["operator_tick_id"] = op_tick_id
+                result = completed_fallback
+        elif last_error:
+            result = {
+                "status": "failed",
+                "tick_id": status.get("tick_id") or "",
+                "error": last_error,
+                "started_at": ls,
+                "ended_at": le,
+                "duration": (le - ls) if ls and le else None,
+            }
+        else:
+            result = {"status": "idle"}
     return result
 
 
@@ -248,6 +330,29 @@ async def simulation_operator_tick():
     )
     thread.start()
     return JSONResponse(status_code=202, content={"status": "started", "tick_id": tick_id})
+
+
+@router.post("/simulation/operator/governor/metrics/snapshot")
+async def simulation_operator_governor_metrics_snapshot():
+    """Create a metrics-only NPC governor snapshot.
+
+    This is observe-only: it persists a report but does not alter tick behavior,
+    NPC selection, memory scoring, LLM routing, or fallback handling.
+    """
+    from npc_governor_metrics import build_governor_metrics_snapshot
+
+    return build_governor_metrics_snapshot(persist=True)
+
+
+@router.get("/simulation/operator/governor/metrics/latest")
+async def simulation_operator_governor_metrics_latest():
+    """Return the latest persisted metrics-only NPC governor snapshot."""
+    from npc_governor_metrics import get_latest_governor_metrics
+
+    snapshot = get_latest_governor_metrics()
+    if snapshot is None:
+        return {"status": "missing"}
+    return snapshot
 
 
 # ---------------------------------------------------------------------------

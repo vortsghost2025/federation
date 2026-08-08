@@ -8,6 +8,8 @@ from spatial_queries import (
     get_all_sectors,
     get_adjacent_sector_ids,
     get_sector_summary,
+    get_all_faction_homes,
+    get_faction_sphere_of_influence,
 )
 
 router = APIRouter(prefix="", tags=["spatial"])
@@ -64,6 +66,50 @@ async def spatial_status():
         return status
     except Exception as e:
         return {"enabled": False, "seeded": False, "available": True, "error": str(e)}
+
+
+# ============================================================================
+# ROUTE: GET /spatial/factions/territories
+# ============================================================================
+
+
+@router.get("/spatial/factions/territories")
+async def spatial_faction_territories():
+    """Read-only: territory counts per faction from the spatial store.
+
+    Returns each faction's home sector, expansion policy, sector count,
+    total control and influence, and the list of held sector IDs. Pure
+    read — never mutates Redis or game state.
+    """
+    if not SPATIAL_SYSTEM_AVAILABLE or not is_spatial_enabled():
+        return {"available": False, "factions": []}
+
+    try:
+        homes = get_all_faction_homes()
+        factions = []
+        for home in homes:
+            sphere = get_faction_sphere_of_influence(home.faction_id)
+            factions.append(
+                {
+                    "faction_id": home.faction_id,
+                    "home_sector_id": sphere.get("home_sector_id"),
+                    "expansion_policy": home.expansion_policy,
+                    "sector_count": sphere.get("sector_count", 0),
+                    "total_control": round(sphere.get("total_control", 0.0), 2),
+                    "total_influence": round(sphere.get("total_influence", 0.0), 2),
+                    "sector_ids": [t.sector_id for t in sphere.get("territories", [])],
+                }
+            )
+        factions.sort(key=lambda f: f["sector_count"], reverse=True)
+        total = sum(f["sector_count"] for f in factions)
+        return {
+            "available": True,
+            "faction_count": len(factions),
+            "total_territories": total,
+            "factions": factions,
+        }
+    except Exception as e:
+        return {"available": True, "factions": [], "error": str(e)}
 
 
 # ============================================================================

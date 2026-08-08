@@ -693,38 +693,84 @@ def execute_decision(decision: dict, r, contacts: dict):
             logger.error("[%s] Artifact submission failed: %s", CHAR_ID, e)
 
     elif cat == "request_capability":
-        import sys, os as _os
-        sys.path.insert(0, _os.path.join(_os.path.dirname(__file__), "..", "backend"))
-        from npc_autonomy import file_npc_need
-        need_type = decision.get("need_type", "information_access")
-        priority = decision.get("priority", "medium")
-        need_desc = decision.get("description", desc[:200] if desc else "Missing context limiting effectiveness.")
-        why_needed = decision.get("why_needed", reasoning[:200] if reasoning else "Repeated low-value actions suggest context gap.")
-        suggested = decision.get("suggested_capability", "general_context_enrichment")
-        related_inst = r.get(f"councilor:{CHAR_ID}:institution") or ""
+        # Production bridge: attempt work-loop publication first,
+        # fall back to legacy file_npc_need exactly once when needed.
         try:
-            need_result = file_npc_need(
-                r, CHAR_ID, NPC_NAME, need_type, priority,
-                need_desc, why_needed, suggested, related_inst,
+            from npc_work_loop_adapter import handle_request_capability
+            bridge_ok = handle_request_capability(
+                decision=decision,
+                actor_id=CHAR_ID,
+                r=r,
+                result=result,
+                desc=desc,
+                reasoning=reasoning,
             )
-            if need_result.get("ok"):
-                result["action_taken"] = "capability_need_filed"
-                result["need_id"] = need_result["need_id"]
-                result["need_type"] = need_type
-                result["summary"] = f"Filed need: {need_type} — {need_desc[:80]}"
-                logger.info("[%s] Filed capability need: %s (%s)", CHAR_ID, need_type, need_result["need_id"])
-                _session_append(r, {
-                    "kind": "capability_need_filed",
-                    "actor": NPC_NAME,
-                    "body": f"requested {need_type}: {need_desc[:120]}",
-                })
+            # When bridge returns True, the new path completed fully.
+            # When False, the adapter preserved partial state or signaled
+            # legacy fallback exactly once.
+            if bridge_ok:
+                pass  # result already populated by adapter
             else:
-                result["action_taken"] = f"capability_need_rejected:{need_result.get('error', 'unknown')}"
-                result["summary"] = f"Need rejected: {need_result.get('error', 'unknown')}"
-                logger.info("[%s] Need rejected: %s", CHAR_ID, need_result.get("error"))
+                # Check whether partial failure preserved a retryable draft
+                if result.get("action_taken") == "capability_request_partial_failure":
+                    # Do NOT call legacy path on partial failure; the draft
+                    # is preserved for retry.
+                    pass
+                else:
+                    # Legacy fallback exactly once for any non-retryable case.
+                    import sys, os as _os
+                    sys.path.insert(0, _os.path.join(_os.path.dirname(__file__), "..", "backend"))
+                    from npc_autonomy import file_npc_need
+                    need_type = decision.get("need_type", "information_access")
+                    priority = decision.get("priority", "medium")
+                    need_desc = decision.get("description", desc[:200] if desc else "Missing context limiting effectiveness.")
+                    why_needed = decision.get("why_needed", reasoning[:200] if reasoning else "Repeated low-value actions suggest context gap.")
+                    suggested = decision.get("suggested_capability", "general_context_enrichment")
+                    related_inst = r.get(f"councilor:{CHAR_ID}:institution") or ""
+                    try:
+                        need_result = file_npc_need(
+                            r, CHAR_ID, NPC_NAME, need_type, priority,
+                            need_desc, why_needed, suggested, related_inst,
+                        )
+                        if need_result.get("ok"):
+                            result["action_taken"] = "capability_need_filed"
+                            result["need_id"] = need_result["need_id"]
+                            result["need_type"] = need_type
+                            result["summary"] = f"Filed need: {need_type} — {need_desc[:80]}"
+                            logger.info("[%s] Filed capability need (legacy): %s (%s)", CHAR_ID, need_type, need_result["need_id"])
+                            _session_append(r, {
+                                "kind": "capability_need_filed",
+                                "actor": NPC_NAME,
+                                "body": f"requested {need_type}: {need_desc[:120]}",
+                            })
+                        else:
+                            result["action_taken"] = f"capability_need_rejected:{need_result.get('error', 'unknown')}"
+                            result["summary"] = f"Need rejected: {need_result.get('error', 'unknown')}"
+                            logger.info("[%s] Need rejected (legacy): %s", CHAR_ID, need_result.get('error'))
+                    except Exception as legacy_e:
+                        result["action_taken"] = f"capability_need_error: {legacy_e}"
+                        logger.error("[%s] Legacy capability need filing failed: %s", CHAR_ID, legacy_e)
         except Exception as e:
-            result["action_taken"] = f"capability_need_error: {e}"
-            logger.error("[%s] Capability need filing failed: %s", CHAR_ID, e)
+            result["action_taken"] = f"capability_request_bridge_exception: {e}"
+            logger.error("[%s] Bridge exception: %s", CHAR_ID, e)
+
+    elif cat == "create_area":
+        # Persistent world-expansion: found a new area/sector via the shared
+        # work-loop `area_found` action. No legacy fallback needed.
+        try:
+            from npc_work_loop_adapter import handle_found_area
+            ok = handle_found_area(
+                decision=decision,
+                actor_id=CHAR_ID,
+                r=r,
+                result=result,
+            )
+            if not ok and not result.get("action_taken"):
+                result["action_taken"] = "area_found_unavailable"
+                result["summary"] = "Work-loop area foundation unavailable."
+        except Exception as e:
+            result["action_taken"] = f"area_found_exception: {e}"
+            logger.error("[%s] create_area bridge exception: %s", CHAR_ID, e)
 
     else:
         note = _compact_text(desc, 180) or _compact_text(reasoning, 180) or f"unhandled category {cat}"

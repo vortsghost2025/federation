@@ -130,10 +130,6 @@ let currentView = 'territory'; // 'territory' | 'network' | 'crisis'
 let labelMode = 'important'; // 'factions' | 'important' | 'all' — label display priority
 let readableSpatialMode = false; // dedicated readable spatial mode toggle
 let astroMode = true; // Galaxy View toggle — use nebula backdrop
-let lineDensity = 'compact'; // 'full' | 'compact' | 'minimal' — relationship line density in network view
-let networkMode = 'overview'; // 'overview' | 'mesh' — high-level network view mode
-let relThreshold = 30; // 0-100, minimum relationship strength to show (only in overview mode)
-let selectedNPCId = null; // for focus mode
 
 // Faction layout angles (8 factions in a circle)
 const FACTION_ORDER = [
@@ -179,7 +175,6 @@ document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape') {
     selectedFaction = null;
     selectedNode = null;
-    if (selectedNPCId) clearFocus();
     showDetail(null);
   }
 });
@@ -196,10 +191,6 @@ if (urlParams.has('spatial') && urlParams.get('spatial') === 'true') {
   document.getElementById('readable-spatial-btn').classList.add('active');
 }
   document.getElementById('search-input').addEventListener('input', onSearch);
-  document.getElementById('zoom-fit').addEventListener('click', fitView);
-  document.getElementById('zoom-reset').addEventListener('click', resetView);
-  document.getElementById('zoom-in').addEventListener('click', () => { zoom = Math.min(4, zoom * 1.3); });
-  document.getElementById('zoom-out').addEventListener('click', () => { zoom = Math.max(0.3, zoom * 0.77); });
 
   for (let i = 0; i < 400; i++) {
     stars.push({
@@ -219,7 +210,7 @@ if (urlParams.has('spatial') && urlParams.get('spatial') === 'true') {
 }
 
 function resize() {
-  W = window.innerWidth;
+  W = window.innerWidth - sidebarW;
   H = window.innerHeight;
   canvas.width = W * devicePixelRatio;
   canvas.height = H * devicePixelRatio;
@@ -249,81 +240,18 @@ function setLabelMode(mode) {
   draw();
 }
 function toggleReadableSpatialMode() {
-   readableSpatialMode = !readableSpatialMode;
-   const btn = document.getElementById('readable-spatial-btn');
-   if (readableSpatialMode) {
-     btn.classList.add('active');
-   } else {
-     btn.classList.remove('active');
-   }
-   // Trigger redraw to apply changes immediately
-   draw();
- }
-
-// --- Line density toggle ---
-function setLineDensity(density) {
-   lineDensity = density;
-   document.querySelectorAll('#density-toggle button').forEach(b => {
-     b.classList.toggle('active', b.dataset.density === density);
-   });
-   draw();
- }
-
-// --- Network mode toggle (Overview vs Full Mesh) ---
-function setNetworkMode(mode) {
-   networkMode = mode;
-   document.querySelectorAll('#network-mode-toggle button').forEach(b => {
-     b.classList.toggle('active', b.dataset.networkMode === mode);
-   });
-   document.getElementById('threshold-control').style.display = mode === 'overview' ? 'block' : 'none';
-   draw();
- }
-
-// --- Relationship threshold ---
-function setRelThreshold(val) {
-   relThreshold = parseInt(val, 10);
-   document.getElementById('threshold-val').textContent = relThreshold + '%';
-   draw();
- }
-
-// --- Focus mode (click NPC to focus) ---
-function focusNPC(npcId) {
-   selectedNPCId = npcId;
-   document.getElementById('rm-clear-focus').style.display = 'block';
-   updateNPCCard(npcId);
-   draw();
- }
-
-function clearFocus() {
-   selectedNPCId = null;
-   document.getElementById('rm-clear-focus').style.display = 'none';
-   document.getElementById('npc-detail-card').style.display = 'none';
-   draw();
- }
-
-function updateNPCCard(npcId) {
-   const npc = nodes.find(n => n.id === npcId);
-   if (!npc) return;
-   const factions = mapData.factions || {};
-   const fdata = factions[npc.faction] || {};
-   document.getElementById('npc-detail-name').textContent = npc.name || npcId;
-   document.getElementById('npc-detail-faction').textContent = (fdata.display_name || npc.faction || 'Unknown');
-   document.getElementById('npc-detail-role').textContent = npc.role || 'Role unknown';
-   document.getElementById('npc-detail-mood').textContent = npc.mood || npc.status || '';
-   document.getElementById('npc-detail-stats').innerHTML = `Activity: ${(npc.activity*100).toFixed(0)}% | Status: ${npc.status || 'Normal'}`;
-   const rels = npc.npc.relationships || {};
-   let allies = [], rivals = [];
-   for (const [id, score] of Object.entries(rels)) {
-     if (score > 50) allies.push(id);
-     else if (score < -30) rivals.push(id);
-   }
-   document.getElementById('npc-detail-actions').innerHTML = `<div style="margin-top:4px"><strong>Allies:</strong> ${allies.length} | <strong>Rivals:</strong> ${rivals.length}</div>`;
-   document.getElementById('npc-detail-card').style.display = 'block';
- }
+  readableSpatialMode = !readableSpatialMode;
+  const btn = document.getElementById('readable-spatial-btn');
+  if (readableSpatialMode) {
+    btn.classList.add('active');
+  } else {
+    btn.classList.remove('active');
+  }
+  // Trigger redraw to apply changes immediately
+  draw();
+}
 
 // --- Data fetch ---
-let _renderDiagnosticShown = false;
-let _renderDiagnosticCount = 0;
       async function fetchData() {
     const data = await fedFetch('mapData', API);
     if (!data) return;
@@ -332,182 +260,7 @@ let _renderDiagnosticCount = 0;
     _sectorOwnerCache = {}; // SPATIAL-03A: clear sector owner cache on data refresh
     buildNodes();
     updateUI();
-    if (!_hasAutoFit && nodes.length) fitView();
-    _runRenderDiagnostic();
   }
-
-// --- Render Diagnostic (extension/privacy blocker detection) ---
-function _runRenderDiagnostic() {
-  _renderDiagnosticCount++;
-  if (!mapData) return;
-  var npcCount = (mapData.npcs || []).length;
-  var factionCount = Object.keys(mapData.factions || {}).length;
-  var locationCount = (mapData.npc_locations || []).length;
-  var sectorCount = (mapData.sectors || []).length;
-  var builtNodes = nodes.length;
-
-  // Console diagnostic
-  console.log('[STARMAP-DIAG] Fetch #' + _renderDiagnosticCount + ':', {
-    apiNPCs: npcCount,
-    apiFactions: factionCount,
-    apiLocations: locationCount,
-    apiSectors: sectorCount,
-    builtNodes: builtNodes,
-    spatialMode: spatialMode,
-    canvasW: W,
-    canvasH: H,
-    dpr: window.devicePixelRatio,
-    ctxOk: !!ctx
-  });
-
-  // Detection: data loaded but canvas has almost no nodes
-  // Allow first fetch to be small (center node only = 1 is OK during startup)
-  // But after 2+ fetches, if we have NPC data but <= 1 node, something is wrong
-  if (_renderDiagnosticCount >= 2 && npcCount > 0 && builtNodes <= 1 && !_renderDiagnosticShown) {
-    _renderDiagnosticShown = true;
-    console.warn('[STARMAP-DIAG] RENDER FAILURE DETECTED: API returned ' + npcCount + ' NPCs but only ' + builtNodes + ' canvas node(s). ' +
-      'Likely cause: browser extension or privacy setting blocking canvas rendering. ' +
-      'Try Incognito mode or whitelist this site in your ad blocker/privacy extension.');
-    _showRenderWarning(npcCount, factionCount);
-    _showDOMFallback();
-  }
-}
-
-// --- Visible warning banner ---
-function _showRenderWarning(npcCount, factionCount) {
-  if (document.getElementById('starmap-render-warning')) return;
-  var banner = document.createElement('div');
-  banner.id = 'starmap-render-warning';
-  banner.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:99999;background:linear-gradient(135deg,#1a0000,#330000);' +
-    'color:#ff4444;padding:20px 30px;font-family:monospace;font-size:18px;font-weight:bold;text-align:center;' +
-    'border-bottom:3px solid #ff4444;box-shadow:0 4px 20px rgba(255,0,0,0.3);cursor:pointer';
-  banner.innerHTML = '<div style="font-size:24px;margin-bottom:8px">&#9888; STARMAP RENDERING BLOCKED</div>' +
-    '<div style="color:#ffaaaa;font-size:14px;margin-bottom:12px">Data loaded successfully (' + npcCount + ' NPCs, ' + factionCount + ' factions) but canvas rendering failed.</div>' +
-    '<div style="color:#ffffff;font-size:16px;margin-bottom:12px">This is almost always caused by a <b>browser extension</b> or <b>privacy setting</b>.</div>' +
-    '<div style="display:flex;gap:12px;justify-content:center;align-items:center;flex-wrap:wrap">' +
-    '<button onclick="window._resetStarmapCache()" style="padding:10px 20px;background:#ff4444;color:#fff;border:none;border-radius:6px;font-size:16px;font-weight:bold;cursor:pointer">RESET LOCAL VIEW CACHE</button>' +
-    '<button id="starmap-open-incognito" style="padding:10px 20px;background:#4444ff;color:#fff;border:none;border-radius:6px;font-size:14px;cursor:pointer">OPEN IN INCOGNITO</button>' +
-    '<span style="color:#888;font-size:13px">or whitelist this site in your ad blocker / privacy extension</span>' +
-    '</div>' +
-    '<div style="color:#666;font-size:11px;margin-top:8px">Click this banner to dismiss</div>';
-  banner.onclick = function(e) { if (e.target.tagName !== 'BUTTON') banner.remove(); };
-  document.body.appendChild(banner);
-  // Wire up incognito button
-  var incBtn = document.getElementById('starmap-open-incognito');
-  if (incBtn) incBtn.onclick = function() {
-    var url = location.href.replace(/[?#].*/, '') + '?nocache=' + Date.now();
-    window.open(url, '_blank');
-  };
-  // Auto-push page content down
-  var spacer = document.createElement('div');
-  spacer.id = 'starmap-render-warning-spacer';
-  spacer.style.height = '140px';
-  document.body.appendChild(spacer);
-}
-
-// --- Reset localStorage cache keys ---
-window._resetStarmapCache = function() {
-  try {
-    var keys = ['fed_smap_spatial', 'fed_smap_readable', 'fed_starmap_phenotype', 'federation-muted'];
-    keys.forEach(function(k) { try { localStorage.removeItem(k); } catch(e) {} });
-    // Also clear sessionStorage
-    try { sessionStorage.clear(); } catch(e) {}
-    console.log('[STARMAP-DIAG] Cache cleared. Reloading...');
-    location.reload();
-  } catch(e) {
-    console.error('[STARMAP-DIAG] Cache clear failed:', e);
-    alert('Failed to clear cache: ' + e.message);
-  }
-};
-
-// --- DOM/SVG fallback mini-map when canvas rendering fails ---
-function _showDOMFallback() {
-  if (document.getElementById('starmap-dom-fallback')) return;
-  if (!mapData) return;
-
-  var container = document.createElement('div');
-  container.id = 'starmap-dom-fallback';
-  container.style.cssText = 'position:fixed;top:140px;left:50%;transform:translateX(-50%);z-index:9999;' +
-    'background:rgba(10,10,30,0.95);border:1px solid rgba(79,195,247,0.3);border-radius:12px;' +
-    'padding:20px;max-width:700px;width:90vw;max-height:70vh;overflow-y:auto;font-family:monospace;color:#e0e0e0;' +
-    'box-shadow:0 0 40px rgba(79,195,247,0.15)';
-
-  var npcs = mapData.npcs || [];
-  var factions = mapData.factions || {};
-  var npcLocations = mapData.npc_locations || [];
-
-  // Build location map
-  var locationMap = {};
-  npcLocations.forEach(function(loc) { locationMap[loc.npc_id] = loc; });
-
-  // Faction order
-  var factionOrder = [
-    'research_division', 'military_command', 'diplomatic_corps',
-    'consciousness_collective', 'cultural_ministry', 'economic_council',
-    'exploration_initiative', 'preservation_society'
-  ];
-  var factionNames = {
-    research_division: 'Research Division', military_command: 'Military Command',
-    diplomatic_corps: 'Diplomatic Corps', consciousness_collective: 'Consciousness Collective',
-    cultural_ministry: 'Cultural Ministry', economic_council: 'Economic Council',
-    exploration_initiative: 'Exploration Initiative', preservation_society: 'Preservation Society'
-  };
-  var factionColors = {
-    research_division: '#4fc3f7', military_command: '#ef5350', diplomatic_corps: '#66bb6a',
-    consciousness_collective: '#ab47bc', cultural_ministry: '#ffa726', economic_council: '#ffd700',
-    exploration_initiative: '#26a69a', preservation_society: '#8d6e63'
-  };
-
-  var html = '<div style="text-align:center;margin-bottom:16px">' +
-    '<span style="font-size:20px;color:#ff4444">&#9888;</span> ' +
-    '<span style="font-size:16px;color:#4fc3f7;font-weight:bold">DOM FALLBACK — Canvas rendering blocked by browser</span></div>';
-
-  // Faction groups
-  factionOrder.forEach(function(fid) {
-    var fdata = factions[fid] || {};
-    var fname = factionNames[fid] || fid;
-    var fcolor = factionColors[fid] || '#888';
-    var fNpcs = npcs.filter(function(n) { return n.affiliation === fid; });
-    if (fNpcs.length === 0) return;
-
-    html += '<div style="margin-bottom:12px;border-left:3px solid ' + fcolor + ';padding-left:12px">';
-    html += '<div style="font-weight:bold;color:' + fcolor + ';font-size:14px;margin-bottom:4px">' + fname + ' (' + fNpcs.length + ')</div>';
-    fNpcs.forEach(function(npc) {
-      var loc = locationMap[npc.id] || {};
-      var locStr = loc.sector_id ? ' [' + loc.sector_id + ']' : '';
-      html += '<div style="color:#ccc;font-size:12px;margin:2px 0;padding-left:8px">' +
-        '<span style="color:#e0e0e0">' + esc(npc.name || npc.id) + '</span>' +
-        (npc.category ? ' <span style="color:#888">(' + npc.category + ')</span>' : '') +
-        '<span style="color:#666">' + locStr + '</span></div>';
-    });
-    html += '</div>';
-  });
-
-  // Unaffiliated
-  var unaffiliated = npcs.filter(function(n) { return !factionOrder.includes(n.affiliation); });
-  if (unaffiliated.length > 0) {
-    html += '<div style="margin-bottom:12px;border-left:3px solid #666;padding-left:12px">';
-    html += '<div style="font-weight:bold;color:#999;font-size:14px;margin-bottom:4px">Unaffiliated (' + unaffiliated.length + ')</div>';
-    unaffiliated.forEach(function(npc) {
-      var catColor = {companion:'#ffd700',rival:'#ef5350',neutral:'#78909c',enigma:'#ab47bc',unknown:'#546e7a'}[npc.category] || '#666';
-      html += '<div style="color:#ccc;font-size:12px;margin:2px 0;padding-left:8px">' +
-        '<span style="color:#e0e0e0">' + esc(npc.name || npc.id) + '</span> ' +
-        '<span style="color:' + catColor + '">(' + (npc.category || 'unknown') + ')</span></div>';
-    });
-    html += '</div>';
-  }
-
-  container.innerHTML = html;
-
-  // Close button
-  var closeBtn = document.createElement('button');
-  closeBtn.textContent = 'X';
-  closeBtn.style.cssText = 'position:absolute;top:8px;right:12px;background:none;border:none;color:#ff4444;font-size:20px;cursor:pointer';
-  closeBtn.onclick = function() { container.remove(); };
-  container.appendChild(closeBtn);
-
-  document.body.appendChild(container);
-}
 
 function hashStr(s) {
   let h = 0;
@@ -2500,34 +2253,15 @@ if (!spatialMode) {
         const nodeMap = {};
         nodes.forEach(n => nodeMap[n.id] = n);
 
-        const perNodeEdgeCount = {};
-        const densityMaxEdges = { full: Infinity, compact: 4, minimal: 2 };
         for (const node of nodes) {
           const rels = node.npc.relationships || {};
-          const relEntries = Object.entries(rels).sort((a, b) => Math.abs(b[1]) - Math.abs(a[1]));
-          for (const [otherId, score] of relEntries) {
+          for (const [otherId, score] of Object.entries(rels)) {
             const other = nodeMap[otherId];
             if (!other) continue;
             if (node.id > otherId) continue;
 
             const strength = Math.abs(score) / 100;
-            // Density-based filtering for network view
-            const densityThresholds = { full: 0.05, compact: 0.15, minimal: 0.35 };
-            const minStrength = currentView === 'network' ? (densityThresholds[lineDensity] || 0.15) : 0.1;
-            // Network mode: overview uses slider threshold, mesh shows all (but still respects density)
-            const useThreshold = currentView === 'network' && networkMode === 'overview';
-            const effectiveMinStrength = useThreshold ? (relThreshold / 100) : minStrength;
-            if (strength < effectiveMinStrength) continue;
-
-            // Network view: keep only the strongest links per node to reduce clutter
-            if (currentView === 'network' && lineDensity !== 'full') {
-              const maxEdges = densityMaxEdges[lineDensity] || 4;
-              perNodeEdgeCount[node.id] = (perNodeEdgeCount[node.id] || 0) + 1;
-              if (perNodeEdgeCount[node.id] > maxEdges) continue;
-            }
-
-            // Focus mode: only show lines involving the selected NPC
-            if (selectedNPCId && node.id !== selectedNPCId && other.id !== selectedNPCId) continue;
+            if (strength < 0.1) continue;
 
             const dx = node.x - other.x, dy = node.y - other.y;
             const dist = Math.sqrt(dx*dx + dy*dy);
@@ -2555,8 +2289,8 @@ if (!spatialMode) {
             let effectiveAlpha = baseAlpha;
             let effectiveWidth = Math.max(1, strength * 3 * distFade);
             if (currentView === 'network') {
-              effectiveAlpha = Math.max(0.12, effectiveAlpha * NETWORK_HIGH_CONTRAST);
-              effectiveWidth = Math.max(1.2, effectiveWidth * 1.1);
+              effectiveAlpha = Math.max(0.18, effectiveAlpha * NETWORK_HIGH_CONTRAST);
+              effectiveWidth = Math.max(1.8, effectiveWidth * 1.4);
             }
             // Clamp to valid range
             effectiveAlpha = Math.min(1, Math.max(0, effectiveAlpha));
@@ -2601,19 +2335,9 @@ const adjR = r * rScale;
         // Guard: skip NPCs with non-finite coordinates (prevents createRadialGradient crash)
         if (!isFinite(node.x) || !isFinite(node.y) || !isFinite(adjR)) continue;
         // SPATIAL-03A: Fade NPCs not in selected faction
-        let npcFade = selectedFaction ? (node.faction === selectedFaction ? 1.0 : 0.15) : 1.0;
-        // Focus mode: only show selected NPC and its connections
-        if (selectedNPCId) {
-          const isFocusTarget = node.id === selectedNPCId;
-          const isConnection = node.relatedToSelected = node.relatedToSelected || node.npc.relationships?.[selectedNPCId];
-          if (!isFocusTarget && !isConnection) {
-            npcFade = 0.15;
-          } else {
-            npcFade = 0.9;
-          }
-        }
+        const npcFade = selectedFaction ? (node.faction === selectedFaction ? 1.0 : 0.15) : 1.0;
         // Skip drawing very faded NPCs (optimization)
-        if (npcFade < 0.15) continue;
+        if (npcFade < 0.1) continue;
 
     // Crisis view: highlight rivals and enigmas with pulse
     const isCrisisHighlight = currentView === 'crisis' && (node.category === 'rival' || node.category === 'enigma');
@@ -2907,91 +2631,42 @@ function onWheel(e) {
   zoom = Math.max(0.3, Math.min(4, zoom * delta));
 }
 
-// --- FIT: compute bounding box of all visible nodes, then set zoom/pan so they ---
-// fill the visible canvas area (the part not covered by left panel or right sidebar).
-let _hasAutoFit = false;
-function fitView() {
-  if (!nodes.length) return;
-  let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
-  for (const n of nodes) {
-    if (!isFinite(n.x) || !isFinite(n.y)) continue;
-    if (n.x < minX) minX = n.x;
-    if (n.x > maxX) maxX = n.x;
-    if (n.y < minY) minY = n.y;
-    if (n.y > maxY) maxY = n.y;
+      function onClick(e) {
+  const rect = canvas.getBoundingClientRect();
+  const mx = e.clientX - rect.left;
+  const my = e.clientY - rect.top;
+  const node = getNodeAt(mx, my);
+  if (node) {
+    selectedNode = node;
+    // SPATIAL-03A: If clicking an NPC, select their faction for isolation
+    if (node.faction && spatialMode) {
+      selectedFaction = node.faction;
+    } else if (node.sectorData && node.ownerFaction && spatialMode) {
+      // Clicking a sector node: select its owning faction
+      selectedFaction = node.ownerFaction;
+    }
+    showDetail(node);
+  } else {
+    // SPATIAL-03A: Check if clicking a faction zone
+    const zone = getFactionZoneAt(mx, my);
+    if (zone && spatialMode) {
+      // Select this faction — isolate it
+      if (selectedFaction === zone.fid) {
+        // Clicking same faction again: deselect
+        selectedFaction = null;
+        selectedNode = null;
+      } else {
+        selectedFaction = zone.fid;
+        selectedNode = null;
+      }
+    } else {
+      // Clicking empty space: deselect everything
+      selectedFaction = null;
+      selectedNode = null;
+      showDetail(null);
+    }
   }
-  if (!isFinite(minX)) return;
-  const padFrac = 0.12;
-  const contentW = Math.max(1, maxX - minX);
-  const contentH = Math.max(1, maxY - minY);
-  // Visible area = full viewport minus panel occlusion
-  const leftPanelW = 284;
-  const rightSidebarW = sidebarW || 420;
-  const visX = leftPanelW;
-  const visW = W - leftPanelW - rightSidebarW;
-  const visH = H;
-  const availW = Math.max(1, visW * (1 - padFrac * 2));
-  const availH = Math.max(1, visH * (1 - padFrac * 2));
-  const newZoom = Math.min(2, Math.max(0.3, Math.min(availW / contentW, availH / contentH)));
-  zoom = newZoom;
-  // Center the bounding box within the visible area
-  const contentCX = (minX + maxX) / 2;
-  const contentCY = (minY + maxY) / 2;
-  const visCX = visX + visW / 2;
-  const visCY = visH / 2;
-  panX = visCX - contentCX * zoom;
-  panY = visCY - contentCY * zoom;
-  _hasAutoFit = true;
 }
-
-function resetView() {
-  zoom = 1; panX = 0; panY = 0;
-}
-
-function onClick(e) {
-   const rect = canvas.getBoundingClientRect();
-   const mx = e.clientX - rect.left;
-   const my = e.clientY - rect.top;
-   const node = getNodeAt(mx, my);
-   if (node) {
-     selectedNode = node;
-     // SPATIAL-03A: If clicking an NPC, select their faction for isolation
-     if (node.faction && spatialMode) {
-       selectedFaction = node.faction;
-     } else if (node.sectorData && node.ownerFaction && spatialMode) {
-       // Clicking a sector node: select its owning faction
-       selectedFaction = node.ownerFaction;
-     }
-     // Network view: click NPC to focus
-     if (currentView === 'network' && node.npc) {
-       if (selectedNPCId === node.id) {
-         clearFocus();
-       } else {
-         focusNPC(node.id);
-       }
-     }
-     showDetail(node);
-   } else {
-     // SPATIAL-03A: Check if clicking a faction zone
-     const zone = getFactionZoneAt(mx, my);
-     if (zone && spatialMode) {
-       // Select this faction — isolate it
-       if (selectedFaction === zone.fid) {
-         // Clicking same faction again: deselect
-         selectedFaction = null;
-         selectedNode = null;
-       } else {
-         selectedFaction = zone.fid;
-         selectedNode = null;
-       }
-     } else {
-       // Clicking empty space: deselect everything
-       selectedFaction = null;
-       selectedNode = null;
-       showDetail(null);
-     }
-   }
- }
 
 function onDblClick(e) {
   const rect = canvas.getBoundingClientRect();
