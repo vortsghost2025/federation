@@ -758,7 +758,18 @@ def execute_decision(decision: dict, r, contacts: dict):
         # Persistent world-expansion: found a new area/sector via the shared
         # work-loop `area_found` action. No legacy fallback needed.
         try:
-            from npc_work_loop_adapter import handle_found_area
+            from npc_work_loop_adapter import area_exists_on_map, handle_found_area
+            if area_exists_on_map(decision.get("area_id", "")):
+                logger.warning(
+                    "[%s] create_area blocked: '%s' already on shared map; rerouting to read_artifacts",
+                    CHAR_ID, decision.get("area_id", ""),
+                )
+                rerouted = {
+                    "category": "read_artifacts",
+                    "reasoning": "create_area rerouted: area already on shared map",
+                    "description": f"area '{decision.get('area_id', '')}' already on the map; reading partner work instead of re-founding it",
+                }
+                return execute_decision(rerouted, r, contacts)
             ok = handle_found_area(
                 decision=decision,
                 actor_id=CHAR_ID,

@@ -497,10 +497,32 @@ def _areas_key(pair_slug: str) -> str:
 
 
 def _normalize_area_id(raw: str) -> str:
-    if not raw:
+    if raw is None or raw is Ellipsis:
         return ""
     cleaned = re.sub(r"[^a-zA-Z0-9_-]", "_", str(raw).strip().lower())
     return cleaned[:48]
+
+
+def _clean_str(v, default: str = "") -> str:
+    """Coerce action payload strings; Ellipsis/None (LLM placeholders that
+    ast.literal_eval turns into the Ellipsis singleton) become the default."""
+    if v is None or v is Ellipsis:
+        return default
+    return str(v).strip()
+
+
+def _coerce_int(v, default: int) -> int:
+    try:
+        return int(v)
+    except (TypeError, ValueError):
+        return default
+
+
+def _coerce_float(v, default: float) -> float:
+    try:
+        return float(v)
+    except (TypeError, ValueError):
+        return default
 
 
 def _action_area_found(pair_slug: str, actor_id: str, payload: Dict[str, Any]) -> Dict[str, Any]:
@@ -510,8 +532,8 @@ def _action_area_found(pair_slug: str, actor_id: str, payload: Dict[str, Any]) -
 
     raw_id = payload.get("area_id", "")
     area_id = _normalize_area_id(raw_id)
-    name = (payload.get("name") or "").strip()
-    description = (payload.get("description") or "").strip()
+    name = _clean_str(payload.get("name"))
+    description = _clean_str(payload.get("description"))
     if not area_id or not name or not description:
         return {"ok": False, "action": "area_found", "result": None,
                 "error": "missing_required_fields", "required": ["area_id", "name", "description"]}
@@ -520,12 +542,12 @@ def _action_area_found(pair_slug: str, actor_id: str, payload: Dict[str, Any]) -
         "area_id": area_id,
         "name": name,
         "description": description,
-        "region_type": (payload.get("region_type") or "frontier").strip(),
-        "resource_profile": (payload.get("resource_profile") or "mixed").strip(),
-        "danger_level": int(payload.get("danger_level", 5) or 5),
-        "x": float(payload.get("x", 0) or 0),
-        "y": float(payload.get("y", 0) or 0),
-        "adjacent_sector_ids": list(payload.get("adjacent_sector_ids", []) or []),
+        "region_type": _clean_str(payload.get("region_type"), "frontier"),
+        "resource_profile": _clean_str(payload.get("resource_profile"), "mixed"),
+        "danger_level": _coerce_int(payload.get("danger_level", 5) or 5, 5),
+        "x": _coerce_float(payload.get("x", 0) or 0, 0),
+        "y": _coerce_float(payload.get("y", 0) or 0, 0),
+        "adjacent_sector_ids": list(payload.get("adjacent_sector_ids", []) or []) if isinstance(payload.get("adjacent_sector_ids", []), (list, tuple, set)) else [],
         "founded_by": actor_id,
         "pair_slug": pair_slug,
         "created_at": _now_iso(),

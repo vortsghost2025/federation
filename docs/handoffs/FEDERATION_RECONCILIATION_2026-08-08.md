@@ -98,3 +98,21 @@ Frontend caller audit (pre-lock): no JS/HTML calls `/councilor/*`; `admin.html` 
 Observed (not changed, for the record): running backend container was created with stale CLI flags `--proxy-headers --forwarded-allow-ips 172.16.2.7` (postgres container IP — not a proxy); the canonical `docker-compose-vps.yml` already specifies bare `uvicorn main:app --host 0.0.0.0 --port 8000`, so a future `docker compose up -d --force-recreate` will drop the stale flag. The running Traefik container also lacks `--api.insecure=true` (compose declares it) — not needed for operation.
 
 PR #7 head will be updated to this commit; still blocked on required approving review.
+
+## NPC-agent loop/parse fix pass (2026-08-08 ~03:45 UTC)
+
+Diagnosed from 2h live logs (`docker logs federation-game-npc-agent-001-1 / -306-1`): both external agents were stuck in a `create_area` loop re-proposing `lumen_confluence` (idempotent guard fired every ~120s), char_306 was resting ~11/51 decisions on LLM JSON parse failures, and `area_found` raised `TypeError: int() argument must be ... not 'ellipsis'`.
+
+Root causes found and fixed (deployed to `/docker/federation-game`, mirrored to canonical, md5-verified inside both containers):
+
+1. **Notifications never consumed by the external agent**: the idempotent guard pushes `area_already_founded` to `npc:system_notifications:{char_id}`, but `npc_decisions.decide_action` never read that inbox — so the agent never learned the area exists. Added `_consume_system_notifications()` (drains inbox into the prompt as SYSTEM NOTIFICATIONS) and `_current_areas_summary()` (pair map list injected as CURRENT WORLD MAP with an explicit "use a NEW area_id" instruction).
+2. **`ast.literal_eval` accepts `...`**: LLM outputs like `"danger_level": ...` parse into the Ellipsis singleton → `int(...)` TypeError in `_action_area_found`. Added `_unwrap_decision` (recursive Ellipsis → `""`, unwraps `{'content': '<json>'}` envelopes) in `_extract_json`, plus a brace-scan pre-pass for single-quoted envelopes containing apostrophes, and hardened `core.py` `_action_area_found` with `_clean_str`/`_coerce_int`/`_coerce_float` (Ellipsis-safe, defense in depth).
+3. **Parse failure → forced `rest`**: prose-only or truncated LLM output fell back to resting. Added one hardened retry (`decide_retry`, explicit raw-JSON mandate, no envelope/no prose); if the retry also fails, falls back to `read_artifacts` instead of rest.
+4. **Deterministic area guard**: `npc_actions.execute_decision` now checks `area_exists_on_map(area_id)` before executing `create_area`; existing areas are rerouted to `read_artifacts` (recursive execute), so the weak decision model can never re-found an area even if it ignores the prompt constraint.
+5. **Stale moderator directive purged** (state, not code): the inbox still held "create_area restored — found Lumen Confluence now", which the agent followed every tick against the idempotent guard. Removed from `npc_messages:{char_001,char_306}:inbox` (kept the overnight-summary message).
+
+Verified live after restart (both containers, md5-identical to canonical):
+- Map grew 54 → 56 with three genuinely new areas (`stellar_harmony`, `crystal_veil`, `anchor_echo`); no `area_found idempotent` lines since the guard deploy.
+- Zero parse-failure rests; retry path exercised once and succeeded; no Ellipsis TypeErrors.
+- Decisions diversified: create_artifact, create_institution, submit_to_institution, read_artifacts.
+- Backend + worker restarted (shared `core.py` change) — no errors in logs.
