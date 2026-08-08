@@ -56,7 +56,7 @@ Federation sessions run in a PowerShell-first environment unless a bash-only scr
 
 - Do not assume Linux shell tools during normal work. Avoid `bash`, `find`, `grep`, `head`, and Unix-style flags in PowerShell sessions.
 - Prefer `Get-ChildItem`, `Select-String`, `Select-Object -First`, `Get-Content -Raw`, and `Test-Path`.
-- Use Git Bash only for explicit bash-only workflows such as `S:/federation/scripts/fed-state.sh`.
+- Use Git Bash only for explicit bash-only workflows.
 - Broad exploration must avoid heavy or sensitive paths unless the task explicitly needs them: `.kilo`, `.opencode`, `.kilocode`, `.horizon`, `session`, `continuity-test-handoff`, `tmp`, `node_modules`, `.secrets`, `genesis-memory/*.db`, `docs/2FAuth.txt`, `docs/VPS.txt`, and large dumps/log bundles.
 
 ---
@@ -67,38 +67,14 @@ For complex problems, see `docs/ramsingh-synthesis-loop.md` for the 6-step escal
 
 ---
 
-## SESSION-STARTUP PROBE — fed-state.sh
+## SESSION CONTEXT RECOVERY
 
-Federation context is large (47+ NPCs, 8 factions, 5 critical constraints,
-active specs/plans). Before doing anything on federation, run:
+After compaction or new conversation: read `.horizon/ARCHITECTURE_STATE.md` first —
+it has pinned function signatures, Redis key map, wiring, and deploy rules.
+One 2KB file replaces re-reading 200KB of backend Python.
 
-```
-bash S:/federation/scripts/fed-state.sh
-```
-
-Or for a full VPS probe (slower, ~5s extra):
-
-```
-bash S:/federation/scripts/fed-state.sh --vps
-```
-
-**After compaction:** read `.horizon/ARCHITECTURE_STATE.md` first — it has pinned function signatures, Redis key map, wiring, and deploy rules. One 2KB file replaces re-reading 200KB of backend Python.
-
-`fed-state.sh` returns:
-- HEAD commit + last 5 commits
-- Active specs in `docs/superpowers/specs/` and plans in `docs/superpowers/plans/`
-- Last 10 entries of `.horizon/HORIZON_STATUS.md` (what's been done)
-- Dirty tree summary (modified + untracked counts, first 10 paths)
-- With `--vps`: federation docker container status
-
-This is the context-recovery tool. Run it:
-- At the start of any federation-related session
-- After a compaction or new conversation
-- Before suggesting code changes (so you can verify a change hasn't
-  already been deployed)
-
-When the script reports `<N> modified, <M> untracked`, mention that to the
-user before making changes. Don't propose fixes to files you haven't read.
+Before making changes, check `git status` for modified and untracked files.
+Don't propose fixes to files you haven't read.
 
 ---
 
@@ -132,10 +108,80 @@ Files at `/docker/federation-game/` are deployed via `scp`. There is no `.git` o
 
 ---
 
-## THE WORDS THAT MATTER
+## RESPONSE FORMAT
 
-"Working. Here is what you see:"
-That is how every result begins. No exceptions.
+For simple questions: short direct answer.
+
+For complex technical work (audits, debugging, deployments, multi-step tasks), use this structure:
+
+```
+STATUS
+WHAT CHANGED
+PROOF
+BLOCKERS
+NEXT STEP
+```
+
+Do not omit failed tests, skipped tests, deployment state, hashes, or unresolved risks to stay brief.
+
+---
+
+## TASK STRUCTURE
+
+Every serious task must include:
+
+```
+WHY:
+What risk or problem this task addresses.
+
+SCOPE:
+The exact files and systems permitted.
+
+SUCCESS:
+The observable evidence required before completion.
+
+STOP:
+What must not be changed, deployed, restarted, or expanded.
+```
+
+Vague instructions force the agent to guess. Explicit is better than implicit.
+
+---
+
+## BUILD MODE vs VERIFY MODE
+
+**BUILD MODE:**
+Make the smallest correction. Do not claim deployment readiness.
+
+**VERIFY MODE:**
+Make no edits. Attempt to disprove the implementation using source inspection, focused tests, runtime evidence, and hashes.
+
+A build agent must never produce the final deployment decision in the same phase.
+
+---
+
+## SKILL SELECTION
+
+Before work:
+1. Inspect the available skills.
+2. Select no more than five relevant skills.
+3. Read them.
+4. Record selected skills in the task plan. Show them to Sean only when they materially affect scope, safety, or verification.
+5. Use a verification skill before the final report.
+
+---
+
+## FINAL VERIFICATION GATE
+
+Before claiming completion:
+- Inspect final code for duplicate calls and dead paths.
+- Run focused tests with cache disabled.
+- Run required integration tests with zero unexpected skips.
+- Confirm isolated test database.
+- Confirm runtime call sites.
+- Calculate SHA-256 for local, host, and containers.
+- State explicitly whether deployment occurred.
+- Mark every claim PROVEN, FAILED, or UNVERIFIED.
 
 ---
 
@@ -148,11 +194,14 @@ When starting a deep technical response (editing backend, debugging VPS, modifyi
 This refreshes critical state in active attention — costs nothing, prevents amnesia.
 
 ### Delta Logging
-After every atomic code change, append a structured entry to `.horizon/DELTA_LOG.md`:
+Append one line per verified completed change to `.horizon/DELTA_LOG.md`:
 ```
-UPDATE file.py:function_name(Lstart:Lend) -> what changed
+YYYY-MM-DD | file.py:function_name | what changed | tests: coverage notes
 ```
-Not narrative. Machine-readable. Post-compaction, read DELTA_LOG to replay what happened.
+No copied code, no stale line numbers, no narrative. Post-compaction, read DELTA_LOG to replay what happened.
+
+DELTA_LOG records completed verified changes only.
+Do not update it during partial implementation or failed attempts.
 
 ---
 

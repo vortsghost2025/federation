@@ -1,0 +1,59 @@
+{
+  "char_id": "comp_003",
+  "affiliation": "independent",
+  "layers": {
+    "L1_symmetry": {
+      "frozen": true,
+      "recovered_equal": true,
+      "aliveness_real": true
+    },
+    "L2_constraints": {
+      "options_in": 11,
+      "options_passing": 4,
+      "violations": [
+        "investigate",
+        "explore",
+        "request_capability",
+        "confront_rival",
+        "self_improve",
+        "seek_resources",
+        "react_to_events"
+      ]
+    },
+    "L3_phenotype": {
+      "attractors": {
+        "advance_goal": 0.12124425592082008,
+        "socialize": 0.15659243548957227,
+        "investigate": 0.10604453870625663,
+        "rest": 0.31813361611876995,
+        "react_to_events": 0.03534817956875221,
+        "seek_resources": 0.03534817956875221,
+        "self_improve": 0.03534817956875221,
+        "confront_rival": 0.03534817956875221,
+        "help_ally": 0.08589607635206788,
+        "explore": 0.03534817956875221,
+        "request_capability": 0.03534817956875221
+      },
+      "chosen_category": "rest",
+      "pull_score": 0.516,
+      "coherent": true
+    },
+    "L4_drift": {
+      "drift": 0.0,
+      "tolerance": 0.15,
+      "recovered": false
+    }
+  },
+  "constitutional": true,
+  "notes": [],
+  "option_count": 11,
+  "baseline_random_choice": {
+    "category": "rest",
+    "score": 0.631
+  },
+  "genesis_choice": {
+    "category": "rest",
+    "score": 0.631
+  },
+  "would_have_diverged": false
+}
