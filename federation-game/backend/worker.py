@@ -953,6 +953,19 @@ def main():
     # Initialize Apprise notification targets (direct library — no API container)
     init_apprise()
 
+    # ── One-time backfill: populate workflow:effects_pending from legacy effect_pending=1 flags ──
+    try:
+        from institutions import backfill_effects_pending_set
+        backfill_result = backfill_effects_pending_set(r)
+        if backfill_result.get("migrated"):
+            log.info("[startup] backfill: migrated %d workflows into workflow:effects_pending", backfill_result["migrated"])
+        elif backfill_result.get("skipped") == "already_completed":
+            log.info("[startup] backfill: marker present, skipping")
+    except ImportError:
+        log.warning(" Institutions module not available for backfill")
+    except Exception as e:
+        log.warning(f" Backfill failed: {e}")
+
     while running:
         try:
             run_tick()

@@ -1,6 +1,6 @@
 # Horizon Status — Living Document
-**Last Updated:** 2026-06-28 14:10
-**Updated By:** GLM-5.1 (z-ai)
+**Last Updated:** 2026-08-01 06:23 UTC
+**Updated By:** GLM-5.2 (z-ai)
 
 ## Current State
 
@@ -37,6 +37,26 @@
   - 35/35 test_needs_queue.py tests pass (13 new P3 tests)
   - Live scoring verified: 3 rejections → advance_goal suppressed 42%; 3 approvals → boosted 15%
 - [x] .horizon/ARCHITECTURE_STATE.md — compressed backend state for post-compaction recovery
+
+## Completed 2026-08-01 (Tick reliability — stale-result absorption fix)
+
+Three-step maintenance on the autonomous-tick pipeline; all validated live across untouched natural cycles.
+
+- [x] MAX_ACTIONS repair — npc_autonomy.py (now `7f7e5172cf1fe032597104e626cb20ab`); tick 37 decisions / 0 errors
+- [x] Stale-tick watchdog repair — `tick_watchdog.py` float-timestamp `isdigit()` bug (now `9b6a9ee78a0b56fbf3847af42edf8711`); routes/simulation.py 300s→watchdog-authority (1800s)
+- [x] Unify autonomous tick ownership — removed dead `_run_autonomous_tick_background` from main.py (now `6d839d1a1853b49939429bd7d3a5a5a9`); worker `ASYNC_POLL_TIMEOUT` 240→1500
+- [x] **Canonical autonomous-tick correlation repair** — DEPLOYED + VERIFIED LIVE (3 consecutive naturally scheduled cycles under one uninterrupted worker process)
+  - One canonical `tick_id` (`auto_tick_<ms>`) flows route → engine → Redis `fed:auto_tick_status.tick_id` → every status response → worker poll
+  - Operator internal id (`operator_<ms>`) exposed separately as `operator_tick_id`; `canonical_tick_id` and `operator_tick_id` are distinct correlated identities, never equal
+  - Separate int `watchdog_id` for the watchdog lease only
+  - worker.py: correlation-aware `_poll_async_completion` (returns `(outcome, data)`); 202 follows only its POST tick; 409 follows only the running tick; non-matching `tick_id` COMPLETED/FAILED ignored; baseline `started_at` race check
+  - worker.py: compact proof record `fed:worker:cycle:<canonical_tick_id>` (decisions/moods/thoughts/actions/interactions/npc_error_count + identity + timing), TTL 4h, no full payload, no clearing existing keys
+  - md5s — `routes/simulation.py` `8ec42f780dd54da6d906289f4ffa4d36`, `tick_engine.py` `03699c0411f4b5c8e0ee2878a5dcad87`, `worker.py` `5c030e4637f0d79547ff415db8adc279`
+  - Safety copies `*.bak.20260801T025958Z`
+  - Validation log: `/docker/federation-game/backend/correlation_validation.log`
+  - **4 correlated worker-driven cycles: 2 startup-triggered + 2 naturally scheduled** (auto_tick_1785563826999 startup-after-deploy, auto_tick_1785564293849 startup-after-06:04:52-restart, auto_tick_1785565120567 scheduled, auto_tick_1785565904530 scheduled). **3 consecutive naturally scheduled cycles verified under the uninterrupted worker process that started 06:04:53Z:** `auto_tick_1785565120567` (06:18), `auto_tick_1785565904530` (06:31), `auto_tick_1785566764803` (06:46). The third scheduled cycle's complete chain: 202 canonical `auto_tick_1785566764803` captured → ignored the previous `COMPLETED` for `auto_tick_1785565904530` → matching running canonical id across 39 polls → matching `COMPLETED canonical tick auto_tick_1785566764803` (242.1s) → proof write logged `decisions=37, npc_errors=0` (key TTL 4h since expired, type=none/TTL=-2 — retained evidence is the write-time log) → cognition/narrator/spatial/councilor/institutions/autosave/notification only AFTER `06:50:10` correlated completion → next tick POST returned `202` (not 409), proving watchdog lease release → Archimedes (`char_001`, LLM OK `06:50:01`/`06:50:13`) + Oracle (`char_306`, LLM OK `06:49:36`) fresh activity in window
+  - Evidence pattern in every cycle: previous stale tick's `COMPLETED` explicitly rejected (`ignored COMPLETED for tick '<old>' (expected '<new>')`); watchdog lease releases between ticks (next POST returns 202); Archimedes + Oracle drive fresh LLM calls each window
+  - Out of scope (separate task): an external SIGTERM hit the worker at 06:04:52Z (exit 0, clean); investigation is a separate issue, unrelated to and not invalidated by this correlation repair; the same patched code was reloaded automatically and correlation remained correct
 
 ## Completed 2026-06-24 (Starmap 3D Visual Pass)
 
