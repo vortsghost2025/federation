@@ -891,6 +891,33 @@ def _rank_artifacts_for_pair_story(char_id: str, artifacts: list, pair_state: di
     return [a for _, _, a in active[:6]], identity[:3]
 
 
+def _build_founded_areas(redis_client, pair_slug: str):
+    """Return a compact list of areas the pair has founded."""
+    if redis_client is None or not pair_slug:
+        return []
+    try:
+        key = f"npc_pair:{pair_slug}:areas"
+        raws = redis_client.hgetall(key) or {}
+        out = []
+        for raw in raws.values():
+            try:
+                a = json.loads(raw)
+            except Exception:
+                continue
+            out.append({
+                "area_id": a.get("area_id", ""),
+                "name": a.get("name", ""),
+                "region_type": a.get("region_type", ""),
+                "founded_by": a.get("founded_by", ""),
+                "danger_level": a.get("danger_level", 0),
+                "created_at": a.get("created_at", ""),
+            })
+        out.sort(key=lambda a: a.get("created_at", ""))
+        return out
+    except Exception:
+        return []
+
+
 @router.get("/spectator/agency")
 def spectator_agency():
     """Live status for agency/container NPCs with a simplified pair-story view.
@@ -1041,6 +1068,7 @@ def spectator_agency():
             "category_by_char": category_by_char,
             "journal": pair_journal,
             "active_thread": pair_thread,
+            "founded_areas": _build_founded_areas(r, pair_slug),
         }
 
     agency_npcs = []

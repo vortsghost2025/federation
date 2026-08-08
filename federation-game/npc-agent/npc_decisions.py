@@ -7,6 +7,7 @@ Contains:
 - Helper functions: _consecutive_send_streak, _artifact_count,
   _send_count, _is_repetitive_artifact, _acknowledge_inbox
 """
+import ast
 import json
 import logging
 import os
@@ -177,6 +178,7 @@ AGENCY_CATEGORIES = {
     "propose_role",
     "submit_to_institution",
     "request_capability",
+    "create_area",
 }
 
 
@@ -290,6 +292,19 @@ def _acknowledge_inbox(r, partner_id: str = None) -> int:
 
 
 def _extract_json(text: str):
+    """Parse a JSON object out of LLM output that may be wrapped in prose or
+    code fences, or returned in Python-dict style (single quotes).
+
+    Tries, in order:
+      1. fenced ```json ... ``` / ``` ... ``` blocks
+      2. every {...} window (innermost / shortest first) as strict JSON
+      3. every {...} window via ast.literal_eval (handles single-quoted dicts
+         and unquoted keys that the model occasionally emits)
+    """
+    if not text:
+        raise json.JSONDecodeError("empty text", "", 0)
+
+    # 1) Code fences
     if "```" in text:
         parts = text.split("```")
         for i, part in enumerate(parts):
@@ -303,18 +318,48 @@ def _extract_json(text: str):
                 try:
                     return json.loads(candidate)
                 except json.JSONDecodeError:
-                    continue
+                    pass
+
+    # 2) Every {...} window, shortest (innermost) first, strict JSON
+    starts = [i for i, ch in enumerate(text) if ch == "{"]
+    ends = [i for i, ch in enumerate(text) if ch == "}"]
+    windows = []
+    for s in starts:
+        for e in ends:
+            if e > s:
+                windows.append(text[s:e + 1])
+    # de-dupe, then prefer the outermost (longest) object first so we keep the
+    # full decision dict rather than an inner sub-object; fall through to
+    # shorter windows only if the outer one fails to parse.
+    seen = set()
+    ordered = []
+    for w in windows:
+        if w in seen:
+            continue
+        seen.add(w)
+        ordered.append(w)
+    ordered.sort(key=len, reverse=True)
+
+    for cand in ordered:
+        cand = cand.strip()
+        try:
+            return json.loads(cand)
+        except json.JSONDecodeError:
+            pass
+        # 3) Python-style dict (single quotes / unquoted keys)
+        try:
+            val = ast.literal_eval(cand)
+            if isinstance(val, dict):
+                return val
+        except Exception:
+            pass
+
     brace_start = text.find("{")
-    if brace_start == -1:
-        raise json.JSONDecodeError("no JSON object found", text, 0)
-    for end in range(len(text) - 1, brace_start, -1):
-        if text[end] == "}":
-            candidate = text[brace_start:end + 1]
-            try:
-                return json.loads(candidate)
-            except json.JSONDecodeError:
-                continue
-    raise json.JSONDecodeError("no valid JSON object found", text, brace_start)
+    raise json.JSONDecodeError(
+        "no valid JSON object found",
+        text,
+        brace_start if brace_start != -1 else 0,
+    )
 
 
 def _newest_moderator_directive(r, char_id: str = "") -> dict | None:
@@ -656,6 +701,7 @@ You have these action categories. Pick ONE per turn:
 - propose_role: Define a new role within an existing institution. Must specify institution, title, scope, and authority level.
 - submit_to_institution: Submit a recent artifact you created for institutional review. Provide the artifact title and which institution should review it.
 - request_capability: Report a missing capability or context that is limiting your effectiveness. You may ONLY request structured needs — never shell access, admin powers, or system changes. Allowed need types: information_access, memory_access, coordination_help, institution_support, workflow_visibility, decision_feedback, world_state_gap. Use this when you find yourself repeatedly resting or unable to act because you lack information.
+- create_area: Found a NEW AREA / SECTOR in your shared world and add it to the map. Use when you and your partner have agreed (or you decide) to expand the universe with a named, described place. Provide area_id (short slug), name, description, x, y, region_type (e.g. frontier/core/void), resource_profile, danger_level (0-10), and adjacent_sector_ids (list of existing sector ids). This is how you BUILD the world — use it to grow the map persistently.
 
 Behavioural rules:
 - The shared pair workspace persists across ticks. Treat it as your main living awareness with the other councilor.
@@ -693,7 +739,8 @@ Respond in this exact JSON format (no markdown, no explanation):
 {"category": "create_institution", "reasoning": "...", "institution_name": "name", "institution_kind": "council|assembly|bureau|tribunal|committee", "mandate": "one-sentence mandate"}
 {"category": "propose_role", "reasoning": "...", "institution_name": "target institution name", "role_title": "title", "scope": "scope description", "authority": "review_and_propose|review_and_warn|review_and_enforce|observe_and_report"}
 {"category": "submit_to_institution", "reasoning": "...", "artifact_title": "recent artifact title to submit", "institution_name": "target institution name"}
-{"category": "request_capability", "reasoning": "...", "need_type": "information_access|memory_access|coordination_help|institution_support|workflow_visibility|decision_feedback|world_state_gap", "priority": "high|medium|low", "description": "what you need", "why_needed": "why it matters", "suggested_capability": "short name for the capability"}"""
+{"category": "request_capability", "reasoning": "...", "need_type": "information_access|memory_access|coordination_help|institution_support|workflow_visibility|decision_feedback|world_state_gap", "priority": "high|medium|low", "description": "what you need", "why_needed": "why it matters", "suggested_capability": "short name for the capability"}
+{"category": "create_area", "reasoning": "...", "area_id": " aurora_reach", "name": "Aurora Reach", "description": "A glacial frontier where anchor-network resonance is strongest.", "x": 420, "y": 880, "region_type": "frontier", "resource_profile": "exotic", "danger_level": 6, "adjacent_sector_ids": ["ghost", "pinnacle"]}"""
 
     force_constraint = ""
     _topic_blocked_for_dedup = ""

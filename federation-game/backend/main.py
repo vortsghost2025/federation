@@ -15,6 +15,7 @@ from typing import Optional, Dict, List, Any
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException
 from fastapi.responses import JSONResponse, Response
 from fastapi.middleware.cors import CORSMiddleware
+from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware
 from pydantic import BaseModel
 import sys
 import os
@@ -57,7 +58,6 @@ from technology import create_technology_tree, TechTree
 from dataclasses import asdict
 
 from federation_game_db import db_manager
-
 from state import game_state, seed_spatial_system
 from faction_ai import FACTION_IDEOLOGY
 from faction_dynamics import FACTION_DISPLAY
@@ -85,6 +85,8 @@ from routes.institutions import router as institutions_router
 from routes.councilor_needs import router as councilor_needs_router
 from routes.decrees import router as decrees_router
 from routes.universe import router as universe_router
+from routes.admin import router as admin_router
+from routes.councilor_exchange import router as councilor_exchange_router
 from map_endpoints import router as map_router
 from data.events import EVENTS
 
@@ -239,63 +241,6 @@ def _run_tick_background():
         )
 
 
-def _run_autonomous_tick_background():
-    _HARD_TIMEOUT = 300
-    tick_start = time.time()
-    with _tick_lock:
-        _set_tick_redis(
-            _AUTO_TICK_REDIS_KEY,
-            {
-                "running": True,
-                "last_start": tick_start,
-                "last_error": "",
-                "last_result": "",
-            },
-        )
-    try:
-        npc_list = []
-        for char_id, character in game_state.npc_system.characters.items():
-            npc_list.append(
-                {
-                    "id": char_id,
-                    "char_id": char_id,
-                    "name": character.name,
-                    "archetype": character.personality_type.value,
-                    "affiliation": character.affiliation,
-                    "ideology": FACTION_IDEOLOGY.get(
-                        character.affiliation, "diplomatic"
-                    )
-                    if character.affiliation
-                    else None,
-                    "title": character.title,
-                    "description": getattr(character, "description", ""),
-                }
-            )
-
-        results = simulation_tick(npc_list)
-        if time.time() - tick_start > _HARD_TIMEOUT:
-            raise TimeoutError(
-                f"Autonomous tick exceeded {_HARD_TIMEOUT}s during simulation_tick"
-            )
-        try:
-            game_state.save_to_db(snapshot_type="auto")
-        except Exception:
-            logger.warning("Auto-save snapshot after autonomous tick failed")
-        result = {"status": "completed", "details": results}
-        _set_tick_redis(_AUTO_TICK_REDIS_KEY, {"last_result": result})
-    except Exception as e:
-        logger.error("Background autonomous tick failed: %s", e)
-        _set_tick_redis(_AUTO_TICK_REDIS_KEY, {"last_error": str(e)})
-    finally:
-        _set_tick_redis(
-            _AUTO_TICK_REDIS_KEY,
-            {
-                "running": False,
-                "last_end": time.time(),
-            },
-        )
-
-
 # ============================================================================
 # FASTAPI APPLICATION SETUP
 # ============================================================================
@@ -308,6 +253,15 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+)
+
+# Traefik/nginx terminate TLS in front of uvicorn, so without this the app
+# believes it is http and emits `http://` redirect Locations (307). That makes
+# the browser follow an insecure redirect -> mixed-content block on HTTPS pages.
+# Trusting X-Forwarded-Proto fixes the scheme at the source.
+app.add_middleware(
+    ProxyHeadersMiddleware,
+    trusted_hosts="*",
 )
 
 app.include_router(core_router)
@@ -335,13 +289,22 @@ app.include_router(map_router)
 app.include_router(institutions_router)
 app.include_router(councilor_needs_router)
 app.include_router(decrees_router)
+app.include_router(admin_router)
+app.include_router(councilor_exchange_router)
 
 
 @app.get("/metrics")
 async def prometheus_metrics():
     from routes.metrics import metrics_response
+    content = metrics_response()
+    if content is None:
+        return Response(
+            content="# federation_metrics_disabled 1\n",
+            media_type="text/plain; version=0.0.4",
+            status_code=200,
+        )
     from prometheus_client import CONTENT_TYPE_LATEST
-    return Response(content=metrics_response(), media_type=CONTENT_TYPE_LATEST)
+    return Response(content=content, media_type=CONTENT_TYPE_LATEST)
 
 
 @app.on_event("startup")

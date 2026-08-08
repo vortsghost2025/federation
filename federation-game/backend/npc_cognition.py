@@ -1018,7 +1018,15 @@ def run_cognition(
             )
 
         # Make LLM call
-        llm_result = route_call("leader", system_prompt, user_prompt, api_key=_get_npc_key(cid))
+        llm_result = route_call(
+            "leader",
+            system_prompt,
+            user_prompt,
+            api_key=_get_npc_key(cid),
+            char_id=cid,
+            source="cognition",
+            system_path="backend.npc_cognition.leader",
+        )
         turn_error_code: Optional[str] = None
         llm_calls_this_tick += 1
         result["stats"]["calls_made"] += 1
@@ -1056,7 +1064,13 @@ def run_cognition(
                         f"Output only the content, no explanations."
                     )
                     content_result = route_call(
-                        "general", "You are a creative writer.", content_prompt, api_key=_get_npc_key(cid)
+                        "general",
+                        "You are a creative writer.",
+                        content_prompt,
+                        api_key=_get_npc_key(cid),
+                        char_id=cid,
+                        source="cognition",
+                        system_path="backend.npc_cognition.leader_artifact",
                     )
                     artifact_content = content_result.get("content", desc)
                     create_npc_artifact(
@@ -1080,6 +1094,9 @@ def run_cognition(
                         "You are a Python developer. Output only code, no markdown.",
                         code_prompt,
                         api_key=_get_npc_key(cid),
+                        char_id=cid,
+                        source="cognition",
+                        system_path="backend.npc_cognition.leader_code",
                     )
                     gen_code = code_result.get("content", "")
                     if gen_code:
@@ -1199,7 +1216,15 @@ def run_cognition(
         )
 
         # Make LLM call
-        llm_result = route_call("specialist", system_prompt, user_prompt, api_key=_get_npc_key(cid))
+        llm_result = route_call(
+            "specialist",
+            system_prompt,
+            user_prompt,
+            api_key=_get_npc_key(cid),
+            char_id=cid,
+            source="cognition",
+            system_path="backend.npc_cognition.specialist",
+        )
         turn_error_code = None
         llm_calls_this_tick += 1
         result["stats"]["calls_made"] += 1
@@ -1237,7 +1262,13 @@ def run_cognition(
                         f"Output only the content, no explanations."
                     )
                     content_result = route_call(
-                        "general", "You are a creative writer.", content_prompt, api_key=_get_npc_key(cid)
+                        "general",
+                        "You are a creative writer.",
+                        content_prompt,
+                        api_key=_get_npc_key(cid),
+                        char_id=cid,
+                        source="cognition",
+                        system_path="backend.npc_cognition.specialist_artifact",
                     )
                     artifact_content = content_result.get("content", desc)
                     create_npc_artifact(
@@ -1261,6 +1292,9 @@ def run_cognition(
                         "You are a Python developer. Output only code, no markdown.",
                         code_prompt,
                         api_key=_get_npc_key(cid),
+                        char_id=cid,
+                        source="cognition",
+                        system_path="backend.npc_cognition.specialist_code",
                     )
                     gen_code = code_result.get("content", "")
                     if gen_code:

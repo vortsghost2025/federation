@@ -1274,6 +1274,7 @@ def build_mysterious_figures() -> List[Character]:
             wisdom=0.95,
             charisma=0.75,
             cunning=0.6,
+            affiliation="consciousness_collective",
             personality_type=CharacterArchetype.MYSTIC,
             status=CharacterStatus.HIDDEN,
             skills=["Perfect Prophecy", "Sight Beyond Sight", "Fate Reading"],
@@ -1598,13 +1599,14 @@ def persist_npc_traits_to_redis(redis_client, npc_system) -> int:
     For each NPC, writes a HASH to key ``npc_relationships:{char_id}`` with fields:
     target_char_id -> float string (0-100 scale).
 
-    Keys expire after 7 days (604800 seconds).
+    These HASHes are written WITHOUT an expiry so the personality/relationship
+    snapshot persists permanently. (The bulk artifact lists are capped elsewhere
+    to protect disk on constrained deployments.)
 
     Returns:
         Number of NPCs persisted.
     """
     TRAIT_FIELDS = ("loyalty", "ambition", "wisdom", "charisma", "cunning")
-    TTL_SECONDS = 604800
     count = 0
     try:
         pipe = redis_client.pipeline(transaction=False)
@@ -1612,7 +1614,7 @@ def persist_npc_traits_to_redis(redis_client, npc_system) -> int:
             key = f"npc_traits:{char_id}"
             mapping = {field: str(getattr(char, field)) for field in TRAIT_FIELDS}
             pipe.hset(key, mapping=mapping)
-            pipe.expire(key, TTL_SECONDS)
+            pipe.persist(key)
 
             if char.relationship_to_other_characters:
                 rkey = f"npc_relationships:{char_id}"
@@ -1621,7 +1623,7 @@ def persist_npc_traits_to_redis(redis_client, npc_system) -> int:
                     for tid, val in char.relationship_to_other_characters.items()
                 }
                 pipe.hset(rkey, mapping=rmap)
-                pipe.expire(rkey, TTL_SECONDS)
+                pipe.persist(rkey)
 
             count += 1
         pipe.execute()

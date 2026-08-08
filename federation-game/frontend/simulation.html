@@ -70,7 +70,7 @@
 <!-- FEDERATION STATUS BRIEF -->
 <div id="fed-brief">
 <div class="brief-row">
-<span class="brief-state-badge" id="brief-state-badge">INITIALIZING</span>
+<span class="brief-state-badge" id="brief-state-badge" aria-live="polite">INITIALIZING</span>
 <span class="brief-meta" id="brief-meta">Loading simulation...</span>
 </div>
 <div class="brief-headline" id="brief-headline">Connecting to Federation systems...</div>
@@ -82,7 +82,7 @@
 <div id="situation">
 <div class="sit-card" id="sit-current">
 <div class="sit-card-label">Current Situation</div>
-<div class="sit-card-value" id="sit-current-text">Loading world state...</div>
+<div class="sit-card-value" id="sit-current-text" aria-live="polite">Loading world state...</div>
 </div>
 <div class="sit-card sit-risk" id="sit-risk">
 <div class="sit-card-label">Main Risk</div>
@@ -187,7 +187,7 @@
 <section id="center" class="panel">
 <div id="human-briefing" class="human-briefing">
 <div class="hb-label">10-Second Briefing</div>
-<div class="hb-headline" id="hb-headline">Loading the current story...</div>
+<div class="hb-headline" id="hb-headline" aria-live="polite">Loading the current story...</div>
 <div class="hb-grid">
 <div class="hb-card"><div class="hb-card-label">What is this?</div><div class="hb-card-text" id="hb-what">A living AI society is running without player control.</div></div>
 <div class="hb-card"><div class="hb-card-label">What changed?</div><div class="hb-card-text" id="hb-changed">Waiting for NPC decisions and events.</div></div>
@@ -217,11 +217,11 @@
 </div>
 <div id="quick-status" class="qs-panel" style="display:none">
 <div class="qs-header">&#x1F4CA; Quick Status <span class="qs-tick" id="qs-tick"></span></div>
-<div class="qs-body" id="qs-body"></div>
+<div class="qs-body" id="qs-body" aria-live="polite"></div>
 </div>
 <div id="rm-summary" class="rm-summary" style="display:none">
 <div class="rm-summary-header">&#x1F4CB; What Is Happening? <span class="rm-summary-tick" id="rm-summary-tick"></span></div>
-<div class="rm-summary-body" id="rm-summary-body"></div>
+<div class="rm-summary-body" id="rm-summary-body" aria-live="polite"></div>
 </div>
 <div class="rm-prog-bar" id="rm-prog-bar" style="display:none">
 <button class="rm-prog-btn active" data-rm-panel="rm-panel-summary" onclick="switchRMPanel('rm-panel-summary')">&#x1F4CB; Summary</button>
