@@ -525,6 +525,86 @@ def _coerce_float(v, default: float) -> float:
         return default
 
 
+# ── Area bloat guards (mirror the institution guards) ──────────────────
+# The pair historically spawned 95+ near-duplicate sectors by suffixing
+# slugs (void_resonance_haven_alpha...eta) and reusing coordinates, so
+# `area_found` is guarded the same way institutions are: hard caps, a
+# per-founder rate limit, placeholder rejection, coordinate uniqueness,
+# prefix-family dedup, and exact-name dedup.
+
+_MAX_AREAS_PER_PAIR = 40
+_MAX_AREAS_PER_FOUNDER_DAY = 4
+_AREA_SLUG_RE = re.compile(r"^[a-z0-9][a-z0-9_-]{2,47}$")
+_PLACEHOLDER_CHARS = "_.-… "
+_MAX_AREAS_IN_NOTICE = 40
+
+
+def _is_placeholder_text(text: str) -> bool:
+    """True when the string is only punctuation/ellipsis (LLM placeholder)."""
+    stripped = "".join(ch for ch in text if ch not in _PLACEHOLDER_CHARS)
+    return len(stripped) < 3
+
+
+def _family_prefix(area_id: str) -> str:
+    """First three underscore-tokens; identical prefixes = variant spam."""
+    tokens = [t for t in area_id.split("_") if t]
+    return "_".join(tokens[:3])
+
+
+def _count_founded_today(areas: List[Dict[str, Any]], actor_id: str) -> int:
+    from datetime import datetime, timezone
+
+    today = datetime.now(timezone.utc).date()
+    count = 0
+    for a in areas:
+        if a.get("founded_by") != actor_id:
+            continue
+        created = a.get("created_at", "")
+        try:
+            day = datetime.fromisoformat(str(created).replace("Z", "+00:00")).date()
+        except (ValueError, TypeError):
+            continue
+        if day == today:
+            count += 1
+    return count
+
+
+def _reject_area(
+    actor_id: str,
+    area_id: str,
+    reason: str,
+    message: str,
+    existing_areas: List[Dict[str, Any]],
+) -> Dict[str, Any]:
+    """Notify the founder and return a structured rejection."""
+    listed = existing_areas[:_MAX_AREAS_IN_NOTICE]
+    summary = ", ".join(
+        f"{a.get('area_id', '?')} ({a.get('name', '?')}, founded_by={a.get('founded_by', '?')})"
+        for a in listed
+    ) or "(no areas yet)"
+    if len(existing_areas) > len(listed):
+        summary += f" ... and {len(existing_areas) - len(listed)} more"
+    notification = {
+        "type": "area_rejected",
+        "area_id": area_id,
+        "reason": reason,
+        "existing_areas": summary,
+        "message": f"{message} Existing areas: {summary}",
+    }
+    try:
+        r = _get_redis()
+        r.rpush(f"npc:system_notifications:{actor_id}", json.dumps(notification))
+    except Exception:
+        pass
+    return {
+        "ok": False,
+        "action": "area_found",
+        "result": None,
+        "error": f"area_rejected:{reason}",
+        "rejected": reason,
+    }
+
+
 def _action_area_found(pair_slug: str, actor_id: str, payload: Dict[str, Any]) -> Dict[str, Any]:
     """Found a new area/sector in the pair's world. Durable, pair-scoped."""
     if actor_id not in PAIR_IDS:
@@ -534,27 +614,113 @@ def _action_area_found(pair_slug: str, actor_id: str, payload: Dict[str, Any]) -
     area_id = _normalize_area_id(raw_id)
     name = _clean_str(payload.get("name"))
     description = _clean_str(payload.get("description"))
+    region_type = _clean_str(payload.get("region_type"), "frontier")
+    resource_profile = _clean_str(payload.get("resource_profile"), "mixed")
+    danger_level = _coerce_int(payload.get("danger_level", 5) or 5, 5)
+    x = _coerce_float(payload.get("x", 0) or 0, 0)
+    y = _coerce_float(payload.get("y", 0) or 0, 0)
+    adjacent_raw = payload.get("adjacent_sector_ids", []) or []
+    adjacent_sector_ids = (
+        [str(a).strip() for a in adjacent_raw if str(a).strip()]
+        if isinstance(adjacent_raw, (list, tuple, set))
+        else []
+    )
     if not area_id or not name or not description:
         return {"ok": False, "action": "area_found", "result": None,
                 "error": "missing_required_fields", "required": ["area_id", "name", "description"]}
+
+    # ── Bloat guards ──
+    r = _get_redis()
+    key = _areas_key(pair_slug)
+    existing_raw = r.hgetall(key) or {}
+    existing_areas = [json.loads(v) for v in existing_raw.values() if v]
+
+    if not _AREA_SLUG_RE.match(area_id):
+        return _reject_area(
+            actor_id, area_id, "invalid_slug",
+            f"Area slug '{area_id}' is not a valid short slug "
+            "(lowercase letters/digits/underscores, no leading '_').",
+            existing_areas,
+        )
+
+    if _is_placeholder_text(name) or _is_placeholder_text(description) or _is_placeholder_text(region_type):
+        return _reject_area(
+            actor_id, area_id, "placeholder_fields",
+            f"Area '{area_id}' was rejected: name/description/region_type must be "
+            "real words, not placeholder punctuation.",
+            existing_areas,
+        )
+
+    if len(existing_areas) >= _MAX_AREAS_PER_PAIR:
+        return _reject_area(
+            actor_id, area_id, "pair_cap_reached",
+            f"Cannot found '{area_id}': the shared map has reached its cap of "
+            f"{_MAX_AREAS_PER_PAIR} areas. Expand existing areas instead.",
+            existing_areas,
+        )
+
+    if _count_founded_today(existing_areas, actor_id) >= _MAX_AREAS_PER_FOUNDER_DAY:
+        return _reject_area(
+            actor_id, area_id, "daily_cap_reached",
+            f"Cannot found '{area_id}': you have already founded "
+            f"{_MAX_AREAS_PER_FOUNDER_DAY} areas today. Wait until tomorrow.",
+            existing_areas,
+        )
+
+    if x == 0 and y == 0:
+        return _reject_area(
+            actor_id, area_id, "placeholder_coordinates",
+            f"Cannot found '{area_id}': coordinates (0, 0) are not valid.",
+            existing_areas,
+        )
+    for a in existing_areas:
+        if a.get("x") == x and a.get("y") == y:
+            return _reject_area(
+                actor_id, area_id, "coordinates_exist",
+                f"Cannot found '{area_id}' at ({x}, {y}): that spot is already taken "
+                f"by '{a.get('area_id', '?')}' ({a.get('name', '?')}). Choose distinct coordinates.",
+                existing_areas,
+            )
+
+    family = _family_prefix(area_id)
+    if len(family.split("_")) >= 3:
+        for a in existing_areas:
+            if _family_prefix(a.get("area_id", "")) == family:
+                return _reject_area(
+                    actor_id, area_id, "family_duplicate",
+                    f"Cannot found '{area_id}': it is a variant of existing "
+                    f"'{a.get('area_id', '?')}' ({a.get('name', '?')}). Propose a genuinely "
+                    "new area, not another suffix of the same sector.",
+                    existing_areas,
+                )
+
+    norm_name = "".join(ch for ch in name.lower() if ch.isalnum())
+    if norm_name:
+        for a in existing_areas:
+            other_name = "".join(ch for ch in str(a.get("name", "")).lower() if ch.isalnum())
+            if other_name and other_name == norm_name:
+                return _reject_area(
+                    actor_id, area_id, "name_duplicate",
+                    f"Cannot found '{area_id}': an area named '{a.get('name', '?')}' "
+                    "already exists. Give the new area a different name.",
+                    existing_areas,
+                )
 
     record = {
         "area_id": area_id,
         "name": name,
         "description": description,
-        "region_type": _clean_str(payload.get("region_type"), "frontier"),
-        "resource_profile": _clean_str(payload.get("resource_profile"), "mixed"),
-        "danger_level": _coerce_int(payload.get("danger_level", 5) or 5, 5),
-        "x": _coerce_float(payload.get("x", 0) or 0, 0),
-        "y": _coerce_float(payload.get("y", 0) or 0, 0),
-        "adjacent_sector_ids": list(payload.get("adjacent_sector_ids", []) or []) if isinstance(payload.get("adjacent_sector_ids", []), (list, tuple, set)) else [],
+        "region_type": region_type,
+        "resource_profile": resource_profile,
+        "danger_level": danger_level,
+        "x": x,
+        "y": y,
+        "adjacent_sector_ids": adjacent_sector_ids,
         "founded_by": actor_id,
         "pair_slug": pair_slug,
         "created_at": _now_iso(),
     }
 
-    r = _get_redis()
-    key = _areas_key(pair_slug)
     if r.hexists(key, area_id):
         existing = json.loads(r.hget(key, area_id) or "{}")
         # Push a system notification so the NPC knows the area is already on the map.
