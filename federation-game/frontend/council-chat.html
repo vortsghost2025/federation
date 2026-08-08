@@ -226,7 +226,7 @@ async function loadAll(){
       fetchJson('/api/agents/moderator/messages?limit=40&thread_limit=40')
     ]);
 
-    $('pair-headline').textContent = agency.headline || 'No agency headline yet.';
+    $('pair-headline').textContent = (agency.pair_story && agency.pair_story.headline) || agency.headline || 'No agency headline yet.';
     const pairStory = agency.pair_story || {};
     $('shared-goal').textContent = pairStory.shared_goal || '—';
     $('current-topic').textContent = pairStory.current_topic || '—';
