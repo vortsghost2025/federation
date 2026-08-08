@@ -17,6 +17,7 @@ set, then produce one canonical merged tree.
 | `recovery/desktop-2026-08-08` | `ebbdee9` | Desktop working-tree state: 60 files (backend, memory, messaging, simulation, frontend, deployment, docs, `.horizon`, `.kilo/kilo.json`) |
 | `recovery/vps-2026-08-08` | `7767a1d` | VPS git working-tree state: `councilor_bridge.py`, `npc_world_snapshot.py`, `starmap3d.html` live edits (VPS `main` itself is an ancestor of GitHub `main`) |
 | `recovery/runtime-2026-08-08` | `b4f67df` | Live runtime source overlay from `/docker/federation-game` (97 files): modular npc-agent set, live-patched backend files |
+| `recovery/architect-2026-08-08` | (from `/docker/federation-architect` @ `6905aa5`) | Builder/architect infrastructure: full `phase2-builder-agent` history (45M .git) + uncommitted `state/registry.json`, `comparison_summary.md`, plus `/root/federation-kilo-handoffs/` docs (capability-request preflight/producer, VPS live scope audit, architect loop phase1) |
 
 ## Canonical merge
 
@@ -59,3 +60,4 @@ recovery branches above.
 2. When approved: fast-forward `main` to the merge, or open a PR.
 3. Deploy pass: copy canonical backend/npc-agent/frontend into `/docker/federation-game` and restart services per AGENTS.md workflow (npc-agent is bind-mounted; backend restart required).
 4. Consider `git merge --strategy=ours` none needed; both recovery branches can be deleted after main advances.
+5. Out-of-tree VPS material is now fully covered: `/docker/federation-architect`, `/docker/federation-worktrees/architect` (empty), `/root/federation-kilo-handoffs/` → `recovery/architect-2026-08-08` (unrelated history branch in the same GitHub repo). The only uncommitted artifact left there is a `__pycache__` `.pyc` (recompile-recoverable).
