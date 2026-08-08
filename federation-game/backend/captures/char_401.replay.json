@@ -1,0 +1,59 @@
+{
+  "char_id": "char_401",
+  "affiliation": "independent",
+  "layers": {
+    "L1_symmetry": {
+      "frozen": true,
+      "recovered_equal": true,
+      "aliveness_real": true
+    },
+    "L2_constraints": {
+      "options_in": 11,
+      "options_passing": 4,
+      "violations": [
+        "investigate",
+        "react_to_events",
+        "explore",
+        "confront_rival",
+        "request_capability",
+        "self_improve",
+        "seek_resources"
+      ]
+    },
+    "L3_phenotype": {
+      "attractors": {
+        "advance_goal": 0.12079348211122919,
+        "socialize": 0.15621679064824653,
+        "investigate": 0.10626992561105207,
+        "rest": 0.31880977683315626,
+        "react_to_events": 0.03542330853701736,
+        "seek_resources": 0.03542330853701736,
+        "self_improve": 0.03542330853701736,
+        "confront_rival": 0.03542330853701736,
+        "help_ally": 0.08537017357421182,
+        "explore": 0.03542330853701736,
+        "request_capability": 0.03542330853701736
+      },
+      "chosen_category": "rest",
+      "pull_score": 0.49,
+      "coherent": true
+    },
+    "L4_drift": {
+      "drift": 0.0,
+      "tolerance": 0.15,
+      "recovered": false
+    }
+  },
+  "constitutional": true,
+  "notes": [],
+  "option_count": 11,
+  "baseline_random_choice": {
+    "category": "explore",
+    "score": 0.264
+  },
+  "genesis_choice": {
+    "category": "rest",
+    "score": 0.599
+  },
+  "would_have_diverged": true
+}

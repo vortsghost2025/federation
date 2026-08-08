@@ -16,6 +16,7 @@ from institutions import (
     override_workflow_status,
     set_institution_status,
     _rebuild_inst_counters,
+    backfill_effects_pending_set,
 )
 
 router = APIRouter(prefix="", tags=["institutions"])
@@ -204,6 +205,7 @@ async def trigger_workflow(request: Request, body: TriggerWorkflowRequest):
 
     r = _get_redis(request)
     seed_institutions(r)
+    backfill_effects_pending_set(r)
     role_ctx = get_councilor_role_context(r, body.councilor_id)
     if not role_ctx:
         return {"outcome": "FAILED", "detail": "Councilor has no institutional role binding"}
