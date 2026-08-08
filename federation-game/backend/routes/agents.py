@@ -23,6 +23,147 @@ MESSAGE_TTL_SECONDS = 86400 * 30
 MESSAGE_CAP = 100
 THREAD_CAP = 100
 THREAD_INDEX_CAP = 40
+_IDEMPOTENCY_TTL = 60
+
+_SINGLE_MESSAGE_LUA = """
+local result_key = KEYS[1]
+local guard_key = KEYS[2]
+local ttl = tonumber(ARGV[1])
+local payload_json = ARGV[2]
+local msg_key = ARGV[3]
+local now = ARGV[4]
+local msg_ttl = tonumber(ARGV[5])
+local thread_cap = tonumber(ARGV[6])
+local thread_idx_cap = tonumber(ARGV[7])
+local is_pair = ARGV[8]
+local pair_key = ARGV[9]
+
+local cached = redis.call('GET', result_key)
+if cached then
+    return cached
+end
+
+local set = redis.call('SET', guard_key, '1', 'NX', 'EX', ttl)
+if not set then
+    local missing = redis.call('GET', result_key)
+    if not missing then
+        return cjson.encode({ok = false, error = "incomplete"})
+    end
+    return missing
+end
+
+local payload = cjson.decode(payload_json)
+local from_id = payload.from_char_id
+local to_id = payload.to_char_id
+local thread_id = payload.thread_id
+
+redis.call('RPUSH', 'npc_messages:' .. to_id .. ':inbox', payload_json)
+redis.call('LTRIM', 'npc_messages:' .. to_id .. ':inbox', -100, -1)
+redis.call('RPUSH', 'npc_messages:' .. from_id .. ':sent', payload_json)
+redis.call('LTRIM', 'npc_messages:' .. from_id .. ':sent', -100, -1)
+redis.call('SET', msg_key, payload_json, 'EX', msg_ttl)
+redis.call('ZADD', 'msg:thread:' .. thread_id, now, msg_key)
+redis.call('ZREMRANGEBYRANK', 'msg:thread:' .. thread_id, 0, -thread_cap - 1)
+redis.call('EXPIRE', 'msg:thread:' .. thread_id, msg_ttl)
+redis.call('ZADD', 'msg:threads:' .. from_id, now, thread_id)
+redis.call('ZADD', 'msg:threads:' .. to_id, now, thread_id)
+redis.call('ZREMRANGEBYRANK', 'msg:threads:' .. from_id, 0, -thread_idx_cap - 1)
+redis.call('ZREMRANGEBYRANK', 'msg:threads:' .. to_id, 0, -thread_idx_cap - 1)
+redis.call('EXPIRE', 'msg:threads:' .. from_id, msg_ttl)
+redis.call('EXPIRE', 'msg:threads:' .. to_id, msg_ttl)
+
+if is_pair == '1' and pair_key ~= '' then
+    local preview = string.sub(payload.body or '', 1, 160)
+    redis.call('HSET', pair_key,
+        'active_thread_id', thread_id,
+        'last_message_ts', now,
+        'last_message_from', from_id,
+        'last_message_preview', preview
+    )
+    redis.call('EXPIRE', pair_key, msg_ttl)
+end
+
+local result = cjson.encode({ok = true, message = payload})
+redis.call('SETEX', result_key, ttl, result)
+return result
+"""
+
+_BROADCAST_LUA = """
+local result_key = KEYS[1]
+local guard_key = KEYS[2]
+local ttl = tonumber(ARGV[1])
+local msg_ttl = tonumber(ARGV[2])
+local thread_cap = tonumber(ARGV[3])
+local thread_idx_cap = tonumber(ARGV[4])
+local sender_from_id = ARGV[5]
+local pause_topic = ARGV[6]
+local duration_minutes = tonumber(ARGV[7])
+local has_pause = ARGV[8]
+
+local cached = redis.call('GET', result_key)
+if cached then
+    return cached
+end
+
+local set = redis.call('SET', guard_key, '1', 'NX', 'EX', ttl)
+if not set then
+    local missing = redis.call('GET', result_key)
+    if not missing then
+        return cjson.encode({ok = false, error = "incomplete"})
+    end
+    return missing
+end
+
+local sent = {}
+local i = 9
+while i <= #ARGV do
+    local recv = cjson.decode(ARGV[i])
+    local to_id = recv.to_char_id
+    local from_id = recv.from_char_id
+
+    redis.call('RPUSH', 'npc_messages:' .. to_id .. ':inbox', ARGV[i])
+    redis.call('LTRIM', 'npc_messages:' .. to_id .. ':inbox', -100, -1)
+    redis.call('RPUSH', 'npc_messages:' .. from_id .. ':sent', ARGV[i])
+    redis.call('LTRIM', 'npc_messages:' .. from_id .. ':sent', -100, -1)
+    redis.call('SET', recv.id, ARGV[i], 'EX', msg_ttl)
+    redis.call('ZADD', 'msg:thread:' .. recv.thread_id, recv.created_at, recv.id)
+    redis.call('ZREMRANGEBYRANK', 'msg:thread:' .. recv.thread_id, 0, -thread_cap - 1)
+    redis.call('EXPIRE', 'msg:thread:' .. recv.thread_id, msg_ttl)
+    redis.call('ZADD', 'msg:threads:' .. from_id, recv.created_at, recv.thread_id)
+    redis.call('ZADD', 'msg:threads:' .. to_id, recv.created_at, recv.thread_id)
+    redis.call('ZREMRANGEBYRANK', 'msg:threads:' .. from_id, 0, -thread_idx_cap - 1)
+    redis.call('ZREMRANGEBYRANK', 'msg:threads:' .. to_id, 0, -thread_idx_cap - 1)
+    redis.call('EXPIRE', 'msg:threads:' .. from_id, msg_ttl)
+    redis.call('EXPIRE', 'msg:threads:' .. to_id, msg_ttl)
+
+    table.insert(sent, recv)
+    i = i + 1
+end
+
+local cooldowns = {}
+if has_pause == '1' and pause_topic ~= '' then
+    local ttl_secs = duration_minutes * 60
+    local j = 9
+    while j <= #ARGV do
+        local recv = cjson.decode(ARGV[j])
+        local agent_id = recv.to_char_id
+        local key = 'npc_topic_cooldown:' .. agent_id .. ':' .. pause_topic
+        local reason_key = 'npc_topic_cooldown_reason:' .. agent_id .. ':' .. pause_topic
+        redis.call('SETEX', key, ttl_secs, 'manual_pause')
+        redis.call('SETEX', reason_key, ttl_secs, sender_from_id)
+        table.insert(cooldowns, {
+            agent_id = agent_id,
+            topic = pause_topic,
+            remaining_seconds = ttl_secs
+        })
+        j = j + 1
+    end
+end
+
+local result = cjson.encode({ok = true, sent = sent, cooldowns = cooldowns})
+redis.call('SETEX', result_key, ttl, result)
+return result
+"""
 
 _DEFAULT_AGENT_LABELS = {
     "char_001": "Archimedes Prime",
@@ -100,6 +241,103 @@ def _agent_labels(r) -> Dict[str, str]:
         pass
     labels.setdefault(OPERATOR_ID, OPERATOR_NAME)
     return labels
+
+
+def _build_message_payload(from_id, from_name, to_id, to_name, body, message_type, topic, subject, thread_id):
+    msg_id = f"msg_{uuid.uuid4().hex[:12]}"
+    now = int(time.time())
+    thread_id = thread_id or _conversation_thread_id(from_id, to_id)
+    return {
+        "id": msg_id,
+        "msg_id": msg_id,
+        "thread_id": thread_id,
+        "from_char_id": from_id,
+        "from_name": from_name,
+        "from_char_name": from_name,
+        "to_char_id": to_id,
+        "to_name": to_name,
+        "to_char_name": to_name,
+        "subject": subject or _subject_for(message_type, topic, body),
+        "body": body,
+        "type": message_type or "direct_message",
+        "topic": _normalize_topic_label(topic or body),
+        "created_at": now,
+        "ts": now,
+        "read": "false",
+    }
+
+
+def _run_idempotent_single_message(r, idempotency_key, agent_id, payload, msg_key, now, from_id, to_id):
+    result_key = f"msg:idempotency:result:message:{agent_id}:{idempotency_key}"
+    guard_key = f"msg:idempotency:guard:message:{agent_id}:{idempotency_key}"
+    is_pair = "1" if {from_id, to_id} == set(PAIR_IDS) else "0"
+    pair_key = _pair_state_key(from_id, to_id) if is_pair == "1" else ""
+    try:
+        result = r.eval(
+            _SINGLE_MESSAGE_LUA,
+            2,
+            result_key,
+            guard_key,
+            _IDEMPOTENCY_TTL,
+            json.dumps(payload, default=str),
+            msg_key,
+            str(now),
+            str(MESSAGE_TTL_SECONDS),
+            str(THREAD_CAP),
+            str(THREAD_INDEX_CAP),
+            is_pair,
+            pair_key,
+        )
+    except Exception as exc:
+        logger.error("idempotent message failed: %s", exc)
+        raise HTTPException(status_code=503, detail="idempotent message failed") from exc
+    if isinstance(result, bytes):
+        result = result.decode("utf-8")
+    if result is None:
+        raise HTTPException(status_code=503, detail="idempotent result missing")
+    return json.loads(result)
+
+
+def _run_idempotent_broadcast(r, idempotency_key, from_id, req, labels):
+    result_key = f"msg:idempotency:result:broadcast:{idempotency_key}"
+    guard_key = f"msg:idempotency:guard:broadcast:{idempotency_key}"
+    recipient_payloads = []
+    for agent_id in req.agent_ids:
+        if req.body:
+            thread_id = req.thread_id or _conversation_thread_id(from_id, agent_id)
+            payload = _build_message_payload(
+                from_id,
+                labels.get(from_id, from_id),
+                agent_id,
+                labels.get(agent_id, agent_id),
+                req.body,
+                req.type,
+                req.topic,
+                req.subject,
+                thread_id,
+            )
+            recipient_payloads.append(json.dumps(payload, default=str))
+    args = [
+        _IDEMPOTENCY_TTL,
+        str(MESSAGE_TTL_SECONDS),
+        str(THREAD_CAP),
+        str(THREAD_INDEX_CAP),
+        from_id,
+        req.pause_topic or "",
+        str(req.duration_minutes),
+        "1" if req.pause_topic else "0",
+    ]
+    args.extend(recipient_payloads)
+    try:
+        result = r.eval(_BROADCAST_LUA, 2, result_key, guard_key, *args)
+    except Exception as exc:
+        logger.error("idempotent broadcast failed: %s", exc)
+        raise HTTPException(status_code=503, detail="idempotent broadcast failed") from exc
+    if isinstance(result, bytes):
+        result = result.decode("utf-8")
+    if result is None:
+        raise HTTPException(status_code=503, detail="idempotent broadcast result missing")
+    return json.loads(result)
 
 
 def _pair_partner(agent_id: str) -> str:
@@ -313,7 +551,7 @@ def _queue_message(
         "topic": _normalize_topic_label(topic or body),
         "created_at": now,
         "ts": now,
-        "read": False,
+        "read": "false",
     }
     raw = json.dumps(payload, default=str)
     msg_key = f"msg:{msg_id}"
@@ -380,22 +618,19 @@ def get_agent_messages(
 @router.post("/agents/{agent_id}/messages")
 def post_agent_message(agent_id: str, req: AgentMessageRequest, request: Request):
     r = _get_redis(request)
+    idempotency_key = request.headers.get("X-Idempotency-Key")
     labels = _agent_labels(r)
     from_id = req.from_id or OPERATOR_ID
     from_name = req.from_name or labels.get(from_id, from_id)
-    payload = _queue_message(
-        r,
-        from_id=from_id,
-        from_name=from_name,
-        to_id=agent_id,
-        to_name=labels.get(agent_id, agent_id),
-        body=req.body,
-        message_type=req.type,
-        topic=req.topic,
-        subject=req.subject,
-        thread_id=req.thread_id,
-    )
-    return {"ok": True, "message": payload}
+    thread_id = req.thread_id or _conversation_thread_id(from_id, agent_id)
+    payload = _build_message_payload(from_id, from_name, agent_id, labels.get(agent_id, agent_id), req.body, req.type, req.topic, req.subject, thread_id)
+    raw = json.dumps(payload, default=str)
+    msg_key = f"msg:{payload['id']}"
+    now = payload["created_at"]
+    if idempotency_key:
+        return _run_idempotent_single_message(r, idempotency_key, agent_id, payload, msg_key, now, from_id, agent_id)
+    queued = _queue_message(r, from_id=from_id, from_name=from_name, to_id=agent_id, to_name=labels.get(agent_id, agent_id), body=req.body, message_type=req.type, topic=req.topic, subject=req.subject, thread_id=thread_id)
+    return {"ok": True, "message": queued}
 
 
 @router.post("/agents/broadcast")
@@ -403,9 +638,12 @@ def broadcast_agent_message(req: AgentBroadcastRequest, request: Request):
     if not req.body and not req.pause_topic:
         raise HTTPException(status_code=400, detail="broadcast requires body or pause_topic")
     r = _get_redis(request)
+    idempotency_key = request.headers.get("X-Idempotency-Key")
     labels = _agent_labels(r)
     from_id = req.from_id or OPERATOR_ID
     from_name = req.from_name or labels.get(from_id, from_id)
+    if idempotency_key:
+        return _run_idempotent_broadcast(r, idempotency_key, from_id, req, labels)
     sent = []
     for agent_id in req.agent_ids:
         if req.body:
@@ -431,22 +669,19 @@ def broadcast_agent_message(req: AgentBroadcastRequest, request: Request):
 @router.post("/agents/{agent_id}/self-diagnostic")
 def request_self_diagnostic(agent_id: str, req: SelfDiagnosticRequest, request: Request):
     r = _get_redis(request)
+    idempotency_key = request.headers.get("X-Idempotency-Key")
     labels = _agent_labels(r)
     from_id = req.from_id or OPERATOR_ID
     from_name = req.from_name or labels.get(from_id, from_id)
     prompt = DEFAULT_SELF_DIAGNOSTIC_PROMPT
     if req.body.strip():
         prompt = f"{prompt}\n\nAdditional moderator context: {req.body.strip()}"
-    payload = _queue_message(
-        r,
-        from_id=from_id,
-        from_name=from_name,
-        to_id=agent_id,
-        to_name=labels.get(agent_id, agent_id),
-        body=prompt,
-        message_type="self_diagnostic",
-        topic=req.topic or "self_diagnostic",
-        subject="Self diagnostic request",
-        thread_id=_conversation_thread_id(from_id, agent_id),
-    )
-    return {"ok": True, "message": payload}
+    thread_id = _conversation_thread_id(from_id, agent_id)
+    payload = _build_message_payload(from_id, from_name, agent_id, labels.get(agent_id, agent_id), prompt, "self_diagnostic", req.topic or "self_diagnostic", "Self diagnostic request", thread_id)
+    raw = json.dumps(payload, default=str)
+    msg_key = f"msg:{payload['id']}"
+    now = payload["created_at"]
+    if idempotency_key:
+        return _run_idempotent_single_message(r, idempotency_key, agent_id, payload, msg_key, now, from_id, agent_id)
+    queued = _queue_message(r, from_id=from_id, from_name=from_name, to_id=agent_id, to_name=labels.get(agent_id, agent_id), body=prompt, message_type="self_diagnostic", topic=req.topic or "self_diagnostic", subject="Self diagnostic request", thread_id=thread_id)
+    return {"ok": True, "message": queued}

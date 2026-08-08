@@ -52,7 +52,7 @@ let spatialSectorNodes = []; // sector center markers for click/hover
 let spatialBounds = null; // {minPx, maxPx, minPy, maxPy, sectorScale, midX, midY} — computed world-to-screen transform for FIT button
 let voronoiCells = []; // SPATIAL-03B: Voronoi territory cells [{factionId, polygon, centroid}]
 const SPATIAL_FILL_RATIO = 0.65; // fraction of viewport that spatial map should fill
-const NETWORK_HIGH_CONTRAST = 1.8; // multiplier for network-view relationship line visibility
+const NETWORK_HIGH_CONTRAST = 3.0; // multiplier for network-view relationship line visibility
 // SPATIAL-03A: Selected faction for isolation/fade behavior
 let selectedFaction = null; // faction_id or null — when set, fade all other factions
 // Kill switch: URL params or env can force legacy layout
@@ -237,7 +237,26 @@ b.classList.toggle('active', b.dataset.view === v);
 // Auto-set label mode defaults per view — only upgrade, never downgrade
 if (v === 'network' && labelMode === 'factions') setLabelMode('important');
 else if (v === 'crisis' && labelMode === 'factions') setLabelMode('important');
-buildMapRead(); // update panel when mode changes
+// Show network-mode-toggle only in network view
+var nmt = document.getElementById('network-mode-toggle');
+if (nmt) nmt.style.display = v === 'network' ? 'flex' : 'none';
+// Show threshold slider only when relevant
+var tc = document.getElementById('threshold-control');
+if (tc) tc.style.display = (v === 'network' && networkMode === 'overview') ? 'block' : 'none';
+buildMapRead();
+draw();
+// Brief view transition indicator
+var vi = document.getElementById('view-indicator') || (function(){
+  var el = document.createElement('div');
+  el.id = 'view-indicator';
+  el.style.cssText = 'position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);z-index:9999;background:rgba(10,15,30,0.92);border:2px solid #4fc3f7;color:#4fc3f7;padding:16px 32px;border-radius:8px;font:bold 28px Courier New;letter-spacing:4px;text-transform:uppercase;pointer-events:none;transition:opacity 0.3s ease';
+  document.body.appendChild(el);
+  return el;
+})();
+vi.textContent = v + ' view';
+vi.style.opacity = '1';
+clearTimeout(vi._hideTimer);
+vi._hideTimer = setTimeout(function(){ vi.style.opacity = '0'; }, 600);
 }
 
 // --- Label mode toggle ---
@@ -275,7 +294,8 @@ function setNetworkMode(mode) {
    document.querySelectorAll('#network-mode-toggle button').forEach(b => {
      b.classList.toggle('active', b.dataset.networkMode === mode);
    });
-   document.getElementById('threshold-control').style.display = mode === 'overview' ? 'block' : 'none';
+   var tc = document.getElementById('threshold-control');
+   if (tc) tc.style.display = (mode === 'overview' && currentView === 'network') ? 'block' : 'none';
    draw();
  }
 

@@ -34,11 +34,13 @@ import logging
 import os
 import random
 import threading
+import copy
 import time
 import urllib.error
 import urllib.parse
 import urllib.request
 from typing import Any, Dict, List, Optional, Tuple
+from collections import OrderedDict
 
 import redis
 
@@ -71,6 +73,7 @@ for _i in range(1, 9):
 _NVIDIA_KEY = os.environ.get("NVIDIA_API_KEY", "")
 if _NVIDIA_KEY and _NVIDIA_KEY not in NIM_KEYS:
     NIM_KEYS.append(_NVIDIA_KEY)
+NIM_DISABLED = os.environ.get("NIM_DISABLED", "").strip() == "1"
 NIM_BASE_URL = "https://integrate.api.nvidia.com/v1/chat/completions"
 NIM_RATE_LIMIT_PER_KEY = 40  # requests per minute per key
 NIM_RATE_LIMIT_WINDOW = 60  # seconds
@@ -313,6 +316,10 @@ def _call_ollama(
     max_tokens: int = 200,
     temperature: float = 0.8,
     heavy: bool = False,
+    task_class: str = "",
+    char_id: str = "",
+    source: str = "",
+    system_path: str = "",
 ) -> Tuple[bool, str, float]:
     """Call Ollama via OpenAI-compatible API with backpressure. Returns (success, content, latency_ms).
 
@@ -324,21 +331,38 @@ def _call_ollama(
         Only for high-significance events. Requires OLLAMA_HEAVY_ENABLED=1.
     """
     global _ollama_calls, _ollama_failures, _ollama_available
+    model = OLLAMA_HEAVY_MODEL if heavy else OLLAMA_MODEL
+
+    def _early_failure(message: str) -> Tuple[bool, str, float]:
+        _record_call(
+            "ollama",
+            None,
+            model,
+            task_class,
+            False,
+            0,
+            message,
+            char_id=char_id,
+            source=source,
+            system_path=system_path,
+            is_final=False,
+        )
+        return False, message, 0
 
     if not _check_ollama_available():
-        return False, "Ollama not available", 0
+        return _early_failure("Ollama not available")
 
     # Block heavy calls unless explicitly enabled
     if heavy and not OLLAMA_HEAVY_ENABLED:
         logger.debug(
             "Ollama: heavy call requested but OLLAMA_HEAVY_ENABLED=0, skipping"
         )
-        return False, "Ollama heavy model disabled", 0
+        return _early_failure("Ollama heavy model disabled")
 
     # Check lane availability (backpressure)
     if not _ollama_lane.is_available():
         logger.debug("Ollama: lane cooling down, skipping")
-        return False, "Ollama lane cooling down", 0
+        return _early_failure("Ollama lane cooling down")
 
     if not _ollama_lane.try_acquire():
         logger.debug(
@@ -346,9 +370,8 @@ def _call_ollama(
             OLLAMA_MAX_ACTIVE,
             OLLAMA_MAX_QUEUE,
         )
-        return False, "Ollama lane full", 0
+        return _early_failure("Ollama lane full")
 
-    model = OLLAMA_HEAVY_MODEL if heavy else OLLAMA_MODEL
     queue_start = time.time()
 
     payload_dict = {
@@ -384,7 +407,18 @@ def _call_ollama(
             content = message.get("content") or ""
             if not isinstance(content, str):
                 content = str(content)
-            _record_call("ollama", None, model, "", True, latency_ms)
+            _record_call(
+                "ollama",
+                None,
+                model,
+                task_class,
+                True,
+                latency_ms,
+                char_id=char_id,
+                source=source,
+                system_path=system_path,
+                is_final=False,
+            )
             _record_provider_result("ollama", True)
             logger.info(
                 "Ollama: provider=ollama model=%s timeout=%d queued_ms=%d success=True -> %d chars (%dms)",
@@ -409,7 +443,19 @@ def _call_ollama(
             pass
         err_msg = f"Ollama HTTP {e.code}: {err_body}"
         logger.debug(err_msg)
-        _record_call("ollama", None, model, "", False, latency_ms, err_msg)
+        _record_call(
+            "ollama",
+            None,
+            model,
+            task_class,
+            False,
+            latency_ms,
+            err_msg,
+            char_id=char_id,
+            source=source,
+            system_path=system_path,
+            is_final=False,
+        )
         _record_provider_result("ollama", False)
         logger.warning(
             "Ollama: provider=ollama model=%s timeout=%d queued_ms=%d success=Fallback is_500=%s (%dms)",
@@ -436,7 +482,19 @@ def _call_ollama(
         )
         err_msg = f"Ollama error: {err_str[:200]}"
         logger.debug(err_msg)
-        _record_call("ollama", None, model, "", False, latency_ms, err_msg)
+        _record_call(
+            "ollama",
+            None,
+            model,
+            task_class,
+            False,
+            latency_ms,
+            err_msg,
+            char_id=char_id,
+            source=source,
+            system_path=system_path,
+            is_final=False,
+        )
         _record_provider_result("ollama", False)
         logger.warning(
             "Ollama: provider=ollama model=%s timeout=%d queued_ms=%d success=Fallback is_500=%s (%dms)",
@@ -1116,6 +1174,13 @@ def _check_rate_limit(provider: str, key: Optional[str] = None) -> bool:
         return True
 
 
+_VALID_AUDIT_SOURCES = {"cognition", "thought", "narrator", "assistant", "unknown", "dialogue"}
+
+
+def _normalize_audit_source(source: str) -> str:
+    return source if source in _VALID_AUDIT_SOURCES else "unknown"
+
+
 def _record_call(
     provider: str,
     key: Optional[str] = None,
@@ -1124,8 +1189,18 @@ def _record_call(
     success: bool = True,
     latency_ms: float = 0,
     error: str = "",
+    char_id: str = "",
+    source: str = "",
+    system_path: str = "",
+    is_final: bool = True,
 ):
-    """Record an LLM call in Redis for rate limiting and auditing."""
+    """Record an LLM call in Redis for rate limiting and auditing.
+
+    Attribution fields (Phase 1):
+      char_id:  which NPC triggered this call (empty if unknown)
+      source:   cognition | thought | narrator | assistant | unknown
+      is_final: True = final route_call result, False = provider sub-call
+    """
     r = _get_redis()
     now = time.time()
 
@@ -1151,7 +1226,12 @@ def _record_call(
             "task_class": task_class,
             "success": success,
             "latency_ms": round(latency_ms, 1),
+            "char_id": char_id,
+            "source": _normalize_audit_source(source),
+            "is_final": is_final,
         }
+        if system_path:
+            audit_entry["system_path"] = system_path
         if error:
             audit_entry["error"] = error[:200]
 
@@ -1176,6 +1256,47 @@ def _record_call(
             r.zremrangebyrank(f"llm_errors:{provider}", 0, -101)
         except Exception:
             pass
+
+
+def _record_final_route_call(
+    provider: str,
+    model: str,
+    task_class: str,
+    success: bool,
+    latency_ms: float,
+    content: str = "",
+    error: str = "",
+    char_id: str = "",
+    source: str = "",
+    system_path: str = "",
+) -> None:
+    """Record the final route_call outcome without touching rate counters."""
+    try:
+        r = _get_redis()
+        now = time.time()
+        audit_entry = {
+            "ts": now,
+            "provider": provider,
+            "model": model,
+            "task_class": task_class,
+            "success": success,
+            "latency_ms": round(latency_ms, 1),
+            "char_id": char_id,
+            "source": _normalize_audit_source(source),
+            "is_final": True,
+        }
+        if system_path:
+            audit_entry["system_path"] = system_path
+        if content:
+            audit_entry["content_preview"] = content[:100]
+        if error:
+            audit_entry["error"] = error[:200]
+
+        r.zadd("llm_audit", {json.dumps(audit_entry): now})
+        r.expire("llm_audit", 86400 * 7)
+        r.zremrangebyrank("llm_audit", 0, -501)
+    except Exception:
+        pass
 
 
 def _is_circuit_open(provider: str) -> bool:
@@ -1250,6 +1371,9 @@ def _call_provider(
     temperature: float = 0.8,
     timeout: int = 20,
     task_class: str = "",
+    char_id: str = "",
+    source: str = "",
+    system_path: str = "",
 ) -> Tuple[bool, str, float]:
     """Make a single API call to a provider. Returns (success, content, latency_ms).
 
@@ -1266,6 +1390,22 @@ def _call_provider(
     """
     global _gemini_calls, _gemini_failures
 
+    def _early_failure(message: str, key_for_rate: Optional[str] = None) -> Tuple[bool, str, float]:
+        _record_call(
+            provider,
+            key_for_rate,
+            model,
+            task_class,
+            False,
+            0,
+            message,
+            char_id=char_id,
+            source=source,
+            system_path=system_path,
+            is_final=False,
+        )
+        return False, message, 0
+
     payload_dict: Dict[str, Any] = {
         "model": model,
         "messages": messages,
@@ -1274,11 +1414,14 @@ def _call_provider(
     }
 
     if provider == "nim":
+        if NIM_DISABLED:
+            logger.info("NIM disabled by env; skipping hosted NIM tier")
+            return _early_failure("NIM disabled by env (NIM_DISABLED=1)")
         key = _get_nim_key()
         if not key:
-            return False, "No NIM API keys configured", 0
+            return _early_failure("No NIM API keys configured")
         if not _check_rate_limit("nim", key):
-            return False, "NIM rate limit exceeded", 0
+            return _early_failure("NIM rate limit exceeded", key)
         headers = {
             "Content-Type": "application/json",
             "Authorization": f"Bearer {key}",
@@ -1287,9 +1430,9 @@ def _call_provider(
 
     elif provider == "gemini":
         if not GEMINI_API_KEY:
-            return False, "No Gemini API key configured", 0
+            return _early_failure("No Gemini API key configured")
         if not _check_rate_limit("gemini"):
-            return False, "Gemini rate limit exceeded", 0
+            return _early_failure("Gemini rate limit exceeded")
         headers = {"Content-Type": "application/json"}
         model_path = model if model.startswith("models/") else f"models/{model}"
         url = (
@@ -1301,9 +1444,9 @@ def _call_provider(
     elif provider == "openrouter":
         or_key = _get_openrouter_key()
         if not or_key:
-            return False, "No OpenRouter API key configured", 0
+            return _early_failure("No OpenRouter API key configured")
         if not _check_rate_limit("openrouter"):
-            return False, "OpenRouter rate limit exceeded", 0
+            return _early_failure("OpenRouter rate limit exceeded")
         headers = {
             "Content-Type": "application/json",
             "Authorization": f"Bearer {or_key}",
@@ -1313,7 +1456,7 @@ def _call_provider(
         url = OPENROUTER_BASE_URL
 
     else:
-        return False, f"Unknown provider: {provider}", 0
+        return _early_failure(f"Unknown provider: {provider}")
 
     payload = json.dumps(payload_dict).encode("utf-8")
     req = urllib.request.Request(url, data=payload, headers=headers, method="POST")
@@ -1355,6 +1498,10 @@ def _call_provider(
                 task_class,
                 True,
                 latency_ms,
+                char_id=char_id,
+                source=source,
+                system_path=system_path,
+                is_final=False,
             )
             return True, content, latency_ms
     except urllib.error.HTTPError as e:
@@ -1378,6 +1525,10 @@ def _call_provider(
             False,
             latency_ms,
             error_msg,
+            char_id=char_id,
+            source=source,
+            system_path=system_path,
+            is_final=False,
         )
         return False, error_msg, latency_ms
     except urllib.error.URLError as e:
@@ -1394,6 +1545,10 @@ def _call_provider(
             False,
             latency_ms,
             error_msg,
+            char_id=char_id,
+            source=source,
+            system_path=system_path,
+            is_final=False,
         )
         return False, error_msg, latency_ms
     except Exception as e:
@@ -1410,11 +1565,59 @@ def _call_provider(
             False,
             latency_ms,
             error_msg,
+            char_id=char_id,
+            source=source,
+            system_path=system_path,
+            is_final=False,
         )
         return False, error_msg, latency_ms
 
 
 # ── Public API: Route Call ──────────────────────────────────────────
+
+
+# ── Prompt cache (in-memory, LRU) ───────────────────────────────────
+# Caches only successful route_call results. Keyed on everything that can
+# change the output: task_class, char_id, source, prompts, sampling params,
+# fallback toggles, and a route-config version salt. api_key / system_path are
+# intentionally excluded (legacy-compat / attribution-only; they do not change
+# generated content). char_id in the key guarantees councilor outputs are never
+# reused across characters (e.g. Archimedes char_001 vs Oracle char_306).
+ROUTE_CACHE_VERSION = "2026-07-15"
+_PROMPT_CACHE_TTL = 600          # seconds (soft; enforced via LRU cap below)
+_PROMPT_CACHE_MAX = 2000         # max entries; LRU eviction
+_PROMPT_CACHE_LOCK = threading.Lock()
+_PROMPT_CACHE = OrderedDict()    # key -> deep-copied result dict
+
+
+def _prompt_cache_key(
+    task_class, system_prompt, user_prompt, max_tokens, temperature,
+    allow_ollama, allow_gemini, char_id, source,
+):
+    payload = "|".join(
+        repr(x) for x in (
+            task_class, char_id, source, system_prompt, user_prompt,
+            max_tokens, temperature, allow_ollama, allow_gemini,
+            ROUTE_CACHE_VERSION,
+        )
+    )
+    return hashlib.sha256(payload.encode("utf-8")).hexdigest()
+
+
+def _prompt_cache_get(key):
+    with _PROMPT_CACHE_LOCK:
+        if key not in _PROMPT_CACHE:
+            return None
+        _PROMPT_CACHE.move_to_end(key)          # LRU touch
+        return copy.deepcopy(_PROMPT_CACHE[key])
+
+
+def _prompt_cache_put(key, result):
+    with _PROMPT_CACHE_LOCK:
+        _PROMPT_CACHE[key] = copy.deepcopy(result)
+        _PROMPT_CACHE.move_to_end(key)
+        while len(_PROMPT_CACHE) > _PROMPT_CACHE_MAX:
+            _PROMPT_CACHE.popitem(last=False)   # evict oldest
 
 
 def route_call(
@@ -1425,6 +1628,10 @@ def route_call(
     temperature: Optional[float] = None,
     allow_ollama: bool = True,
     allow_gemini: bool = True,
+    char_id: str = "",
+    source: str = "",
+    system_path: str = "",
+    api_key: Optional[str] = None,
 ) -> Dict:
     """Route an LLM call through the multi-provider tiered system.
 
@@ -1439,6 +1646,10 @@ def route_call(
         temperature: Override default temperature
         allow_ollama: Whether local Ollama may be used in the fallback chain
         allow_gemini: Whether Gemini may be used as the last-resort fallback
+        char_id: Optional NPC id for llm_audit attribution
+        source: Optional source for llm_audit attribution
+        system_path: Optional call-site path for llm_audit attribution
+        api_key: Legacy compatibility parameter; routing uses configured keys
 
     Returns:
     Dict with keys:
@@ -1461,10 +1672,36 @@ def route_call(
         "attempts": 0,
         "errors": [],
     }
+    if not source and task_class in ("assistant", "narrator"):
+        source = task_class
+    # ── Prompt cache lookup ───────────────────────────────────────
+    # On a hit we return a deep copy and skip the provider chain entirely.
+    # A cache hit intentionally skips llm_audit (no real call was made).
+    _cache_key = _prompt_cache_key(
+        task_class, system_prompt, user_prompt, max_tokens, temperature,
+        allow_ollama, allow_gemini, char_id, source,
+    )
+    _cached = _prompt_cache_get(_cache_key)
+    if _cached is not None:
+        return _cached
+
 
     config = TASK_MODELS.get(task_class)
     if not config:
-        result["errors"].append(f"Unknown task class: {task_class}")
+        error = f"Unknown task class: {task_class}"
+        result["errors"].append(error)
+        _record_final_route_call(
+            "",
+            "",
+            task_class,
+            False,
+            0,
+            error=error,
+            char_id=char_id,
+            source=source,
+            system_path=system_path,
+        )
+        if result.get("success"): _prompt_cache_put(_cache_key, result)
         return result
 
     messages = [
@@ -1516,7 +1753,16 @@ def route_call(
         result["attempts"] += 1
 
         ok, content, latency = _call_provider(
-            provider, model, messages, tier_mt, tier_temp, tier_timeout
+            provider,
+            model,
+            messages,
+            tier_mt,
+            tier_temp,
+            tier_timeout,
+            task_class=task_class,
+            char_id=char_id,
+            source=source,
+            system_path=system_path,
         )
 
         _record_provider_result(provider, ok)
@@ -1527,20 +1773,18 @@ def route_call(
             result["provider"] = provider
             result["model"] = model
             result["latency_ms"] = latency
-            try:
-                r = _get_redis()
-                audit_entry = {
-                    "ts": time.time(),
-                    "provider": provider,
-                    "model": model,
-                    "task_class": task_class,
-                    "success": True,
-                    "latency_ms": round(latency, 1),
-                    "content_preview": content[:100],
-                }
-                r.zadd("llm_audit", {json.dumps(audit_entry): time.time()})
-            except Exception:
-                pass
+            _record_final_route_call(
+                provider,
+                model,
+                task_class,
+                True,
+                latency,
+                content,
+                char_id=char_id,
+                source=source,
+                system_path=system_path,
+            )
+            if result.get("success"): _prompt_cache_put(_cache_key, result)
             return result
         else:
             result["errors"].append(f"{provider}/{model}: {content[:150]}")
@@ -1555,27 +1799,33 @@ def route_call(
     # ── Ollama local fallback ─────────────────────────────────────────
     if allow_ollama and _check_ollama_available() and not _is_circuit_open("ollama"):
         result["attempts"] += 1
-        ok, content, latency = _call_ollama(messages, mt, temp)
+        ok, content, latency = _call_ollama(
+            messages,
+            mt,
+            temp,
+            task_class=task_class,
+            char_id=char_id,
+            source=source,
+            system_path=system_path,
+        )
         if ok and content:
             result["success"] = True
             result["content"] = content
             result["provider"] = "ollama"
             result["model"] = OLLAMA_MODEL
             result["latency_ms"] = latency
-            try:
-                r = _get_redis()
-                audit_entry = {
-                    "ts": time.time(),
-                    "provider": "ollama",
-                    "model": OLLAMA_MODEL,
-                    "task_class": task_class,
-                    "success": True,
-                    "latency_ms": round(latency, 1),
-                    "content_preview": content[:100],
-                }
-                r.zadd("llm_audit", {json.dumps(audit_entry): time.time()})
-            except Exception:
-                pass
+            _record_final_route_call(
+                "ollama",
+                OLLAMA_MODEL,
+                task_class,
+                True,
+                latency,
+                content,
+                char_id=char_id,
+                source=source,
+                system_path=system_path,
+            )
+            if result.get("success"): _prompt_cache_put(_cache_key, result)
             return result
         else:
             result["errors"].append(f"ollama/{OLLAMA_MODEL}: {content[:150]}")
@@ -1612,7 +1862,16 @@ def route_call(
 
             result["attempts"] += 1
             ok, content, latency = _call_provider(
-                provider, model, messages, tier_mt, tier_temp, tier_timeout
+                provider,
+                model,
+                messages,
+                tier_mt,
+                tier_temp,
+                tier_timeout,
+                task_class=task_class,
+                char_id=char_id,
+                source=source,
+                system_path=system_path,
             )
             # Record per-model circuit breaker
             _record_provider_result(cb_key, ok)
@@ -1624,20 +1883,18 @@ def route_call(
                 result["provider"] = provider
                 result["model"] = model
                 result["latency_ms"] = latency
-                try:
-                    r = _get_redis()
-                    audit_entry = {
-                        "ts": time.time(),
-                        "provider": provider,
-                        "model": model,
-                        "task_class": task_class,
-                        "success": True,
-                        "latency_ms": round(latency, 1),
-                        "content_preview": content[:100],
-                    }
-                    r.zadd("llm_audit", {json.dumps(audit_entry): time.time()})
-                except Exception:
-                    pass
+                _record_final_route_call(
+                    provider,
+                    model,
+                    task_class,
+                    True,
+                    latency,
+                    content,
+                    char_id=char_id,
+                    source=source,
+                    system_path=system_path,
+                )
+                if result.get("success"): _prompt_cache_put(_cache_key, result)
                 return result
             else:
                 result["errors"].append(f"{provider}/{model}: {content[:150]}")
@@ -1657,7 +1914,16 @@ def route_call(
         if not _is_circuit_open("openrouter_paid"):
             result["attempts"] += 1
             ok, content, latency = _call_provider(
-                pp, pmodel, messages, pmt, ptemp, ptimeout
+                pp,
+                pmodel,
+                messages,
+                pmt,
+                ptemp,
+                ptimeout,
+                task_class=task_class,
+                char_id=char_id,
+                source=source,
+                system_path=system_path,
             )
             _record_provider_result("openrouter_paid", ok)
             if ok and content:
@@ -1666,20 +1932,18 @@ def route_call(
                 result["provider"] = pp
                 result["model"] = pmodel
                 result["latency_ms"] = latency
-                try:
-                    r = _get_redis()
-                    audit_entry = {
-                        "ts": time.time(),
-                        "provider": pp,
-                        "model": pmodel,
-                        "task_class": task_class,
-                        "success": True,
-                        "latency_ms": round(latency, 1),
-                        "content_preview": content[:100],
-                    }
-                    r.zadd("llm_audit", {json.dumps(audit_entry): time.time()})
-                except Exception:
-                    pass
+                _record_final_route_call(
+                    pp,
+                    pmodel,
+                    task_class,
+                    True,
+                    latency,
+                    content,
+                    char_id=char_id,
+                    source=source,
+                    system_path=system_path,
+                )
+                if result.get("success"): _prompt_cache_put(_cache_key, result)
                 return result
             else:
                 result["errors"].append(f"{pp}/{pmodel}: {content[:150]}")
@@ -1715,6 +1979,9 @@ def route_call(
                 tier_temp,
                 tier_timeout,
                 task_class=task_class,
+                char_id=char_id,
+                source=source,
+                system_path=system_path,
             )
             _record_provider_result(provider, ok)
             if ok and content:
@@ -1723,20 +1990,18 @@ def route_call(
                 result["provider"] = provider
                 result["model"] = model
                 result["latency_ms"] = latency
-                try:
-                    r = _get_redis()
-                    audit_entry = {
-                        "ts": time.time(),
-                        "provider": provider,
-                        "model": model,
-                        "task_class": task_class,
-                        "success": True,
-                        "latency_ms": round(latency, 1),
-                        "content_preview": content[:100],
-                    }
-                    r.zadd("llm_audit", {json.dumps(audit_entry): time.time()})
-                except Exception:
-                    pass
+                _record_final_route_call(
+                    provider,
+                    model,
+                    task_class,
+                    True,
+                    latency,
+                    content,
+                    char_id=char_id,
+                    source=source,
+                    system_path=system_path,
+                )
+                if result.get("success"): _prompt_cache_put(_cache_key, result)
                 return result
             else:
                 result["errors"].append(f"{provider}/{model}: {content[:150]}")
@@ -1747,6 +2012,18 @@ def route_call(
         task_class,
         "; ".join(result["errors"][:3]),
     )
+    _record_final_route_call(
+        result.get("provider", ""),
+        result.get("model", ""),
+        task_class,
+        False,
+        result.get("latency_ms", 0),
+        error="; ".join(result["errors"][:3]),
+        char_id=char_id,
+        source=source,
+        system_path=system_path,
+    )
+    if result.get("success"): _prompt_cache_put(_cache_key, result)
     return result
 
 
@@ -1755,6 +2032,8 @@ def route_assistant_call(
     user_prompt: str,
     max_tokens: Optional[int] = None,
     temperature: Optional[float] = None,
+    source: str = "",
+    system_path: str = "",
 ) -> Dict:
     """Route the human-facing assistant through bounded cloud providers only.
 
@@ -1762,6 +2041,11 @@ def route_assistant_call(
     Ollama fallback path. Use the assistant task's fast NIM/OpenRouter chain and
     avoid long last-resort providers that outlive the browser request.
     """
+    attribution = {}
+    if source:
+        attribution["source"] = source
+    if system_path:
+        attribution["system_path"] = system_path
     return route_call(
         task_class="assistant",
         system_prompt=system_prompt,
@@ -1770,6 +2054,7 @@ def route_assistant_call(
         temperature=temperature,
         allow_ollama=False,
         allow_gemini=False,
+        **attribution,
     )
 
 
@@ -1793,6 +2078,9 @@ def route_call_batch(
             user_prompt=call["user_prompt"],
             max_tokens=call.get("max_tokens"),
             temperature=call.get("temperature"),
+            char_id=call.get("char_id", ""),
+            source=call.get("source", ""),
+            system_path=call.get("system_path", ""),
         )
         results.append(result)
         # Small delay between calls to respect rate limits

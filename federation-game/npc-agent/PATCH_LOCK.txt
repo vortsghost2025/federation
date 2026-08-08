@@ -1,0 +1,4 @@
+This directory is locked to write operations by remixable agents.
+Only the deployment pipeline at /usr/local/bin/deploy_npc_agent.sh should write here.
+
+To unlock: chmod 755 /docker/federation-game/npc-agent/

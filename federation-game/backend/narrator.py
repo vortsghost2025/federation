@@ -423,7 +423,13 @@ def generate_narration(
         system_prompt = _build_narrator_system_prompt()
         user_prompt = _build_narrator_user_prompt(tick_summary, recent_narration)
 
-        llm_result = route_call("narrator", system_prompt, user_prompt)
+        llm_result = route_call(
+            "narrator",
+            system_prompt,
+            user_prompt,
+            source="narrator",
+            system_path="backend.narrator.generate_narration",
+        )
         result["latency_ms"] = llm_result.get("latency_ms", 0)
 
         if llm_result["success"] and llm_result.get("content"):

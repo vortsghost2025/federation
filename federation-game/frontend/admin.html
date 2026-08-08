@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Federation Admin — Observability Dashboard</title>
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html { font-size: 18px; }
+body {
+  font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+  background: #0a0a0f;
+  color: #e0e0e8;
+  padding: 1.5rem;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+h1 { font-size: 1.6rem; font-weight: 700; color: #a0c4ff; margin-bottom: 0.25rem; letter-spacing: 0.02em; }
+.subtitle { color: #888; font-size: 0.85rem; margin-bottom: 1.5rem; display: flex; gap: 1.5rem; flex-wrap: wrap; }
+.subtitle span { white-space: nowrap; }
+.agent-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(400px, 1fr)); gap: 1rem; margin-bottom: 1.5rem; }
+.card {
+  background: #14141e;
+  border: 1px solid #2a2a38;
+  border-radius: 8px;
+  padding: 1rem;
+  position: relative;
+}
+.card.health-green { border-left: 4px solid #44cc66; }
+.card.health-yellow { border-left: 4px solid #eebb44; }
+.card.health-red { border-left: 4px solid #ee4444; }
+.card-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 0.5rem; }
+.card-header h2 { font-size: 1.1rem; font-weight: 600; color: #c8d8ff; }
+.health-badge {
+  display: inline-block; padding: 0.15rem 0.6rem; border-radius: 4px;
+  font-size: 0.75rem; font-weight: 700; text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+.health-green .health-badge { background: #1a3a24; color: #44cc66; }
+.health-yellow .health-badge { background: #3a2a14; color: #eebb44; }
+.health-red .health-badge { background: #3a1414; color: #ee4444; }
+.stat-row { display: flex; gap: 1rem; flex-wrap: wrap; font-size: 0.85rem; margin-bottom: 0.5rem; }
+.stat-row dt { color: #888; min-width: 7em; }
+.stat-row dd { color: #d0d0e0; }
+.stat-col { flex: 1; min-width: 160px; }
+.stat-col dt { color: #888; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 0.1rem; }
+.stat-col dd { color: #d0d0e0; font-size: 0.9rem; }
+.decision-box {
+  background: #0d0d16; border: 1px solid #222; border-radius: 4px;
+  padding: 0.5rem; margin-top: 0.5rem; font-size: 0.8rem;
+  font-family: 'Cascadia Code', 'Fira Code', 'Consolas', monospace;
+  line-height: 1.4; max-height: 80px; overflow-y: auto; color: #b0b0c0;
+}
+.pair-card {
+  background: #14141e; border: 1px solid #2a2a38; border-radius: 8px;
+  padding: 1rem; margin-bottom: 1rem;
+}
+.pair-card h2 { font-size: 1.1rem; font-weight: 600; color: #c8d8ff; margin-bottom: 0.75rem; }
+.pair-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; font-size: 0.85rem; }
+.pair-item label { color: #888; display: block; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.04em; }
+.pair-item .value { color: #d0d0e0; word-break: break-word; }
+.pair-item.full { grid-column: 1 / -1; }
+.journal-entry {
+  background: #0d0d16; border: 1px solid #222; border-radius: 4px;
+  padding: 0.4rem 0.6rem; margin-bottom: 0.3rem; font-size: 0.8rem; color: #b0b0c0;
+}
+.journal-entry .ts { color: #666; font-size: 0.7rem; font-family: monospace; }
+.thread-msg {
+  background: #0d0d16; border: 1px solid #1a1a28; border-radius: 4px;
+  padding: 0.4rem 0.6rem; margin-bottom: 0.3rem; font-size: 0.8rem;
+}
+.thread-msg .from { color: #88aaff; font-weight: 600; }
+.thread-msg .body { color: #d0d0e0; margin-top: 0.15rem; }
+.error-count { color: #ee6666; font-weight: 600; }
+.ok-count { color: #66cc88; }
+.last-decision-cat {
+  display: inline-block; padding: 0.1rem 0.4rem; border-radius: 3px;
+  font-size: 0.7rem; font-weight: 600; text-transform: uppercase;
+  background: #1a1a2e; color: #aabbee;
+}
+.empty-state { color: #555; font-style: italic; font-size: 0.8rem; }
+.loading { color: #666; text-align: center; padding: 3rem; font-size: 1.2rem; }
+.error-state { color: #ee4444; text-align: center; padding: 2rem; }
+footer { text-align: center; color: #444; font-size: 0.7rem; margin-top: 2rem; padding-top: 1rem; border-top: 1px solid #1a1a28; }
+@media (max-width: 800px) {
+  html { font-size: 16px; }
+  body { padding: 1rem; }
+  .agent-grid { grid-template-columns: 1fr; }
+  .pair-grid { grid-template-columns: 1fr; }
+}
+</style>
+</head>
+<body>
+<h1>FEDERATION ADMIN</h1>
+<div class="subtitle" id="subtitle">
+  <span id="update-time">Last updated: --</span>
+  <span>Auto-refresh: 15s</span>
+  <span id="agent-count">Agents: --</span>
+</div>
+<div id="content" class="loading">Loading dashboard...</div>
+<footer>Read-only observability — no active interventions</footer>
+
+<script>
+const API = '/api/admin/status';
+
+function ago(ts) {
+  if (!ts) return 'never';
+  const s = Math.floor(Date.now() / 1000 - ts);
+  if (s < 5) return 'just now';
+  if (s < 60) return s + 's ago';
+  const m = Math.floor(s / 60);
+  if (m < 60) return m + 'm ' + (s % 60) + 's ago';
+  return Math.floor(m / 60) + 'h ' + (m % 60) + 'm ago';
+}
+
+function esc(s) {
+  if (!s) return '';
+  const d = document.createElement('div');
+  d.textContent = String(s);
+  return d.innerHTML;
+}
+
+function healthBadge(h) {
+  return '<span class="health-badge">' + esc(h) + '</span>';
+}
+
+function lastDecisionHtml(d) {
+  if (!d) return '<span class="empty-state">none</span>';
+  const cat = d.category || '?';
+  const desc = (d.description || '').slice(0, 80);
+  const reasoning = (d.reasoning || '').slice(0, 80);
+  const ts = d.ts ? ago(d.ts) : '';
+  return '<div class="last-decision-cat">' + esc(cat) + '</div>'
+    + '<div class="decision-box">'
+    + (desc ? esc(desc) + '<br>' : '')
+    + (reasoning ? '<span style="color:#888">' + esc(reasoning) + '</span><br>' : '')
+    + (ts ? '<span style="color:#555;font-size:0.7rem">' + esc(ts) + '</span>' : '')
+    + '</div>';
+}
+
+function renderAgent(a) {
+  const h = a.health || 'unknown';
+  const card = document.createElement('div');
+  card.className = 'card health-' + h;
+
+  const lastDecision = a.last_decision || {};
+  const decisionCat = lastDecision.category || '';
+
+  card.innerHTML =
+    '<div class="card-header">'
+    + '<h2>' + esc(a.name) + ' <span style="color:#666;font-weight:400;font-size:0.85rem">(' + esc(a.char_id) + ')</span></h2>'
+    + healthBadge(h)
+    + '</div>'
+    + '<div class="stat-row">'
+    + '<div class="stat-col"><dt>Model</dt><dd>' + esc(a.model || '—') + '</dd></div>'
+    + '<div class="stat-col"><dt>Last Tick</dt><dd>' + (a.last_tick_ago_s != null ? ago(Date.now() / 1000 - a.last_tick_ago_s) : '—') + '</dd></div>'
+    + '<div class="stat-col"><dt>Mood</dt><dd>' + esc(a.mood || '—') + '</dd></div>'
+    + '</div>'
+    + '<div class="stat-row">'
+    + '<div class="stat-col"><dt>LLM Calls</dt><dd>' + esc(a.llm_calls_total || 0) + '</dd></div>'
+    + '<div class="stat-col"><dt>429 / Timeout</dt><dd><span class="error-count">' + esc(a.llm_failures_429 || 0) + '</span> / <span class="error-count">' + esc(a.llm_failures_timeout || 0) + '</span></dd></div>'
+    + '<div class="stat-col"><dt>Parse Fails</dt><dd><span class="error-count">' + esc(a.parse_failures || 0) + '</span></dd></div>'
+    + '<div class="stat-col"><dt>Error Rate</dt><dd>' + esc(a.error_rate_pct || 0) + '%</dd></div>'
+    + '</div>'
+    + '<div class="stat-row">'
+    + '<div class="stat-col"><dt>Artifacts</dt><dd>' + esc(a.artifact_count || 0) + '</dd></div>'
+    + '<div class="stat-col" style="flex:2"><dt>Last Artifact</dt><dd style="font-size:0.8rem">' + esc(a.last_artifact_title || '—') + '</dd></div>'
+    + '</div>'
+    + '<dt style="color:#888;font-size:0.75rem;text-transform:uppercase;letter-spacing:0.04em;margin-bottom:0.2rem">Last Decision</dt>'
+    + lastDecisionHtml(lastDecision);
+
+  return card;
+}
+
+function renderPair(p) {
+  if (!p || !p.pair_ids || p.pair_ids.length === 0) {
+    return '<div class="pair-card"><h2>Pair Story</h2><span class="empty-state">No pair data</span></div>';
+  }
+  let journalHtml = '';
+  if (p.journal && p.journal.length) {
+    const recent = p.journal.slice(-5).reverse();
+    journalHtml = recent.map(function(j) {
+      const ts = j.ts ? new Date(j.ts * 1000).toLocaleTimeString() : '';
+      const summary = (j.summary || '').slice(0, 140);
+      const ref = j.open_question_ref
+        ? '<div class="muted" style="font-size:.8em">Open question: ' + esc(j.open_question_ref) + ' · Source: ' + esc(j.open_question_source || '—') + '</div>'
+        : '';
+      return '<div class="journal-entry"><span class="ts">[' + esc(ts) + ']</span> ' + esc(summary) + '</div>' + ref;
+    }).join('');
+  } else {
+    journalHtml = '<span class="empty-state">No journal entries</span>';
+  }
+
+  let threadHtml = '';
+  if (p.active_thread && p.active_thread.length) {
+    threadHtml = p.active_thread.map(function(m) {
+      const from = m.from_name || m.from_char_name || m.from_char_id || '?';
+      const body = (m.body || '').slice(0, 160);
+      return '<div class="thread-msg"><span class="from">' + esc(from) + ':</span> <span class="body">' + esc(body) + '</span></div>';
+    }).join('');
+  }
+
+  return '<div class="pair-card">'
+    + '<h2>Pair Story — ' + esc(p.pair_ids.join(' & ')) + '</h2>'
+    + '<div class="pair-grid">'
+    + '<div class="pair-item"><label>Shared Goal</label><div class="value">' + esc(p.shared_goal || '—') + '</div></div>'
+    + '<div class="pair-item"><label>Current Topic</label><div class="value">' + esc(p.current_topic || '—') + '</div></div>'
+    + '<div class="pair-item"><label>Open Question</label><div class="value">' + esc(p.open_question || '—') + '</div></div>'
+    + '<div class="pair-item"><label>Last Message</label><div class="value">' + esc(p.last_message_preview || '—') + '</div></div>'
+    + '</div>'
+    + '<div style="margin-top:0.75rem"><label style="color:#888;font-size:0.75rem;text-transform:uppercase;letter-spacing:0.04em">Journal</label>'
+    + '<div style="margin-top:0.3rem">' + journalHtml + '</div></div>'
+    + (threadHtml ? '<div style="margin-top:0.75rem"><label style="color:#888;font-size:0.75rem;text-transform:uppercase;letter-spacing:0.04em">Active Thread</label>'
+    + '<div style="margin-top:0.3rem">' + threadHtml + '</div></div>' : '')
+    + '<div class="pair-grid" style="margin-top:0.75rem">'
+    + '<div class="pair-item"><label>Focus (001)</label><div class="value">' + esc(p.focus_by_char?.char_001 || '—') + '</div></div>'
+    + '<div class="pair-item"><label>Focus (306)</label><div class="value">' + esc(p.focus_by_char?.char_306 || '—') + '</div></div>'
+    + '<div class="pair-item"><label>Action (001)</label><div class="value">' + esc(p.action_by_char?.char_001 || '—') + '</div></div>'
+    + '<div class="pair-item"><label>Action (306)</label><div class="value">' + esc(p.action_by_char?.char_306 || '—') + '</div></div>'
+    + '</div>'
+    + '</div>';
+}
+
+function render(data) {
+  const el = document.getElementById('content');
+  if (data.status !== 'ok') {
+    el.className = 'error-state';
+    el.textContent = 'API error: ' + (data.error || 'unknown');
+    return;
+  }
+  el.className = '';
+
+  document.getElementById('update-time').textContent = 'Last updated: ' + (data.updated_at || new Date().toISOString());
+
+  const agents = data.agents || [];
+  document.getElementById('agent-count').textContent = 'Agents: ' + agents.length;
+
+  let html = '<div class="agent-grid">';
+  agents.forEach(function(a) {
+    html += renderAgent(a).outerHTML;
+  });
+  html += '</div>';
+  html += renderPair(data.pair);
+
+  el.innerHTML = html;
+}
+
+function load() {
+  fetch(API)
+    .then(function(r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+    .then(render)
+    .catch(function(err) {
+      document.getElementById('content').className = 'error-state';
+      document.getElementById('content').textContent = 'Failed to load: ' + err.message;
+    });
+}
+
+load();
+setInterval(load, 15000);
+</script>
+</body>
+</html>

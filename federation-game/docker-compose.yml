@@ -54,8 +54,11 @@ services:
     restart: unless-stopped
     env_file:
       - .env
+    environment:
+      - PYTHONPATH=/opt/federation_shared
     volumes:
       - /docker/federation-game/backend:/app:ro
+      - /docker/federation-game/shared:/opt/federation_shared:ro
       - /docker/federation-game/universe:/docker/federation-game/universe
     healthcheck:
       test:
@@ -325,6 +328,9 @@ services:
       - MAX_OUTPUT_TOKENS=1024
       - MAX_TOTAL_BUDGET_MS=120000
       - TICK_INTERVAL=45
+      - PYTHONPATH=/opt/federation_shared
+    volumes:
+      - /docker/federation-game/shared:/opt/federation_shared:ro
     depends_on:
       - redis
     networks:
@@ -350,6 +356,9 @@ services:
       - MAX_OUTPUT_TOKENS=1024
       - MAX_TOTAL_BUDGET_MS=120000
       - TICK_INTERVAL=45
+      - PYTHONPATH=/opt/federation_shared
+    volumes:
+      - /docker/federation-game/shared:/opt/federation_shared:ro
     depends_on:
       - redis
     networks:
