@@ -135,6 +135,7 @@ _WORK_LOOP_ACTIONS = frozenset({
     "capability_request_draft",
     "capability_request_submit",
     "acceptance_test_record",
+    "area_found",
 })
 
 _action_scrubber = None
@@ -225,6 +226,8 @@ def execute_work_loop_action(action: str, payload: Dict[str, Any]) -> Dict[str, 
             return _action_capability_request_submit(pair_slug, actor_id, payload)
         elif action == "acceptance_test_record":
             return _action_acceptance_test_record(pair_slug, actor_id, payload)
+        elif action == "area_found":
+            return _action_area_found(pair_slug, actor_id, payload)
     except Exception as e:
         logger.exception("[%s] Action %s raised: %s", actor_id, action, e)
         return {"ok": False, "action": action, "result": None, "error": f"internal_error: {e}"}
@@ -482,6 +485,126 @@ def _action_acceptance_test_record(pair_slug: str, actor_id: str, payload: Dict[
         _reopen_agenda_for_retest(existing, result)
 
     return {"ok": True, "action": "acceptance_test_record", "result": {"recorded": True, "passed_count": r.scard(acceptance_key)}, "error": None}
+
+
+# ── Area / World Expansion ──────────────────────────────────────────
+# Lets the persistent councilor pair FOUND new areas/sectors in their
+# world. Stored durably (no TTL) so the map they build persists and can
+# later be surfaced alongside the procedural universe.
+
+def _areas_key(pair_slug: str) -> str:
+    return f"npc_pair:{pair_slug}:areas"
+
+
+def _normalize_area_id(raw: str) -> str:
+    if not raw:
+        return ""
+    cleaned = re.sub(r"[^a-zA-Z0-9_-]", "_", str(raw).strip().lower())
+    return cleaned[:48]
+
+
+def _action_area_found(pair_slug: str, actor_id: str, payload: Dict[str, Any]) -> Dict[str, Any]:
+    """Found a new area/sector in the pair's world. Durable, pair-scoped."""
+    if actor_id not in PAIR_IDS:
+        return {"ok": False, "action": "area_found", "result": None, "error": "only_councilors_may_found"}
+
+    raw_id = payload.get("area_id", "")
+    area_id = _normalize_area_id(raw_id)
+    name = (payload.get("name") or "").strip()
+    description = (payload.get("description") or "").strip()
+    if not area_id or not name or not description:
+        return {"ok": False, "action": "area_found", "result": None,
+                "error": "missing_required_fields", "required": ["area_id", "name", "description"]}
+
+    record = {
+        "area_id": area_id,
+        "name": name,
+        "description": description,
+        "region_type": (payload.get("region_type") or "frontier").strip(),
+        "resource_profile": (payload.get("resource_profile") or "mixed").strip(),
+        "danger_level": int(payload.get("danger_level", 5) or 5),
+        "x": float(payload.get("x", 0) or 0),
+        "y": float(payload.get("y", 0) or 0),
+        "adjacent_sector_ids": list(payload.get("adjacent_sector_ids", []) or []),
+        "founded_by": actor_id,
+        "pair_slug": pair_slug,
+        "created_at": _now_iso(),
+    }
+
+    r = _get_redis()
+    key = _areas_key(pair_slug)
+    if r.hexists(key, area_id):
+        existing = json.loads(r.hget(key, area_id) or "{}")
+        # Push a system notification so the NPC knows the area is already on the map.
+        try:
+            existing_areas = get_areas(pair_slug)
+            area_summary = ", ".join(
+                f"{a['area_id']} ({a['name']}, founded_by={a['founded_by']})"
+                for a in existing_areas
+            ) or "(no areas yet)"
+            notification = {
+                "type": "area_already_founded",
+                "area_id": area_id,
+                "name": existing.get("name", name),
+                "founded_by": existing.get("founded_by", "?"),
+                "created_at": existing.get("created_at", ""),
+                "existing_areas": area_summary,
+                "message": (
+                    f"Area '{area_id}' is already on your shared map "
+                    f"(founded by {existing.get('founded_by', '?')}). "
+                    f"Existing areas: {area_summary}. "
+                    f"Propose a NEW area with a different slug, name, "
+                    f"or coordinates instead of re-using this one."
+                ),
+            }
+            r.rpush(f"npc:system_notifications:{actor_id}", json.dumps(notification))
+            logger.info("[%s] area_found idempotent: %s already on map", actor_id, area_id)
+        except Exception as e:
+            logger.warning("[%s] area_found idempotent notification failed: %s", actor_id, e)
+        return {"ok": True, "action": "area_found", "result": existing, "error": None, "idempotent": True}
+
+    r.hset(key, area_id, json.dumps(record))
+    try:
+        notification = {
+            "type": "area_founded",
+            "area_id": area_id,
+            "name": name,
+            "founded_by": actor_id,
+            "message": f"You founded '{name}' ({area_id}). It is now on the shared map.",
+        }
+        r.rpush(f"npc:system_notifications:{actor_id}", json.dumps(notification))
+    except Exception as e:
+        logger.warning("[%s] area_found confirmation notification failed: %s", actor_id, e)
+    return {"ok": True, "action": "area_found", "result": record, "error": None}
+
+
+def get_areas(pair_slug: str) -> List[Dict[str, Any]]:
+    """Return all areas founded by the pair (oldest-first)."""
+    r = _get_redis()
+    key = _areas_key(pair_slug)
+    raws = r.hgetall(key)
+    out = []
+    for raw in raws.values():
+        try:
+            out.append(json.loads(raw))
+        except Exception:
+            continue
+    out.sort(key=lambda a: a.get("created_at", ""))
+    return out
+
+
+def get_area(pair_slug: str, area_id: str) -> Optional[Dict[str, Any]]:
+    area_id = _normalize_area_id(area_id)
+    if not area_id:
+        return None
+    r = _get_redis()
+    raw = r.hget(_areas_key(pair_slug), area_id)
+    if not raw:
+        return None
+    try:
+        return json.loads(raw)
+    except Exception:
+        return None
 
 
 # ── Cognition Action Adapter (Legacy) ────────────────────────────────
