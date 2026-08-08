@@ -276,18 +276,18 @@ def _clamp(v: float, lo: float = 0.0, hi: float = 1.0) -> float:
 
 
 FACTION_ACTION_EVENTS = {
-    "propose_law": ("advance_goal", "high"),
-    "trade_resources": ("seek_resources", "medium"),
-    "military_posture": ("confront_rival", "medium"),
-    "research_invest": ("investigate", "medium"),
-    "cultural_campaign": ("socialize", "medium"),
-    "explore_territory": ("explore", "medium"),
-    "diplomatic_outreach": ("help_ally", "medium"),
-    "consciousness_ritual": ("socialize", "medium"),
-    "defensive_measure": ("help_ally", "medium"),
-    "offensive_strike": ("confront_rival", "high"),
-    "form_alliance": ("help_ally", "high"),
-    "break_alliance": ("confront_rival", "high"),
+    "propose_law": ("advance_goal", 0.8),
+    "trade_resources": ("seek_resources", 0.6),
+    "military_posture": ("confront_rival", 0.6),
+    "research_invest": ("investigate", 0.6),
+    "cultural_campaign": ("socialize", 0.6),
+    "explore_territory": ("explore", 0.6),
+    "diplomatic_outreach": ("help_ally", 0.6),
+    "consciousness_ritual": ("socialize", 0.6),
+    "defensive_measure": ("help_ally", 0.6),
+    "offensive_strike": ("confront_rival", 0.8),
+    "form_alliance": ("help_ally", 0.8),
+    "break_alliance": ("confront_rival", 0.8),
 }
 
 FACTION_ACTION_PHRASES = {
