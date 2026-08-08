@@ -1,6 +1,6 @@
 # Federation Desktop ↔ VPS Reconciliation — 2026-08-08
 
-Status: **DONE (snapshots + canonical merge created, pushed to GitHub)**
+Status: **DONE (snapshots + canonical merge created, correction pass applied, pushed to GitHub)**
 
 ## Why this happened
 
@@ -47,17 +47,29 @@ recovery branches above.
 - `frontend/*` (`council-chat`, `simulation.css/html/js`, `spectator.html`) — **runtime** (plain-fetch vs fedFetch; `computeVerdict` refactor)
 - `starmap3d.html` — **ours** (LANE-1 cosmic-scale evolution supersedes older runtime iteration)
 
+## Correction pass (review findings, committed after merge)
+
+Independent review of the merge surfaced three gaps; all fixed forward on the branch:
+
+1. **Stale shared work-loop core.** The reconciled `shared/federation_work_loop/core.py` was an old 10-action version; the live runtime's core has 11 actions including `area_found` (dispatch + `_action_area_found`). Overlaid the live core so `create_area → handle_found_area → area_found` works end-to-end. Verified: `area_found` registered, dispatched, adapter imports (`_WORK_LOOP_OK=True`).
+2. **NPC container wiring.** `docker-compose-vps.yml` had no npc-agent services at all, and neither compose gave NPC containers the shared package. Added `npc-agent-001`/`npc-agent-306` to the VPS compose mirroring the live containers (bind-mount `/docker/federation-game/npc-agent:/app:ro` + `/docker/federation-game/shared:/opt/federation_shared:ro`, `PYTHONPATH=/opt/federation_shared`, live model/env config via env vars, no hardcoded keys); backend gained the shared mount + PYTHONPATH; dev compose NPC services gained shared mount + PYTHONPATH.
+3. **Junk classification.** 104 forensic/recovery-only files removed from the canonical branch (43 replay captures, audit/debug/investigate scripts, `.horizon/`/`.kilo/`/`.recovery/` agent state, one-off Windows verify scripts, nginx/simulation `.bak` files, genesis harness captures/samples). All remain on the recovery branches. `.gitignore` (line 91+: `federation-game/backend/_*.py`, `fix2.py`, …) already keeps the live runtime's debug scripts out of git.
+
+Test gap fixed: `test_institutions.py` FakeRedis mock gained `hincrby`, `ltrim`, and a faithful Python translation of the `_APPLY_EFFECTS_LUA` `eval` semantics (idempotency, cutoff skip, caps, clamping, rounding, receipts).
+
 ## Verification
 
 - Desktop: back on `main` at `7c90aae`, clean.
 - VPS repo (`/opt/federation`): back on `main` at `c28b9dc`, clean.
-- All four branches pushed to GitHub: `main` (unchanged), 3 recovery branches, 1 reconciliation branch.
+- All branches pushed to GitHub: `main` (unchanged), 4 recovery branches, 1 reconciliation branch.
 - PAT used for pushes was scrubbed from git config after each push; revoke it after review.
+- Tests: npc-agent 22/22 passed; institutions 9/9 passed (after mock fixes, zero skips); full `compileall` clean; both compose files YAML-valid; adapter import smoke test OK.
+- Real branch-vs-main scope after classification: **156 files changed (+32258/−13293)** — the "73 files" figure in earlier notes was one merge commit's stat, not the branch scope.
 
 ## Next steps
 
-1. Review `reconciliation/merge-2026-08-08` (diff vs `main`: 73 files, +18452/−11300).
+1. Review `reconciliation/merge-2026-08-08` (diff vs `main`: 156 files, +32258/−13293).
 2. When approved: fast-forward `main` to the merge, or open a PR.
-3. Deploy pass: copy canonical backend/npc-agent/frontend into `/docker/federation-game` and restart services per AGENTS.md workflow (npc-agent is bind-mounted; backend restart required).
+3. Deploy pass: copy canonical backend/npc-agent/frontend/shared into `/docker/federation-game` and restart services per AGENTS.md workflow (npc-agent is bind-mounted; backend restart required). Compose now describes the full NPC setup.
 4. Consider `git merge --strategy=ours` none needed; both recovery branches can be deleted after main advances.
 5. Out-of-tree VPS material is now fully covered: `/docker/federation-architect`, `/docker/federation-worktrees/architect` (empty), `/root/federation-kilo-handoffs/` → `recovery/architect-2026-08-08` (unrelated history branch in the same GitHub repo). The only uncommitted artifact left there is a `__pycache__` `.pyc` (recompile-recoverable).
