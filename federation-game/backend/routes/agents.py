@@ -263,7 +263,7 @@ def _build_message_payload(from_id, from_name, to_id, to_name, body, message_typ
         "topic": _normalize_topic_label(topic or body),
         "created_at": now,
         "ts": now,
-        "read": False,
+        "read": "false",
     }
 
 
@@ -551,7 +551,7 @@ def _queue_message(
         "topic": _normalize_topic_label(topic or body),
         "created_at": now,
         "ts": now,
-        "read": False,
+        "read": "false",
     }
     raw = json.dumps(payload, default=str)
     msg_key = f"msg:{msg_id}"
@@ -629,8 +629,8 @@ def post_agent_message(agent_id: str, req: AgentMessageRequest, request: Request
     now = payload["created_at"]
     if idempotency_key:
         return _run_idempotent_single_message(r, idempotency_key, agent_id, payload, msg_key, now, from_id, agent_id)
-    _queue_message(r, from_id=from_id, from_name=from_name, to_id=agent_id, to_name=labels.get(agent_id, agent_id), body=req.body, message_type=req.type, topic=req.topic, subject=req.subject, thread_id=thread_id)
-    return {"ok": True, "message": payload}
+    queued = _queue_message(r, from_id=from_id, from_name=from_name, to_id=agent_id, to_name=labels.get(agent_id, agent_id), body=req.body, message_type=req.type, topic=req.topic, subject=req.subject, thread_id=thread_id)
+    return {"ok": True, "message": queued}
 
 
 @router.post("/agents/broadcast")
@@ -683,5 +683,5 @@ def request_self_diagnostic(agent_id: str, req: SelfDiagnosticRequest, request: 
     now = payload["created_at"]
     if idempotency_key:
         return _run_idempotent_single_message(r, idempotency_key, agent_id, payload, msg_key, now, from_id, agent_id)
-    _queue_message(r, from_id=from_id, from_name=from_name, to_id=agent_id, to_name=labels.get(agent_id, agent_id), body=prompt, message_type="self_diagnostic", topic=req.topic or "self_diagnostic", subject="Self diagnostic request", thread_id=thread_id)
-    return {"ok": True, "message": payload}
+    queued = _queue_message(r, from_id=from_id, from_name=from_name, to_id=agent_id, to_name=labels.get(agent_id, agent_id), body=prompt, message_type="self_diagnostic", topic=req.topic or "self_diagnostic", subject="Self diagnostic request", thread_id=thread_id)
+    return {"ok": True, "message": queued}

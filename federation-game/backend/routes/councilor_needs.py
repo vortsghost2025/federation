@@ -33,7 +33,7 @@ def _r(request: Request):
 
 
 @router.get("/councilor/areas")
-def get_councilor_areas(request: Request):
+def get_councilor_areas(request: Request, _: None = Depends(require_operator)):
     """Return areas founded by the persistent councilor pair (world expansion)."""
     try:
         from federation_work_loop.core import get_areas
@@ -178,7 +178,7 @@ if WORK_LOOP_AVAILABLE:
 
 
 @router.get("/councilor/capability-requests")
-def get_capability_requests():
+def get_capability_requests(_: None = Depends(require_operator)):
     """Get all capability requests for moderator visibility."""
     if not WORK_LOOP_AVAILABLE:
         return {"requests": [], "count": 0, "error": "work_loop_not_available"}
@@ -188,7 +188,7 @@ def get_capability_requests():
 
 
 @router.get("/councilor/capability-requests/{request_id}")
-def get_capability_request_by_id(request_id: str):
+def get_capability_request_by_id(request_id: str, _: None = Depends(require_operator)):
     """Get a specific capability request by ID."""
     if not WORK_LOOP_AVAILABLE:
         raise HTTPException(status_code=503, detail="work_loop_not_available")
