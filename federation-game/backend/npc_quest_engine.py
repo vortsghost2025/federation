@@ -878,12 +878,13 @@ class NPCQuestEngine:
                     # Hard age cap — force resolve quests that survived soft timeout too long
                     if tick_count > MAX_QUEST_AGE_HARD_CAP:
                         # Check if all mandatory objectives are done for auto-complete
+                        progress_hash = r.hgetall(progress_key) or {}
                         all_done = True
                         for obj_data in quest_data.get("objectives", []):
                             if not obj_data.get("optional", False):
-                                if int(
-                                    obj_data.get("current_progress", 0)
-                                ) < obj_data.get("target", 1):
+                                obj_id = obj_data.get("objective_id", "")
+                                current = int(progress_hash.get(obj_id, 0) or 0)
+                                if current < obj_data.get("target", 1):
                                     all_done = False
                                     break
                         if all_done:
@@ -894,52 +895,52 @@ class NPCQuestEngine:
                             summary["quests_abandoned"] += 1
                         continue
 
-                        # Setback check
-                        if random.random() < SETBACK_CHANCE:
-                            continue
+                    # Setback check
+                    if random.random() < SETBACK_CHANCE:
+                        continue
 
-                        # Calculate progress amount
-                        progress_amount = 1
-                        quest_faction_str = (
-                            quest_data.get("faction_affiliation") or "none"
-                        ).lower()
-                        # Proper skill-faction keyword matching (fixes substring bug)
-                        for sk in skills or []:
-                            keywords = SKILL_FACTION_KEYWORDS.get(
-                                (sk or "").lower(), [(sk or "").lower()]
-                            )
-                            if any(kw in quest_faction_str for kw in keywords):
-                                progress_amount += 1
-                                break
-                        # Ambition bonus: chance of extra progress proportional to ambition
-                        if ambition > 0.7 and random.random() < ambition * 0.4:
+                    # Calculate progress amount
+                    progress_amount = 1
+                    quest_faction_str = (
+                        quest_data.get("faction_affiliation") or "none"
+                    ).lower()
+                    # Proper skill-faction keyword matching (fixes substring bug)
+                    for sk in skills or []:
+                        keywords = SKILL_FACTION_KEYWORDS.get(
+                            (sk or "").lower(), [(sk or "").lower()]
+                        )
+                        if any(kw in quest_faction_str for kw in keywords):
                             progress_amount += 1
+                            break
+                    # Ambition bonus: chance of extra progress proportional to ambition
+                    if ambition > 0.7 and random.random() < ambition * 0.4:
+                        progress_amount += 1
 
-                        # Progress each objective type present in the quest
-                        objective_types_seen = set()
-                        for obj_data in quest_data.get("objectives", []):
-                            obj_type_val = obj_data.get("objective_type", "")
-                            if (
-                                obj_type_val
-                                and obj_type_val not in objective_types_seen
-                            ):
-                                objective_types_seen.add(obj_type_val)
-                                try:
-                                    obj_type = ObjectiveType(obj_type_val)
-                                except ValueError:
-                                    continue
+                    # Progress each objective type present in the quest
+                    objective_types_seen = set()
+                    for obj_data in quest_data.get("objectives", []):
+                        obj_type_val = obj_data.get("objective_type", "")
+                        if (
+                            obj_type_val
+                            and obj_type_val not in objective_types_seen
+                        ):
+                            objective_types_seen.add(obj_type_val)
+                            try:
+                                obj_type = ObjectiveType(obj_type_val)
+                            except ValueError:
+                                continue
 
-                                result = self.progress_quest(
-                                    char_id, qid, obj_type, progress_amount
-                                )
-                                if result["objectives_progressed"] > 0:
-                                    summary["quests_progressed"] += 1
+                            result = self.progress_quest(
+                                char_id, qid, obj_type, progress_amount
+                            )
+                            if result["objectives_progressed"] > 0:
+                                summary["quests_progressed"] += 1
 
-                                # (d) Auto-complete
-                                if result["quest_completed"]:
-                                    self.complete_quest(char_id, qid)
-                                    summary["quests_completed"] += 1
-                                    break
+                            # (d) Auto-complete
+                            if result["quest_completed"]:
+                                self.complete_quest(char_id, qid)
+                                summary["quests_completed"] += 1
+                                break
 
                 summary["npcs_processed"] += 1
 
