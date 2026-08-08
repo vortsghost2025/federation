@@ -36,8 +36,10 @@ services:
     environment:
       - NVIDIA_API_KEY=${NVIDIA_API_KEY}
       - SANDBOX_URL=http://npc-sandbox:9002
+      - PYTHONPATH=/opt/federation_shared
     volumes:
       - /docker/federation-game/backend:/app:ro
+      - /docker/federation-game/shared:/opt/federation_shared:ro
     healthcheck:
       test:
         - CMD
@@ -144,6 +146,82 @@ services:
       resources:
         limits:
           cpus: "0.50"
+
+  # ── EXTERNAL NPC AGENTS (char_001 / char_306) ──────────────────────
+  # Live-mirrored: bind-mounts /docker/federation-game/npc-agent and the
+  # shared work-loop package into each container so npc_work_loop_adapter
+  # can import federation_work_loop.core (PYTHONPATH=/opt/federation_shared).
+  npc-agent-001:
+    build: /docker/federation-game/npc-agent
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      - CHAR_ID=char_001
+      - NPC_NAME=Archimedes Prime
+      - NVIDIA_API_KEY=${NVIDIA_API_KEY_CHAR_001}
+      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
+      - REDIS_URL=redis://redis:6379/0
+      - PRIMARY_MODEL=nvidia/llama-3.3-nemotron-super-49b-v1
+      - DECISION_MODEL=nvidia/nemotron-3-nano-30b-a3b
+      - FALLBACK_MODEL_1=nvidia/nemotron-3-nano-30b-a3b
+      - FALLBACK_MODEL_2=meta/llama-3.3-70b-instruct
+      - REQUEST_TIMEOUT=20
+      - MAX_OUTPUT_TOKENS=1024
+      - MAX_TOTAL_BUDGET_MS=120000
+      - TICK_INTERVAL=120
+      - PYTHONPATH=/opt/federation_shared
+    volumes:
+      - /docker/federation-game/npc-agent:/app:ro
+      - /docker/federation-game/shared:/opt/federation_shared:ro
+    depends_on:
+      - redis
+    networks:
+      - fed-net
+    deploy:
+      resources:
+        limits:
+          cpus: "0.50"
+          memory: 256M
+
+  npc-agent-306:
+    build: /docker/federation-game/npc-agent
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      - CHAR_ID=char_306
+      - NPC_NAME=The Oracle
+      - NVIDIA_API_KEY=${NVIDIA_API_KEY_CHAR_306}
+      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
+      - REDIS_URL=redis://redis:6379/0
+      - PRIMARY_MODEL=nvidia/llama-3.3-nemotron-super-49b-v1
+      - DECISION_MODEL=nvidia/nemotron-3-nano-30b-a3b
+      - FALLBACK_MODEL_1=nvidia/nemotron-3-nano-30b-a3b
+      - FALLBACK_MODEL_2=meta/llama-3.3-70b-instruct
+      - REQUEST_TIMEOUT=20
+      - MAX_OUTPUT_TOKENS=1024
+      - MAX_TOTAL_BUDGET_MS=120000
+      - TICK_INTERVAL=120
+      - PYTHONPATH=/opt/federation_shared
+      - OPERATOR_ROUTE_ENABLED=true
+      - OPERATOR_LLM_API_KEY=${OPERATOR_LLM_API_KEY}
+      - OPERATOR_LLM_BASE_URL=https://openrouter.ai/api/v1
+      - OPERATOR_REQUEST_TIMEOUT=90
+      - OPERATOR_DECISION_MODEL=openrouter/free
+      - OPERATOR_MAX_OUTPUT_TOKENS=4096
+    volumes:
+      - /docker/federation-game/npc-agent:/app:ro
+      - /docker/federation-game/shared:/opt/federation_shared:ro
+    depends_on:
+      - redis
+    networks:
+      - fed-net
+    deploy:
+      resources:
+        limits:
+          cpus: "0.50"
+          memory: 256M
 
   postgres:
     image: postgres:15-alpine

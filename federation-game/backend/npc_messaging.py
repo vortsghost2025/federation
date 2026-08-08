@@ -74,7 +74,8 @@ def send_message(
         "subject": subject,
         "body": body,
         "created_at": now,
-        "read": False,
+        # redis-py rejects bool mapping values (DataError); store as string.
+        "read": "false",
     }
 
     try:
@@ -108,6 +109,26 @@ def send_message(
     return msg
 
 
+def reconcile_inbox(r, char_id: str) -> int:
+    """Remove inbox ZSET members whose msg:{id} payload no longer exists.
+
+    The payload hash carries a 30-day TTL; when it expires the ZSET member
+    is not automatically scavenged, leaving a dangling pointer. This prunes
+    those so inbox reads stay accurate. Returns the number removed.
+    """
+    key = f"msg:inbox:{char_id}"
+    try:
+        members = r.zrange(key, 0, -1)
+    except Exception:
+        return 0
+    removed = 0
+    for mid in members:
+        if not r.exists(f"msg:{mid}"):
+            r.zrem(key, mid)
+            removed += 1
+    return removed
+
+
 def get_inbox(char_id: str, limit: int = 20) -> List[Dict[str, Any]]:
     """Get messages in an NPC's inbox, newest first. Marks as read."""
     r = _get_redis()
@@ -116,10 +137,13 @@ def get_inbox(char_id: str, limit: int = 20) -> List[Dict[str, Any]]:
         messages = []
         for mid in msg_ids:
             msg = r.hgetall(f"msg:{mid}")
-            if msg:
-                msg["read"] = True
-                r.hset(f"msg:{mid}", "read", "true")
-                messages.append(dict(msg))
+            if not msg:
+                # Payload expired/missing: drop the dangling zset member.
+                r.zrem(f"msg:inbox:{char_id}", mid)
+                continue
+            msg["read"] = True
+            r.hset(f"msg:{mid}", "read", "true")
+            messages.append(dict(msg))
         return messages
     except Exception as e:
         logger.warning("Failed to get inbox for %s: %s", char_id, e)
@@ -146,6 +170,8 @@ def get_unread_count(char_id: str) -> int:
     """Count unread messages in an NPC's inbox."""
     r = _get_redis()
     try:
+        # Prune dangling members (payload expired) before counting.
+        reconcile_inbox(r, char_id)
         msg_ids = r.zrevrange(f"msg:inbox:{char_id}", 0, -1)
         count = 0
         for mid in msg_ids:

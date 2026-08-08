@@ -1,0 +1,614 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Federation &mdash; War Room</title>
+    <!-- New Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Bai+Jamjuree:wght@400;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            /* Neon Colors */
+            --neon-blue: #00f3ff;
+            --neon-pink: #ff2ced;
+            --neon-green: #00ff9d;
+            --neon-amber: #ff9f1c;
+            --neon-red: #ff3860;
+            --neon-violet: #9c27b0;
+            
+            /* UI Colors */
+            --bg-black: #0a0a0a;
+            --bg-darker: #040404;
+            --panel-bg: #111111;
+            --panel-border: rgba(0, 243, 255, 0.2);
+            --text-primary: #e0e0e0;
+            --text-secondary: #a0a0a0;
+            --text-dim: #6c6c6c;
+            
+            /* Badge Colors */
+            --severity-critical: #ff3860;
+            --severity-severe: #ff2ced;
+            --severity-high: #ff9f1c;
+            --severity-medium: #ffc107;
+            --severity-low: #00ff9d;
+            --severity-stable: #00f3ff;
+            
+            /* Glow Effects */
+            --glow-blue: 0 0 12px rgba(0, 243, 255, 0.3);
+            --glow-pink: 0 0 12px rgba(255, 44, 237, 0.3);
+            --glow-amber: 0 0 12px rgba(255, 159, 28, 0.3);
+        }
+
+        /* Reset and Base Styles */
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        html, body {
+            height: 100%;
+            overflow: hidden;
+            background: var(--bg-black);
+            color: var(--text-primary);
+            font-family: 'Space Mono', monospace;
+            font-size: 14px;
+            line-height: 1.5;
+        }
+
+        #app {
+            display: grid;
+            grid-template-rows: 60px auto 1fr 40px;
+            grid-template-columns: 35% 65%;
+            grid-template-areas:
+                "header header"
+                "situation situation"
+                "left center"
+                "bottom bottom";
+            height: 100vh;
+            gap: 2px;
+            background:
+                radial-gradient(circle at 20% 50%, rgba(0, 243, 255, 0.05) 0%, transparent 20%),
+                radial-gradient(circle at 80% 20%, rgba(255, 44, 237, 0.05) 0%, transparent 20%);
+        }
+
+        .panel {
+            background: var(--panel-bg);
+            border: 1px solid var(--panel-border);
+            overflow: hidden;
+            scrollbar-width: thin;
+            scrollbar-color: var(--neon-blue) transparent;
+        }
+
+        .panel::-webkit-scrollbar {
+            width: 6px;
+        }
+
+        .panel::-webkit-scrollbar-thumb {
+            background: var(--neon-blue);
+            border-radius: 3px;
+        }
+
+        /* Header */
+        #header {
+            grid-area: header;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 16px;
+            background: var(--bg-darker);
+            border-bottom: 1px solid var(--panel-border);
+            box-shadow: var(--glow-blue);
+        }
+
+        .logo {
+            font-family: 'Bai Jamjuree', sans-serif;
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: var(--neon-blue);
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            text-shadow: var(--glow-blue);
+        }
+
+        .header-right {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .tick-display, .connection-status {
+            font-family: 'Space Mono', monospace;
+            font-size: 0.8rem;
+            color: var(--text-dim);
+        }
+
+        .connection-status.signal-lost {
+            color: var(--neon-red);
+        }
+
+        /* Situation Room */
+        #situation {
+            grid-area: situation;
+            display: flex;
+            flex-direction: column;
+            padding: 12px 16px;
+            background: var(--bg-darker);
+            border-bottom: 1px solid var(--panel-border);
+            box-shadow: var(--glow-blue);
+        }
+
+        .situation-card {
+            display: flex;
+            gap: 12px;
+            margin-bottom: 12px;
+        }
+
+        .sit-card {
+            flex: 1;
+            background: rgba(17, 17, 17, 0.5);
+            border: 1px solid var(--panel-border);
+            border-radius: 6px;
+            padding: 8px 12px;
+            position: relative;
+        }
+
+        .sit-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 2px;
+            height: 100%;
+            background: linear-gradient(180deg, var(--neon-blue), var(--neon-pink));
+            border-radius: 2px;
+        }
+
+        .sit-card-title {
+            font-family: 'Bai Jamjuree', sans-serif;
+            font-size: 0.7rem;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 6px;
+        }
+
+        .sit-card-value {
+            font-family: 'Bai Jamjuree', sans-serif;
+            font-size: 1rem;
+            font-weight: 600;
+            color: var(--neon-blue);
+        }
+
+        .sit-card .severity {
+            margin-left: auto;
+        }
+
+        /* Left Panel (Cascade Pipeline) */
+        #left {
+            grid-area: left;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            padding: 16px;
+            border-right: 1px solid var(--panel-border);
+        }
+
+        .section-title {
+            font-family: 'Bai Jamjuree', sans-serif;
+            font-size: 0.7rem;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 1.5px;
+            margin-bottom: 8px;
+            padding-left: 4px;
+            border-left: 2px solid var(--neon-blue);
+        }
+
+        .pipeline-root {
+            padding: 12px;
+            background: rgba(255, 56, 96, 0.1);
+            border: 1px solid rgba(255, 56, 96, 0.3);
+            border-radius: 6px;
+            position: relative;
+        }
+
+        .pipeline-root::after {
+            content: '';
+            position: absolute;
+            inset: 0;
+            border-radius: 5px;
+            pointer-events: none;
+            background: linear-gradient(135deg, transparent 30%, rgba(255, 56, 96, 0.1) 50%, transparent 70%);
+            animation: scan 4s linear infinite;
+        }
+
+        @keyframes scan {
+            0% { top: -100%; }
+            100% { top: 100%; }
+        }
+
+        .pipeline-dominoes {
+            margin-left: 8px;
+            padding-left: 12px;
+            border-left: 1px dashed rgba(220, 220, 220, 0.2);
+        }
+
+        .domino-npc {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 4px 0;
+            background: rgba(220, 220, 220, 0.03);
+            border-radius: 4px;
+            margin-top: 4px;
+            animation: fadeIn 0.3s ease;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(-10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .domino-depth {
+            font-family: 'Bai Jamjuree', sans-serif;
+            font-size: 0.6rem;
+            color: var(--neon-pink);
+            background: rgba(255, 44, 237, 0.2);
+            padding: 1px 4px;
+            border-radius: 2px;
+            border: 1px solid rgba(255, 44, 237, 0.4);
+        }
+
+        /* Center Panel (Event Log + NPC List) */
+        #center {
+            grid-area: center;
+            display: flex;
+            flex-direction: column;
+            padding: 16px;
+        }
+
+        .tabs {
+            display: flex;
+            gap: 2px;
+            margin-bottom: 12px;
+            background: rgba(255, 255, 255, 0.02);
+            border-radius: 4px;
+            padding: 2px;
+        }
+
+        .tab {
+            flex: 1;
+            padding: 8px 0;
+            text-align: center;
+            font-family: 'Bai Jamjuree', sans-serif;
+            font-size: 0.7rem;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            cursor: pointer;
+            transition: all 0.2s;
+            border-radius: 2px;
+        }
+
+        .tab.active {
+            background: var(--neon-blue);
+            color: var(--bg-black);
+        }
+
+        .tab-content {
+            display: none;
+        }
+
+        .tab-content.visible {
+            display: block;
+        }
+
+        .event-feed {
+            flex: 1;
+            overflow-y: auto;
+        }
+
+        .event-entry {
+            display: flex;
+            gap: 8px;
+            padding: 8px;
+            background: rgba(255, 255, 255, 0.02);
+            margin-bottom: 4px;
+            border-left: 3px solid var(--neon-blue);
+            animation: slideIn 0.3s ease;
+        }
+
+        @keyframes slideIn {
+            from { opacity: 0; transform: translateX(-20px); }
+            to { opacity: 1; transform: translateX(0); }
+        }
+
+        .event-time {
+            font-size: 0.7rem;
+            color: var(--text-dim);
+            min-width: 50px;
+        }
+
+        .event-body {
+            flex: 1;
+        }
+
+        .npc-list-container {
+            flex: 1;
+            overflow-y: auto;
+        }
+
+        .npc-toggle {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 8px;
+            padding: 4px 8px;
+            background: rgba(255, 255, 255, 0.03);
+            border-radius: 4px;
+            cursor: pointer;
+        }
+
+        .npc-list {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+
+        .npc-card {
+            width: 120px;
+            padding: 8px;
+            background: rgba(220, 220, 220, 0.05);
+            border: 1px solid rgba(220, 220, 220, 0.1);
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .npc-card:hover {
+            border-color: var(--neon-blue);
+            box-shadow: var(--glow-blue);
+        }
+
+        .npc-name {
+            font-family: 'Bai Jamjuree', sans-serif;
+            font-size: 0.8rem;
+            font-weight: 600;
+            color: var(--neon-blue);
+        }
+
+        .npc-mood {
+            font-size: 0.7rem;
+            color: var(--neon-amber);
+        }
+
+        /* Bottom Bar */
+        #bottom {
+            grid-area: bottom;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 16px;
+            background: var(--bg-darker);
+            border-top: 1px solid var(--panel-border);
+            box-shadow: var(--glow-blue);
+        }
+
+        .era-display {
+            font-family: 'Bai Jamjuree', sans-serif;
+            font-size: 0.9rem;
+            font-weight: 600;
+            color: var(--neon-amber);
+            text-shadow: var(--glow-amber);
+        }
+
+        .progress-container {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .progress-bar {
+            width: 120px;
+            height: 12px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 6px;
+            overflow: hidden;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, var(--neon-blue), var(--neon-pink));
+            transition: width 0.5s ease;
+        }
+
+        /* Badges */
+        .severity-badge {
+            font-family: 'Bai Jamjuree', sans-serif;
+            font-size: 0.6rem;
+            font-weight: 700;
+            padding: 2px 6px;
+            border-radius: 4px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            border: 1px solid currentColor;
+        }
+
+        .severity-critical {
+            background: rgba(255, 56, 96, 0.2);
+            color: var(--severity-critical);
+            border-color: var(--severity-critical);
+        }
+
+        .severity-severe {
+            background: rgba(255, 44, 237, 0.2);
+            color: var(--severity-severe);
+            border-color: var(--severity-severe);
+        }
+
+        .severity-high {
+            background: rgba(255, 159, 28, 0.2);
+            color: var(--severity-high);
+            border-color: var(--severity-high);
+        }
+
+        .severity-medium {
+            background: rgba(255, 193, 7, 0.2);
+            color: var(--severity-medium);
+            border-color: var(--severity-medium);
+        }
+
+        .severity-low {
+            background: rgba(0, 255, 157, 0.2);
+            color: var(--severity-low);
+            border-color: var(--severity-low);
+        }
+
+        .severity-stable {
+            background: rgba(0, 243, 255, 0.2);
+            color: var(--severity-stable);
+            border-color: var(--severity-stable);
+        }
+
+        /* Scanlines Overlay */
+        .scanlines {
+            position: fixed;
+            inset: 0;
+            z-index: 100;
+            pointer-events: none;
+            background: linear-gradient(
+                to bottom,
+                transparent 50%,
+                rgba(0, 243, 255, 0.05) 50%
+            );
+            background-size: 100% 4px;
+            opacity: 0.5;
+            animation: scanOverlay 20s linear infinite;
+        }
+
+        @keyframes scanOverlay {
+            0% { background-position: 0 0; }
+            100% { background-position: 0 100%; }
+        }
+    </style>
+</head>
+<body>
+    <div id="app">
+        <!-- Header -->
+        <div id="header" class="panel">
+            <div class="logo">Federation</div>
+            <div class="header-right">
+                <div class="tick-display" id="tick-val">Tick: <span>0</span></div>
+                <div class="tick-display" id="time-since">2m ago</div>
+                <div class="connection-status" id="connection-status">▣ ONLINE</div>
+            </div>
+        </div>
+
+        <!-- Situation Room -->
+        <div id="situation" class="panel">
+            <div class="situation-card" id="sit-outline">
+                <div class="sit-card">
+                    <div class="sit-card-title">World State</div>
+                    <div class="sit-card-value">ELEVATED <span class="severity severity-high">high</span></div>
+                </div>
+                <div class="sit-card">
+                    <div class="sit-card-title">Threat Level</div>
+                    <div class="sit-card-value">SEVERE <span class="severity severity-severe">severe</span></div>
+                </div>
+            </div>
+            <div class="situation-text" id="situation-text">
+                // Crisis narrative loads here.
+            </div>
+        </div>
+
+        <!-- Left Panel -->
+        <div id="left" class="panel">
+            <div class="section-title">Cascade Pipeline</div>
+            <div class="pipeline-root" id="pipeline-root">
+                <div class="pipeline-root-label">Root Event</div>
+                <div class="pipeline-root-event">A mining dispute has intensified into open conflict...</div>
+            </div>
+            <div class="pipeline-dominoes" id="pipeline-dominoes">
+                <!-- Dominoes load here -->
+            </div>
+        </div>
+
+        <!-- Center Panel -->
+        <div id="center" class="panel">
+            <div class="tabs" id="tabs">
+                <div class="tab active" data-tab="events">Events</div>
+                <div class="tab" data-tab="npcs">NPCs</div>
+                <div class="tab" data-tab="quests">Quests</div>
+            </div>
+            <div class="tab-content visible" id="events">
+                <div class="event-feed" id="event-feed">
+                    <!-- Events load here -->
+                </div>
+            </div>
+            <div class="tab-content" id="npcs">
+                <div class="npc-toggle" id="npc-toggle">
+                    <span>Show Idle NPCs</span>
+                    <input type="checkbox" id="toggle-idle">
+                </div>
+                <div class="npc-list-container">
+                    <div class="npc-list" id="npc-list">
+                        <!-- NPCs load here -->
+                    </div>
+                </div>
+            </div>
+            <div class="tab-content" id="quests">
+                <div id="quest-log">
+                    <!-- Quests load here -->
+                </div>
+            </div>
+        </div>
+
+        <!-- Bottom Bar -->
+        <div id="bottom" class="panel">
+            <div class="era-display" id="era-display">Year 2078</div>
+            <div class="progress-container">
+                <span>Endgame:</span>
+                <div class="progress-bar">
+                    <div class="progress-fill" id="progress-fill" style="width: 37%"></div>
+                </div>
+                <span id="progress-pct">37%</span>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Scanlines Overlay -->
+    <div class="scanlines"></div>
+
+    <!-- JS will be ported separately -->
+    <script>
+        // Mock data and interactivity will be added here.
+        document.addEventListener('DOMContentLoaded', () => {
+            // Toggle tabs
+            const tabs = document.querySelectorAll('.tab');
+            const tabContents = document.querySelectorAll('.tab-content');
+            tabs.forEach(tab => {
+                tab.addEventListener('click', () => {
+                    const target = document.getElementById(tab.dataset.tab);
+                    
+                    tabs.forEach(t => t.classList.remove('active'));
+                    tabContents.forEach(c => c.classList.remove('visible'));
+                    
+                    tab.classList.add('active');
+                    target.classList.add('visible');
+                });
+            });
+            
+            // Toggle idle NPCs
+            const toggleIdle = document.getElementById('toggle-idle');
+            toggleIdle.addEventListener('change', () => {
+                const idleNpcs = document.querySelectorAll('.npc-idle');
+                idleNpcs.forEach(npc => {
+                    npc.style.display = toggleIdle.checked ? 'block' : 'none';
+                });
+            });
+        });
+    </script>
+</body>
+</html>

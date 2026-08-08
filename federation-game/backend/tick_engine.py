@@ -129,14 +129,24 @@ def _read_world_state_for_cognition():
     return {}
 
 
-def _run_autonomous_tick_background(game_state=None, faction_ideology=None):
-    tick_id = int(time.time() * 1000)
+def _run_autonomous_tick_background(
+    game_state=None,
+    faction_ideology=None,
+    tick_id=None,
+):
+    # Canonical correlation id is provided by the route handler.
+    # If for any reason it is missing, fall back to a fresh ms id.
+    if not tick_id:
+        tick_id = f"auto_tick_{int(time.time() * 1000)}"
+    watchdog_id = int(time.time() * 1000)
     if WATCHDOG_AVAILABLE:
-        if not try_start_tick(tick_id):
-            logger.warning("Could not start tick %d: another tick is active", tick_id)
+        if not try_start_tick(watchdog_id):
+            logger.warning(
+                "Could not start tick %s: another tick is active", tick_id
+            )
             return
     if not _tick_lock.acquire(blocking=False):
-        logger.warning("Legacy lock failed for tick %d", tick_id)
+        logger.warning("Legacy lock failed for tick %s", tick_id)
         return
     try:
         _set_tick_redis(
@@ -161,22 +171,23 @@ def _run_autonomous_tick_background(game_state=None, faction_ideology=None):
         result = {"status": "completed", "details": results}
         _set_tick_redis(_AUTO_TICK_REDIS_KEY, {"last_result": result})
         if WATCHDOG_AVAILABLE:
-            complete_tick(tick_id)
+            complete_tick(watchdog_id)
     except Exception as e:
         logger.error("Autonomous tick failed: %s", e)
         _set_tick_redis(_AUTO_TICK_REDIS_KEY, {"last_error": str(e)})
         if WATCHDOG_AVAILABLE:
-            complete_tick(tick_id)
+            complete_tick(watchdog_id)
     finally:
         _set_tick_redis(
             _AUTO_TICK_REDIS_KEY,
             {
                 "running": False,
                 "last_end": time.time(),
+                "tick_id": tick_id,
             },
         )
         if WATCHDOG_AVAILABLE:
-            complete_tick(tick_id)
+            complete_tick(watchdog_id)
         _tick_lock.release()
 
 

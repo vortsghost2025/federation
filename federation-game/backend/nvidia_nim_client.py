@@ -39,6 +39,7 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 
 NIM_BASE_URL = "https://integrate.api.nvidia.com/v1"
+NIM_DISABLED = os.environ.get("NIM_DISABLED", "").strip() == "1"
 
 # Comma-separated NIM API keys from env
 _NIM_KEYS_ENV = os.environ.get("NIM_API_KEYS", "")
@@ -891,11 +892,14 @@ class NimClient:
         result = None
 
         # Tier 1: NIM cloud -- primary for ALL call types
-        result = await self._call_nim(
-            system_prompt, user_prompt, max_tokens, temperature
-        )
-        if result is not None:
-            return result
+        if NIM_DISABLED:
+            logger.info("NIM disabled by env; skipping hosted NIM tier")
+        else:
+            result = await self._call_nim(
+                system_prompt, user_prompt, max_tokens, temperature
+            )
+            if result is not None:
+                return result
 
         # Tier 2: Ollama local -- fallback to local GPU
         heavy = (priority == "heavy")
