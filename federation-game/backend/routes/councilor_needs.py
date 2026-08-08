@@ -32,6 +32,18 @@ def _r(request: Request):
     return _redis.Redis(connection_pool=_redis_pool)
 
 
+@router.get("/councilor/areas")
+def get_councilor_areas(request: Request):
+    """Return areas founded by the persistent councilor pair (world expansion)."""
+    try:
+        from federation_work_loop.core import get_areas
+    except Exception:
+        return {"ok": False, "error": "work_loop_unavailable", "areas": []}
+    pair_slug = "char_001__char_306"
+    areas = get_areas(pair_slug)
+    return {"ok": True, "pair_slug": pair_slug, "count": len(areas), "areas": areas}
+
+
 @router.get("/councilor/needs")
 def get_needs(npc_id: Optional[str] = None):
     r = _r(None)
