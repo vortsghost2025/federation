@@ -2298,6 +2298,24 @@ def autonomous_tick(
         result['step8_6_diplomacy_bridge'] = {'errors': [str(exc)]}
         result["errors"].append(f"step8_6: {exc}")
 
+    # Step 8.7: Faction AI — FactionBrain chooses and executes faction-level
+    # actions (laws, trade, alliances, strikes). Broadcasts them into
+    # npc_broadcast_events so NPCs see and react to their faction's moves,
+    # and accumulates faction power from member decisions.
+    try:
+        _progress("step8_7_faction_ai_start")
+        step_start = time.time()
+        from faction_ai import run_all_factions
+
+        result["step8_7_faction_ai"] = run_all_factions(npc_list)
+        result["step8_7_faction_ai"]["duration_ms"] = round(
+            (time.time() - step_start) * 1000, 1
+        )
+        _progress("step8_7_faction_ai_complete", result["step8_7_faction_ai"])
+    except Exception as exc:
+        logger.error("Step 8.7 (faction AI) failed: %s", exc)
+        result["step8_7_faction_ai"] = {"errors": [str(exc)]}
+        result["errors"].append(f"step8_7: {exc}")
 
     # Step 9: Narration — generate dramatic prose summarizing this tick
     # Runs AFTER all world state changes so it can narrate what actually happened.

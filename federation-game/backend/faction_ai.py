@@ -23,6 +23,7 @@ from faction_dynamics import (
     compute_faction_stances,
     store_faction_dynamics,
     KNOWN_FACTIONS,
+    FACTION_DISPLAY,
 )
 
 logger = logging.getLogger(__name__)
@@ -272,6 +273,110 @@ def _sf(val: Any, default: float = 0.0) -> float:
 
 def _clamp(v: float, lo: float = 0.0, hi: float = 1.0) -> float:
     return max(lo, min(hi, v))
+
+
+FACTION_ACTION_EVENTS = {
+    "propose_law": ("advance_goal", "high"),
+    "trade_resources": ("seek_resources", "medium"),
+    "military_posture": ("confront_rival", "medium"),
+    "research_invest": ("investigate", "medium"),
+    "cultural_campaign": ("socialize", "medium"),
+    "explore_territory": ("explore", "medium"),
+    "diplomatic_outreach": ("help_ally", "medium"),
+    "consciousness_ritual": ("socialize", "medium"),
+    "defensive_measure": ("help_ally", "medium"),
+    "offensive_strike": ("confront_rival", "high"),
+    "form_alliance": ("help_ally", "high"),
+    "break_alliance": ("confront_rival", "high"),
+}
+
+FACTION_ACTION_PHRASES = {
+    "propose_law": "proposed a new law",
+    "trade_resources": "opened trade negotiations",
+    "military_posture": "adjusted its military posture",
+    "research_invest": "invested in research",
+    "cultural_campaign": "launched a cultural campaign",
+    "explore_territory": "moved to expand territory",
+    "diplomatic_outreach": "began diplomatic outreach",
+    "consciousness_ritual": "performed a consciousness ritual",
+    "defensive_measure": "fortified its defenses",
+    "offensive_strike": "launched an offensive strike",
+    "form_alliance": "forged a new alliance",
+    "break_alliance": "broke an alliance",
+}
+
+FACTION_ACTION_DISPLAY_KEYS = (
+    "law_name",
+    "title",
+    "partner",
+    "target",
+    "target_faction",
+    "former",
+    "tech_name",
+    "sector",
+    "volume",
+)
+
+
+def _broadcast_faction_action(faction_id: str, action_name: str, detail: Dict) -> None:
+    """Publish a faction-level action into npc_broadcast_events so NPCs
+    see and react to their faction's moves and dynamics can reflect it."""
+    try:
+        from npc_decree import BROADCAST_TTL, MAX_BROADCAST_EVENTS
+    except Exception:
+        MAX_BROADCAST_EVENTS = 100
+        BROADCAST_TTL = 86400 * 7
+
+    category, significance = FACTION_ACTION_EVENTS.get(
+        action_name, ("advance_goal", "medium")
+    )
+    target_faction = ""
+    for key in ("partner", "target", "target_faction", "former"):
+        val = detail.get(key)
+        if isinstance(val, str) and val:
+            target_faction = val
+            break
+
+    snippet_parts = []
+    for key in FACTION_ACTION_DISPLAY_KEYS:
+        val = detail.get(key)
+        if val is not None and str(val) not in ("", "None"):
+            snippet_parts.append(str(val))
+    snippet = ", ".join(snippet_parts)[:120]
+
+    faction_name = FACTION_DISPLAY.get(faction_id, faction_id)
+    description = (
+        f"{faction_name} {FACTION_ACTION_PHRASES.get(action_name, action_name.replace('_', ' '))}"
+    )
+    if snippet:
+        description += f" — {snippet}"
+
+    event = {
+        "event_type": "faction_action",
+        "source_char_id": "",
+        "source_char_name": faction_name,
+        "source_affiliation": faction_id,
+        "decision_category": category,
+        "description": description[:200],
+        "visibility": "public",
+        "significance": significance,
+        "faction": faction_id,
+        "target_faction": target_faction,
+        "ts": int(_now()),
+    }
+    try:
+        r = _get_redis()
+        key = "npc_broadcast_events"
+        r.zadd(key, {json.dumps(event): event["ts"]})
+        r.zremrangebyrank(key, 0, -(MAX_BROADCAST_EVENTS + 1))
+        r.expire(key, BROADCAST_TTL)
+        from npc_event_log import log_from_broadcast_event
+
+        log_from_broadcast_event(event, tick_id=int(_now()))
+    except Exception as e:
+        logger.error(
+            "Broadcast faction action failed for %s: %s", faction_id, e
+        )
 
 
 class FactionBrain:
@@ -845,6 +950,7 @@ class FactionBrain:
             r.zadd(f"faction_actions:{self.faction_id}", {json.dumps(record): _now()})  # type: ignore[union-attr]
             r.expire(f"faction_actions:{self.faction_id}", 604800)  # type: ignore[union-attr]
             r.zremrangebyrank(f"faction_actions:{self.faction_id}", 0, -51)  # type: ignore[union-attr]
+            _broadcast_faction_action(self.faction_id, action_name, detail)
         except Exception as e:
             logger.error("_record_action failed for %s: %s", self.faction_id, e)
 

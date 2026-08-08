@@ -219,6 +219,18 @@ def _score_decision_option(
         pass
 
     try:
+        from npc_autonomy import _get_redis
+        _fmod_r = _get_redis()
+        _fmod_raw = _fmod_r.get(f"npc_faction_modifier:{char_id}")
+        if _fmod_raw:
+            _fmod_data = json.loads(_fmod_raw)
+            _fmod_val = _fmod_data.get(category, 1.0)
+            if _fmod_val and float(_fmod_val) != 1.0:
+                score *= float(_fmod_val)
+    except Exception:
+        pass
+
+    try:
         from npc_autonomy import DIRECTIVE_KEY, DECREE_DIRECTIVE_BIAS, _is_allied_faction, _get_redis
         _dir_r = _get_redis()
         _dir_raw = _dir_r.get(DIRECTIVE_KEY)
