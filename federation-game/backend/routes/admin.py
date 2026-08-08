@@ -6,8 +6,10 @@ import json
 import logging
 import os
 import time
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 from datetime import datetime
+
+from operator_auth import require_operator
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="", tags=["admin"])
@@ -206,7 +208,7 @@ def _pull_pair(r) -> dict:
 
 
 @router.get("/admin/status")
-def admin_status():
+def admin_status(_: None = Depends(require_operator)):
     r = _r()
     if not r:
         return {"status": "error", "error": "Redis unavailable"}

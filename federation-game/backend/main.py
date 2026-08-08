@@ -261,7 +261,7 @@ app.add_middleware(
 # Trusting X-Forwarded-Proto fixes the scheme at the source.
 app.add_middleware(
     ProxyHeadersMiddleware,
-    trusted_hosts="*",
+    trusted_hosts="172.16.2.10,172.16.2.11",
 )
 
 app.include_router(core_router)
