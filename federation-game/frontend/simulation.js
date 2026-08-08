@@ -2060,6 +2060,9 @@ function renderQuickStatus() {
   var ws = status.world_state || status.worldState || status;
   var metrics = getMetrics(status);
   var v = computeVerdict(status);
+  var cascade = status.cascade_summary || status.cascadeSummary || {};
+  var temp = cascade.temperature != null ? cascade.temperature : (cascade.cascade_temperature != null ? cascade.cascade_temperature : 0);
+  var cascadePct = temp > 1.5 ? temp : (temp * 100);
 
   /* Tick display */
   var tick = '\u2014';
