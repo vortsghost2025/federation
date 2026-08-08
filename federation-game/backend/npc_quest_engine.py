@@ -1041,12 +1041,12 @@ class NPCQuestEngine:
                 deltas["stability"] = rewards.stability_boost
 
             if rewards.resources != 0:
-                current = int(r.hget("world_state", "treasury") or 0)
+                current = int(float(r.hget("world_state", "treasury") or 0))
                 r.hset("world_state", "treasury", current + rewards.resources)
                 deltas["treasury"] = rewards.resources
 
             if rewards.tech_points != 0:
-                current = int(r.hget("world_state", "tech_level") or 0)
+                current = int(float(r.hget("world_state", "tech_level") or 0))
                 r.hset("world_state", "tech_level", current + rewards.tech_points)
                 deltas["tech_level"] = rewards.tech_points
 
