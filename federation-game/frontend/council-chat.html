@@ -239,10 +239,17 @@ async function loadAll(){
       renderStatusCard('char_306', oracle, agency)
     ].join('');
 
+    const keyOf = m => m.msg_id || m.id || `${m.from_char_id}:${m.ts || m.created_at}:${(m.body || '').slice(0, 80)}`;
+    const seenKeys = new Set();
     const moderatorRows = [
       ...(moderator.inbox || []),
       ...(moderator.active_thread || [])
-    ].sort((a,b) => Number(a.ts || a.created_at || 0) - Number(b.ts || b.created_at || 0));
+    ].filter(m => {
+      const k = keyOf(m);
+      if (seenKeys.has(k)) return false;
+      seenKeys.add(k);
+      return true;
+    }).sort((a, b) => Number(a.ts || a.created_at || 0) - Number(b.ts || b.created_at || 0));
     renderMessages($('moderator-inbox'), moderatorRows, 'No agent replies to moderator yet.');
     status(`Updated ${new Date().toLocaleTimeString()}`);
   }catch(err){

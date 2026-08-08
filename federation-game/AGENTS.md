@@ -114,18 +114,19 @@ The spectator story/show surface now lives in:
 - `backend/routes/npc_logs.py` (`/spectator/agency`)
 - `frontend/nginx-default.conf`
 
-Important caveat: the live `federation-game-frontend-1` container is currently **baked**, not bind-mounted.
-Changing the host copy under `/docker/federation-game/frontend` or `/docker/federation-game/public_html`
-does **not** automatically change what the running container serves.
+Current live mounting (verify with `docker inspect federation-game-frontend-1`):
 
-For a live frontend update today, also copy files into the running container:
+- `/docker/federation-game/public_html` → `/usr/share/nginx/html` (**read-only bind mount** — the live HTML source)
+- `/docker/federation-game/frontend/nginx-default.conf` → `/etc/nginx/conf.d/default.conf` (ro)
+
+A live frontend update = edit canonical `frontend/*.html` first, then copy into `public_html/`:
 
 ```bash
-docker cp /docker/federation-game/frontend/spectator.html federation-game-frontend-1:/usr/share/nginx/html/spectator.html
-docker cp /docker/federation-game/frontend/nginx-default.conf federation-game-frontend-1:/etc/nginx/conf.d/default.conf
-docker exec federation-game-frontend-1 nginx -t
-docker exec federation-game-frontend-1 nginx -s reload
+cp /docker/federation-game/frontend/council-chat.html /docker/federation-game/public_html/council-chat.html
+docker exec federation-game-frontend-1 md5sum /usr/share/nginx/html/council-chat.html   # must match host
 ```
+
+No `docker cp` or nginx reload is needed for static HTML; `nginx -t && nginx -s reload` is only needed after touching `nginx-default.conf`.
 
 The nginx config now uses Docker DNS re-resolution (`resolver 127.0.0.11` + `$backend_upstream`) so `/spectator/agency`, `/map/data`, and similar proxied routes survive backend restarts without requiring a frontend restart.
 

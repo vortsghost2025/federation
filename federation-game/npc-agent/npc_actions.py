@@ -128,6 +128,26 @@ def _record_sent_reply(r, target: str, body: str, ts: int) -> None:
         pass
 
 
+def _push_institution_cap_notification(r, founded):
+    """Tell the agent the institution cap is reached so it stops attempting
+    create_institution (mirrors the area_found idempotent loop-closure)."""
+    if r is None:
+        return
+    try:
+        note = {
+            "type": "institution_cap_reached",
+            "message": (
+                f"You have founded {founded}/{_MAX_INSTITUTIONS_PER_NPC} institutions "
+                f"(per-councilor cap). Do NOT attempt create_institution again — pursue "
+                "other work instead: create_artifact, create_area for NEW sectors, "
+                "propose_role, investigate, or continue the pair thread."
+            ),
+        }
+        r.rpush(f"npc:system_notifications:{CHAR_ID}", json.dumps(note))
+    except Exception:
+        pass
+
+
 def execute_decision(decision: dict, r, contacts: dict):
     cat = decision.get("category", "rest")
     desc = _enforce_fourth_wall(decision.get("description", ""))
@@ -440,6 +460,7 @@ def execute_decision(decision: dict, r, contacts: dict):
                             f" {founded} institutions (cap: {_MAX_INSTITUTIONS_PER_NPC})"
                         ),
                     })
+                    _push_institution_cap_notification(r, founded)
 
                 # 2. Total institution cap
                 if not _rejected:
@@ -460,6 +481,7 @@ def execute_decision(decision: dict, r, contacts: dict):
                                 f" cap of {_TOTAL_INSTITUTION_LIMIT} has been reached"
                             ),
                         })
+                        _push_institution_cap_notification(r, founded)
 
                 # 3. Similar-name check
                 if not _rejected:
