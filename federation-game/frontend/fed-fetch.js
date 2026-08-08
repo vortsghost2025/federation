@@ -76,8 +76,12 @@
     var retryDelay = opts.retryDelay || 2000;
     var fetchOpts = {};
     var k;
+    var idempotencyKey = opts.idempotencyKey;
     for (k in opts) {
-      if (k !== 'timeout' && k !== 'retries' && k !== 'retryDelay') fetchOpts[k] = opts[k];
+      if (k !== 'timeout' && k !== 'retries' && k !== 'retryDelay' && k !== 'idempotencyKey') fetchOpts[k] = opts[k];
+    }
+    if (idempotencyKey) {
+      fetchOpts.headers = Object.assign({}, fetchOpts.headers || {}, {'X-Idempotency-Key': idempotencyKey});
     }
 
     if (!_online) {

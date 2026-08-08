@@ -54,7 +54,7 @@ Use only:
 2. Once a page is read, save to .horizon/page-status.txt — Sean can review slowly with his magnifier on his own time.
 3. If vision keeps failing, never escalate to "describe your screen" prompts. Always DOM scrape.
 4. This is the canonical accessibility path now. Do not invent alternatives.
-5. Console / terminal output to Sean must be SHORTER than 4 lines of text unless he asks for detail. No preamble. No postamble. No "Working — here is what you see:".
+5. For ordinary live-page narration, lead with the important visible result and remain concise. For technical failures, audits, or multi-step work, follow the full AGENTS.md technical response format and never hide evidence to stay brief.
 
 ## Decision rationale (Sean said this)
 

@@ -1,0 +1,1 @@
+# federation_work_loop - shared package for persistent councilor work loop

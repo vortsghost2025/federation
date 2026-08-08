@@ -54,8 +54,11 @@ services:
     restart: unless-stopped
     env_file:
       - .env
+    environment:
+      - PYTHONPATH=/opt/federation_shared
     volumes:
       - /docker/federation-game/backend:/app:ro
+      - /docker/federation-game/shared:/opt/federation_shared:ro
       - /docker/federation-game/universe:/docker/federation-game/universe
     healthcheck:
       test:

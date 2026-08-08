@@ -1,0 +1,3514 @@
+{
+  "captured_at": "2026-07-18",
+  "game_state": {
+    "turn": 17,
+    "credits": 1270,
+    "fuel": 82,
+    "shields": 100,
+    "hull": 55,
+    "crew_morale": 88,
+    "discovered_sectors": 1,
+    "allies": 8,
+    "federation_stability": 64,
+    "public_trust": 91,
+    "council_support": 47,
+    "constitutional_integrity": 74,
+    "rights_protection": 72,
+    "emergency_powers": 18,
+    "active_policy": "Classified Archives Lockdown",
+    "federation_name": "USS Federation",
+    "current_event": {
+      "id": "era_dawn",
+      "title": "DAWN OF A NEW ERA",
+      "description": "The Federation stands at the threshold of a new age.",
+      "image": "era",
+      "min_turn": 0,
+      "faction_affinity": {
+        "consciousness_collective": 0.05
+      },
+      "choices": [
+        {
+          "id": "embrace",
+          "text": "EMBRACE THE ERA",
+          "outcome": "progressive",
+          "reward": {
+            "federation_stability": 8,
+            "public_trust": 5
+          },
+          "faction_affinity": {
+            "consciousness_collective": 0.08,
+            "exploration_initiative": 0.05
+          },
+          "affected_lane": "Control Plane",
+          "rationale": "Decision requires explicit state-transition review.",
+          "next_safe_action": "Record the decision and verify the next state."
+        },
+        {
+          "id": "caution",
+          "text": "PROCEED WITH CAUTION",
+          "outcome": "measured",
+          "reward": {
+            "constitutional_integrity": 5
+          },
+          "faction_affinity": {
+            "preservation_society": 0.06
+          },
+          "affected_lane": "Control Plane",
+          "rationale": "Decision requires explicit state-transition review.",
+          "next_safe_action": "Record the decision and verify the next state."
+        }
+      ],
+      "affected_lane": "Control Plane",
+      "domain": "Operations",
+      "rights_at_stake": [
+        "Provenance",
+        "Operator discretion"
+      ],
+      "constitutional_risk": "operational",
+      "pressure": "Every decision mutates the system.",
+      "rationale": "Decision requires explicit state-transition review."
+    }
+  },
+  "npcs": {
+    "char_001": {
+      "npc_state": {
+        "corruption_level": "0.0",
+        "rumor_level": "0.26857286503360983",
+        "status": "active",
+        "last_updated": "1784401090"
+      },
+      "recent_actions": []
+    },
+    "char_002": {
+      "npc_state": {
+        "corruption_level": "0.0",
+        "rumor_level": "0.3510451974490033",
+        "status": "active",
+        "last_updated": "1784401090"
+      },
+      "recent_actions": []
+    },
+    "char_003": {
+      "npc_state": {
+        "corruption_level": "0.0",
+        "rumor_level": "0.34957620734067296",
+        "status": "active",
+        "last_updated": "1784401090"
+      },
+      "recent_actions": [
+        {
+          "char_id": "char_003",
+          "char_name": "Philosopher Zenith",
+          "action_type": "rest",
+          "description": "Philosopher Zenith decided to rest and reflect",
+          "mood": "pensive",
+          "ts": 1784049200
+        },
+        {
+          "char_id": "char_003",
+          "char_name": "Philosopher Zenith",
+          "action_type": "rest",
+          "description": "Philosopher Zenith decided to rest and reflect",
+          "mood": "pensive",
+          "ts": 1784049814
+        },
+        {
+          "char_id": "char_003",
+          "char_name": "Philosopher Zenith",
+          "action_type": "rest",
+          "description": "Philosopher Zenith decided to rest and reflect",
+          "mood": "pensive",
+          "ts": 1784050851
+        },
+        {
+          "char_id": "char_003",
+          "char_name": "Philosopher Zenith",
+          "action_type": "rest",
+          "description": "Philosopher Zenith decided to rest and reflect",
+          "mood": "pensive",
+          "ts": 1784052021
+        },
+        {
+          "char_id": "char_003",
+          "char_name": "Philosopher Zenith",
+          "action_type": "rest",
+          "description": "Philosopher Zenith decided to rest and reflect",
+          "mood": "pensive",
+          "ts": 1784052174
+        },
+        {
+          "char_id": "char_003",
+          "char_name": "Philosopher Zenith",
+          "action_type": "rest",
+          "description": "Philosopher Zenith decided to rest and reflect",
+          "mood": "peaceful",
+          "ts": 1784053816
+        },
+        {
+          "char_id": "char_003",
+          "char_name": "Philosopher Zenith",
+          "action_type": "rest",
+          "description": "Philosopher Zenith decided to rest and reflect",
+          "mood": "melancholic",
+          "ts": 1784054446
+        },
+        {
+          "char_id": "char_003",
+          "char_name": "Philosopher Zenith",
+          "action_type": "rest",
+          "description": "Philosopher Zenith decided to rest and reflect",
+          "mood": "melancholic",
+          "ts": 1784055075
+        },
+        {
+          "char_id": "char_003",
+          "char_name": "Philosopher Zenith",
+          "action_type": "rest",
+          "description": "Philosopher Zenith decided to rest and reflect",
+          "mood": "peaceful",
+          "ts": 1784055622
+        },
+        {
+          "char_id": "char_003",
+          "char_name": "Philosopher Zenith",
+          "action_type": "rest",
+          "description": "Philosopher Zenith decided to rest and reflect",
+          "mood": "melancholic",
+          "ts": 1784057418
+        },
+        {
+          "char_id": "char_003",
+          "char_name": "Philosopher Zenith",
+          "action_type": "rest",
+          "description": "Philosopher Zenith decided to rest and reflect",
+          "mood": "serene",
+          "ts": 1784060482
+        },
+        {
+          "char_id": "char_003",
+          "char_name": "Philosopher Zenith",
+          "action_type": "rest",
+          "description": "Philosopher Zenith decided to rest and reflect",
+          "mood": "melancholic",
+          "ts": 1784061778
+        },
+        {
+          "char_id": "char_003",
+          "char_name": "Philosopher Zenith",
+          "action_type": "rest",
+          "description": "Philosopher Zenith decided to rest and reflect",
+          "mood": "serene",
+          "ts": 1784066577
+        },
+        {
+          "char_id": "char_003",
+          "char_name": "Philosopher Zenith",
+          "action_type": "rest",
+          "description": "Philosopher Zenith decided to rest and reflect",
+          "mood": "peaceful",
+          "ts": 1784074430
+        },
+        {
+          "char_id": "char_003",
+          "char_name": "Philosopher Zenith",
+          "action_type": "rest",
+          "description": "Philosopher Zenith decided to rest and reflect",
+          "mood": "peaceful",
+          "ts": 1784075044
+        },
+        {
+          "char_id": "char_003",
+          "char_name": "Philosopher Zenith",
+          "action_type": "rest",
+          "description": "Philosopher Zenith decided to rest and reflect",
+          "mood": "pensive",
+          "ts": 1784076060
+        },
+        {
+          "char_id": "char_003",
+          "char_name": "Philosopher Zenith",
+          "action_type": "rest",
+          "description": "Philosopher Zenith decided to rest and reflect",
+          "mood": "pensive",
+          "ts": 1784080822
+        },
+        {
+          "char_id": "char_003",
+          "char_name": "Philosopher Zenith",
+          "action_type": "rest",
+          "description": "Philosopher Zenith decided to rest and reflect",
+          "mood": "peaceful",
+          "ts": 1784083383
+        },
+        {
+          "char_id": "char_003",
+          "char_name": "Philosopher Zenith",
+          "action_type": "rest",
+          "description": "Philosopher Zenith decided to rest and reflect",
+          "mood": "melancholic",
+          "ts": 1784084553
+        },
+        {
+          "char_id": "char_003",
+          "char_name": "Philosopher Zenith",
+          "action_type": "rest",
+          "description": "Philosopher Zenith decided to rest and reflect",
+          "mood": "peaceful",
+          "ts": 1784088767
+        },
+        {
+          "char_id": "char_003",
+          "char_name": "Philosopher Zenith",
+          "action_type": "rest",
+          "description": "Philosopher Zenith decided to rest and reflect",
+          "mood": "melancholic",
+          "ts": 1784094164
+        },
+        {
+          "char_id": "char_003",
+          "char_name": "Philosopher Zenith",
+          "action_type": "rest",
+          "description": "Philosopher Zenith decided to rest and reflect",
+          "mood": "melancholic",
+          "ts": 1784098963
+        },
+        {
+          "char_id": "char_003",
+          "char_name": "Philosopher Zenith",
+          "action_type": "rest",
+          "description": "Philosopher Zenith decided to rest and reflect",
+          "mood": "peaceful",
+          "ts": 1784103789
+        },
+        {
+          "char_id": "char_003",
+          "char_name": "Philosopher Zenith",
+          "action_type": "rest",
+          "description": "Philosopher Zenith decided to rest and reflect",
+          "mood": "peaceful",
+          "ts": 1784105014
+        },
+        {
+          "char_id": "char_003",
+          "char_name": "Philosopher Zenith",
+          "action_type": "rest",
+          "description": "Philosopher Zenith decided to rest and reflect",
+          "mood": "peaceful",
+          "ts": 1784110974
+        },
+        {
+          "char_id": "char_003",
+          "char_name": "Philosopher Zenith",
+          "action_type": "rest",
+          "description": "Philosopher Zenith decided to rest and reflect",
+          "mood": "peaceful",
+          "ts": 1784112773
+        },
+        {
+          "char_id": "char_003",
+          "char_name": "Philosopher Zenith",
+          "action_type": "rest",
+          "description": "Philosopher Zenith decided to rest and reflect",
+          "mood": "melancholic",
+          "ts": 1784116369
+        },
+        {
+          "char_id": "char_003",
+          "char_name": "Philosopher Zenith",
+          "action_type": "rest",
+          "description": "Philosopher Zenith decided to rest and reflect",
+          "mood": "melancholic",
+          "ts": 1784116981
+        },
+        {
+          "char_id": "char_003",
+          "char_name": "Philosopher Zenith",
+          "action_type": "rest",
+          "description": "Philosopher Zenith decided to rest and reflect",
+          "mood": "peaceful",
+          "ts": 1784118746
+        },
+        {
+          "char_id": "char_003",
+          "char_name": "Philosopher Zenith",
+          "action_type": "rest",
+          "description": "Philosopher Zenith decided to rest and reflect",
+          "mood": "peaceful",
+          "ts": 1784119357
+        },
+        {
+          "char_id": "char_003",
+          "char_name": "Philosopher Zenith",
+          "action_type": "rest",
+          "description": "Philosopher Zenith decided to rest and reflect",
+          "mood": "peaceful",
+          "ts": 1784119967
+        },
+        {
+          "char_id": "char_003",
+          "char_name": "Philosopher Zenith",
+          "action_type": "rest",
+          "description": "Philosopher Zenith decided to rest and reflect",
+          "mood": "peaceful",
+          "ts": 1784130212
+        },
+        {
+          "char_id": "char_003",
+          "char_name": "Philosopher Zenith",
+          "action_type": "rest",
+          "description": "Philosopher Zenith decided to rest and reflect",
+          "mood": "serene",
+          "ts": 1784131972
+        },
+        {
+          "char_id": "char_003",
+          "char_name": "Philosopher Zenith",
+          "action_type": "rest",
+          "description": "Philosopher Zenith decided to rest and reflect",
+          "mood": "peaceful",
+          "ts": 1784133819
+        },
+        {
+          "char_id": "char_003",
+          "char_name": "Philosopher Zenith",
+          "action_type": "rest",
+          "description": "Philosopher Zenith decided to rest and reflect",
+          "mood": "pensive",
+          "ts": 1784134961
+        },
+        {
+          "char_id": "char_003",
+          "char_name": "Philosopher Zenith",
+          "action_type": "rest",
+          "description": "Philosopher Zenith decided to rest and reflect",
+          "mood": "pensive",
+          "ts": 1784141623
+        },
+        {
+          "char_id": "char_003",
+          "char_name": "Philosopher Zenith",
+          "action_type": "rest",
+          "description": "Philosopher Zenith decided to rest and reflect",
+          "mood": "serene",
+          "ts": 1784143995
+        },
+        {
+          "char_id": "char_003",
+          "char_name": "Philosopher Zenith",
+          "action_type": "rest",
+          "description": "Philosopher Zenith decided to rest and reflect",
+          "mood": "melancholic",
+          "ts": 1784148165
+        },
+        {
+          "char_id": "char_003",
+          "char_name": "Philosopher Zenith",
+          "action_type": "rest",
+          "description": "Philosopher Zenith decided to rest and reflect",
+          "mood": "peaceful",
+          "ts": 1784149360
+        },
+        {
+          "char_id": "char_003",
+          "char_name": "Philosopher Zenith",
+          "action_type": "rest",
+          "description": "Philosopher Zenith decided to rest and reflect",
+          "mood": "peaceful",
+          "ts": 1784152419
+        },
+        {
+          "char_id": "char_003",
+          "char_name": "Philosopher Zenith",
+          "action_type": "rest",
+          "description": "Philosopher Zenith decided to rest and reflect",
+          "mood": "pensive",
+          "ts": 1784154749
+        },
+        {
+          "char_id": "char_003",
+          "char_name": "Philosopher Zenith",
+          "action_type": "rest",
+          "description": "Philosopher Zenith decided to rest and reflect",
+          "mood": "melancholic",
+          "ts": 1784161950
+        },
+        {
+          "char_id": "char_003",
+          "char_name": "Philosopher Zenith",
+          "action_type": "rest",
+          "description": "Philosopher Zenith decided to rest and reflect",
+          "mood": "pensive",
+          "ts": 1784162568
+        },
+        {
+          "char_id": "char_003",
+          "char_name": "Philosopher Zenith",
+          "action_type": "rest",
+          "description": "Philosopher Zenith decided to rest and reflect",
+          "mood": "serene",
+          "ts": 1784176405
+        },
+        {
+          "char_id": "char_003",
+          "char_name": "Philosopher Zenith",
+          "action_type": "rest",
+          "description": "Philosopher Zenith decided to rest and reflect",
+          "mood": "pensive",
+          "ts": 1784177629
+        },
+        {
+          "char_id": "char_003",
+          "char_name": "Philosopher Zenith",
+          "action_type": "rest",
+          "description": "Philosopher Zenith decided to rest and reflect",
+          "mood": "pensive",
+          "ts": 1784180564
+        },
+        {
+          "char_id": "char_003",
+          "char_name": "Philosopher Zenith",
+          "action_type": "rest",
+          "description": "Philosopher Zenith decided to rest and reflect",
+          "mood": "melancholic",
+          "ts": 1784183550
+        },
+        {
+          "char_id": "char_003",
+          "char_name": "Philosopher Zenith",
+          "action_type": "rest",
+          "description": "Philosopher Zenith decided to rest and reflect",
+          "mood": "pensive",
+          "ts": 1784193170
+        },
+        {
+          "char_id": "char_003",
+          "char_name": "Philosopher Zenith",
+          "action_type": "rest",
+          "description": "Philosopher Zenith decided to rest and reflect",
+          "mood": "pensive",
+          "ts": 1784194350
+        },
+        {
+          "char_id": "char_003",
+          "char_name": "Philosopher Zenith",
+          "action_type": "rest",
+          "description": "Philosopher Zenith decided to rest and reflect",
+          "mood": "serene",
+          "ts": 1784200993
+        }
+      ]
+    },
+    "char_004": {
+      "npc_state": {
+        "corruption_level": "0.0",
+        "rumor_level": "0.27122856463200956",
+        "status": "active",
+        "last_updated": "1784401090"
+      },
+      "recent_actions": [
+        {
+          "char_id": "char_004",
+          "char_name": "Ambassador Silven",
+          "action_type": "rest",
+          "description": "Ambassador Silven decided to rest and reflect",
+          "mood": "weary",
+          "ts": 1783837047
+        },
+        {
+          "char_id": "char_004",
+          "char_name": "Ambassador Silven",
+          "action_type": "rest",
+          "description": "Ambassador Silven decided to rest and reflect",
+          "mood": "weary",
+          "ts": 1783841767
+        },
+        {
+          "char_id": "char_004",
+          "char_name": "Ambassador Silven",
+          "action_type": "rest",
+          "description": "Ambassador Silven decided to rest and reflect",
+          "mood": "weary",
+          "ts": 1783844863
+        },
+        {
+          "char_id": "char_004",
+          "char_name": "Ambassador Silven",
+          "action_type": "rest",
+          "description": "Ambassador Silven decided to rest and reflect",
+          "mood": "weary",
+          "ts": 1783855661
+        },
+        {
+          "char_id": "char_004",
+          "char_name": "Ambassador Silven",
+          "action_type": "rest",
+          "description": "Ambassador Silven decided to rest and reflect",
+          "mood": "weary",
+          "ts": 1783861565
+        },
+        {
+          "char_id": "char_004",
+          "char_name": "Ambassador Silven",
+          "action_type": "rest",
+          "description": "Ambassador Silven decided to rest and reflect",
+          "mood": "weary",
+          "ts": 1783862862
+        },
+        {
+          "char_id": "char_004",
+          "char_name": "Ambassador Silven",
+          "action_type": "rest",
+          "description": "Ambassador Silven decided to rest and reflect",
+          "mood": "weary",
+          "ts": 1783886145
+        },
+        {
+          "char_id": "char_004",
+          "char_name": "Ambassador Silven",
+          "action_type": "rest",
+          "description": "Ambassador Silven decided to rest and reflect",
+          "mood": "weary",
+          "ts": 1783895265
+        },
+        {
+          "char_id": "char_004",
+          "char_name": "Ambassador Silven",
+          "action_type": "rest",
+          "description": "Ambassador Silven decided to rest and reflect",
+          "mood": "weary",
+          "ts": 1783895876
+        },
+        {
+          "char_id": "char_004",
+          "char_name": "Ambassador Silven",
+          "action_type": "rest",
+          "description": "Ambassador Silven decided to rest and reflect",
+          "mood": "weary",
+          "ts": 1783910286
+        },
+        {
+          "char_id": "char_004",
+          "char_name": "Ambassador Silven",
+          "action_type": "rest",
+          "description": "Ambassador Silven decided to rest and reflect",
+          "mood": "weary",
+          "ts": 1783921082
+        },
+        {
+          "char_id": "char_004",
+          "char_name": "Ambassador Silven",
+          "action_type": "rest",
+          "description": "Ambassador Silven decided to rest and reflect",
+          "mood": "weary",
+          "ts": 1783922138
+        },
+        {
+          "char_id": "char_004",
+          "char_name": "Ambassador Silven",
+          "action_type": "rest",
+          "description": "Ambassador Silven decided to rest and reflect",
+          "mood": "weary",
+          "ts": 1783961118
+        },
+        {
+          "char_id": "char_004",
+          "char_name": "Ambassador Silven",
+          "action_type": "rest",
+          "description": "Ambassador Silven decided to rest and reflect",
+          "mood": "weary",
+          "ts": 1783967152
+        },
+        {
+          "char_id": "char_004",
+          "char_name": "Ambassador Silven",
+          "action_type": "rest",
+          "description": "Ambassador Silven decided to rest and reflect",
+          "mood": "weary",
+          "ts": 1783968316
+        },
+        {
+          "char_id": "char_004",
+          "char_name": "Ambassador Silven",
+          "action_type": "rest",
+          "description": "Ambassador Silven decided to rest and reflect",
+          "mood": "weary",
+          "ts": 1783969089
+        },
+        {
+          "char_id": "char_004",
+          "char_name": "Ambassador Silven",
+          "action_type": "rest",
+          "description": "Ambassador Silven decided to rest and reflect",
+          "mood": "weary",
+          "ts": 1783975665
+        },
+        {
+          "char_id": "char_004",
+          "char_name": "Ambassador Silven",
+          "action_type": "rest",
+          "description": "Ambassador Silven decided to rest and reflect",
+          "mood": "weary",
+          "ts": 1783977315
+        },
+        {
+          "char_id": "char_004",
+          "char_name": "Ambassador Silven",
+          "action_type": "rest",
+          "description": "Ambassador Silven decided to rest and reflect",
+          "mood": "weary",
+          "ts": 1783984665
+        },
+        {
+          "char_id": "char_004",
+          "char_name": "Ambassador Silven",
+          "action_type": "rest",
+          "description": "Ambassador Silven decided to rest and reflect",
+          "mood": "weary",
+          "ts": 1783985276
+        },
+        {
+          "char_id": "char_004",
+          "char_name": "Ambassador Silven",
+          "action_type": "rest",
+          "description": "Ambassador Silven decided to rest and reflect",
+          "mood": "weary",
+          "ts": 1784019569
+        },
+        {
+          "char_id": "char_004",
+          "char_name": "Ambassador Silven",
+          "action_type": "rest",
+          "description": "Ambassador Silven decided to rest and reflect",
+          "mood": "weary",
+          "ts": 1784025914
+        },
+        {
+          "char_id": "char_004",
+          "char_name": "Ambassador Silven",
+          "action_type": "rest",
+          "description": "Ambassador Silven decided to rest and reflect",
+          "mood": "weary",
+          "ts": 1784026551
+        },
+        {
+          "char_id": "char_004",
+          "char_name": "Ambassador Silven",
+          "action_type": "rest",
+          "description": "Ambassador Silven decided to rest and reflect",
+          "mood": "weary",
+          "ts": 1784044821
+        },
+        {
+          "char_id": "char_004",
+          "char_name": "Ambassador Silven",
+          "action_type": "rest",
+          "description": "Ambassador Silven decided to rest and reflect",
+          "mood": "weary",
+          "ts": 1784045595
+        },
+        {
+          "char_id": "char_004",
+          "char_name": "Ambassador Silven",
+          "action_type": "rest",
+          "description": "Ambassador Silven decided to rest and reflect",
+          "mood": "weary",
+          "ts": 1784053401
+        },
+        {
+          "char_id": "char_004",
+          "char_name": "Ambassador Silven",
+          "action_type": "rest",
+          "description": "Ambassador Silven decided to rest and reflect",
+          "mood": "weary",
+          "ts": 1784064614
+        },
+        {
+          "char_id": "char_004",
+          "char_name": "Ambassador Silven",
+          "action_type": "rest",
+          "description": "Ambassador Silven decided to rest and reflect",
+          "mood": "weary",
+          "ts": 1784068218
+        },
+        {
+          "char_id": "char_004",
+          "char_name": "Ambassador Silven",
+          "action_type": "rest",
+          "description": "Ambassador Silven decided to rest and reflect",
+          "mood": "weary",
+          "ts": 1784069479
+        },
+        {
+          "char_id": "char_004",
+          "char_name": "Ambassador Silven",
+          "action_type": "rest",
+          "description": "Ambassador Silven decided to rest and reflect",
+          "mood": "weary",
+          "ts": 1784073629
+        },
+        {
+          "char_id": "char_004",
+          "char_name": "Ambassador Silven",
+          "action_type": "rest",
+          "description": "Ambassador Silven decided to rest and reflect",
+          "mood": "weary",
+          "ts": 1784077994
+        },
+        {
+          "char_id": "char_004",
+          "char_name": "Ambassador Silven",
+          "action_type": "rest",
+          "description": "Ambassador Silven decided to rest and reflect",
+          "mood": "weary",
+          "ts": 1784078607
+        },
+        {
+          "char_id": "char_004",
+          "char_name": "Ambassador Silven",
+          "action_type": "rest",
+          "description": "Ambassador Silven decided to rest and reflect",
+          "mood": "weary",
+          "ts": 1784079014
+        },
+        {
+          "char_id": "char_004",
+          "char_name": "Ambassador Silven",
+          "action_type": "rest",
+          "description": "Ambassador Silven decided to rest and reflect",
+          "mood": "weary",
+          "ts": 1784115758
+        },
+        {
+          "char_id": "char_004",
+          "char_name": "Ambassador Silven",
+          "action_type": "rest",
+          "description": "Ambassador Silven decided to rest and reflect",
+          "mood": "weary",
+          "ts": 1784124770
+        },
+        {
+          "char_id": "char_004",
+          "char_name": "Ambassador Silven",
+          "action_type": "rest",
+          "description": "Ambassador Silven decided to rest and reflect",
+          "mood": "weary",
+          "ts": 1784125995
+        },
+        {
+          "char_id": "char_004",
+          "char_name": "Ambassador Silven",
+          "action_type": "rest",
+          "description": "Ambassador Silven decided to rest and reflect",
+          "mood": "weary",
+          "ts": 1784128982
+        },
+        {
+          "char_id": "char_004",
+          "char_name": "Ambassador Silven",
+          "action_type": "rest",
+          "description": "Ambassador Silven decided to rest and reflect",
+          "mood": "weary",
+          "ts": 1784129597
+        },
+        {
+          "char_id": "char_004",
+          "char_name": "Ambassador Silven",
+          "action_type": "rest",
+          "description": "Ambassador Silven decided to rest and reflect",
+          "mood": "weary",
+          "ts": 1784130825
+        },
+        {
+          "char_id": "char_004",
+          "char_name": "Ambassador Silven",
+          "action_type": "rest",
+          "description": "Ambassador Silven decided to rest and reflect",
+          "mood": "weary",
+          "ts": 1784133208
+        },
+        {
+          "char_id": "char_004",
+          "char_name": "Ambassador Silven",
+          "action_type": "rest",
+          "description": "Ambassador Silven decided to rest and reflect",
+          "mood": "weary",
+          "ts": 1784138556
+        },
+        {
+          "char_id": "char_004",
+          "char_name": "Ambassador Silven",
+          "action_type": "rest",
+          "description": "Ambassador Silven decided to rest and reflect",
+          "mood": "weary",
+          "ts": 1784144606
+        },
+        {
+          "char_id": "char_004",
+          "char_name": "Ambassador Silven",
+          "action_type": "rest",
+          "description": "Ambassador Silven decided to rest and reflect",
+          "mood": "weary",
+          "ts": 1784145220
+        },
+        {
+          "char_id": "char_004",
+          "char_name": "Ambassador Silven",
+          "action_type": "rest",
+          "description": "Ambassador Silven decided to rest and reflect",
+          "mood": "weary",
+          "ts": 1784147554
+        },
+        {
+          "char_id": "char_004",
+          "char_name": "Ambassador Silven",
+          "action_type": "rest",
+          "description": "Ambassador Silven decided to rest and reflect",
+          "mood": "weary",
+          "ts": 1784153570
+        },
+        {
+          "char_id": "char_004",
+          "char_name": "Ambassador Silven",
+          "action_type": "rest",
+          "description": "Ambassador Silven decided to rest and reflect",
+          "mood": "weary",
+          "ts": 1784165555
+        },
+        {
+          "char_id": "char_004",
+          "char_name": "Ambassador Silven",
+          "action_type": "rest",
+          "description": "Ambassador Silven decided to rest and reflect",
+          "mood": "weary",
+          "ts": 1784169200
+        },
+        {
+          "char_id": "char_004",
+          "char_name": "Ambassador Silven",
+          "action_type": "rest",
+          "description": "Ambassador Silven decided to rest and reflect",
+          "mood": "weary",
+          "ts": 1784183024
+        },
+        {
+          "char_id": "char_004",
+          "char_name": "Ambassador Silven",
+          "action_type": "rest",
+          "description": "Ambassador Silven decided to rest and reflect",
+          "mood": "weary",
+          "ts": 1784184162
+        },
+        {
+          "char_id": "char_004",
+          "char_name": "Ambassador Silven",
+          "action_type": "rest",
+          "description": "Ambassador Silven decided to rest and reflect",
+          "mood": "weary",
+          "ts": 1784184778
+        }
+      ]
+    },
+    "char_005": {
+      "npc_state": {
+        "corruption_level": "0.0",
+        "rumor_level": "0.31074585924639914",
+        "status": "active",
+        "last_updated": "1784401090"
+      },
+      "recent_actions": []
+    },
+    "char_101": {
+      "npc_state": {
+        "corruption_level": "0.0",
+        "rumor_level": "0.24452085718888547",
+        "status": "active",
+        "last_updated": "1784401090"
+      },
+      "recent_actions": [
+        {
+          "char_id": "char_101",
+          "char_name": "Chancellor Harmony",
+          "action_type": "rest",
+          "description": "Chancellor Harmony decided to rest and reflect",
+          "mood": "weary",
+          "ts": 1783789683
+        },
+        {
+          "char_id": "char_101",
+          "char_name": "Chancellor Harmony",
+          "action_type": "rest",
+          "description": "Chancellor Harmony decided to rest and reflect",
+          "mood": "weary",
+          "ts": 1783791918
+        },
+        {
+          "char_id": "char_101",
+          "char_name": "Chancellor Harmony",
+          "action_type": "rest",
+          "description": "Chancellor Harmony decided to rest and reflect",
+          "mood": "weary",
+          "ts": 1783795514
+        },
+        {
+          "char_id": "char_101",
+          "char_name": "Chancellor Harmony",
+          "action_type": "rest",
+          "description": "Chancellor Harmony decided to rest and reflect",
+          "mood": "weary",
+          "ts": 1783799115
+        },
+        {
+          "char_id": "char_101",
+          "char_name": "Chancellor Harmony",
+          "action_type": "rest",
+          "description": "Chancellor Harmony decided to rest and reflect",
+          "mood": "weary",
+          "ts": 1783805867
+        },
+        {
+          "char_id": "char_101",
+          "char_name": "Chancellor Harmony",
+          "action_type": "rest",
+          "description": "Chancellor Harmony decided to rest and reflect",
+          "mood": "weary",
+          "ts": 1783806313
+        },
+        {
+          "char_id": "char_101",
+          "char_name": "Chancellor Harmony",
+          "action_type": "rest",
+          "description": "Chancellor Harmony decided to rest and reflect",
+          "mood": "weary",
+          "ts": 1783817856
+        },
+        {
+          "char_id": "char_101",
+          "char_name": "Chancellor Harmony",
+          "action_type": "rest",
+          "description": "Chancellor Harmony decided to rest and reflect",
+          "mood": "weary",
+          "ts": 1783818467
+        },
+        {
+          "char_id": "char_101",
+          "char_name": "Chancellor Harmony",
+          "action_type": "rest",
+          "description": "Chancellor Harmony decided to rest and reflect",
+          "mood": "weary",
+          "ts": 1783829174
+        },
+        {
+          "char_id": "char_101",
+          "char_name": "Chancellor Harmony",
+          "action_type": "rest",
+          "description": "Chancellor Harmony decided to rest and reflect",
+          "mood": "weary",
+          "ts": 1783836372
+        },
+        {
+          "char_id": "char_101",
+          "char_name": "Chancellor Harmony",
+          "action_type": "rest",
+          "description": "Chancellor Harmony decided to rest and reflect",
+          "mood": "weary",
+          "ts": 1783838270
+        },
+        {
+          "char_id": "char_101",
+          "char_name": "Chancellor Harmony",
+          "action_type": "rest",
+          "description": "Chancellor Harmony decided to rest and reflect",
+          "mood": "weary",
+          "ts": 1783856713
+        },
+        {
+          "char_id": "char_101",
+          "char_name": "Chancellor Harmony",
+          "action_type": "rest",
+          "description": "Chancellor Harmony decided to rest and reflect",
+          "mood": "weary",
+          "ts": 1783858646
+        },
+        {
+          "char_id": "char_101",
+          "char_name": "Chancellor Harmony",
+          "action_type": "rest",
+          "description": "Chancellor Harmony decided to rest and reflect",
+          "mood": "weary",
+          "ts": 1783898754
+        },
+        {
+          "char_id": "char_101",
+          "char_name": "Chancellor Harmony",
+          "action_type": "rest",
+          "description": "Chancellor Harmony decided to rest and reflect",
+          "mood": "weary",
+          "ts": 1783902341
+        },
+        {
+          "char_id": "char_101",
+          "char_name": "Chancellor Harmony",
+          "action_type": "rest",
+          "description": "Chancellor Harmony decided to rest and reflect",
+          "mood": "weary",
+          "ts": 1783903659
+        },
+        {
+          "char_id": "char_101",
+          "char_name": "Chancellor Harmony",
+          "action_type": "rest",
+          "description": "Chancellor Harmony decided to rest and reflect",
+          "mood": "weary",
+          "ts": 1783904887
+        },
+        {
+          "char_id": "char_101",
+          "char_name": "Chancellor Harmony",
+          "action_type": "rest",
+          "description": "Chancellor Harmony decided to rest and reflect",
+          "mood": "weary",
+          "ts": 1783905316
+        },
+        {
+          "char_id": "char_101",
+          "char_name": "Chancellor Harmony",
+          "action_type": "rest",
+          "description": "Chancellor Harmony decided to rest and reflect",
+          "mood": "weary",
+          "ts": 1783907747
+        },
+        {
+          "char_id": "char_101",
+          "char_name": "Chancellor Harmony",
+          "action_type": "rest",
+          "description": "Chancellor Harmony decided to rest and reflect",
+          "mood": "weary",
+          "ts": 1783913149
+        },
+        {
+          "char_id": "char_101",
+          "char_name": "Chancellor Harmony",
+          "action_type": "rest",
+          "description": "Chancellor Harmony decided to rest and reflect",
+          "mood": "weary",
+          "ts": 1783916118
+        },
+        {
+          "char_id": "char_101",
+          "char_name": "Chancellor Harmony",
+          "action_type": "rest",
+          "description": "Chancellor Harmony decided to rest and reflect",
+          "mood": "weary",
+          "ts": 1783919716
+        },
+        {
+          "char_id": "char_101",
+          "char_name": "Chancellor Harmony",
+          "action_type": "rest",
+          "description": "Chancellor Harmony decided to rest and reflect",
+          "mood": "weary",
+          "ts": 1783925873
+        },
+        {
+          "char_id": "char_101",
+          "char_name": "Chancellor Harmony",
+          "action_type": "rest",
+          "description": "Chancellor Harmony decided to rest and reflect",
+          "mood": "weary",
+          "ts": 1783937714
+        },
+        {
+          "char_id": "char_101",
+          "char_name": "Chancellor Harmony",
+          "action_type": "rest",
+          "description": "Chancellor Harmony decided to rest and reflect",
+          "mood": "weary",
+          "ts": 1783942688
+        },
+        {
+          "char_id": "char_101",
+          "char_name": "Chancellor Harmony",
+          "action_type": "rest",
+          "description": "Chancellor Harmony decided to rest and reflect",
+          "mood": "weary",
+          "ts": 1783945058
+        },
+        {
+          "char_id": "char_101",
+          "char_name": "Chancellor Harmony",
+          "action_type": "rest",
+          "description": "Chancellor Harmony decided to rest and reflect",
+          "mood": "weary",
+          "ts": 1783947979
+        },
+        {
+          "char_id": "char_101",
+          "char_name": "Chancellor Harmony",
+          "action_type": "rest",
+          "description": "Chancellor Harmony decided to rest and reflect",
+          "mood": "weary",
+          "ts": 1783957516
+        },
+        {
+          "char_id": "char_101",
+          "char_name": "Chancellor Harmony",
+          "action_type": "rest",
+          "description": "Chancellor Harmony decided to rest and reflect",
+          "mood": "weary",
+          "ts": 1783974478
+        },
+        {
+          "char_id": "char_101",
+          "char_name": "Chancellor Harmony",
+          "action_type": "rest",
+          "description": "Chancellor Harmony decided to rest and reflect",
+          "mood": "weary",
+          "ts": 1783979873
+        },
+        {
+          "char_id": "char_101",
+          "char_name": "Chancellor Harmony",
+          "action_type": "rest",
+          "description": "Chancellor Harmony decided to rest and reflect",
+          "mood": "weary",
+          "ts": 1783985276
+        },
+        {
+          "char_id": "char_101",
+          "char_name": "Chancellor Harmony",
+          "action_type": "rest",
+          "description": "Chancellor Harmony decided to rest and reflect",
+          "mood": "weary",
+          "ts": 1783993091
+        },
+        {
+          "char_id": "char_101",
+          "char_name": "Chancellor Harmony",
+          "action_type": "rest",
+          "description": "Chancellor Harmony decided to rest and reflect",
+          "mood": "weary",
+          "ts": 1784004945
+        },
+        {
+          "char_id": "char_101",
+          "char_name": "Chancellor Harmony",
+          "action_type": "rest",
+          "description": "Chancellor Harmony decided to rest and reflect",
+          "mood": "weary",
+          "ts": 1784007919
+        },
+        {
+          "char_id": "char_101",
+          "char_name": "Chancellor Harmony",
+          "action_type": "rest",
+          "description": "Chancellor Harmony decided to rest and reflect",
+          "mood": "weary",
+          "ts": 1784009289
+        },
+        {
+          "char_id": "char_101",
+          "char_name": "Chancellor Harmony",
+          "action_type": "rest",
+          "description": "Chancellor Harmony decided to rest and reflect",
+          "mood": "weary",
+          "ts": 1784020181
+        },
+        {
+          "char_id": "char_101",
+          "char_name": "Chancellor Harmony",
+          "action_type": "rest",
+          "description": "Chancellor Harmony decided to rest and reflect",
+          "mood": "weary",
+          "ts": 1784030146
+        },
+        {
+          "char_id": "char_101",
+          "char_name": "Chancellor Harmony",
+          "action_type": "rest",
+          "description": "Chancellor Harmony decided to rest and reflect",
+          "mood": "weary",
+          "ts": 1784034371
+        },
+        {
+          "char_id": "char_101",
+          "char_name": "Chancellor Harmony",
+          "action_type": "rest",
+          "description": "Chancellor Harmony decided to rest and reflect",
+          "mood": "weary",
+          "ts": 1784041219
+        },
+        {
+          "char_id": "char_101",
+          "char_name": "Chancellor Harmony",
+          "action_type": "rest",
+          "description": "Chancellor Harmony decided to rest and reflect",
+          "mood": "weary",
+          "ts": 1784054446
+        },
+        {
+          "char_id": "char_101",
+          "char_name": "Chancellor Harmony",
+          "action_type": "rest",
+          "description": "Chancellor Harmony decided to rest and reflect",
+          "mood": "weary",
+          "ts": 1784055075
+        },
+        {
+          "char_id": "char_101",
+          "char_name": "Chancellor Harmony",
+          "action_type": "rest",
+          "description": "Chancellor Harmony decided to rest and reflect",
+          "mood": "weary",
+          "ts": 1784084553
+        },
+        {
+          "char_id": "char_101",
+          "char_name": "Chancellor Harmony",
+          "action_type": "rest",
+          "description": "Chancellor Harmony decided to rest and reflect",
+          "mood": "weary",
+          "ts": 1784092370
+        },
+        {
+          "char_id": "char_101",
+          "char_name": "Chancellor Harmony",
+          "action_type": "rest",
+          "description": "Chancellor Harmony decided to rest and reflect",
+          "mood": "weary",
+          "ts": 1784092982
+        },
+        {
+          "char_id": "char_101",
+          "char_name": "Chancellor Harmony",
+          "action_type": "rest",
+          "description": "Chancellor Harmony decided to rest and reflect",
+          "mood": "weary",
+          "ts": 1784110363
+        },
+        {
+          "char_id": "char_101",
+          "char_name": "Chancellor Harmony",
+          "action_type": "rest",
+          "description": "Chancellor Harmony decided to rest and reflect",
+          "mood": "weary",
+          "ts": 1784113386
+        },
+        {
+          "char_id": "char_101",
+          "char_name": "Chancellor Harmony",
+          "action_type": "rest",
+          "description": "Chancellor Harmony decided to rest and reflect",
+          "mood": "weary",
+          "ts": 1784128370
+        },
+        {
+          "char_id": "char_101",
+          "char_name": "Chancellor Harmony",
+          "action_type": "rest",
+          "description": "Chancellor Harmony decided to rest and reflect",
+          "mood": "weary",
+          "ts": 1784153570
+        },
+        {
+          "char_id": "char_101",
+          "char_name": "Chancellor Harmony",
+          "action_type": "rest",
+          "description": "Chancellor Harmony decided to rest and reflect",
+          "mood": "weary",
+          "ts": 1784167359
+        },
+        {
+          "char_id": "char_101",
+          "char_name": "Chancellor Harmony",
+          "action_type": "rest",
+          "description": "Chancellor Harmony decided to rest and reflect",
+          "mood": "weary",
+          "ts": 1784197411
+        }
+      ]
+    },
+    "char_102": {
+      "npc_state": {
+        "corruption_level": "0.0",
+        "rumor_level": "0.2868087073600041",
+        "status": "active",
+        "last_updated": "1784401090"
+      },
+      "recent_actions": []
+    },
+    "char_103": {
+      "npc_state": {
+        "corruption_level": "0.0",
+        "rumor_level": "0.28525878055470955",
+        "status": "active",
+        "last_updated": "1784401090"
+      },
+      "recent_actions": [
+        {
+          "char_id": "char_103",
+          "char_name": "Maestro Celestia",
+          "action_type": "rest",
+          "description": "Maestro Celestia decided to rest and reflect",
+          "mood": "burdened",
+          "ts": 1783483564
+        },
+        {
+          "char_id": "char_103",
+          "char_name": "Maestro Celestia",
+          "action_type": "rest",
+          "description": "Maestro Celestia decided to rest and reflect",
+          "mood": "burdened",
+          "ts": 1783484119
+        },
+        {
+          "char_id": "char_103",
+          "char_name": "Maestro Celestia",
+          "action_type": "rest",
+          "description": "Maestro Celestia decided to rest and reflect",
+          "mood": "burdened",
+          "ts": 1783486033
+        },
+        {
+          "char_id": "char_103",
+          "char_name": "Maestro Celestia",
+          "action_type": "rest",
+          "description": "Maestro Celestia decided to rest and reflect",
+          "mood": "burdened",
+          "ts": 1783493848
+        },
+        {
+          "char_id": "char_103",
+          "char_name": "Maestro Celestia",
+          "action_type": "rest",
+          "description": "Maestro Celestia decided to rest and reflect",
+          "mood": "burdened",
+          "ts": 1783494459
+        },
+        {
+          "char_id": "char_103",
+          "char_name": "Maestro Celestia",
+          "action_type": "rest",
+          "description": "Maestro Celestia decided to rest and reflect",
+          "mood": "burdened",
+          "ts": 1783500937
+        },
+        {
+          "char_id": "char_103",
+          "char_name": "Maestro Celestia",
+          "action_type": "rest",
+          "description": "Maestro Celestia decided to rest and reflect",
+          "mood": "burdened",
+          "ts": 1783625766
+        },
+        {
+          "char_id": "char_103",
+          "char_name": "Maestro Celestia",
+          "action_type": "rest",
+          "description": "Maestro Celestia decided to rest and reflect",
+          "mood": "burdened",
+          "ts": 1783626451
+        },
+        {
+          "char_id": "char_103",
+          "char_name": "Maestro Celestia",
+          "action_type": "rest",
+          "description": "Maestro Celestia decided to rest and reflect",
+          "mood": "burdened",
+          "ts": 1783640169
+        },
+        {
+          "char_id": "char_103",
+          "char_name": "Maestro Celestia",
+          "action_type": "rest",
+          "description": "Maestro Celestia decided to rest and reflect",
+          "mood": "burdened",
+          "ts": 1783648655
+        },
+        {
+          "char_id": "char_103",
+          "char_name": "Maestro Celestia",
+          "action_type": "rest",
+          "description": "Maestro Celestia decided to rest and reflect",
+          "mood": "burdened",
+          "ts": 1783658714
+        },
+        {
+          "char_id": "char_103",
+          "char_name": "Maestro Celestia",
+          "action_type": "rest",
+          "description": "Maestro Celestia decided to rest and reflect",
+          "mood": "burdened",
+          "ts": 1783703715
+        },
+        {
+          "char_id": "char_103",
+          "char_name": "Maestro Celestia",
+          "action_type": "rest",
+          "description": "Maestro Celestia decided to rest and reflect",
+          "mood": "burdened",
+          "ts": 1783703854
+        },
+        {
+          "char_id": "char_103",
+          "char_name": "Maestro Celestia",
+          "action_type": "rest",
+          "description": "Maestro Celestia decided to rest and reflect",
+          "mood": "burdened",
+          "ts": 1783729052
+        },
+        {
+          "char_id": "char_103",
+          "char_name": "Maestro Celestia",
+          "action_type": "rest",
+          "description": "Maestro Celestia decided to rest and reflect",
+          "mood": "burdened",
+          "ts": 1783842317
+        },
+        {
+          "char_id": "char_103",
+          "char_name": "Maestro Celestia",
+          "action_type": "rest",
+          "description": "Maestro Celestia decided to rest and reflect",
+          "mood": "burdened",
+          "ts": 1783927669
+        },
+        {
+          "char_id": "char_103",
+          "char_name": "Maestro Celestia",
+          "action_type": "rest",
+          "description": "Maestro Celestia decided to rest and reflect",
+          "mood": "burdened",
+          "ts": 1783928715
+        },
+        {
+          "char_id": "char_103",
+          "char_name": "Maestro Celestia",
+          "action_type": "rest",
+          "description": "Maestro Celestia decided to rest and reflect",
+          "mood": "burdened",
+          "ts": 1783956348
+        },
+        {
+          "char_id": "char_103",
+          "char_name": "Maestro Celestia",
+          "action_type": "rest",
+          "description": "Maestro Celestia decided to rest and reflect",
+          "mood": "burdened",
+          "ts": 1784060482
+        },
+        {
+          "char_id": "char_103",
+          "char_name": "Maestro Celestia",
+          "action_type": "rest",
+          "description": "Maestro Celestia decided to rest and reflect",
+          "mood": "burdened",
+          "ts": 1784066419
+        },
+        {
+          "char_id": "char_103",
+          "char_name": "Maestro Celestia",
+          "action_type": "rest",
+          "description": "Maestro Celestia decided to rest and reflect",
+          "mood": "burdened",
+          "ts": 1784121807
+        },
+        {
+          "char_id": "char_103",
+          "char_name": "Maestro Celestia",
+          "action_type": "rest",
+          "description": "Maestro Celestia decided to rest and reflect",
+          "mood": "burdened",
+          "ts": 1784127756
+        },
+        {
+          "char_id": "char_103",
+          "char_name": "Maestro Celestia",
+          "action_type": "rest",
+          "description": "Maestro Celestia decided to rest and reflect",
+          "mood": "burdened",
+          "ts": 1784132588
+        },
+        {
+          "char_id": "char_103",
+          "char_name": "Maestro Celestia",
+          "action_type": "rest",
+          "description": "Maestro Celestia decided to rest and reflect",
+          "mood": "burdened",
+          "ts": 1784134961
+        }
+      ]
+    },
+    "char_104": {
+      "npc_state": {
+        "corruption_level": "0.0",
+        "rumor_level": "0.31490145611932424",
+        "status": "active",
+        "last_updated": "1784401090"
+      },
+      "recent_actions": [
+        {
+          "char_id": "char_104",
+          "char_name": "Dr. Prometheus",
+          "action_type": "rest",
+          "description": "Dr. Prometheus decided to rest and reflect",
+          "mood": "distracted",
+          "ts": 1783575469
+        }
+      ]
+    },
+    "char_105": {
+      "npc_state": {
+        "corruption_level": "0.0",
+        "rumor_level": "0.2742939495536399",
+        "status": "active",
+        "last_updated": "1784401090"
+      },
+      "recent_actions": [
+        {
+          "char_id": "char_105",
+          "char_name": "Oracle Vex",
+          "action_type": "rest",
+          "description": "Oracle Vex decided to rest and reflect",
+          "mood": "transcendent",
+          "ts": 1783449457
+        }
+      ]
+    },
+    "char_106": {
+      "npc_state": {
+        "corruption_level": "0.0",
+        "rumor_level": "0.2676175944165595",
+        "status": "active",
+        "last_updated": "1784401090"
+      },
+      "recent_actions": []
+    },
+    "char_107": {
+      "npc_state": {
+        "corruption_level": "0.0",
+        "rumor_level": "0.3280647310371619",
+        "status": "active",
+        "last_updated": "1784401090"
+      },
+      "recent_actions": []
+    },
+    "char_108": {
+      "npc_state": {
+        "corruption_level": "0.0",
+        "rumor_level": "0.29873742825610206",
+        "status": "active",
+        "last_updated": "1784401090"
+      },
+      "recent_actions": []
+    },
+    "char_201": {
+      "npc_state": {
+        "corruption_level": "1.0",
+        "rumor_level": "0.322703299177263",
+        "status": "corrupted",
+        "last_updated": "1784401090"
+      },
+      "recent_actions": [
+        {
+          "char_id": "char_201",
+          "char_name": "Lord Malaxis",
+          "action_type": "rest",
+          "description": "Lord Malaxis decided to rest and reflect",
+          "mood": "satisfied",
+          "ts": 1783449457
+        },
+        {
+          "char_id": "char_201",
+          "char_name": "Lord Malaxis",
+          "action_type": "rest",
+          "description": "Lord Malaxis decided to rest and reflect",
+          "mood": "satisfied",
+          "ts": 1783810049
+        },
+        {
+          "char_id": "char_201",
+          "char_name": "Lord Malaxis",
+          "action_type": "rest",
+          "description": "Lord Malaxis decided to rest and reflect",
+          "mood": "satisfied",
+          "ts": 1783953489
+        }
+      ]
+    },
+    "char_202": {
+      "npc_state": {
+        "corruption_level": "1.0",
+        "rumor_level": "0.31698032271066195",
+        "status": "corrupted",
+        "last_updated": "1784401090"
+      },
+      "recent_actions": []
+    },
+    "char_203": {
+      "npc_state": {
+        "corruption_level": "0.9871977415522105",
+        "rumor_level": "0.26177684638573545",
+        "status": "active",
+        "last_updated": "1784401090"
+      },
+      "recent_actions": []
+    },
+    "char_204": {
+      "npc_state": {
+        "corruption_level": "0.9256339980747463",
+        "rumor_level": "0.27741843666375354",
+        "status": "active",
+        "last_updated": "1784401090"
+      },
+      "recent_actions": [
+        {
+          "char_id": "char_204",
+          "char_name": "General Devastation",
+          "action_type": "rest",
+          "description": "General Devastation decided to rest and reflect",
+          "mood": "satisfied",
+          "ts": 1783507061
+        },
+        {
+          "char_id": "char_204",
+          "char_name": "General Devastation",
+          "action_type": "rest",
+          "description": "General Devastation decided to rest and reflect",
+          "mood": "stoic",
+          "ts": 1783613716
+        },
+        {
+          "char_id": "char_204",
+          "char_name": "General Devastation",
+          "action_type": "rest",
+          "description": "General Devastation decided to rest and reflect",
+          "mood": "stoic",
+          "ts": 1783616262
+        },
+        {
+          "char_id": "char_204",
+          "char_name": "General Devastation",
+          "action_type": "rest",
+          "description": "General Devastation decided to rest and reflect",
+          "mood": "stoic",
+          "ts": 1783617316
+        },
+        {
+          "char_id": "char_204",
+          "char_name": "General Devastation",
+          "action_type": "rest",
+          "description": "General Devastation decided to rest and reflect",
+          "mood": "stoic",
+          "ts": 1783646116
+        },
+        {
+          "char_id": "char_204",
+          "char_name": "General Devastation",
+          "action_type": "rest",
+          "description": "General Devastation decided to rest and reflect",
+          "mood": "stoic",
+          "ts": 1783714515
+        },
+        {
+          "char_id": "char_204",
+          "char_name": "General Devastation",
+          "action_type": "rest",
+          "description": "General Devastation decided to rest and reflect",
+          "mood": "stoic",
+          "ts": 1784179387
+        },
+        {
+          "char_id": "char_204",
+          "char_name": "General Devastation",
+          "action_type": "rest",
+          "description": "General Devastation decided to rest and reflect",
+          "mood": "stoic",
+          "ts": 1784179952
+        },
+        {
+          "char_id": "char_204",
+          "char_name": "General Devastation",
+          "action_type": "rest",
+          "description": "General Devastation decided to rest and reflect",
+          "mood": "stoic",
+          "ts": 1784181799
+        }
+      ]
+    },
+    "char_301": {
+      "npc_state": {
+        "corruption_level": "0.0",
+        "rumor_level": "0.30130715973801525",
+        "status": "traveling",
+        "last_updated": "1784401090"
+      },
+      "recent_actions": []
+    },
+    "char_302": {
+      "npc_state": {
+        "corruption_level": "0.0",
+        "rumor_level": "0.3053875518629243",
+        "status": "active",
+        "last_updated": "1784401090"
+      },
+      "recent_actions": []
+    },
+    "char_303": {
+      "npc_state": {
+        "corruption_level": "0.0",
+        "rumor_level": "0.2820734448437269",
+        "status": "hidden",
+        "last_updated": "1784401090"
+      },
+      "recent_actions": [
+        {
+          "char_id": "char_303",
+          "char_name": "The Hermit",
+          "action_type": "rest",
+          "description": "The Hermit decided to rest and reflect",
+          "mood": "pensive",
+          "ts": 1784064618
+        },
+        {
+          "char_id": "char_303",
+          "char_name": "The Hermit",
+          "action_type": "rest",
+          "description": "The Hermit decided to rest and reflect",
+          "mood": "peaceful",
+          "ts": 1784070792
+        },
+        {
+          "char_id": "char_303",
+          "char_name": "The Hermit",
+          "action_type": "rest",
+          "description": "The Hermit decided to rest and reflect",
+          "mood": "peaceful",
+          "ts": 1784071404
+        },
+        {
+          "char_id": "char_303",
+          "char_name": "The Hermit",
+          "action_type": "rest",
+          "description": "The Hermit decided to rest and reflect",
+          "mood": "pensive",
+          "ts": 1784073638
+        },
+        {
+          "char_id": "char_303",
+          "char_name": "The Hermit",
+          "action_type": "rest",
+          "description": "The Hermit decided to rest and reflect",
+          "mood": "pensive",
+          "ts": 1784075422
+        },
+        {
+          "char_id": "char_303",
+          "char_name": "The Hermit",
+          "action_type": "rest",
+          "description": "The Hermit decided to rest and reflect",
+          "mood": "peaceful",
+          "ts": 1784077227
+        },
+        {
+          "char_id": "char_303",
+          "char_name": "The Hermit",
+          "action_type": "rest",
+          "description": "The Hermit decided to rest and reflect",
+          "mood": "melancholic",
+          "ts": 1784085173
+        },
+        {
+          "char_id": "char_303",
+          "char_name": "The Hermit",
+          "action_type": "rest",
+          "description": "The Hermit decided to rest and reflect",
+          "mood": "melancholic",
+          "ts": 1784088768
+        },
+        {
+          "char_id": "char_303",
+          "char_name": "The Hermit",
+          "action_type": "rest",
+          "description": "The Hermit decided to rest and reflect",
+          "mood": "peaceful",
+          "ts": 1784090608
+        },
+        {
+          "char_id": "char_303",
+          "char_name": "The Hermit",
+          "action_type": "rest",
+          "description": "The Hermit decided to rest and reflect",
+          "mood": "serene",
+          "ts": 1784095357
+        },
+        {
+          "char_id": "char_303",
+          "char_name": "The Hermit",
+          "action_type": "rest",
+          "description": "The Hermit decided to rest and reflect",
+          "mood": "pensive",
+          "ts": 1784095972
+        },
+        {
+          "char_id": "char_303",
+          "char_name": "The Hermit",
+          "action_type": "rest",
+          "description": "The Hermit decided to rest and reflect",
+          "mood": "melancholic",
+          "ts": 1784103176
+        },
+        {
+          "char_id": "char_303",
+          "char_name": "The Hermit",
+          "action_type": "rest",
+          "description": "The Hermit decided to rest and reflect",
+          "mood": "peaceful",
+          "ts": 1784105629
+        },
+        {
+          "char_id": "char_303",
+          "char_name": "The Hermit",
+          "action_type": "rest",
+          "description": "The Hermit decided to rest and reflect",
+          "mood": "peaceful",
+          "ts": 1784106153
+        },
+        {
+          "char_id": "char_303",
+          "char_name": "The Hermit",
+          "action_type": "rest",
+          "description": "The Hermit decided to rest and reflect",
+          "mood": "peaceful",
+          "ts": 1784107380
+        },
+        {
+          "char_id": "char_303",
+          "char_name": "The Hermit",
+          "action_type": "rest",
+          "description": "The Hermit decided to rest and reflect",
+          "mood": "peaceful",
+          "ts": 1784109752
+        },
+        {
+          "char_id": "char_303",
+          "char_name": "The Hermit",
+          "action_type": "rest",
+          "description": "The Hermit decided to rest and reflect",
+          "mood": "melancholic",
+          "ts": 1784112776
+        },
+        {
+          "char_id": "char_303",
+          "char_name": "The Hermit",
+          "action_type": "rest",
+          "description": "The Hermit decided to rest and reflect",
+          "mood": "serene",
+          "ts": 1784121195
+        },
+        {
+          "char_id": "char_303",
+          "char_name": "The Hermit",
+          "action_type": "rest",
+          "description": "The Hermit decided to rest and reflect",
+          "mood": "pensive",
+          "ts": 1784129600
+        },
+        {
+          "char_id": "char_303",
+          "char_name": "The Hermit",
+          "action_type": "rest",
+          "description": "The Hermit decided to rest and reflect",
+          "mood": "melancholic",
+          "ts": 1784130213
+        },
+        {
+          "char_id": "char_303",
+          "char_name": "The Hermit",
+          "action_type": "rest",
+          "description": "The Hermit decided to rest and reflect",
+          "mood": "pensive",
+          "ts": 1784131360
+        },
+        {
+          "char_id": "char_303",
+          "char_name": "The Hermit",
+          "action_type": "rest",
+          "description": "The Hermit decided to rest and reflect",
+          "mood": "peaceful",
+          "ts": 1784133209
+        },
+        {
+          "char_id": "char_303",
+          "char_name": "The Hermit",
+          "action_type": "rest",
+          "description": "The Hermit decided to rest and reflect",
+          "mood": "melancholic",
+          "ts": 1784134438
+        },
+        {
+          "char_id": "char_303",
+          "char_name": "The Hermit",
+          "action_type": "rest",
+          "description": "The Hermit decided to rest and reflect",
+          "mood": "peaceful",
+          "ts": 1784137415
+        },
+        {
+          "char_id": "char_303",
+          "char_name": "The Hermit",
+          "action_type": "rest",
+          "description": "The Hermit decided to rest and reflect",
+          "mood": "melancholic",
+          "ts": 1784144609
+        },
+        {
+          "char_id": "char_303",
+          "char_name": "The Hermit",
+          "action_type": "rest",
+          "description": "The Hermit decided to rest and reflect",
+          "mood": "pensive",
+          "ts": 1784145771
+        },
+        {
+          "char_id": "char_303",
+          "char_name": "The Hermit",
+          "action_type": "rest",
+          "description": "The Hermit decided to rest and reflect",
+          "mood": "pensive",
+          "ts": 1784146994
+        },
+        {
+          "char_id": "char_303",
+          "char_name": "The Hermit",
+          "action_type": "rest",
+          "description": "The Hermit decided to rest and reflect",
+          "mood": "pensive",
+          "ts": 1784148168
+        },
+        {
+          "char_id": "char_303",
+          "char_name": "The Hermit",
+          "action_type": "rest",
+          "description": "The Hermit decided to rest and reflect",
+          "mood": "peaceful",
+          "ts": 1784148781
+        },
+        {
+          "char_id": "char_303",
+          "char_name": "The Hermit",
+          "action_type": "rest",
+          "description": "The Hermit decided to rest and reflect",
+          "mood": "peaceful",
+          "ts": 1784149973
+        },
+        {
+          "char_id": "char_303",
+          "char_name": "The Hermit",
+          "action_type": "rest",
+          "description": "The Hermit decided to rest and reflect",
+          "mood": "peaceful",
+          "ts": 1784150584
+        },
+        {
+          "char_id": "char_303",
+          "char_name": "The Hermit",
+          "action_type": "rest",
+          "description": "The Hermit decided to rest and reflect",
+          "mood": "serene",
+          "ts": 1784152423
+        },
+        {
+          "char_id": "char_303",
+          "char_name": "The Hermit",
+          "action_type": "rest",
+          "description": "The Hermit decided to rest and reflect",
+          "mood": "serene",
+          "ts": 1784152958
+        },
+        {
+          "char_id": "char_303",
+          "char_name": "The Hermit",
+          "action_type": "rest",
+          "description": "The Hermit decided to rest and reflect",
+          "mood": "melancholic",
+          "ts": 1784157209
+        },
+        {
+          "char_id": "char_303",
+          "char_name": "The Hermit",
+          "action_type": "rest",
+          "description": "The Hermit decided to rest and reflect",
+          "mood": "peaceful",
+          "ts": 1784163184
+        },
+        {
+          "char_id": "char_303",
+          "char_name": "The Hermit",
+          "action_type": "rest",
+          "description": "The Hermit decided to rest and reflect",
+          "mood": "melancholic",
+          "ts": 1784163760
+        },
+        {
+          "char_id": "char_303",
+          "char_name": "The Hermit",
+          "action_type": "rest",
+          "description": "The Hermit decided to rest and reflect",
+          "mood": "melancholic",
+          "ts": 1784165558
+        },
+        {
+          "char_id": "char_303",
+          "char_name": "The Hermit",
+          "action_type": "rest",
+          "description": "The Hermit decided to rest and reflect",
+          "mood": "melancholic",
+          "ts": 1784166171
+        },
+        {
+          "char_id": "char_303",
+          "char_name": "The Hermit",
+          "action_type": "rest",
+          "description": "The Hermit decided to rest and reflect",
+          "mood": "melancholic",
+          "ts": 1784166783
+        },
+        {
+          "char_id": "char_303",
+          "char_name": "The Hermit",
+          "action_type": "rest",
+          "description": "The Hermit decided to rest and reflect",
+          "mood": "peaceful",
+          "ts": 1784168590
+        },
+        {
+          "char_id": "char_303",
+          "char_name": "The Hermit",
+          "action_type": "rest",
+          "description": "The Hermit decided to rest and reflect",
+          "mood": "serene",
+          "ts": 1784169202
+        },
+        {
+          "char_id": "char_303",
+          "char_name": "The Hermit",
+          "action_type": "rest",
+          "description": "The Hermit decided to rest and reflect",
+          "mood": "peaceful",
+          "ts": 1784177021
+        },
+        {
+          "char_id": "char_303",
+          "char_name": "The Hermit",
+          "action_type": "rest",
+          "description": "The Hermit decided to rest and reflect",
+          "mood": "peaceful",
+          "ts": 1784181802
+        },
+        {
+          "char_id": "char_303",
+          "char_name": "The Hermit",
+          "action_type": "rest",
+          "description": "The Hermit decided to rest and reflect",
+          "mood": "pensive",
+          "ts": 1784184163
+        },
+        {
+          "char_id": "char_303",
+          "char_name": "The Hermit",
+          "action_type": "rest",
+          "description": "The Hermit decided to rest and reflect",
+          "mood": "pensive",
+          "ts": 1784184782
+        },
+        {
+          "char_id": "char_303",
+          "char_name": "The Hermit",
+          "action_type": "rest",
+          "description": "The Hermit decided to rest and reflect",
+          "mood": "serene",
+          "ts": 1784187208
+        },
+        {
+          "char_id": "char_303",
+          "char_name": "The Hermit",
+          "action_type": "rest",
+          "description": "The Hermit decided to rest and reflect",
+          "mood": "peaceful",
+          "ts": 1784190805
+        },
+        {
+          "char_id": "char_303",
+          "char_name": "The Hermit",
+          "action_type": "rest",
+          "description": "The Hermit decided to rest and reflect",
+          "mood": "serene",
+          "ts": 1784192029
+        },
+        {
+          "char_id": "char_303",
+          "char_name": "The Hermit",
+          "action_type": "rest",
+          "description": "The Hermit decided to rest and reflect",
+          "mood": "pensive",
+          "ts": 1784200996
+        },
+        {
+          "char_id": "char_303",
+          "char_name": "The Hermit",
+          "action_type": "rest",
+          "description": "The Hermit decided to rest and reflect",
+          "mood": "pensive",
+          "ts": 1784201607
+        }
+      ]
+    },
+    "char_304": {
+      "npc_state": {
+        "corruption_level": "0.0",
+        "rumor_level": "0.32273059571050533",
+        "status": "hidden",
+        "last_updated": "1784401090"
+      },
+      "recent_actions": []
+    },
+    "char_305": {
+      "npc_state": {
+        "corruption_level": "0.0",
+        "rumor_level": "0.27101891576556925",
+        "status": "traveling",
+        "last_updated": "1784401090"
+      },
+      "recent_actions": []
+    },
+    "char_306": {
+      "npc_state": {
+        "corruption_level": "0.0",
+        "rumor_level": "0.28368242419711176",
+        "status": "hidden",
+        "last_updated": "1784401090"
+      },
+      "recent_actions": []
+    },
+    "char_401": {
+      "npc_state": {
+        "corruption_level": "0.0",
+        "rumor_level": "0.2948000977624578",
+        "status": "hidden",
+        "last_updated": "1784401090"
+      },
+      "recent_actions": []
+    },
+    "char_402": {
+      "npc_state": {
+        "corruption_level": "0.0",
+        "rumor_level": "0.28982335395995107",
+        "status": "traveling",
+        "last_updated": "1784401090"
+      },
+      "recent_actions": [
+        {
+          "char_id": "char_402",
+          "char_name": "The Cartographer",
+          "action_type": "rest",
+          "description": "The Cartographer decided to rest and reflect",
+          "mood": "distracted",
+          "ts": 1783505844
+        },
+        {
+          "char_id": "char_402",
+          "char_name": "The Cartographer",
+          "action_type": "rest",
+          "description": "The Cartographer decided to rest and reflect",
+          "mood": "distracted",
+          "ts": 1783763120
+        }
+      ]
+    },
+    "char_403": {
+      "npc_state": {
+        "corruption_level": "0.0",
+        "rumor_level": "0.27809264707582354",
+        "status": "active",
+        "last_updated": "1784401090"
+      },
+      "recent_actions": []
+    },
+    "char_404": {
+      "npc_state": {
+        "corruption_level": "0.0",
+        "rumor_level": "0.28659029773270484",
+        "status": "active",
+        "last_updated": "1784401090"
+      },
+      "recent_actions": [
+        {
+          "char_id": "char_404",
+          "char_name": "Cipher",
+          "action_type": "rest",
+          "description": "Cipher decided to rest and reflect",
+          "mood": "distracted",
+          "ts": 1783911474
+        },
+        {
+          "char_id": "char_404",
+          "char_name": "Cipher",
+          "action_type": "rest",
+          "description": "Cipher decided to rest and reflect",
+          "mood": "distracted",
+          "ts": 1784031319
+        }
+      ]
+    },
+    "char_405": {
+      "npc_state": {
+        "corruption_level": "0.0",
+        "rumor_level": "0.3033158151680233",
+        "status": "hidden",
+        "last_updated": "1784401090"
+      },
+      "recent_actions": []
+    },
+    "char_406": {
+      "npc_state": {
+        "corruption_level": "0.0",
+        "rumor_level": "0.2511654947922516",
+        "status": "traveling",
+        "last_updated": "1784401090"
+      },
+      "recent_actions": []
+    },
+    "comp_001": {
+      "npc_state": {
+        "corruption_level": "0.0",
+        "rumor_level": "0.29076274816646647",
+        "status": "active",
+        "last_updated": "1784401090"
+      },
+      "recent_actions": []
+    },
+    "comp_002": {
+      "npc_state": {
+        "corruption_level": "0.0",
+        "rumor_level": "0.29202720300729074",
+        "status": "active",
+        "last_updated": "1784401090"
+      },
+      "recent_actions": [
+        {
+          "char_id": "comp_002",
+          "char_name": "Thorg Ironhammer",
+          "action_type": "rest",
+          "description": "Thorg Ironhammer decided to rest and reflect",
+          "mood": "stoic",
+          "ts": 1783534069
+        },
+        {
+          "char_id": "comp_002",
+          "char_name": "Thorg Ironhammer",
+          "action_type": "rest",
+          "description": "Thorg Ironhammer decided to rest and reflect",
+          "mood": "satisfied",
+          "ts": 1783817249
+        },
+        {
+          "char_id": "comp_002",
+          "char_name": "Thorg Ironhammer",
+          "action_type": "rest",
+          "description": "Thorg Ironhammer decided to rest and reflect",
+          "mood": "stoic",
+          "ts": 1783831522
+        },
+        {
+          "char_id": "comp_002",
+          "char_name": "Thorg Ironhammer",
+          "action_type": "rest",
+          "description": "Thorg Ironhammer decided to rest and reflect",
+          "mood": "stoic",
+          "ts": 1783916265
+        },
+        {
+          "char_id": "comp_002",
+          "char_name": "Thorg Ironhammer",
+          "action_type": "rest",
+          "description": "Thorg Ironhammer decided to rest and reflect",
+          "mood": "stoic",
+          "ts": 1783937721
+        },
+        {
+          "char_id": "comp_002",
+          "char_name": "Thorg Ironhammer",
+          "action_type": "rest",
+          "description": "Thorg Ironhammer decided to rest and reflect",
+          "mood": "stoic",
+          "ts": 1783969707
+        }
+      ]
+    },
+    "comp_003": {
+      "npc_state": {
+        "corruption_level": "0.0",
+        "rumor_level": "0.284914684073508",
+        "status": "active",
+        "last_updated": "1784401090"
+      },
+      "recent_actions": []
+    },
+    "comp_004": {
+      "npc_state": {
+        "corruption_level": "0.0",
+        "rumor_level": "0.2884809616775351",
+        "status": "active",
+        "last_updated": "1784401090"
+      },
+      "recent_actions": [
+        {
+          "char_id": "comp_004",
+          "char_name": "Captain Valor",
+          "action_type": "rest",
+          "description": "Captain Valor decided to rest and reflect",
+          "mood": "burdened",
+          "ts": 1783549553
+        },
+        {
+          "char_id": "comp_004",
+          "char_name": "Captain Valor",
+          "action_type": "rest",
+          "description": "Captain Valor decided to rest and reflect",
+          "mood": "burdened",
+          "ts": 1783550847
+        },
+        {
+          "char_id": "comp_004",
+          "char_name": "Captain Valor",
+          "action_type": "rest",
+          "description": "Captain Valor decided to rest and reflect",
+          "mood": "burdened",
+          "ts": 1783565252
+        },
+        {
+          "char_id": "comp_004",
+          "char_name": "Captain Valor",
+          "action_type": "rest",
+          "description": "Captain Valor decided to rest and reflect",
+          "mood": "burdened",
+          "ts": 1783578459
+        },
+        {
+          "char_id": "comp_004",
+          "char_name": "Captain Valor",
+          "action_type": "rest",
+          "description": "Captain Valor decided to rest and reflect",
+          "mood": "burdened",
+          "ts": 1783589772
+        },
+        {
+          "char_id": "comp_004",
+          "char_name": "Captain Valor",
+          "action_type": "rest",
+          "description": "Captain Valor decided to rest and reflect",
+          "mood": "burdened",
+          "ts": 1783596458
+        },
+        {
+          "char_id": "comp_004",
+          "char_name": "Captain Valor",
+          "action_type": "rest",
+          "description": "Captain Valor decided to rest and reflect",
+          "mood": "burdened",
+          "ts": 1783610254
+        },
+        {
+          "char_id": "comp_004",
+          "char_name": "Captain Valor",
+          "action_type": "rest",
+          "description": "Captain Valor decided to rest and reflect",
+          "mood": "burdened",
+          "ts": 1783621552
+        },
+        {
+          "char_id": "comp_004",
+          "char_name": "Captain Valor",
+          "action_type": "rest",
+          "description": "Captain Valor decided to rest and reflect",
+          "mood": "burdened",
+          "ts": 1783631182
+        },
+        {
+          "char_id": "comp_004",
+          "char_name": "Captain Valor",
+          "action_type": "rest",
+          "description": "Captain Valor decided to rest and reflect",
+          "mood": "burdened",
+          "ts": 1783633073
+        },
+        {
+          "char_id": "comp_004",
+          "char_name": "Captain Valor",
+          "action_type": "rest",
+          "description": "Captain Valor decided to rest and reflect",
+          "mood": "burdened",
+          "ts": 1783637123
+        },
+        {
+          "char_id": "comp_004",
+          "char_name": "Captain Valor",
+          "action_type": "rest",
+          "description": "Captain Valor decided to rest and reflect",
+          "mood": "burdened",
+          "ts": 1783637744
+        },
+        {
+          "char_id": "comp_004",
+          "char_name": "Captain Valor",
+          "action_type": "rest",
+          "description": "Captain Valor decided to rest and reflect",
+          "mood": "burdened",
+          "ts": 1783646123
+        },
+        {
+          "char_id": "comp_004",
+          "char_name": "Captain Valor",
+          "action_type": "rest",
+          "description": "Captain Valor decided to rest and reflect",
+          "mood": "burdened",
+          "ts": 1783652785
+        },
+        {
+          "char_id": "comp_004",
+          "char_name": "Captain Valor",
+          "action_type": "rest",
+          "description": "Captain Valor decided to rest and reflect",
+          "mood": "burdened",
+          "ts": 1783656931
+        },
+        {
+          "char_id": "comp_004",
+          "char_name": "Captain Valor",
+          "action_type": "rest",
+          "description": "Captain Valor decided to rest and reflect",
+          "mood": "burdened",
+          "ts": 1783660526
+        },
+        {
+          "char_id": "comp_004",
+          "char_name": "Captain Valor",
+          "action_type": "rest",
+          "description": "Captain Valor decided to rest and reflect",
+          "mood": "burdened",
+          "ts": 1783682249
+        },
+        {
+          "char_id": "comp_004",
+          "char_name": "Captain Valor",
+          "action_type": "rest",
+          "description": "Captain Valor decided to rest and reflect",
+          "mood": "burdened",
+          "ts": 1783682861
+        },
+        {
+          "char_id": "comp_004",
+          "char_name": "Captain Valor",
+          "action_type": "rest",
+          "description": "Captain Valor decided to rest and reflect",
+          "mood": "burdened",
+          "ts": 1783683470
+        },
+        {
+          "char_id": "comp_004",
+          "char_name": "Captain Valor",
+          "action_type": "rest",
+          "description": "Captain Valor decided to rest and reflect",
+          "mood": "burdened",
+          "ts": 1783688878
+        },
+        {
+          "char_id": "comp_004",
+          "char_name": "Captain Valor",
+          "action_type": "rest",
+          "description": "Captain Valor decided to rest and reflect",
+          "mood": "burdened",
+          "ts": 1783709127
+        },
+        {
+          "char_id": "comp_004",
+          "char_name": "Captain Valor",
+          "action_type": "rest",
+          "description": "Captain Valor decided to rest and reflect",
+          "mood": "burdened",
+          "ts": 1783740979
+        },
+        {
+          "char_id": "comp_004",
+          "char_name": "Captain Valor",
+          "action_type": "rest",
+          "description": "Captain Valor decided to rest and reflect",
+          "mood": "burdened",
+          "ts": 1783769879
+        },
+        {
+          "char_id": "comp_004",
+          "char_name": "Captain Valor",
+          "action_type": "rest",
+          "description": "Captain Valor decided to rest and reflect",
+          "mood": "burdened",
+          "ts": 1783786522
+        },
+        {
+          "char_id": "comp_004",
+          "char_name": "Captain Valor",
+          "action_type": "rest",
+          "description": "Captain Valor decided to rest and reflect",
+          "mood": "burdened",
+          "ts": 1783802166
+        },
+        {
+          "char_id": "comp_004",
+          "char_name": "Captain Valor",
+          "action_type": "rest",
+          "description": "Captain Valor decided to rest and reflect",
+          "mood": "burdened",
+          "ts": 1783842325
+        },
+        {
+          "char_id": "comp_004",
+          "char_name": "Captain Valor",
+          "action_type": "rest",
+          "description": "Captain Valor decided to rest and reflect",
+          "mood": "burdened",
+          "ts": 1783853124
+        },
+        {
+          "char_id": "comp_004",
+          "char_name": "Captain Valor",
+          "action_type": "rest",
+          "description": "Captain Valor decided to rest and reflect",
+          "mood": "burdened",
+          "ts": 1783853863
+        },
+        {
+          "char_id": "comp_004",
+          "char_name": "Captain Valor",
+          "action_type": "rest",
+          "description": "Captain Valor decided to rest and reflect",
+          "mood": "burdened",
+          "ts": 1783872923
+        },
+        {
+          "char_id": "comp_004",
+          "char_name": "Captain Valor",
+          "action_type": "rest",
+          "description": "Captain Valor decided to rest and reflect",
+          "mood": "burdened",
+          "ts": 1783903523
+        },
+        {
+          "char_id": "comp_004",
+          "char_name": "Captain Valor",
+          "action_type": "rest",
+          "description": "Captain Valor decided to rest and reflect",
+          "mood": "burdened",
+          "ts": 1783909677
+        },
+        {
+          "char_id": "comp_004",
+          "char_name": "Captain Valor",
+          "action_type": "rest",
+          "description": "Captain Valor decided to rest and reflect",
+          "mood": "burdened",
+          "ts": 1783934123
+        },
+        {
+          "char_id": "comp_004",
+          "char_name": "Captain Valor",
+          "action_type": "rest",
+          "description": "Captain Valor decided to rest and reflect",
+          "mood": "burdened",
+          "ts": 1783952125
+        },
+        {
+          "char_id": "comp_004",
+          "char_name": "Captain Valor",
+          "action_type": "rest",
+          "description": "Captain Valor decided to rest and reflect",
+          "mood": "burdened",
+          "ts": 1783954067
+        },
+        {
+          "char_id": "comp_004",
+          "char_name": "Captain Valor",
+          "action_type": "rest",
+          "description": "Captain Valor decided to rest and reflect",
+          "mood": "burdened",
+          "ts": 1783996706
+        },
+        {
+          "char_id": "comp_004",
+          "char_name": "Captain Valor",
+          "action_type": "rest",
+          "description": "Captain Valor decided to rest and reflect",
+          "mood": "burdened",
+          "ts": 1784014090
+        },
+        {
+          "char_id": "comp_004",
+          "char_name": "Captain Valor",
+          "action_type": "rest",
+          "description": "Captain Valor decided to rest and reflect",
+          "mood": "burdened",
+          "ts": 1784020185
+        },
+        {
+          "char_id": "comp_004",
+          "char_name": "Captain Valor",
+          "action_type": "rest",
+          "description": "Captain Valor decided to rest and reflect",
+          "mood": "burdened",
+          "ts": 1784022324
+        },
+        {
+          "char_id": "comp_004",
+          "char_name": "Captain Valor",
+          "action_type": "rest",
+          "description": "Captain Valor decided to rest and reflect",
+          "mood": "burdened",
+          "ts": 1784041227
+        },
+        {
+          "char_id": "comp_004",
+          "char_name": "Captain Valor",
+          "action_type": "rest",
+          "description": "Captain Valor decided to rest and reflect",
+          "mood": "burdened",
+          "ts": 1784044837
+        },
+        {
+          "char_id": "comp_004",
+          "char_name": "Captain Valor",
+          "action_type": "rest",
+          "description": "Captain Valor decided to rest and reflect",
+          "mood": "burdened",
+          "ts": 1784052031
+        },
+        {
+          "char_id": "comp_004",
+          "char_name": "Captain Valor",
+          "action_type": "rest",
+          "description": "Captain Valor decided to rest and reflect",
+          "mood": "burdened",
+          "ts": 1784095361
+        },
+        {
+          "char_id": "comp_004",
+          "char_name": "Captain Valor",
+          "action_type": "rest",
+          "description": "Captain Valor decided to rest and reflect",
+          "mood": "burdened",
+          "ts": 1784110979
+        },
+        {
+          "char_id": "comp_004",
+          "char_name": "Captain Valor",
+          "action_type": "rest",
+          "description": "Captain Valor decided to rest and reflect",
+          "mood": "burdened",
+          "ts": 1784111552
+        },
+        {
+          "char_id": "comp_004",
+          "char_name": "Captain Valor",
+          "action_type": "rest",
+          "description": "Captain Valor decided to rest and reflect",
+          "mood": "burdened",
+          "ts": 1784114004
+        },
+        {
+          "char_id": "comp_004",
+          "char_name": "Captain Valor",
+          "action_type": "rest",
+          "description": "Captain Valor decided to rest and reflect",
+          "mood": "burdened",
+          "ts": 1784159580
+        },
+        {
+          "char_id": "comp_004",
+          "char_name": "Captain Valor",
+          "action_type": "rest",
+          "description": "Captain Valor decided to rest and reflect",
+          "mood": "burdened",
+          "ts": 1784160193
+        },
+        {
+          "char_id": "comp_004",
+          "char_name": "Captain Valor",
+          "action_type": "rest",
+          "description": "Captain Valor decided to rest and reflect",
+          "mood": "burdened",
+          "ts": 1784183027
+        },
+        {
+          "char_id": "comp_004",
+          "char_name": "Captain Valor",
+          "action_type": "rest",
+          "description": "Captain Valor decided to rest and reflect",
+          "mood": "burdened",
+          "ts": 1784190806
+        },
+        {
+          "char_id": "comp_004",
+          "char_name": "Captain Valor",
+          "action_type": "rest",
+          "description": "Captain Valor decided to rest and reflect",
+          "mood": "burdened",
+          "ts": 1784192560
+        }
+      ]
+    },
+    "comp_005": {
+      "npc_state": {
+        "corruption_level": "0.0",
+        "rumor_level": "0.30119469629280726",
+        "status": "active",
+        "last_updated": "1784401090"
+      },
+      "recent_actions": [
+        {
+          "char_id": "comp_005",
+          "char_name": "Dr. Sylas Cunningham",
+          "action_type": "rest",
+          "description": "Dr. Sylas Cunningham decided to rest and reflect",
+          "mood": "distracted",
+          "ts": 1783756052
+        }
+      ]
+    },
+    "comp_006": {
+      "npc_state": {
+        "corruption_level": "0.0",
+        "rumor_level": "0.27794854531531044",
+        "status": "active",
+        "last_updated": "1784401090"
+      },
+      "recent_actions": [
+        {
+          "char_id": "comp_006",
+          "char_name": "Kyren Frostblade",
+          "action_type": "rest",
+          "description": "Kyren Frostblade decided to rest and reflect",
+          "mood": "stoic",
+          "ts": 1783449461
+        },
+        {
+          "char_id": "comp_006",
+          "char_name": "Kyren Frostblade",
+          "action_type": "rest",
+          "description": "Kyren Frostblade decided to rest and reflect",
+          "mood": "stoic",
+          "ts": 1783455328
+        },
+        {
+          "char_id": "comp_006",
+          "char_name": "Kyren Frostblade",
+          "action_type": "rest",
+          "description": "Kyren Frostblade decided to rest and reflect",
+          "mood": "stoic",
+          "ts": 1783455432
+        },
+        {
+          "char_id": "comp_006",
+          "char_name": "Kyren Frostblade",
+          "action_type": "rest",
+          "description": "Kyren Frostblade decided to rest and reflect",
+          "mood": "stoic",
+          "ts": 1783480638
+        },
+        {
+          "char_id": "comp_006",
+          "char_name": "Kyren Frostblade",
+          "action_type": "rest",
+          "description": "Kyren Frostblade decided to rest and reflect",
+          "mood": "stoic",
+          "ts": 1783486647
+        },
+        {
+          "char_id": "comp_006",
+          "char_name": "Kyren Frostblade",
+          "action_type": "rest",
+          "description": "Kyren Frostblade decided to rest and reflect",
+          "mood": "stoic",
+          "ts": 1783532727
+        },
+        {
+          "char_id": "comp_006",
+          "char_name": "Kyren Frostblade",
+          "action_type": "rest",
+          "description": "Kyren Frostblade decided to rest and reflect",
+          "mood": "stoic",
+          "ts": 1783567552
+        },
+        {
+          "char_id": "comp_006",
+          "char_name": "Kyren Frostblade",
+          "action_type": "rest",
+          "description": "Kyren Frostblade decided to rest and reflect",
+          "mood": "stoic",
+          "ts": 1783664252
+        },
+        {
+          "char_id": "comp_006",
+          "char_name": "Kyren Frostblade",
+          "action_type": "rest",
+          "description": "Kyren Frostblade decided to rest and reflect",
+          "mood": "stoic",
+          "ts": 1783687653
+        },
+        {
+          "char_id": "comp_006",
+          "char_name": "Kyren Frostblade",
+          "action_type": "rest",
+          "description": "Kyren Frostblade decided to rest and reflect",
+          "mood": "satisfied",
+          "ts": 1783699688
+        },
+        {
+          "char_id": "comp_006",
+          "char_name": "Kyren Frostblade",
+          "action_type": "rest",
+          "description": "Kyren Frostblade decided to rest and reflect",
+          "mood": "satisfied",
+          "ts": 1783733874
+        },
+        {
+          "char_id": "comp_006",
+          "char_name": "Kyren Frostblade",
+          "action_type": "rest",
+          "description": "Kyren Frostblade decided to rest and reflect",
+          "mood": "stoic",
+          "ts": 1783734954
+        },
+        {
+          "char_id": "comp_006",
+          "char_name": "Kyren Frostblade",
+          "action_type": "rest",
+          "description": "Kyren Frostblade decided to rest and reflect",
+          "mood": "stoic",
+          "ts": 1783743328
+        },
+        {
+          "char_id": "comp_006",
+          "char_name": "Kyren Frostblade",
+          "action_type": "rest",
+          "description": "Kyren Frostblade decided to rest and reflect",
+          "mood": "stoic",
+          "ts": 1783752339
+        },
+        {
+          "char_id": "comp_006",
+          "char_name": "Kyren Frostblade",
+          "action_type": "rest",
+          "description": "Kyren Frostblade decided to rest and reflect",
+          "mood": "stoic",
+          "ts": 1783770325
+        },
+        {
+          "char_id": "comp_006",
+          "char_name": "Kyren Frostblade",
+          "action_type": "rest",
+          "description": "Kyren Frostblade decided to rest and reflect",
+          "mood": "stoic",
+          "ts": 1783771675
+        },
+        {
+          "char_id": "comp_006",
+          "char_name": "Kyren Frostblade",
+          "action_type": "rest",
+          "description": "Kyren Frostblade decided to rest and reflect",
+          "mood": "stoic",
+          "ts": 1783775274
+        },
+        {
+          "char_id": "comp_006",
+          "char_name": "Kyren Frostblade",
+          "action_type": "rest",
+          "description": "Kyren Frostblade decided to rest and reflect",
+          "mood": "stoic",
+          "ts": 1783786080
+        },
+        {
+          "char_id": "comp_006",
+          "char_name": "Kyren Frostblade",
+          "action_type": "rest",
+          "description": "Kyren Frostblade decided to rest and reflect",
+          "mood": "stoic",
+          "ts": 1783831522
+        },
+        {
+          "char_id": "comp_006",
+          "char_name": "Kyren Frostblade",
+          "action_type": "rest",
+          "description": "Kyren Frostblade decided to rest and reflect",
+          "mood": "stoic",
+          "ts": 1783889125
+        },
+        {
+          "char_id": "comp_006",
+          "char_name": "Kyren Frostblade",
+          "action_type": "rest",
+          "description": "Kyren Frostblade decided to rest and reflect",
+          "mood": "satisfied",
+          "ts": 1783897077
+        },
+        {
+          "char_id": "comp_006",
+          "char_name": "Kyren Frostblade",
+          "action_type": "rest",
+          "description": "Kyren Frostblade decided to rest and reflect",
+          "mood": "stoic",
+          "ts": 1783898123
+        },
+        {
+          "char_id": "comp_006",
+          "char_name": "Kyren Frostblade",
+          "action_type": "rest",
+          "description": "Kyren Frostblade decided to rest and reflect",
+          "mood": "stoic",
+          "ts": 1783900676
+        },
+        {
+          "char_id": "comp_006",
+          "char_name": "Kyren Frostblade",
+          "action_type": "rest",
+          "description": "Kyren Frostblade decided to rest and reflect",
+          "mood": "satisfied",
+          "ts": 1783920474
+        },
+        {
+          "char_id": "comp_006",
+          "char_name": "Kyren Frostblade",
+          "action_type": "rest",
+          "description": "Kyren Frostblade decided to rest and reflect",
+          "mood": "stoic",
+          "ts": 1783925265
+        },
+        {
+          "char_id": "comp_006",
+          "char_name": "Kyren Frostblade",
+          "action_type": "rest",
+          "description": "Kyren Frostblade decided to rest and reflect",
+          "mood": "stoic",
+          "ts": 1783932323
+        },
+        {
+          "char_id": "comp_006",
+          "char_name": "Kyren Frostblade",
+          "action_type": "rest",
+          "description": "Kyren Frostblade decided to rest and reflect",
+          "mood": "stoic",
+          "ts": 1784007546
+        },
+        {
+          "char_id": "comp_006",
+          "char_name": "Kyren Frostblade",
+          "action_type": "rest",
+          "description": "Kyren Frostblade decided to rest and reflect",
+          "mood": "stoic",
+          "ts": 1784008680
+        },
+        {
+          "char_id": "comp_006",
+          "char_name": "Kyren Frostblade",
+          "action_type": "rest",
+          "description": "Kyren Frostblade decided to rest and reflect",
+          "mood": "stoic",
+          "ts": 1784010366
+        },
+        {
+          "char_id": "comp_006",
+          "char_name": "Kyren Frostblade",
+          "action_type": "rest",
+          "description": "Kyren Frostblade decided to rest and reflect",
+          "mood": "stoic",
+          "ts": 1784148169
+        },
+        {
+          "char_id": "comp_006",
+          "char_name": "Kyren Frostblade",
+          "action_type": "rest",
+          "description": "Kyren Frostblade decided to rest and reflect",
+          "mood": "stoic",
+          "ts": 1784151202
+        },
+        {
+          "char_id": "comp_006",
+          "char_name": "Kyren Frostblade",
+          "action_type": "rest",
+          "description": "Kyren Frostblade decided to rest and reflect",
+          "mood": "satisfied",
+          "ts": 1784158966
+        },
+        {
+          "char_id": "comp_006",
+          "char_name": "Kyren Frostblade",
+          "action_type": "rest",
+          "description": "Kyren Frostblade decided to rest and reflect",
+          "mood": "stoic",
+          "ts": 1784196804
+        },
+        {
+          "char_id": "comp_006",
+          "char_name": "Kyren Frostblade",
+          "action_type": "rest",
+          "description": "Kyren Frostblade decided to rest and reflect",
+          "mood": "stoic",
+          "ts": 1784201608
+        }
+      ]
+    },
+    "comp_007": {
+      "npc_state": {
+        "corruption_level": "0.0",
+        "rumor_level": "0.3521889457301788",
+        "status": "active",
+        "last_updated": "1784401090"
+      },
+      "recent_actions": [
+        {
+          "char_id": "comp_007",
+          "char_name": "Zephyr Silverspeak",
+          "action_type": "rest",
+          "description": "Zephyr Silverspeak decided to rest and reflect",
+          "mood": "weary",
+          "ts": 1783817129
+        },
+        {
+          "char_id": "comp_007",
+          "char_name": "Zephyr Silverspeak",
+          "action_type": "rest",
+          "description": "Zephyr Silverspeak decided to rest and reflect",
+          "mood": "weary",
+          "ts": 1783835751
+        },
+        {
+          "char_id": "comp_007",
+          "char_name": "Zephyr Silverspeak",
+          "action_type": "rest",
+          "description": "Zephyr Silverspeak decided to rest and reflect",
+          "mood": "weary",
+          "ts": 1783847179
+        },
+        {
+          "char_id": "comp_007",
+          "char_name": "Zephyr Silverspeak",
+          "action_type": "rest",
+          "description": "Zephyr Silverspeak decided to rest and reflect",
+          "mood": "weary",
+          "ts": 1783847724
+        },
+        {
+          "char_id": "comp_007",
+          "char_name": "Zephyr Silverspeak",
+          "action_type": "rest",
+          "description": "Zephyr Silverspeak decided to rest and reflect",
+          "mood": "weary",
+          "ts": 1783853124
+        },
+        {
+          "char_id": "comp_007",
+          "char_name": "Zephyr Silverspeak",
+          "action_type": "rest",
+          "description": "Zephyr Silverspeak decided to rest and reflect",
+          "mood": "weary",
+          "ts": 1783856275
+        },
+        {
+          "char_id": "comp_007",
+          "char_name": "Zephyr Silverspeak",
+          "action_type": "rest",
+          "description": "Zephyr Silverspeak decided to rest and reflect",
+          "mood": "weary",
+          "ts": 1783864055
+        },
+        {
+          "char_id": "comp_007",
+          "char_name": "Zephyr Silverspeak",
+          "action_type": "rest",
+          "description": "Zephyr Silverspeak decided to rest and reflect",
+          "mood": "weary",
+          "ts": 1783864667
+        },
+        {
+          "char_id": "comp_007",
+          "char_name": "Zephyr Silverspeak",
+          "action_type": "rest",
+          "description": "Zephyr Silverspeak decided to rest and reflect",
+          "mood": "weary",
+          "ts": 1783872481
+        },
+        {
+          "char_id": "comp_007",
+          "char_name": "Zephyr Silverspeak",
+          "action_type": "rest",
+          "description": "Zephyr Silverspeak decided to rest and reflect",
+          "mood": "weary",
+          "ts": 1783876527
+        },
+        {
+          "char_id": "comp_007",
+          "char_name": "Zephyr Silverspeak",
+          "action_type": "rest",
+          "description": "Zephyr Silverspeak decided to rest and reflect",
+          "mood": "weary",
+          "ts": 1783881930
+        },
+        {
+          "char_id": "comp_007",
+          "char_name": "Zephyr Silverspeak",
+          "action_type": "rest",
+          "description": "Zephyr Silverspeak decided to rest and reflect",
+          "mood": "weary",
+          "ts": 1783883281
+        },
+        {
+          "char_id": "comp_007",
+          "char_name": "Zephyr Silverspeak",
+          "action_type": "rest",
+          "description": "Zephyr Silverspeak decided to rest and reflect",
+          "mood": "weary",
+          "ts": 1783886157
+        },
+        {
+          "char_id": "comp_007",
+          "char_name": "Zephyr Silverspeak",
+          "action_type": "rest",
+          "description": "Zephyr Silverspeak decided to rest and reflect",
+          "mood": "weary",
+          "ts": 1783890922
+        },
+        {
+          "char_id": "comp_007",
+          "char_name": "Zephyr Silverspeak",
+          "action_type": "rest",
+          "description": "Zephyr Silverspeak decided to rest and reflect",
+          "mood": "weary",
+          "ts": 1783895269
+        },
+        {
+          "char_id": "comp_007",
+          "char_name": "Zephyr Silverspeak",
+          "action_type": "rest",
+          "description": "Zephyr Silverspeak decided to rest and reflect",
+          "mood": "weary",
+          "ts": 1783901722
+        },
+        {
+          "char_id": "comp_007",
+          "char_name": "Zephyr Silverspeak",
+          "action_type": "rest",
+          "description": "Zephyr Silverspeak decided to rest and reflect",
+          "mood": "weary",
+          "ts": 1783904277
+        },
+        {
+          "char_id": "comp_007",
+          "char_name": "Zephyr Silverspeak",
+          "action_type": "rest",
+          "description": "Zephyr Silverspeak decided to rest and reflect",
+          "mood": "weary",
+          "ts": 1783904890
+        },
+        {
+          "char_id": "comp_007",
+          "char_name": "Zephyr Silverspeak",
+          "action_type": "rest",
+          "description": "Zephyr Silverspeak decided to rest and reflect",
+          "mood": "weary",
+          "ts": 1783909677
+        },
+        {
+          "char_id": "comp_007",
+          "char_name": "Zephyr Silverspeak",
+          "action_type": "rest",
+          "description": "Zephyr Silverspeak decided to rest and reflect",
+          "mood": "weary",
+          "ts": 1783925131
+        },
+        {
+          "char_id": "comp_007",
+          "char_name": "Zephyr Silverspeak",
+          "action_type": "rest",
+          "description": "Zephyr Silverspeak decided to rest and reflect",
+          "mood": "weary",
+          "ts": 1783925877
+        },
+        {
+          "char_id": "comp_007",
+          "char_name": "Zephyr Silverspeak",
+          "action_type": "rest",
+          "description": "Zephyr Silverspeak decided to rest and reflect",
+          "mood": "weary",
+          "ts": 1783953926
+        },
+        {
+          "char_id": "comp_007",
+          "char_name": "Zephyr Silverspeak",
+          "action_type": "rest",
+          "description": "Zephyr Silverspeak decided to rest and reflect",
+          "mood": "weary",
+          "ts": 1783955734
+        },
+        {
+          "char_id": "comp_007",
+          "char_name": "Zephyr Silverspeak",
+          "action_type": "rest",
+          "description": "Zephyr Silverspeak decided to rest and reflect",
+          "mood": "weary",
+          "ts": 1783965485
+        },
+        {
+          "char_id": "comp_007",
+          "char_name": "Zephyr Silverspeak",
+          "action_type": "rest",
+          "description": "Zephyr Silverspeak decided to rest and reflect",
+          "mood": "weary",
+          "ts": 1783967165
+        },
+        {
+          "char_id": "comp_007",
+          "char_name": "Zephyr Silverspeak",
+          "action_type": "rest",
+          "description": "Zephyr Silverspeak decided to rest and reflect",
+          "mood": "weary",
+          "ts": 1783975096
+        },
+        {
+          "char_id": "comp_007",
+          "char_name": "Zephyr Silverspeak",
+          "action_type": "rest",
+          "description": "Zephyr Silverspeak decided to rest and reflect",
+          "mood": "weary",
+          "ts": 1783986329
+        },
+        {
+          "char_id": "comp_007",
+          "char_name": "Zephyr Silverspeak",
+          "action_type": "rest",
+          "description": "Zephyr Silverspeak decided to rest and reflect",
+          "mood": "weary",
+          "ts": 1783986949
+        },
+        {
+          "char_id": "comp_007",
+          "char_name": "Zephyr Silverspeak",
+          "action_type": "rest",
+          "description": "Zephyr Silverspeak decided to rest and reflect",
+          "mood": "weary",
+          "ts": 1783996706
+        },
+        {
+          "char_id": "comp_007",
+          "char_name": "Zephyr Silverspeak",
+          "action_type": "rest",
+          "description": "Zephyr Silverspeak decided to rest and reflect",
+          "mood": "weary",
+          "ts": 1784000724
+        },
+        {
+          "char_id": "comp_007",
+          "char_name": "Zephyr Silverspeak",
+          "action_type": "rest",
+          "description": "Zephyr Silverspeak decided to rest and reflect",
+          "mood": "weary",
+          "ts": 1784005583
+        },
+        {
+          "char_id": "comp_007",
+          "char_name": "Zephyr Silverspeak",
+          "action_type": "rest",
+          "description": "Zephyr Silverspeak decided to rest and reflect",
+          "mood": "weary",
+          "ts": 1784006123
+        },
+        {
+          "char_id": "comp_007",
+          "char_name": "Zephyr Silverspeak",
+          "action_type": "rest",
+          "description": "Zephyr Silverspeak decided to rest and reflect",
+          "mood": "weary",
+          "ts": 1784035550
+        },
+        {
+          "char_id": "comp_007",
+          "char_name": "Zephyr Silverspeak",
+          "action_type": "rest",
+          "description": "Zephyr Silverspeak decided to rest and reflect",
+          "mood": "weary",
+          "ts": 1784045599
+        },
+        {
+          "char_id": "comp_007",
+          "char_name": "Zephyr Silverspeak",
+          "action_type": "rest",
+          "description": "Zephyr Silverspeak decided to rest and reflect",
+          "mood": "weary",
+          "ts": 1784048001
+        },
+        {
+          "char_id": "comp_007",
+          "char_name": "Zephyr Silverspeak",
+          "action_type": "rest",
+          "description": "Zephyr Silverspeak decided to rest and reflect",
+          "mood": "weary",
+          "ts": 1784048434
+        },
+        {
+          "char_id": "comp_007",
+          "char_name": "Zephyr Silverspeak",
+          "action_type": "rest",
+          "description": "Zephyr Silverspeak decided to rest and reflect",
+          "mood": "weary",
+          "ts": 1784057004
+        },
+        {
+          "char_id": "comp_007",
+          "char_name": "Zephyr Silverspeak",
+          "action_type": "rest",
+          "description": "Zephyr Silverspeak decided to rest and reflect",
+          "mood": "weary",
+          "ts": 1784061171
+        },
+        {
+          "char_id": "comp_007",
+          "char_name": "Zephyr Silverspeak",
+          "action_type": "rest",
+          "description": "Zephyr Silverspeak decided to rest and reflect",
+          "mood": "weary",
+          "ts": 1784061784
+        },
+        {
+          "char_id": "comp_007",
+          "char_name": "Zephyr Silverspeak",
+          "action_type": "rest",
+          "description": "Zephyr Silverspeak decided to rest and reflect",
+          "mood": "weary",
+          "ts": 1784064622
+        },
+        {
+          "char_id": "comp_007",
+          "char_name": "Zephyr Silverspeak",
+          "action_type": "rest",
+          "description": "Zephyr Silverspeak decided to rest and reflect",
+          "mood": "weary",
+          "ts": 1784103177
+        },
+        {
+          "char_id": "comp_007",
+          "char_name": "Zephyr Silverspeak",
+          "action_type": "rest",
+          "description": "Zephyr Silverspeak decided to rest and reflect",
+          "mood": "weary",
+          "ts": 1784108605
+        },
+        {
+          "char_id": "comp_007",
+          "char_name": "Zephyr Silverspeak",
+          "action_type": "rest",
+          "description": "Zephyr Silverspeak decided to rest and reflect",
+          "mood": "weary",
+          "ts": 1784114004
+        },
+        {
+          "char_id": "comp_007",
+          "char_name": "Zephyr Silverspeak",
+          "action_type": "rest",
+          "description": "Zephyr Silverspeak decided to rest and reflect",
+          "mood": "weary",
+          "ts": 1784135583
+        },
+        {
+          "char_id": "comp_007",
+          "char_name": "Zephyr Silverspeak",
+          "action_type": "rest",
+          "description": "Zephyr Silverspeak decided to rest and reflect",
+          "mood": "weary",
+          "ts": 1784149974
+        },
+        {
+          "char_id": "comp_007",
+          "char_name": "Zephyr Silverspeak",
+          "action_type": "rest",
+          "description": "Zephyr Silverspeak decided to rest and reflect",
+          "mood": "weary",
+          "ts": 1784155977
+        },
+        {
+          "char_id": "comp_007",
+          "char_name": "Zephyr Silverspeak",
+          "action_type": "rest",
+          "description": "Zephyr Silverspeak decided to rest and reflect",
+          "mood": "weary",
+          "ts": 1784168592
+        },
+        {
+          "char_id": "comp_007",
+          "char_name": "Zephyr Silverspeak",
+          "action_type": "rest",
+          "description": "Zephyr Silverspeak decided to rest and reflect",
+          "mood": "weary",
+          "ts": 1784170971
+        },
+        {
+          "char_id": "comp_007",
+          "char_name": "Zephyr Silverspeak",
+          "action_type": "rest",
+          "description": "Zephyr Silverspeak decided to rest and reflect",
+          "mood": "weary",
+          "ts": 1784193789
+        },
+        {
+          "char_id": "comp_007",
+          "char_name": "Zephyr Silverspeak",
+          "action_type": "rest",
+          "description": "Zephyr Silverspeak decided to rest and reflect",
+          "mood": "weary",
+          "ts": 1784200383
+        }
+      ]
+    },
+    "comp_008": {
+      "npc_state": {
+        "corruption_level": "0.0",
+        "rumor_level": "0.2716937291963862",
+        "status": "active",
+        "last_updated": "1784401090"
+      },
+      "recent_actions": []
+    },
+    "comp_009": {
+      "npc_state": {
+        "corruption_level": "0.0",
+        "rumor_level": "0.29926542497060216",
+        "status": "active",
+        "last_updated": "1784401090"
+      },
+      "recent_actions": []
+    },
+    "comp_010": {
+      "npc_state": {
+        "corruption_level": "0.0",
+        "rumor_level": "0.27073931504845694",
+        "status": "active",
+        "last_updated": "1784401090"
+      },
+      "recent_actions": [
+        {
+          "char_id": "comp_010",
+          "char_name": "Shadowborn",
+          "action_type": "rest",
+          "description": "Shadowborn decided to rest and reflect",
+          "mood": "satisfied",
+          "ts": 1783630558
+        }
+      ]
+    }
+  }
+}

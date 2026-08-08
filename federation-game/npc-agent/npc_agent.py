@@ -20,6 +20,41 @@ import uuid
 import httpx
 import redis
 
+# Work loop integration for persistent councilor pair
+try:
+    from npc_work_loop import (
+        get_shared_agenda,
+        get_next_action_owner,
+        get_agenda_summary,
+        attach_delegation_response,
+        get_agenda_item,
+        pre_decision_hook,
+        claim_ownership,
+        create_agenda_item,
+        create_delegation,
+        create_capability_request,
+        submit_capability_request,
+        get_capability_request,
+        get_all_capability_requests,
+        execute_work_loop_action,
+        update_agenda_item,
+        _pair_slug,
+        _stable_capability_id,
+        set_cognition_scrubber,
+        set_action_scrubber,
+    )
+    WORK_LOOP_AVAILABLE = True
+except ImportError:
+    WORK_LOOP_AVAILABLE = False
+
+if WORK_LOOP_AVAILABLE:
+    try:
+        from fourth_wall import _enforce_fourth_wall
+        set_cognition_scrubber(_enforce_fourth_wall)
+        set_action_scrubber(_enforce_fourth_wall)
+    except Exception:
+        pass
+
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [%(levelname)s] %(message)s",
@@ -1585,6 +1620,31 @@ def think_about_world(r) -> str:
     except Exception:
         pass
 
+    # ── Shared Agenda: persistent councilor work loop ──
+    # Shows active agenda items, ownership, and next actions
+    if WORK_LOOP_AVAILABLE and CHAR_ID in PAIR_IDS:
+        try:
+            partner_id = _partner_id()
+            pslug = _pair_slug(CHAR_ID, partner_id)
+            agenda_summary = get_agenda_summary(pslug)
+            if agenda_summary and agenda_summary.get("active_items", 0) > 0:
+                parts.append("Shared agenda:")
+                parts.append(f"  Active items: {agenda_summary['active_items']}")
+                owner = agenda_summary.get("next_action_owner", "")
+                if owner:
+                    owner_label = "You" if owner == CHAR_ID else f"Partner ({owner})"
+                    parts.append(f"  Next action owner: {owner_label}")
+                # Show first 3 active items
+                for item in agenda_summary.get("items", [])[:3]:
+                    if item.get("status") not in {"completed", "rejected"}:
+                        status = item.get("status", "unknown")
+                        objective = item.get("objective", "")[:80]
+                        assigned = item.get("assigned_councilor", "")
+                        assigned_label = "you" if assigned == CHAR_ID else assigned
+                        parts.append(f"  - [{status}] {objective} (assigned to {assigned_label})")
+        except Exception as e:
+            logger.warning("[%s] Failed to get agenda summary: %s", CHAR_ID, e)
+
     contacts_str = "; ".join(f"{cid}: {name}" for cid, name in CONTACTS.items() if cid != CHAR_ID)
     parts.append(f"Contacts: {contacts_str}")
 
@@ -1780,6 +1840,190 @@ def _session_append(r, entry: dict) -> None:
         r.ltrim(key, -SESSION_CAP, -1)
     except Exception as e:
         logger.debug("[%s] session append failed: %s", CHAR_ID, e)
+
+
+# ── Work-loop capability request publication ───────────────────────
+# Bridge: when an NPC decides `request_capability`, publish a genuine
+# work-loop capability request (draft + submit) instead of only filing a
+# legacy `file_npc_need()` record. Falls back to the legacy path only when
+# the work-loop path cannot complete.
+
+_CAPABILITY_KEY_RE = re.compile(r"[^a-z0-9]+")
+
+
+def _normalize_capability_key(text: str) -> str:
+    """Derive a stable, normalized capability_key from free text."""
+    if not text:
+        return ""
+    key = _CAPABILITY_KEY_RE.sub("_", text.strip().lower()).strip("_")
+    if len(key) < 3:
+        return ""
+    return key[:64]
+
+
+def _resolve_active_agenda(redis_client, pair_slug: str) -> str:
+    """Return the id of an existing active agenda item, or "".
+
+    Prefers an item the acting NPC owns; then one assigned to it; then the
+    oldest active item in the pair. Never creates an agenda.
+    """
+    if not WORK_LOOP_AVAILABLE:
+        return ""
+    try:
+        agenda = get_shared_agenda(pair_slug)
+    except Exception:
+        return ""
+    active = [a for a in agenda if a.get("status") not in ("completed", "rejected")]
+    if not active:
+        return ""
+    active.sort(key=lambda x: float(x.get("created_ts", 0) or 0))
+    for item in active:
+        if (item.get("owner") or "") == CHAR_ID:
+            return item.get("id", "")
+    for item in active:
+        if (item.get("assigned_councilor") or "") == CHAR_ID:
+            return item.get("id", "")
+    return active[0].get("id", "")
+
+
+def _try_publish_capability_request(decision: dict, partner_id: str, redis_client) -> dict:
+    """Attempt to publish a work-loop capability request (draft + submit).
+
+    Returns:
+      {"ok": bool, "request_id": str, "status": str,
+       "fallback_reason": str, "error": str, "existing": bool}
+
+    fallback_reason is one of:
+      ""                           — published successfully
+      "work_loop_unavailable"      — work-loop imports missing
+      "no_active_agenda"           — no resolvable active agenda
+      "validation_failed"          — mapping produced empty required fields
+      "draft_failed"               — draft action returned not ok
+      "submit_failed"              — submit action returned not ok (draft kept)
+    """
+    if not WORK_LOOP_AVAILABLE:
+        return {"ok": False, "request_id": "", "status": "",
+                "fallback_reason": "work_loop_unavailable",
+                "error": "work-loop imports unavailable", "existing": False}
+
+    need_type = (decision.get("need_type") or "information_access").strip()
+    priority = (decision.get("priority") or "medium").strip()
+    raw_description = (decision.get("description") or "").strip()
+    raw_why = (decision.get("why_needed") or "").strip()
+    raw_suggested = (decision.get("suggested_capability") or "").strip()
+
+    description = _enforce_fourth_wall(raw_description)
+    why_needed = _enforce_fourth_wall(raw_why)
+    suggested = _enforce_fourth_wall(raw_suggested)
+
+    try:
+        pair_slug = _pair_slug(CHAR_ID, partner_id)
+    except Exception:
+        return {"ok": False, "request_id": "", "status": "",
+                "fallback_reason": "validation_failed",
+                "error": "cannot derive pair slug", "existing": False}
+
+    agenda_id = _resolve_active_agenda(redis_client, pair_slug)
+    if not agenda_id:
+        return {"ok": False, "request_id": "", "status": "",
+                "fallback_reason": "no_active_agenda",
+                "error": "no active agenda for pair", "existing": False}
+
+    capability_key = _normalize_capability_key(suggested) or _normalize_capability_key(need_type)
+    if not capability_key:
+        return {"ok": False, "request_id": "", "status": "",
+                "fallback_reason": "validation_failed",
+                "error": "empty capability key", "existing": False}
+
+    title = _enforce_fourth_wall(
+        f"{need_type.replace('_', ' ').title()} request: {suggested or need_type}"[:120]
+    )
+    objective = _enforce_fourth_wall(
+        description or f"Gain the {need_type.replace('_', ' ')} capability to continue current work."
+    )
+    blocker = _enforce_fourth_wall(
+        why_needed or description or "Repeated work cycles stall on this missing capability."
+    )
+    attempts = _enforce_fourth_wall(
+        "Attempted to proceed without this capability during recent work cycles; "
+        "progress stalled on this gap."
+    )
+    consulted_npcs = [partner_id] if partner_id else []
+    evidence = _enforce_fourth_wall(why_needed or description or "Observed repeated stall in current work.")
+    requested_change = _enforce_fourth_wall(
+        f"Enable {suggested or need_type.replace('_', ' ')} so the described work can resume."
+    )
+    acceptance_criteria = _enforce_fourth_wall(
+        "The capability is available and unblocks the described work in the next cycle."
+    )
+    expected_benefit = _enforce_fourth_wall(
+        "Reduces repeated stalls and lets the pair move the shared agenda forward."
+    )
+    implementation_risks = _enforce_fourth_wall(
+        "Minor adjustment to how work is routed; no risk to existing records."
+    )
+
+    for field in (title, objective, blocker, attempts, evidence,
+                  requested_change, acceptance_criteria, expected_benefit,
+                  implementation_risks):
+        if not field or not field.strip():
+            return {"ok": False, "request_id": "", "status": "",
+                    "fallback_reason": "validation_failed",
+                    "error": "empty mapped field", "existing": False}
+
+    payload = {
+        "actor_id": CHAR_ID,
+        "pair_slug": pair_slug,
+        "agenda_id": agenda_id,
+        "capability_key": capability_key,
+        "title": title,
+        "objective": objective,
+        "blocker": blocker,
+        "attempts": attempts,
+        "consulted_npcs": consulted_npcs,
+        "evidence": evidence,
+        "requested_change": requested_change,
+        "acceptance_criteria": acceptance_criteria,
+        "expected_benefit": expected_benefit,
+        "implementation_risks": implementation_risks,
+        "priority": priority,
+        "collaborating_councilor_id": partner_id,
+    }
+
+    draft = execute_work_loop_action("capability_request_draft", payload)
+    if not draft.get("ok"):
+        return {"ok": False, "request_id": "", "status": "",
+                "fallback_reason": "draft_failed",
+                "error": draft.get("error", "draft failed"), "existing": False}
+
+    request = draft.get("result") or {}
+    request_id = request.get("request_id", "")
+    status = request.get("status", "draft")
+    if not request_id:
+        return {"ok": False, "request_id": "", "status": "",
+                "fallback_reason": "draft_failed",
+                "error": "no request_id returned", "existing": False}
+
+    # Idempotency: if this exact request already advanced past draft,
+    # do not re-submit. Return the existing request without a duplicate.
+    if status != "draft":
+        return {"ok": True, "request_id": request_id, "status": status,
+                "fallback_reason": "", "error": "", "existing": True}
+
+    submit = execute_work_loop_action("capability_request_submit", {
+        "actor_id": CHAR_ID,
+        "pair_slug": pair_slug,
+        "request_id": request_id,
+    })
+    if not submit.get("ok"):
+        return {"ok": False, "request_id": request_id, "status": "draft",
+                "fallback_reason": "submit_failed",
+                "error": submit.get("error", "submit failed"), "existing": False}
+
+    submitted = submit.get("result") or {}
+    return {"ok": True, "request_id": request_id,
+            "status": submitted.get("status", "submitted"),
+            "fallback_reason": "", "error": "", "existing": False}
 
 
 def _recent_artifact_dedup_count(r) -> int:
@@ -2785,38 +3029,71 @@ def execute_decision(decision: dict, r):
             logger.error("[%s] Artifact submission failed: %s", CHAR_ID, e)
 
     elif cat == "request_capability":
-        import sys, os as _os
-        sys.path.insert(0, _os.path.join(_os.path.dirname(__file__), "..", "backend"))
-        from npc_autonomy import file_npc_need
         need_type = decision.get("need_type", "information_access")
         priority = decision.get("priority", "medium")
         need_desc = decision.get("description", desc[:200] if desc else "Missing context limiting effectiveness.")
         why_needed = decision.get("why_needed", reasoning[:200] if reasoning else "Repeated low-value actions suggest context gap.")
         suggested = decision.get("suggested_capability", "general_context_enrichment")
         related_inst = r.get(f"councilor:{CHAR_ID}:institution") or ""
-        try:
-            need_result = file_npc_need(
-                r, CHAR_ID, NPC_NAME, need_type, priority,
-                need_desc, why_needed, suggested, related_inst,
+
+        # Attempt-first producer: publish a genuine work-loop capability
+        # request (draft + submit). Fall back to the legacy file_npc_need()
+        # path only when the work-loop publication cannot complete.
+        published = _try_publish_capability_request(decision, partner_id, r)
+        if published.get("ok"):
+            result["action_taken"] = "capability_request_published"
+            result["request_id"] = published["request_id"]
+            result["request_status"] = published.get("status", "submitted")
+            result["need_type"] = need_type
+            result["existing"] = published.get("existing", False)
+            result["summary"] = (
+                f"Published capability request: {need_type} — {need_desc[:80]}"
             )
-            if need_result.get("ok"):
-                result["action_taken"] = "capability_need_filed"
-                result["need_id"] = need_result["need_id"]
-                result["need_type"] = need_type
-                result["summary"] = f"Filed need: {need_type} — {need_desc[:80]}"
-                logger.info("[%s] Filed capability need: %s (%s)", CHAR_ID, need_type, need_result["need_id"])
-                _session_append(r, {
-                    "kind": "capability_need_filed",
-                    "actor": NPC_NAME,
-                    "body": f"requested {need_type}: {need_desc[:120]}",
-                })
-            else:
-                result["action_taken"] = f"capability_need_rejected:{need_result.get('error', 'unknown')}"
-                result["summary"] = f"Need rejected: {need_result.get('error', 'unknown')}"
-                logger.info("[%s] Need rejected: %s", CHAR_ID, need_result.get("error"))
-        except Exception as e:
-            result["action_taken"] = f"capability_need_error: {e}"
-            logger.error("[%s] Capability need filing failed: %s", CHAR_ID, e)
+            logger.info(
+                "[%s] Published capability request %s (%s)%s",
+                CHAR_ID, published["request_id"], published.get("status"),
+                " [existing]" if published.get("existing") else "",
+            )
+            _session_append(r, {
+                "kind": "capability_request_published",
+                "actor": NPC_NAME,
+                "body": f"requested {need_type}: {need_desc[:120]}",
+            })
+        else:
+            fallback_reason = published.get("fallback_reason", "work_loop_unavailable")
+            import sys, os as _os
+            sys.path.insert(0, _os.path.join(_os.path.dirname(__file__), "..", "backend"))
+            from npc_autonomy import file_npc_need
+            try:
+                need_result = file_npc_need(
+                    r, CHAR_ID, NPC_NAME, need_type, priority,
+                    need_desc, why_needed, suggested, related_inst,
+                )
+                if need_result.get("ok"):
+                    result["action_taken"] = "capability_need_filed"
+                    result["need_id"] = need_result["need_id"]
+                    result["need_type"] = need_type
+                    result["fallback_reason"] = fallback_reason
+                    result["summary"] = f"Filed need: {need_type} — {need_desc[:80]}"
+                    logger.info(
+                        "[%s] Filed capability need (fallback %s): %s (%s)",
+                        CHAR_ID, fallback_reason, need_type, need_result["need_id"],
+                    )
+                    _session_append(r, {
+                        "kind": "capability_need_filed",
+                        "actor": NPC_NAME,
+                        "body": f"requested {need_type}: {need_desc[:120]}",
+                    })
+                else:
+                    result["action_taken"] = f"capability_need_rejected:{need_result.get('error', 'unknown')}"
+                    result["fallback_reason"] = fallback_reason
+                    result["summary"] = f"Need rejected: {need_result.get('error', 'unknown')}"
+                    logger.info("[%s] Need rejected: %s", CHAR_ID, need_result.get("error"))
+            except Exception as e:
+                result["action_taken"] = f"capability_need_error: {e}"
+                result["fallback_reason"] = fallback_reason
+                logger.error("[%s] Capability need filing failed: %s", CHAR_ID, e)
+
 
     else:
         note = _compact_text(desc, 180) or _compact_text(reasoning, 180) or f"unhandled category {cat}"
@@ -2897,6 +3174,23 @@ def main():
             logger.debug("[%s] Tick %d", CHAR_ID, tick)
 
             context = think_about_world(r)
+
+            # Pre-decision hook: check for owned work before LLM decides
+            if WORK_LOOP_AVAILABLE and CHAR_ID in PAIR_IDS:
+                try:
+                    partner_id = _partner_id()
+                    pslug = _pair_slug(CHAR_ID, partner_id)
+                    hook_result = pre_decision_hook(pslug, CHAR_ID)
+                    if hook_result.get("has_owned_work"):
+                        context += f"\n\n⚠ You have owned work: {hook_result.get('objective', '')}"
+                        context += f"\n  Next action: {hook_result.get('next_action', '')}"
+                        context += "\n  Do NOT propose new work. Execute the owned next action."
+                    if hook_result.get("partner_work"):
+                        for pw in hook_result["partner_work"]:
+                            context += f"\n  Partner is working on: {pw.get('objective', '')}"
+                except Exception as e:
+                    logger.warning("[%s] Pre-decision hook failed: %s", CHAR_ID, e)
+
             decision = decide_action(context, r)
             execute_decision(decision, r)
 
@@ -2907,6 +3201,35 @@ def main():
             try:
                 inbox_count = r.llen(f"npc_messages:{CHAR_ID}:inbox")
                 r.hset(f"npc_stats:{CHAR_ID}", "unread", str(inbox_count))
+                
+                # Process delegation responses if work loop is available
+                if WORK_LOOP_AVAILABLE and CHAR_ID in PAIR_IDS and inbox_count > 0:
+                    try:
+                        partner_id = _partner_id()
+                        pslug = _pair_slug(CHAR_ID, partner_id)
+                        # Check for delegation responses in npc_messages inbox
+                        inbox = r.lrange(f"npc_messages:{CHAR_ID}:inbox", -10, -1)
+                        for msg_json in inbox:
+                            try:
+                                msg = json.loads(msg_json)
+                                if msg.get("type") == "delegation_response" and msg.get("delegation_id"):
+                                    agenda_id = msg.get("agenda_id")
+                                    delegation_id = msg.get("delegation_id")
+                                    response = msg.get("body", "")
+                                    msg_id = msg.get("id", "")
+                                    if agenda_id and delegation_id and response:
+                                        responder_id = msg.get("from_char_id", "")
+                                        deleg_thread_id = msg.get("thread_id", "")
+                                        attach_delegation_response(
+                                            pslug, agenda_id, delegation_id, response, msg_id,
+                                            responder_id=responder_id,
+                                            thread_id=deleg_thread_id,
+                                        )
+                                        logger.info("[%s] Attached delegation response for %s", CHAR_ID, delegation_id)
+                            except Exception as e:
+                                logger.debug("[%s] Failed to process delegation response: %s", CHAR_ID, e)
+                    except Exception as e:
+                        logger.warning("[%s] Failed to process delegation responses: %s", CHAR_ID, e)
             except Exception:
                 pass
 
