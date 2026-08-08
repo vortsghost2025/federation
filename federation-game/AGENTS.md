@@ -288,3 +288,42 @@ unblock is the exact sequence below — do not improvise:
 
 After a code deploy, md5-verify host vs containers (see Mandatory verification above) and
 restart npc-agent containers + backend + worker whenever `shared/` code changed.
+
+## Communication style (accessibility)
+
+The user is nearly blind and consumes assistant output via text-to-speech and a
+zoom-enabled phone. Honor this in every session:
+
+- Be concise by default, but DO NOT truncate when the answer genuinely needs
+  detail (root-cause explanations, multi-step plans, code reviews, investigation
+  summaries). Full detail is expected and welcome there.
+- Prefer linear prose over dense tables and wide multi-column layouts; TTS reads
+  them poorly. Use short headers and numbered lists for multi-part answers.
+- Summarize the single most important conclusion up front, then expand.
+
+## Environment & session entry (for agents)
+
+- This workspace runs ON the VPS host: the live runtime source is
+  `/docker/federation-game`. Edit here, restart the affected container, then
+  md5-verify host vs container vs git for every changed file.
+- GitHub has NO SSH key on this host: `git fetch/pull` over SSH fails with
+  "Permission denied (publickey)". Verify remote state with
+  `gh api repos/vortsghost2025/federation/branches/main --jq '.commit.sha'`.
+  Pushes use the temporary https remote + gh credential helper (procedure
+  above), then restore the SSH remote.
+- Redis is reached through the `federation-game-redis-1` container:
+  `docker exec federation-game-redis-1 redis-cli <cmd>`.
+- On session start: check `fed:auto_tick_status` (running flag, tick_id,
+  last_result), grep backend logs for new `[ERROR]` lines, and md5-compare
+  host vs container vs git for any file that should be live.
+- Restart backend/worker only between ticks. A mid-tick restart leaves stale
+  `fed:watchdog:*` lease keys; `DEL` them before the next tick.
+- Pair state (spectator / council chat content) is self-servable from Redis —
+  no need to ask the user to paste pages:
+  - `npc_pair:char_001__char_306:state` — focus, open question, actions, partner answer
+  - `npc_pair:char_001__char_306:areas` — founded sectors
+  - `fed:auto_tick_status` `last_result` JSON — per-step tick results
+    (e.g. `step7_npc_quests`: accepted / progressed / completed / errors)
+- Keep secrets out of files and commits entirely.
+
+
