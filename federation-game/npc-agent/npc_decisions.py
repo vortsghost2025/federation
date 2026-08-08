@@ -291,6 +291,35 @@ def _acknowledge_inbox(r, partner_id: str = None) -> int:
         return 0
 
 
+def _unwrap_decision(val):
+    """Sanitize literal_eval / json.loads results.
+
+    Models emit `...` as a placeholder, which ast.literal_eval turns into the
+    Ellipsis singleton (json.loads rejects it), and sometimes wrap the actual
+    decision in {'content': '<json string>'}. Recursively strip Ellipsis and
+    unwrap the content wrapper when the outer dict has no 'category'.
+    """
+    if val is Ellipsis:
+        return ""
+    if isinstance(val, dict):
+        out = {}
+        for k, v in val.items():
+            out[k] = _unwrap_decision(v)
+        if "content" in out and isinstance(out["content"], str) and "category" not in out:
+            inner = out["content"]
+            if "{" in inner:
+                try:
+                    inner_val = _extract_json(inner)
+                    if isinstance(inner_val, dict):
+                        return inner_val
+                except Exception:
+                    pass
+        return out
+    if isinstance(val, list):
+        return [_unwrap_decision(v) for v in val]
+    return val
+
+
 def _extract_json(text: str):
     """Parse a JSON object out of LLM output that may be wrapped in prose or
     code fences, or returned in Python-dict style (single quotes).
@@ -304,6 +333,29 @@ def _extract_json(text: str):
     if not text:
         raise json.JSONDecodeError("empty text", "", 0)
 
+    # 0) `{'content': '<json string>'}` wrapper: the model often wraps its
+    # decision in a Python-dict-style envelope with single quotes. Apostrophes
+    # inside the content (e.g. "Confluence's") break literal_eval of the whole
+    # envelope, so scan braces directly instead of quote-matching.
+    _wrap = re.match(r"\s*\{['\"]content['\"]\s*:\s*['\"]", text, re.DOTALL)
+    if _wrap:
+        inner_start = text.find("{", _wrap.end())
+        last_brace = text.rfind("}")
+        if inner_start != -1 and last_brace - 1 > inner_start:
+            inner = text[inner_start:last_brace - 1].strip()
+            if inner.endswith("}"):
+                for attempt in (
+                    lambda: _unwrap_decision(json.loads(inner)),
+                    lambda: _unwrap_decision(ast.literal_eval(inner)),
+                    lambda: _extract_json(inner),
+                ):
+                    try:
+                        val = attempt()
+                        if isinstance(val, dict):
+                            return val
+                    except Exception:
+                        continue
+
     # 1) Code fences
     if "```" in text:
         parts = text.split("```")
@@ -316,7 +368,7 @@ def _extract_json(text: str):
             candidate = candidate.strip()
             if candidate.startswith("{") and candidate.endswith("}"):
                 try:
-                    return json.loads(candidate)
+                    return _unwrap_decision(json.loads(candidate))
                 except json.JSONDecodeError:
                     pass
 
@@ -343,14 +395,14 @@ def _extract_json(text: str):
     for cand in ordered:
         cand = cand.strip()
         try:
-            return json.loads(cand)
+            return _unwrap_decision(json.loads(cand))
         except json.JSONDecodeError:
             pass
         # 3) Python-style dict (single quotes / unquoted keys)
         try:
             val = ast.literal_eval(cand)
             if isinstance(val, dict):
-                return val
+                return _unwrap_decision(val)
         except Exception:
             pass
 
@@ -360,6 +412,46 @@ def _extract_json(text: str):
         text,
         brace_start if brace_start != -1 else 0,
     )
+
+
+def _consume_system_notifications(r) -> list:
+    """Drain the agent's system-notification inbox and return readable messages.
+
+    System notifications (idempotent-guard results like `area_already_founded`,
+    moderator pushes, area-founded confirmations) land in
+    `npc:system_notifications:<char_id>`. The external-agent loop never read
+    this inbox, so guard feedback never reached the LLM — draining it into the
+    decision prompt closes that loop.
+    """
+    if r is None:
+        return []
+    key = f"npc:system_notifications:{CHAR_ID}"
+    try:
+        raws = r.lrange(key, 0, -1)
+        if raws:
+            r.delete(key)
+        out = []
+        for raw in raws:
+            try:
+                obj = json.loads(raw)
+                out.append(obj.get("message") or obj.get("type") or str(raw)[:200])
+            except Exception:
+                out.append(str(raw)[:200])
+        return out
+    except Exception as e:
+        logger.warning("[%s] notification consume failed: %s", CHAR_ID, e)
+        return []
+
+
+def _current_areas_summary(r) -> str:
+    """Best-effort summary of areas already on the pair's shared map."""
+    if r is None:
+        return ""
+    try:
+        from npc_work_loop_adapter import current_areas_summary
+        return current_areas_summary()
+    except Exception:
+        return ""
 
 
 def _newest_moderator_directive(r, char_id: str = "") -> dict | None:
@@ -1012,6 +1104,19 @@ Respond in this exact JSON format (no markdown, no explanation):
                     f"\n\nLOOP-BREAK (runtime): You have done '{shapes[0]}' 3 times in a row. "
                     "Strongly consider a different category this turn."
                 )
+    _notes = _consume_system_notifications(r)
+    if _notes:
+        force_constraint += (
+            "\n\nSYSTEM NOTIFICATIONS (feedback from your recent actions):\n- "
+            + "\n- ".join(_notes)
+        )
+    _areas = _current_areas_summary(r)
+    if _areas:
+        force_constraint += (
+            "\n\nCURRENT WORLD MAP (areas already on your shared map):\n"
+            + _areas
+            + "\ncreate_area must use a NEW area_id/name/coordinates that are NOT in this list."
+        )
     system_prompt = base_system + force_constraint
 
     from npc_llm_client import DECISION_MODEL
@@ -1142,4 +1247,31 @@ Respond in this exact JSON format (no markdown, no explanation):
         return decision
     except (json.JSONDecodeError, ValueError) as e:
         logger.warning("Failed to parse LLM decision: %s | raw: %s", e, str(raw)[:200])
-        return {"category": "rest", "reasoning": f"parse error: {e}", "description": "resting"}
+        try:
+            retry_prompt = (
+                system_prompt
+                + "\n\nMANDATE: Your previous reply contained NO valid JSON decision. "
+                'Reply with ONLY a single raw JSON object of the requested form, e.g. '
+                '{"category": "read_artifacts", "reasoning": "R", "description": "D"}. '
+                "Do NOT wrap it in a 'content' field, do NOT use single-quoted Python "
+                "dict style, do NOT use ellipsis (...), and do NOT add prose or markdown "
+                "fences. The reply must begin with { and end with }."
+            )
+            retry_raw = call_llm(
+                retry_prompt,
+                context,
+                model=DECISION_MODEL or "",
+                r=r,
+                call_label="decide_retry",
+            )
+            decision = _extract_json(retry_raw["content"])
+            if isinstance(decision, dict) and decision.get("category") in AGENCY_CATEGORIES:
+                logger.info("[%s] decision retry parse succeeded: %s", CHAR_ID, decision.get("category"))
+                return decision
+        except Exception as e2:
+            logger.warning("[%s] decision retry also failed: %s", CHAR_ID, e2)
+        return {
+            "category": "read_artifacts",
+            "reasoning": f"parse error: {e}; retry failed",
+            "description": "reading artifacts after LLM produced no parseable decision",
+        }

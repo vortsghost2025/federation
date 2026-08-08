@@ -40,6 +40,7 @@ try:
         get_shared_agenda,
         get_agenda_item,
         get_capability_request,
+        get_areas,
         PAIR_IDS as _WL_PAIR_IDS,
         _pair_slug,
         _stable_capability_id,
@@ -305,3 +306,33 @@ def handle_found_area(decision: dict, actor_id: str, r, result: dict) -> bool:
     result["partial_error"] = res.get("error")
     result["summary"] = f"Area foundation failed: {res.get('error')}"
     return False
+
+
+def current_areas_summary() -> str:
+    """Human-readable list of areas already on the pair's shared map, for
+    injection into the decision prompt so create_area proposes new areas."""
+    if not _WORK_LOOP_OK:
+        return ""
+    try:
+        pair_slug = "__".join(sorted(PAIR_IDS))
+        areas = get_areas(pair_slug)
+    except Exception:
+        return ""
+    if not areas:
+        return ""
+    return "; ".join(
+        f"{a.get('area_id', '?')} ({a.get('name', '?')}, founded_by={a.get('founded_by', '?')})"
+        for a in areas
+    )
+
+
+def area_exists_on_map(area_id: str) -> bool:
+    """Deterministic check: is this area_id already on the pair's shared map?"""
+    if not _WORK_LOOP_OK or not area_id:
+        return False
+    try:
+        from federation_work_loop.core import get_area
+        pair_slug = "__".join(sorted(PAIR_IDS))
+        return get_area(pair_slug, area_id) is not None
+    except Exception:
+        return False
