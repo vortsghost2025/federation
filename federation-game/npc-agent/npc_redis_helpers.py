@@ -883,7 +883,10 @@ def _recent_completed_goals(r, char_id: str = "", limit: int = RECENT_COMPLETION
     if not key:
         return []
     try:
-        raw_list = r.lrange(key, 0, limit - 1)
+        # Records are appended via rpush (tail) and trimmed to the last N with
+        # ltrim(key, -N, -1), so the START of the list holds the OLDEST goals.
+        # Read from the tail (-limit..-1) to get the most recent.
+        raw_list = r.lrange(key, -limit, -1)
     except Exception:
         return []
     out = []
