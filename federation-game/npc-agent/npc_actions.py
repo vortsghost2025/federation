@@ -943,21 +943,47 @@ def execute_decision(decision: dict, r, contacts: dict):
 
                 # 4. Reroute to productive work when a guard rejects, so the
                 #    councilor never stays locked on an impossible creation.
+                #    Cap-reached (world oversaturated with institutions) is a
+                #    good moment to BUILD something quantitative instead of yet
+                #    another prose artifact, so route it to the sandboxed
+                #    write_code builder. Similar-exists keeps the artifact path
+                #    because there is a concrete institution to analyze.
                 if _rejected:
-                    rerouted = {
-                        "category": "create_artifact",
-                        "reasoning": (
-                            f"create_institution rerouted: '{inst_name}' rejected "
-                            "(cap reached or similar exists); producing an artifact "
-                            "advancing the shared work instead"
-                        ),
-                        "description": (
-                            f"Institution '{inst_name}' could not be founded right now, "
-                            f"so write a concise artifact that advances the shared topic: "
-                            f"{_compact_text(desc, 120) or 'the current shared goal'}"
-                        ),
-                    }
-                    logger.info("[%s] create_institution rerouted to create_artifact", CHAR_ID)
+                    if result.get("action_taken") in {
+                        "institution_cap_reached",
+                        "institution_total_cap_reached",
+                    }:
+                        rerouted = {
+                            "category": "write_code",
+                            "reasoning": (
+                                f"create_institution rerouted: '{inst_name}' rejected "
+                                "(institution cap reached); the world already has enough "
+                                "institutions, so build a quantitative model/metric that "
+                                "advances the shared work instead"
+                            ),
+                            "description": (
+                                f"A quantitative model, metric, or projection that advances "
+                                f"the shared topic: {_compact_text(desc, 120) or 'the current shared goal'}."
+                                f" Compute a concrete number and print it."
+                            ),
+                            "title": f"Model: {_compact_text(desc, 48)}",
+                        }
+                        logger.info("[%s] create_institution rerouted to write_code (cap)", CHAR_ID)
+                    else:
+                        rerouted = {
+                            "category": "create_artifact",
+                            "reasoning": (
+                                f"create_institution rerouted: '{inst_name}' rejected "
+                                "(cap reached or similar exists); producing an artifact "
+                                "advancing the shared work instead"
+                            ),
+                            "description": (
+                                f"Institution '{inst_name}' could not be founded right now, "
+                                f"so write a concise artifact that advances the shared topic: "
+                                f"{_compact_text(desc, 120) or 'the current shared goal'}"
+                            ),
+                        }
+                        logger.info("[%s] create_institution rerouted to create_artifact", CHAR_ID)
                     return execute_decision(rerouted, r, contacts)
 
                 # ── Create institution (passes all guards) ──
@@ -1101,6 +1127,41 @@ def execute_decision(decision: dict, r, contacts: dict):
                             "title": role_title,
                             "body": f"proposed role '{role_title}' (authority: {authority}) in {inst_rec.get('name', target_inst_id)} — scope: {scope[:120]}",
                         })
+                # ── Anti-loop: repeated role rejections should pivot to building
+                #    something quantitative instead of hammering governance again.
+                #    The streak is a best-effort guard; a minimal Redis client
+                #    (e.g. some test fakes) may lack setex/delete, so tolerate that.
+                try:
+                    _streak_key = f"npc_role_reject_streak:{CHAR_ID}"
+                    if result.get("action_taken", "").startswith("role_rejected"):
+                        streak = int(r.get(_streak_key) or 0) + 1
+                        if hasattr(r, "setex"):
+                            r.setex(_streak_key, 3600, streak)
+                        if streak >= 2:
+                            if hasattr(r, "delete"):
+                                r.delete(_streak_key)
+                            rerouted = {
+                                "category": "write_code",
+                                "reasoning": (
+                                    f"propose_role rejected {streak} consecutive times "
+                                    f"('{role_title}'); the governance space is saturated, so "
+                                    "build a quantitative model/metric that advances the shared "
+                                    "work instead of proposing more roles"
+                                ),
+                                "description": (
+                                    f"A quantitative model, metric, or projection that advances "
+                                    f"the shared topic: {_compact_text(desc, 120) or 'the current shared goal'}."
+                                    f" Compute a concrete number and print it."
+                                ),
+                                "title": f"Model: {_compact_text(desc, 48)}",
+                            }
+                            logger.info("[%s] propose_role rejection loop -> write_code", CHAR_ID)
+                            return execute_decision(rerouted, r, contacts)
+                    else:
+                        if hasattr(r, "delete"):
+                            r.delete(_streak_key)
+                except Exception as _streak_exc:
+                    logger.info("[%s] role streak guard skipped: %s", CHAR_ID, _streak_exc)
         except Exception as e:
             result["action_taken"] = f"role_error: {e}"
             logger.error("[%s] Role proposal failed: %s", CHAR_ID, e)
