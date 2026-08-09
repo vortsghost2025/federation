@@ -5,6 +5,7 @@ Extracted from npc_agent.py as part of Phase 1 monolith breakup.
 Each function takes explicit parameters (char_id, contacts) instead of
 relying on module-level globals, avoiding circular imports.
 """
+import ast
 import json
 import logging
 import os
@@ -38,66 +39,243 @@ from npc_redis_helpers import (
 # The "builder" capability lets a councilor WRITE code that actually RUNS and
 # produces a concrete, verifiable output (a computed model, a simulation, a
 # metric) rather than another essay artifact. To make it a real builder we
-# execute the generated Python in a heavily restricted subprocess: dangerous
-# patterns are blocked statically, and the process is resource/time limited so
-# it cannot hang or escape the container. The captured stdout is stored as the
-# artifact's concrete outcome and recorded in the outcome-feedback ledger.
+# execute the generated Python in a heavily restricted subprocess: the code is
+# checked against an AST allowlist (pure computation only) and the process is
+# resource/time limited so it cannot hang or escape the container. The captured
+# stdout is stored as the artifact's concrete outcome and recorded in the
+# outcome-feedback ledger.
 import subprocess
-import resource
 
 _SANDBOX_TIMEOUT = float(os.environ.get("SANDBOX_TIMEOUT", "6"))
 _SANDBOX_MAX_MEM_MB = int(os.environ.get("SANDBOX_MAX_MEM_MB", "64"))
 _SANDBOX_MAX_OUTPUT = int(os.environ.get("SANDBOX_MAX_OUTPUT", "2000"))
-_SANDBOX_BLOCKED_PATTERNS = re.compile(
-    r"\b(?:__import__|eval|exec|compile|open|input|breakpoint)\s*\("
-    r"|\b(?:import|from)\s+(?:os|sys|subprocess|socket|shutil|ctypes|"
-    r"multiprocessing|threading|signal|resource|pathlib|builtins|"
-    r"importlib|pickle|marshal)\b"
-    r"|\b(?:os\.|sys\.|subprocess\.|socket\.|shutil\.)"
-    r"|\b(?:globals|locals|vars|dir|getattr|setattr|delattr)\s*\("
-    r"|\b(?:while)\s+True"
-    r"|\b(?:open|write|unlink|remove|rmdir|mkdir|chmod)\s*\(",
-    re.IGNORECASE,
+# The old static regex blacklist was bypassable: it never matched dunder
+# introspection (''.__class__.__base__.__subclasses__()), bare-name aliasing of
+# the wrapper's pre-imported modules (s = sys; s.modules['os']...), or
+# __builtins__['__import__']('os'). The sandbox now validates the code with an
+# AST allowlist instead: only pure-computation constructs are permitted, only
+# whitelisted builtin names may be referenced, and attribute access is limited
+# to non-dunder, non-frame names. Execution runs in a subprocess under
+# RLIMIT_AS/RLIMIT_CPU/RLIMIT_NPROC, isolated mode (-I), a restricted builtins
+# dict and a clean environment, plus a hard timeout — defense in depth.
+_SANDBOX_ALLOWED_NAMES = frozenset({
+    # safe builtins
+    "print", "len", "range", "int", "float", "str", "bool", "bytes", "abs",
+    "min", "max", "sum", "round", "sorted", "enumerate", "zip", "list", "dict",
+    "set", "tuple", "chr", "ord", "pow", "divmod", "isinstance", "repr",
+    "format", "reversed", "any", "all", "map", "filter", "hex", "oct", "bin",
+    "hash", "id", "iter", "next", "slice", "complex", "frozenset",
+    # exceptions, so `except ValueError:` works
+    "Exception", "ArithmeticError", "ValueError", "TypeError", "KeyError",
+    "IndexError", "ZeroDivisionError", "OverflowError", "RuntimeError",
+    "StopIteration", "NameError",
+})
+
+# Non-dunder attributes that can still lead toward interpreter internals
+# (generator frames, tracebacks). Dunders are denied by prefix anyway; this
+# list is defense in depth for the non-dunder escape attrs.
+_SANDBOX_BLOCKED_ATTRS = frozenset({
+    "gi_frame", "ag_frame", "cr_frame", "f_back", "f_globals", "f_locals",
+    "f_builtins", "f_code", "f_lasti", "tb_frame", "tb_next", "tb_lasti",
+    "tb_lineno", "func_globals", "func_code", "im_func", "im_class",
+})
+
+# Node types with no place in a pure-computation sandbox.
+_SANDBOX_DENIED_NODES = (
+    ast.Import, ast.ImportFrom, ast.While, ast.With, ast.AsyncWith,
+    ast.ClassDef, ast.Global, ast.Nonlocal, ast.AsyncFunctionDef,
+    ast.AsyncFor, ast.Delete, ast.Yield, ast.YieldFrom, ast.Await,
+    ast.Starred, ast.Match,
 )
 
-_SANDBOX_WRAPPER = r"""
+# str.format() runs its own mini-language that walks attributes by NAME
+# ("{0.__class__}"), bypassing the AST attribute check. Reject format strings
+# whose fields reference dunder names.
+_SANDBOX_FORMAT_FIELD_DUNDER_RE = re.compile(r"\{[^{}]*__[^{}]*\}")
+
+
+def _validate_sandbox_code(code: str):
+    """Return an error string if `code` uses anything outside the sandbox
+    subset, else None.
+
+    The subset is pure computation: variables, arithmetic, strings, if/else,
+    bounded for loops, containers, indexing/slicing, functions, f-strings, and
+    non-dunder attribute access / method calls on values produced by safe
+    builtins. Denied: imports, while, classes, with, async, dunder/frame
+    attribute tricks, and any name that is not a whitelisted builtin or a
+    locally bound variable.
+    """
+    try:
+        tree = ast.parse(code, mode="exec")
+    except SyntaxError as e:
+        return f"invalid syntax: {e.msg}"
+    if not isinstance(tree, ast.Module):
+        return "invalid module"
+
+    # Pass 1: collect every name the code binds (assignment targets, loop
+    # targets, function params/names, comprehension targets, walrus).
+    bound: set[str] = set()
+
+    def _collect_target(t) -> None:
+        if isinstance(t, ast.Name):
+            bound.add(t.id)
+        elif isinstance(t, (ast.Tuple, ast.List)):
+            for elt in t.elts:
+                _collect_target(elt)
+
+    def _collect_args(args) -> None:
+        for a in list(args.posonlyargs) + list(args.args) + list(args.kwonlyargs):
+            bound.add(a.arg)
+        if args.vararg:
+            bound.add(args.vararg.arg)
+        if args.kwarg:
+            bound.add(args.kwarg.arg)
+
+    class _Collector(ast.NodeVisitor):
+        def visit_Assign(self, n):
+            for t in n.targets:
+                _collect_target(t)
+            self.generic_visit(n)
+
+        def visit_AugAssign(self, n):
+            _collect_target(n.target)
+            self.generic_visit(n)
+
+        def visit_AnnAssign(self, n):
+            if n.target:
+                _collect_target(n.target)
+            self.generic_visit(n)
+
+        def visit_For(self, n):
+            _collect_target(n.target)
+            self.generic_visit(n)
+
+        def visit_NamedExpr(self, n):
+            _collect_target(n.target)
+            self.generic_visit(n)
+
+        def visit_FunctionDef(self, n):
+            bound.add(n.name)
+            _collect_args(n.args)
+            self.generic_visit(n)
+
+        def visit_Lambda(self, n):
+            _collect_args(n.args)
+            self.generic_visit(n)
+
+        def visit_comprehension(self, n):
+            _collect_target(n.target)
+            self.generic_visit(n)
+
+    _Collector().visit(tree)
+
+    # Pass 2: enforce the allowlist.
+    error: list[str] = []
+
+    class _Checker(ast.NodeVisitor):
+        def visit_Name(self, n):
+            if n.id not in _SANDBOX_ALLOWED_NAMES and n.id not in bound:
+                error.append(f"name '{n.id}' is not allowed in the sandbox")
+            self.generic_visit(n)
+
+        def visit_Attribute(self, n):
+            if n.attr.startswith("__") or n.attr in _SANDBOX_BLOCKED_ATTRS:
+                error.append(f"attribute '{n.attr}' is not allowed in the sandbox")
+            self.generic_visit(n)
+
+        def visit_Call(self, n):
+            func = n.func
+            if isinstance(func, ast.Attribute):
+                # Method call on a value produced by literals / safe builtins.
+                # The attribute NAME is checked by visit_Attribute (dunder and
+                # frame/traceback attrs are denied there); only the name gate
+                # matters here.
+                if func.attr.startswith("__") or func.attr in _SANDBOX_BLOCKED_ATTRS:
+                    error.append(f"method '{func.attr}' is not allowed in the sandbox")
+            elif not isinstance(func, ast.Name):
+                error.append("only direct calls to allowed builtins, local functions, or safe methods are permitted")
+            elif func.id not in _SANDBOX_ALLOWED_NAMES and func.id not in bound:
+                error.append(f"call to '{func.id}' is not allowed in the sandbox")
+            self.generic_visit(n)
+
+        def visit_FunctionDef(self, n):
+            if n.decorator_list:
+                error.append("decorators are not allowed in the sandbox")
+            self.generic_visit(n)
+
+        def visit_Constant(self, n):
+            if isinstance(n.value, str) and _SANDBOX_FORMAT_FIELD_DUNDER_RE.search(n.value):
+                error.append("format strings may not reference dunder attributes")
+            self.generic_visit(n)
+
+        def generic_visit(self, n):
+            if isinstance(n, _SANDBOX_DENIED_NODES):
+                error.append(f"'{type(n).__name__}' is not allowed in the sandbox")
+                return
+            super().generic_visit(n)
+
+    _Checker().visit(tree)
+    return error[0] if error else None
+
+
+# Fixed runner script (nothing user-controlled is interpolated into it): sets
+# rlimits, then exec()s the user code with a restricted builtins dict and no
+# other globals. Code, mem and cpu are passed via argv.
+_SANDBOX_RUNNER = r"""
 import resource, sys, time
-resource.setrlimit(resource.RLIMIT_AS, (MAXMEM, MAXMEM))
-resource.setrlimit(resource.RLIMIT_CPU, (MAXCPU, MAXCPU))
+mem = int(sys.argv[2])
+cpu = int(sys.argv[3])
+resource.setrlimit(resource.RLIMIT_AS, (mem, mem))
+resource.setrlimit(resource.RLIMIT_CPU, (cpu, cpu))
 resource.setrlimit(resource.RLIMIT_NPROC, (200, 200))
-_start = time.time()
-_real_stdout = sys.stdout
-_real_stderr = sys.stderr
-class _Out:
-    def write(self, s): _real_stdout.write(s)
-    def flush(self): _real_stdout.flush()
-sys.stdout = _Out()
-sys.stderr = _Out()
-CODE
+_safe = {"print": print, "len": len, "range": range, "int": int, "float": float,
+         "str": str, "bool": bool, "bytes": bytes, "abs": abs, "min": min,
+         "max": max, "sum": sum, "round": round, "sorted": sorted,
+         "enumerate": enumerate, "zip": zip, "list": list, "dict": dict,
+         "set": set, "tuple": tuple, "chr": chr, "ord": ord, "pow": pow,
+         "divmod": divmod, "isinstance": isinstance, "repr": repr,
+         "format": format, "reversed": reversed, "any": any, "all": all,
+         "map": map, "filter": filter, "hex": hex, "oct": oct, "bin": bin,
+         "hash": hash, "id": id, "iter": iter, "next": next, "slice": slice,
+         "complex": complex, "frozenset": frozenset,
+         "Exception": Exception, "ArithmeticError": ArithmeticError,
+         "ValueError": ValueError, "TypeError": TypeError,
+         "KeyError": KeyError, "IndexError": IndexError,
+         "ZeroDivisionError": ZeroDivisionError, "OverflowError": OverflowError,
+         "RuntimeError": RuntimeError, "StopIteration": StopIteration,
+         "NameError": NameError}
+_globals = {"__builtins__": dict(_safe)}
+exec(compile(sys.argv[1], "<sandbox>", "exec"), _globals)
 """
 
 
 def _execute_sandboxed_python(code: str, timeout: float = None, max_output: int = None):
     """Run generated Python in a restricted subprocess.
 
-    Returns (ok: bool, output: str). Blocks before execution if the code
-    contains statically-dangerous patterns (imports, os/sys access, eval/exec,
-    file I/O, subshell, infinite loops). Uses RLIMIT_AS/RLIMIT_CPU/RLIMIT_NPROC
-    plus a hard timeout so a runaway build cannot hang the agent.
+    Returns (ok: bool, output: str). The code is first validated with an AST
+    allowlist (pure computation only — no imports, no while/classes/async, no
+    dunder or frame attribute access, no unknown names). It then runs in a
+    subprocess under RLIMIT_AS/RLIMIT_CPU/RLIMIT_NPROC, isolated mode (-I), a
+    restricted builtins dict and a clean environment, with a hard timeout, so
+    a runaway or hostile build cannot hang the agent or touch the system.
     """
-    if _SANDBOX_BLOCKED_PATTERNS.search(code or ""):
-        return False, "code_denied: blocked disallowed operations (imports, file I/O, eval/exec, OS access)"
+    code = code or ""
+    if not code.strip():
+        return False, "code_denied: empty code"
+    verdict = _validate_sandbox_code(code)
+    if verdict:
+        return False, f"code_denied: {verdict}"
     timeout = timeout or _SANDBOX_TIMEOUT
     max_output = max_output or _SANDBOX_MAX_OUTPUT
     mem_bytes = _SANDBOX_MAX_MEM_MB * 1024 * 1024
-    wrapped = _SANDBOX_WRAPPER.replace("MAXMEM", str(mem_bytes)).replace("MAXCPU", str(int(timeout))).replace("CODE", code)
     try:
         proc = subprocess.run(
-            [sys.executable, "-c", wrapped],
+            [sys.executable, "-I", "-c", _SANDBOX_RUNNER, code, str(mem_bytes), str(int(timeout))],
             capture_output=True,
             text=True,
             timeout=timeout,
             cwd="/tmp",
+            env={"PATH": "/usr/bin:/bin"},
         )
     except subprocess.TimeoutExpired:
         return False, "code_timeout: execution exceeded the sandbox limit"
@@ -547,7 +725,7 @@ def execute_decision(decision: dict, r, contacts: dict):
                 )
 
     elif cat == "write_code":
-        code_prompt = f"Generate Python code for: {desc}\n\nOutput ONLY valid Python code. The code runs in a sandbox; print your computed result to stdout."
+        code_prompt = f"Generate Python code for: {desc}\n\nOutput ONLY valid Python code. The code runs in a restricted sandbox; print your computed result to stdout. Use only variables, arithmetic, strings, f-strings, if/else, for loops over range(), lists/dicts/sets, indexing/slicing, functions, and print(). Do NOT import anything, do not use while loops or classes, do not touch files, os, sys, or dunder attributes."
         llm_result = call_llm("You are a Python developer. Output only code.", code_prompt, r=r, call_label="code")
         gen_code = llm_result.get("content", "")
         if not gen_code:
