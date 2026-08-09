@@ -10,6 +10,7 @@ import logging
 import os
 import random
 import re
+import sys
 import time
 import uuid
 
@@ -30,7 +31,82 @@ from npc_redis_helpers import (
     _acknowledge_operator_directive,
     _semantic_artifact_dedup_blocked,
     _record_outcome_feedback,
+    _record_outcome_consequence,
 )
+
+# ── Sandboxed builder (write_code) ──
+# The "builder" capability lets a councilor WRITE code that actually RUNS and
+# produces a concrete, verifiable output (a computed model, a simulation, a
+# metric) rather than another essay artifact. To make it a real builder we
+# execute the generated Python in a heavily restricted subprocess: dangerous
+# patterns are blocked statically, and the process is resource/time limited so
+# it cannot hang or escape the container. The captured stdout is stored as the
+# artifact's concrete outcome and recorded in the outcome-feedback ledger.
+import subprocess
+import resource
+
+_SANDBOX_TIMEOUT = float(os.environ.get("SANDBOX_TIMEOUT", "6"))
+_SANDBOX_MAX_MEM_MB = int(os.environ.get("SANDBOX_MAX_MEM_MB", "64"))
+_SANDBOX_MAX_OUTPUT = int(os.environ.get("SANDBOX_MAX_OUTPUT", "2000"))
+_SANDBOX_BLOCKED_PATTERNS = re.compile(
+    r"\b(?:__import__|eval|exec|compile|open|input|breakpoint)\s*\("
+    r"|\b(?:import|from)\s+(?:os|sys|subprocess|socket|shutil|ctypes|"
+    r"multiprocessing|threading|signal|resource|pathlib|builtins|"
+    r"importlib|pickle|marshal)\b"
+    r"|\b(?:os\.|sys\.|subprocess\.|socket\.|shutil\.)"
+    r"|\b(?:globals|locals|vars|dir|getattr|setattr|delattr)\s*\("
+    r"|\b(?:while)\s+True"
+    r"|\b(?:open|write|unlink|remove|rmdir|mkdir|chmod)\s*\(",
+    re.IGNORECASE,
+)
+
+_SANDBOX_WRAPPER = r"""
+import resource, sys, time
+resource.setrlimit(resource.RLIMIT_AS, (MAXMEM, MAXMEM))
+resource.setrlimit(resource.RLIMIT_CPU, (MAXCPU, MAXCPU))
+resource.setrlimit(resource.RLIMIT_NPROC, (200, 200))
+_start = time.time()
+_real_stdout = sys.stdout
+_real_stderr = sys.stderr
+class _Out:
+    def write(self, s): _real_stdout.write(s)
+    def flush(self): _real_stdout.flush()
+sys.stdout = _Out()
+sys.stderr = _Out()
+CODE
+"""
+
+
+def _execute_sandboxed_python(code: str, timeout: float = None, max_output: int = None):
+    """Run generated Python in a restricted subprocess.
+
+    Returns (ok: bool, output: str). Blocks before execution if the code
+    contains statically-dangerous patterns (imports, os/sys access, eval/exec,
+    file I/O, subshell, infinite loops). Uses RLIMIT_AS/RLIMIT_CPU/RLIMIT_NPROC
+    plus a hard timeout so a runaway build cannot hang the agent.
+    """
+    if _SANDBOX_BLOCKED_PATTERNS.search(code or ""):
+        return False, "code_denied: blocked disallowed operations (imports, file I/O, eval/exec, OS access)"
+    timeout = timeout or _SANDBOX_TIMEOUT
+    max_output = max_output or _SANDBOX_MAX_OUTPUT
+    mem_bytes = _SANDBOX_MAX_MEM_MB * 1024 * 1024
+    wrapped = _SANDBOX_WRAPPER.replace("MAXMEM", str(mem_bytes)).replace("MAXCPU", str(int(timeout))).replace("CODE", code)
+    try:
+        proc = subprocess.run(
+            [sys.executable, "-c", wrapped],
+            capture_output=True,
+            text=True,
+            timeout=timeout,
+            cwd="/tmp",
+        )
+    except subprocess.TimeoutExpired:
+        return False, "code_timeout: execution exceeded the sandbox limit"
+    except Exception as e:
+        return False, f"code_exec_error: {e}"
+    combined = (proc.stdout or "") + (proc.stderr or "")
+    if proc.returncode != 0:
+        return False, f"code_error (exit {proc.returncode}): {combined.strip()[:max_output]}"
+    return True, (combined.strip()[:max_output] or "ran successfully (no output)")
 
 # ── Artifact title cleaning ──
 # When a create_institution is rejected, the reroute injects system text into
@@ -471,10 +547,16 @@ def execute_decision(decision: dict, r, contacts: dict):
                 )
 
     elif cat == "write_code":
-        code_prompt = f"Generate Python code for: {desc}\n\nOutput ONLY valid Python code."
+        code_prompt = f"Generate Python code for: {desc}\n\nOutput ONLY valid Python code. The code runs in a sandbox; print your computed result to stdout."
         llm_result = call_llm("You are a Python developer. Output only code.", code_prompt, r=r, call_label="code")
         gen_code = llm_result.get("content", "")
-        if gen_code:
+        if not gen_code:
+            result["action_taken"] = "code_failed"
+        else:
+            # Run the code in the sandbox and capture a concrete, verifiable
+            # output — this is what makes the builder "real" (a computed model,
+            # a metric, a simulation result) instead of an unexecuted script.
+            ok, output = _execute_sandboxed_python(gen_code)
             artifact = {
                 "artifact_id": str(uuid.uuid4()),
                 "char_id": CHAR_ID,
@@ -482,22 +564,46 @@ def execute_decision(decision: dict, r, contacts: dict):
                 "title": f"Code: {desc[:60]}",
                 "artifact_type": "code",
                 "content": gen_code,
+                "output": output,
                 "created_at": ts,
             }
             r.rpush(f"npc_artifacts:{CHAR_ID}", json.dumps(artifact))
             r.rpush("npc_artifacts:global", json.dumps(artifact))
             r.hincrby(f"npc_stats:{CHAR_ID}", "code_written", 1)
-            result["action_taken"] = "code_executed"
-            result["artifact_title"] = artifact["title"]
-            logger.info("[%s] Wrote code for: %s", CHAR_ID, desc[:60])
-            _session_append(r, {
-                "kind": "code_written",
-                "actor": NPC_NAME,
-                "title": f"Code: {desc[:60]}",
-                "body": f"{len(gen_code)} chars",
-            })
-        else:
-            result["action_taken"] = "code_failed"
+            if ok:
+                result["action_taken"] = "code_executed"
+                result["artifact_title"] = artifact["title"]
+                result["output"] = output
+                logger.info("[%s] Wrote + executed code for: %s", CHAR_ID, desc[:60])
+                _session_append(r, {
+                    "kind": "code_written",
+                    "actor": NPC_NAME,
+                    "title": f"Code: {desc[:60]}",
+                    "body": f"executed OK; output: {output[:80]}",
+                })
+                # Concrete outcome: the code produced a verifiable result.
+                _record_outcome_consequence(
+                    r, result["artifact_title"], "code executed; produced: " + _compact_text(output, 200),
+                    consequence={"kind": "code", "ok": True},
+                    char_id=CHAR_ID,
+                )
+            else:
+                result["action_taken"] = "code_failed"
+                result["artifact_title"] = artifact["title"]
+                result["code_error"] = output
+                logger.info("[%s] Code attempted for: %s (failed: %.60s)", CHAR_ID, desc[:60], output)
+                _session_append(r, {
+                    "kind": "code_written",
+                    "actor": NPC_NAME,
+                    "title": f"Code: {desc[:60]}",
+                    "body": f"sandbox rejected/failed: {output[:80]}",
+                })
+                # Record the failure as a concrete (negative) outcome.
+                _record_outcome_consequence(
+                    r, result["artifact_title"], "code failed: " + _compact_text(output, 200),
+                    consequence={"kind": "code", "ok": False},
+                    char_id=CHAR_ID,
+                )
 
     elif cat == "read_artifacts":
         try:
