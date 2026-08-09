@@ -532,7 +532,7 @@ def _coerce_float(v, default: float) -> float:
 # per-founder rate limit, placeholder rejection, coordinate uniqueness,
 # prefix-family dedup, and exact-name dedup.
 
-_MAX_AREAS_PER_PAIR = 40
+_MAX_AREAS_PER_PAIR = 200
 _MAX_AREAS_PER_FOUNDER_DAY = 4
 _AREA_SLUG_RE = re.compile(r"^[a-z0-9][a-z0-9_-]{2,47}$")
 _PLACEHOLDER_CHARS = "_.-… "
