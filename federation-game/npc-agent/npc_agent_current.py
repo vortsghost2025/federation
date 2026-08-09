@@ -20,6 +20,9 @@ import uuid
 import httpx
 import redis
 
+from npc_redis_helpers import _recent_artifact_dedup_count as _dedup_count_impl
+from npc_redis_helpers import _dedup_blocked_topic as _dedup_topic_impl
+
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [%(levelname)s] %(message)s",
@@ -1822,29 +1825,16 @@ def _session_append(r, entry: dict) -> None:
 
 
 def _recent_artifact_dedup_count(r) -> int:
-    """Return consecutive artifact dedup block count (10 min TTL)."""
-    try:
-        val = r.get(f"npc_dedup_streak:{CHAR_ID}")
-        return int(val) if val is not None else 0
-    except Exception:
-        return 0
+    """Consecutive artifact dedup block count (10 min TTL). Delegates to the
+    canonical implementation in npc_redis_helpers to avoid drift (single source
+    of truth)."""
+    return _dedup_count_impl(r, CHAR_ID)
 
 
 def _dedup_blocked_topic(r) -> str:
-    """Return the normalized topic of the most recent dedup-deferred artifact.
-
-    Returns empty string if no recent dedup topic. Safe on bytes/string Redis values.
-    """
-    try:
-        key = f"npc_dedup_topic:{CHAR_ID}"
-        if not r.exists(key):
-            return ""
-        raw = r.get(key)
-        if isinstance(raw, bytes):
-            raw = raw.decode("utf-8", errors="replace")
-        return (raw or "").strip()
-    except Exception:
-        return ""
+    """Normalized topic of the most recent dedup-deferred artifact. Delegates to
+    the canonical implementation in npc_redis_helpers to avoid drift."""
+    return _dedup_topic_impl(r, CHAR_ID)
 
 
 def _recent_decision_shapes(r, n: int = 5) -> list[str]:
