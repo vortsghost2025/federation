@@ -149,6 +149,80 @@ def check_tick_health() -> dict:
     return {"ok": not errors, "errors": errors, "detail": "ok"}
 
 
+def _redis_keys(pattern) -> list:
+    """Return matching redis keys via docker exec redis-cli."""
+    out = run(
+        ["docker", "exec", "federation-game-redis-1", "redis-cli",
+         "KEYS", pattern]
+    )
+    return [k for k in out.splitlines() if k]
+
+
+# Role-title suffixes that indicate generated governance positions. Shared
+# content words across many such roles => combinatorial title bloat.
+_ROLE_SUFFIXES = (
+    "_analyst", "_coordinator", "_steward", "_officer", "_auditor",
+    "_arbiter", "_envoy", "_liaison", "_enforcer", "_overseer", "_manager",
+    "_advisor", "_administrator", "_director",
+)
+
+# Thresholds above which the world is considered "bloated" (historical
+# accumulation rather than healthy growth).
+_BLOAT_THRESHOLDS = {
+    "roles": 400,
+    "workflows": 5000,
+    "institutions": 20,
+}
+
+
+def check_subsystem_bloat() -> dict:
+    """Detect institution/role/workflow bloat and semantic role duplication.
+
+    Returns a dict with counts and a list of issues (empty = healthy). This is
+    the monitor instrumentation that lets the Custodian/architect notice the
+    "combinatorial title generation" pathology instead of it silently piling up.
+    """
+    issues = []
+    counts = {"roles": 0, "workflows": 0, "institutions": 0}
+
+    roles = _redis_keys("role:*")
+    workflows = _redis_keys("workflow:*")
+    institutions = _redis_keys("institution:*")
+
+    counts["roles"] = len(roles)
+    counts["workflows"] = len(workflows)
+    counts["institutions"] = len(institutions)
+
+    for label, key_list in (("roles", roles),):
+        # Semantic duplication: count how many roles share the same
+        # significant content tokens after dropping the title suffix.
+        base_counts = {}
+        for r in key_list:
+            name = r.split(":", 1)[-1]
+            base = name
+            for suf in _ROLE_SUFFIXES:
+                if name.endswith(suf):
+                    base = name[: -len(suf)]
+                    break
+            base_counts[base] = base_counts.get(base, 0) + 1
+        dupes = {b: c for b, c in base_counts.items() if c >= 3}
+        if dupes:
+            top = sorted(dupes.items(), key=lambda x: -x[1])[:5]
+            issues.append(
+                f"{len(dupes)} role base-phrases with >=3 near-duplicate titles "
+                f"(e.g. {', '.join(b for b, _ in top[:3])})"
+            )
+
+    for label, threshold in _BLOAT_THRESHOLDS.items():
+        if counts[label] > threshold:
+            issues.append(
+                f"{counts[label]} {label} exceeds threshold {threshold}"
+            )
+
+    counts["duplicate_role_clusters"] = len(issues)
+    return {"counts": counts, "issues": issues}
+
+
 def scan_backend_errors(window=200) -> list:
     """Scan backend logs for recent [ERROR] lines."""
     out = run(
@@ -222,12 +296,23 @@ def cycle(verbose=False) -> dict:
             priority="medium",
         )
 
+    # 5. Subsystem bloat (roles/workflows/institutions + semantic duplication)
+    bloat = check_subsystem_bloat()
+    if bloat["issues"]:
+        append_task(
+            "world_bloat",
+            "Institution/role/workflow bloat or near-duplicate roles detected",
+            "; ".join(bloat["issues"]),
+            priority="high",
+        )
+
     snapshot = {
         "ts": now_iso(),
         "runtime_truth": truth,
         "container_issues": container_issues,
         "tick_ok": tick.get("ok"),
         "backend_error_count": len(backend_errors),
+        "bloat": bloat,
         "queue": _read_json(QUEUE_FILE, [])[-20:],
     }
     _write_json(STATUS_FILE, snapshot)
