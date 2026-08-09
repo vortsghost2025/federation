@@ -556,8 +556,8 @@ def _record_sent_reply(r, target: str, body: str, ts: int) -> None:
         r.rpush(key, json.dumps({"body": body.strip(), "ts": ts}))
         r.ltrim(key, -16, -1)
         r.expire(key, _RECENT_REPLY_TTL * 3)
-    except Exception:
-        pass
+    except Exception as e:
+        logger.warning("[%s] _record_sent_reply write failed for target %s: %s", CHAR_ID, target, e)
 
 
 def _push_institution_cap_notification(r, founded):

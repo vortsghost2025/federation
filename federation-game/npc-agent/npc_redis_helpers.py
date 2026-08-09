@@ -242,8 +242,8 @@ def _pair_hset(r, partner_id: str, mapping: dict, char_id: str = "") -> None:
             pipe.hdel(key, *deletes)
         pipe.expire(key, PAIR_STATE_TTL)
         pipe.execute()
-    except Exception:
-        pass
+    except Exception as e:
+        logger.warning("[%s] _pair_hset write failed for %s: %s", CHAR_ID, key, e)
 
 
 def _pair_append_journal(r, partner_id: str, entry: dict, char_id: str = "") -> None:

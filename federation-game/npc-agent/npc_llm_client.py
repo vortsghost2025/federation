@@ -59,6 +59,47 @@ _ollama_cooldown_until = 0.0
 _ollama_available = None  # None = not checked yet
 _ollama_last_check = 0.0
 
+# ── NIM per-model circuit breaker ───────────────────────────────────
+# NVIDIA NIM is intermittently flaky (403s, timeouts) and some models
+# (e.g. openai/gpt-oss-120b) can be dead for long stretches. Rather than burn
+# 20-90s per call on a known-bad model, track consecutive failures per model
+# and skip ("open") a model for a cooldown window after a run of failures.
+# In-memory is fine: each NPC container is a single long-lived process.
+CB_FAIL_THRESHOLD = int(os.environ.get("NIM_CB_FAIL_THRESHOLD", "3"))
+CB_RESET_SECONDS = int(os.environ.get("NIM_CB_RESET_SECONDS", "300"))
+_cb_fail_count: dict = {}   # model -> consecutive failures
+_cb_open_until: dict = {}   # model -> timestamp when it may be retried
+_cb_success: dict = {}      # model -> last success timestamp
+
+
+def _cb_is_open(model: str) -> bool:
+    """True if the model is currently tripped (skip it). Self-heals after the
+    cooldown window."""
+    until = _cb_open_until.get(model)
+    if until is None:
+        return False
+    if time.monotonic() >= until:
+        # Cooldown elapsed: clear and allow one retry.
+        _cb_open_until.pop(model, None)
+        _cb_fail_count.pop(model, None)
+        return False
+    return True
+
+
+def _cb_record_failure(model: str):
+    """Record a failed call; trip the breaker once the threshold is reached."""
+    _cb_fail_count[model] = _cb_fail_count.get(model, 0) + 1
+    if _cb_fail_count[model] >= CB_FAIL_THRESHOLD:
+        _cb_open_until[model] = time.monotonic() + CB_RESET_SECONDS
+        logger.warning("[%s] Circuit breaker OPEN for NIM model %s (%d consecutive failures, tripping %ds)",
+                       CHAR_ID, model, _cb_fail_count[model], CB_RESET_SECONDS)
+
+
+def _cb_record_success(model: str):
+    """A successful call resets the model's failure streak."""
+    _cb_fail_count.pop(model, None)
+    _cb_success[model] = time.monotonic()
+
 # ── Operator-only OpenRouter route (Patch A2 escalation tier) ────────────────
 #
 # Ordinary NPC cognition stays on the NVIDIA route. Only the two operator call
@@ -479,6 +520,13 @@ def call_llm(system_prompt: str, user_prompt: str, model: str = "", r=None, call
             last_error = f"Total budget {MAX_TOTAL_BUDGET_MS}ms exceeded"
             break
 
+        # Circuit breaker: skip a model that has been tripped (recently failed
+        # repeatedly) so we don't burn 20-90s on a known-bad/flaky model.
+        if _cb_is_open(attempt_model):
+            logger.info("[%s] Skipping circuit-open model %s", CHAR_ID, attempt_model)
+            last_error = f"circuit_open:{attempt_model}"
+            continue
+
         attempt_key = _api_key_for_model(attempt_model)
         key_tag = "primary" if attempt_key == NVIDIA_API_KEY else "fallback"
         start = time.monotonic()
@@ -517,6 +565,7 @@ def call_llm(system_prompt: str, user_prompt: str, model: str = "", r=None, call
                 data = resp.json()
                 content = data["choices"][0]["message"]["content"].strip()
                 elapsed_ms = int((time.monotonic() - start) * 1000)
+                _cb_record_success(attempt_model)
                 logger.info("[%s] LLM OK — model: %s (%dms)", CHAR_ID, attempt_model, elapsed_ms)
                 if r:
                     _log_llm_call(r, call_label, attempt_model, system_prompt, user_prompt, content, True, "", elapsed_ms)
@@ -526,6 +575,7 @@ def call_llm(system_prompt: str, user_prompt: str, model: str = "", r=None, call
             status = getattr(e, "response", None)
             status_code = getattr(status, "status_code", 0) if status else 0
             err_msg = str(e)[:200]
+            _cb_record_failure(attempt_model)
             if attempt_model == PRIMARY_MODEL:
                 logger.warning(
                     "[%s] PRIMARY_MODEL %s failed (HTTP %s, %dms): %s — falling back",
@@ -551,22 +601,24 @@ def call_llm(system_prompt: str, user_prompt: str, model: str = "", r=None, call
             last_error = err_msg
             continue
 
-    logger.warning("[%s] All %d NIM models failed, trying OpenRouter free pool. Last error: %s", CHAR_ID, len(models_to_try), last_error)
+    logger.warning("[%s] All %d NIM models failed. Last error: %s", CHAR_ID, len(models_to_try), last_error)
+
+    # ── Local Ollama (RTX 5060) before flaky OpenRouter free ─────────
+    # Ollama is a reliable free local model; OpenRouter free models are flaky
+    # (circuit breakers trip often). Prefer the reliable local GPU first.
+    if _check_ollama_available():
+        logger.warning("[%s] NIM failed; trying local Ollama (%s)", CHAR_ID, OLLAMA_MODEL)
+        ollama_result = _call_ollama(system_prompt, user_prompt, r, call_label)
+        if ollama_result.get("content"):
+            return ollama_result
+        ollama_error = ollama_result.get("error", "")
+        logger.warning("[%s] Ollama failed too (%s); falling back to OpenRouter free", CHAR_ID, ollama_error)
+    else:
+        ollama_error = "ollama unavailable"
+
+    # ── OpenRouter free pool (last) ──────────────────────────────────
     or_result = _call_openrouter_free(system_prompt, user_prompt, r, call_label)
     if or_result.get("content"):
         return or_result
 
-    # ── Last resort: local Ollama (RTX 5060) ────────────────────────
-    # Only reached when NVIDIA + OpenRouter both failed. Throttled to 1 active
-    # call so it can never flood the user's local machine.
-    if _check_ollama_available():
-        logger.warning("[%s] NIM + OR failed; trying local Ollama (%s)", CHAR_ID, OLLAMA_MODEL)
-        ollama_result = _call_ollama(system_prompt, user_prompt, r, call_label)
-        if ollama_result.get("content"):
-            return ollama_result
-        or_error = or_result.get("error", "")
-        ollama_error = ollama_result.get("error", "")
-        return {"content": "", "error": f"All models failed. NIM: {last_error}; OR: {or_error}; Ollama: {ollama_error}"}
-
-    logger.error("[%s] All NIM + OR free models failed. Last NIM: %s | OR: %s", CHAR_ID, last_error, or_result.get("error", ""))
-    return {"content": "", "error": f"All models failed. NIM: {last_error}; OR: {or_result.get('error', '')}"}
+    return {"content": "", "error": f"All models failed. NIM: {last_error}; Ollama: {ollama_error}; OR: {or_result.get('error', '')}"}
