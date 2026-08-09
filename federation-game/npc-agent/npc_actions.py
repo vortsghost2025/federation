@@ -249,6 +249,45 @@ exec(compile(sys.argv[1], "<sandbox>", "exec"), _globals)
 """
 
 
+def _clean_generated_code(raw: str) -> str:
+    """Strip markdown fences, prose, and surrounding noise from an LLM code
+    response so the remaining text is pure Python.
+
+    Models frequently wrap generated code in ```python ... ``` fences or
+    prepend/appended explanatory sentences, which makes ast.parse fail with
+    'invalid syntax'. This extracts the code block (or the longest run of
+    code-looking lines) and returns only that.
+    """
+    if not raw:
+        return ""
+    text = raw.strip()
+    # 1) If there is a fenced code block, take its inner content.
+    import re as _re
+    fence = _re.search(r"```(?:python|py)?\s*\n(.*?)```", text, _re.DOTALL | _re.IGNORECASE)
+    if fence:
+        return fence.group(1).strip()
+    # 2) Otherwise drop any leading prose up to the first line that looks like
+    #    Python (starts with a keyword, a def, an identifier followed by =, etc.).
+    code_lines = []
+    in_code = False
+    for line in text.splitlines():
+        stripped = line.strip()
+        if not stripped:
+            if in_code:
+                code_lines.append(line)
+            continue
+        if in_code:
+            code_lines.append(line)
+            continue
+        # Start collecting when a line looks like Python.
+        if (stripped.startswith(("def ", "import ", "from ", "print(", "for ", "if ", "while ",
+                                  "return ", "class ")) or _re.match(r"^[A-Za-z_][A-Za-z0-9_]*\s*=", stripped)
+                or _re.match(r"^[A-Za-z_][A-Za-z0-9_]*\s*\(", stripped)):
+            in_code = True
+            code_lines.append(line)
+    return "\n".join(code_lines).strip()
+
+
 def _execute_sandboxed_python(code: str, timeout: float = None, max_output: int = None):
     """Run generated Python in a restricted subprocess.
 
@@ -725,9 +764,25 @@ def execute_decision(decision: dict, r, contacts: dict):
                 )
 
     elif cat == "write_code":
-        code_prompt = f"Generate Python code for: {desc}\n\nOutput ONLY valid Python code. The code runs in a restricted sandbox; print your computed result to stdout. Use only variables, arithmetic, strings, f-strings, if/else, for loops over range(), lists/dicts/sets, indexing/slicing, functions, and print(). Do NOT import anything, do not use while loops or classes, do not touch files, os, sys, or dunder attributes."
-        llm_result = call_llm("You are a Python developer. Output only code.", code_prompt, r=r, call_label="code")
-        gen_code = llm_result.get("content", "")
+        code_prompt = f"Generate Python code for: {desc}\n\nOutput ONLY valid Python code inside a single ```python code block. Print your computed result to stdout. Use only variables, arithmetic, strings, f-strings, if/else, for loops over range(), lists/dicts/sets, indexing/slicing, functions, and print(). Do NOT import anything, do not use while loops or classes, do not touch files, os, sys, or dunder attributes."
+        llm_result = call_llm("You are a Python developer. Output only code, wrapped in a ```python code block.", code_prompt, r=r, call_label="code")
+        gen_code = _clean_generated_code(llm_result.get("content", ""))
+        # Self-verify the code parses; if not, give the model one retry with the
+        # syntax error fed back so the builder can recover from fence/prose noise.
+        if gen_code:
+            try:
+                ast.parse(gen_code, mode="exec")
+            except SyntaxError as _se:
+                retry_prompt = (
+                    f"The previous code failed to parse:\n{gen_code}\n\n"
+                    f"SyntaxError: {_se.msg}\n\n"
+                    f"Rewrite it as clean, runnable Python inside a single ```python code block. "
+                    f"No prose, no explanation, no markdown outside the block."
+                )
+                retry_result = call_llm("You are a Python developer. Output only a ```python code block.", retry_prompt, r=r, call_label="code_retry")
+                retry_code = _clean_generated_code(retry_result.get("content", ""))
+                if retry_code:
+                    gen_code = retry_code
         if not gen_code:
             result["action_taken"] = "code_failed"
         else:
