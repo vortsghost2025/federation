@@ -612,6 +612,10 @@ def _sync_pair_workspace(r, decision: dict, result: dict, npc_name: str = "", ch
                 mapping["open_question_from"] = "system"
                 mapping["open_question_ts"] = str(now)
                 mapping["open_question_source"] = "post_resolution_pivot"
+                # Same re-anchoring hazard as the novel branch: the pivot
+                # question replaces the resolved goal as the pair's new shared
+                # objective, so the stale resolved goal stops being re-derived.
+                mapping["shared_goal"] = _next_q
             elif _novel_next:
                 mapping["open_question"] = _novel_next
                 mapping["open_question_from"] = "system"
@@ -624,6 +628,10 @@ def _sync_pair_workspace(r, decision: dict, result: dict, npc_name: str = "", ch
                 mapping["open_question_from"] = "system"
                 mapping["open_question_ts"] = str(now)
                 mapping["open_question_source"] = "post_resolution_default"
+                # No next-question or novel proposal survived; adopt the default
+                # pivot as the new shared objective so the pair still detaches
+                # from the resolved theme instead of re-anchoring to it.
+                mapping["shared_goal"] = mapping["open_question"]
         elif state.get("shared_goal"):
             derived = _derive_question_from_goal(state["shared_goal"])
             if derived:
@@ -1232,6 +1240,46 @@ def _record_outcome_feedback(
             pass
 
 
+# Atomic resolve-or-append for the outcome ledgers. The per-agent key is
+# single-writer, but the shared pair key is written by BOTH agents; doing the
+# lrange -> modify -> delete -> rewrite in Lua keeps concurrent writers from
+# losing each other's updates or duplicating entries.
+_OUTCOME_CONSEQUENCE_LUA = """
+local key = KEYS[1]
+local new_json = ARGV[1]
+local cap = tonumber(ARGV[2])
+local ttl = tonumber(ARGV[3])
+local ok, new_entry = pcall(cjson.decode, new_json)
+if not ok or type(new_entry) ~= 'table' then
+  return -1
+end
+local title = new_entry['artifact_title']
+local items = redis.call('LRANGE', key, 0, -1)
+local resolved = 0
+for i, raw in ipairs(items) do
+  local pok, e = pcall(cjson.decode, raw)
+  if pok and type(e) == 'table' and e['artifact_title'] == title
+     and type(e['outcome']) == 'string'
+     and string.find(e['outcome'], 'awaiting', 1, true) then
+    items[i] = new_json
+    resolved = 1
+    break
+  end
+end
+if resolved == 1 then
+  redis.call('DEL', key)
+  for _, v in ipairs(items) do
+    redis.call('RPUSH', key, v)
+  end
+else
+  redis.call('LPUSH', key, new_json)
+  redis.call('LTRIM', key, 0, cap - 1)
+end
+redis.call('EXPIRE', key, ttl)
+return resolved
+"""
+
+
 def _record_outcome_consequence(
     r, artifact_title: str, outcome: str,
     consequence: dict | None = None, char_id: str = "",
@@ -1256,46 +1304,19 @@ def _record_outcome_consequence(
     }
     key = _outcome_key(cid)
     pair_key = _pair_outcome_key(cid)
+    new_json = json.dumps(new_entry, default=str)
     for target in (key, pair_key):
         if not target:
             continue
+        # Both agents write the shared pair ledger, so this read-modify-write
+        # must be atomic: the Lua script does the whole resolve-or-append in
+        # one step to avoid lost updates / duplicated entries under
+        # concurrency.
         try:
-            items = r.lrange(target, 0, -1) or []
+            r.eval(_OUTCOME_CONSEQUENCE_LUA, 1, target, new_json,
+                   OUTCOME_FEEDBACK_CAP, OUTCOME_TTL)
         except Exception:
-            continue
-        resolved = False
-        # Update the newest matching placeholder in place.
-        for i, raw in enumerate(items):
-            try:
-                e = json.loads(raw)
-            except Exception:
-                continue
-            if (e.get("artifact_title", "") == new_entry["artifact_title"]
-                    and "awaiting" in e.get("outcome", "")):
-                items[i] = json.dumps(new_entry, default=str)
-                resolved = True
-                break
-        if resolved:
-            try:
-                r.delete(target)
-                _rewrite_list(r, target, items)
-                r.expire(target, OUTCOME_TTL)
-            except Exception:
-                pass
-        else:
-            # No placeholder to resolve — append as a fresh consequence.
-            try:
-                r.lpush(target, json.dumps(new_entry, default=str))
-                r.ltrim(target, 0, OUTCOME_FEEDBACK_CAP - 1)
-                r.expire(target, OUTCOME_TTL)
-            except Exception:
-                pass
-
-
-def _rewrite_list(r, key: str, items: list) -> None:
-    """Rebuild a list in place (oldest-first ordering preserved in list order)."""
-    for item in items:
-        r.rpush(key, item)
+            pass
 
 
 def _load_outcome_feedback(r, char_id: str = "", limit: int = 5) -> str:
