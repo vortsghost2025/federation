@@ -49,6 +49,56 @@ def _normalize_inst_name(name: str) -> str:
             break
     return re.sub(r"[^a-z0-9_]+", "", n).strip("_")
 
+
+# ── Role anti-bloat guards ──
+ROLE_CAP_PER_INSTITUTION = int(os.environ.get("ROLE_CAP_PER_INSTITUTION", "20"))
+_ROLE_SUFFIXES = (
+    "_analyst", "_coordinator", "_steward", "_officer", "_auditor",
+    "_arbiter", "_envoy", "_liaison", "_enforcer", "_overseer", "_manager",
+    "_advisor", "_administrator", "_director", "_curator", "_specialist",
+    "_counselor", "_planner", "_spokesperson", "_representative",
+)
+
+
+def _normalize_role_name(title: str) -> str:
+    """Slugify a role title and drop its standard suffix for similarity checks."""
+    n = re.sub(r"[^a-z0-9]+", "_", title.lower()).strip("_")
+    for sfx in _ROLE_SUFFIXES:
+        if n.endswith(sfx):
+            n = n[: -len(sfx)].strip("_")
+            break
+    return n
+
+
+def _institution_role_count(r, institution_id: str) -> int:
+    """Return the number of roles currently assigned to an institution."""
+    try:
+        return len(r.smembers(f"{institution_id}:roles"))
+    except Exception:
+        return 0
+
+
+def _find_near_duplicate_role(r, role_title: str, institution_id: str):
+    """Return an existing role id that is a near-duplicate of role_title.
+
+    Compares against roles already in the target institution (and index-wide as
+    a fallback). Two roles are near-duplicates when their slugified base names
+    (after dropping standard title suffixes) are identical.
+    """
+    base = _normalize_role_name(role_title)
+    if not base:
+        return None
+    candidates = set(r.smembers(f"{institution_id}:roles")) if institution_id else set()
+    if not candidates:
+        candidates = set(r.smembers("role:index"))
+    for rid in candidates:
+        existing_title = r.hget(rid, "title")
+        if not existing_title:
+            continue
+        if _normalize_role_name(existing_title) == base:
+            return rid
+    return None
+
 logger = logging.getLogger("npc_agent")
 
 CHAR_ID = os.environ.get("CHAR_ID", "")
@@ -609,32 +659,64 @@ def execute_decision(decision: dict, r, contacts: dict):
                         "body": f"proposed role '{role_title}' but it already exists",
                     })
                 else:
-                    r.sadd("role:index", role_id)
-                    r.hset(role_id, mapping={
-                        "institution_id": target_inst_id,
-                        "title": role_title,
-                        "scope": scope,
-                        "authority": authority,
-                        "holder_char_id": "",
-                        "proposed_by": CHAR_ID,
-                        "status": "proposed",
-                        "created_at": now_iso,
-                    })
-                    r.sadd(f"{target_inst_id}:roles", role_id)
-                    r.hincrby(f"npc_stats:{CHAR_ID}", "roles_proposed", 1)
-                    inst_rec = r.hgetall(target_inst_id)
-                    result["action_taken"] = "role_proposed"
-                    result["role_id"] = role_id
-                    result["institution_id"] = target_inst_id
-                    result["role_title"] = role_title
-                    result["summary"] = f"Proposed role '{role_title}' in {inst_rec.get('name', target_inst_id)}"
-                    logger.info("[%s] Proposed role: %s in %s", CHAR_ID, role_title, target_inst_id)
-                    _session_append(r, {
-                        "kind": "role_proposed",
-                        "actor": NPC_NAME,
-                        "title": role_title,
-                        "body": f"proposed role '{role_title}' (authority: {authority}) in {inst_rec.get('name', target_inst_id)} — scope: {scope[:120]}",
-                    })
+                    # ── Anti-bloat guards: near-duplicate + per-institution cap ──
+                    dup = _find_near_duplicate_role(r, role_title, target_inst_id)
+                    if dup:
+                        result["action_taken"] = "role_rejected_near_duplicate"
+                        result["summary"] = (
+                            f"Role '{role_title}' rejected: too similar to existing "
+                            f"role '{dup}'"
+                        )
+                        _session_append(r, {
+                            "kind": "role_proposal_failed",
+                            "actor": NPC_NAME,
+                            "body": (
+                                f"proposed role '{role_title}' but it is a near-duplicate "
+                                f"of existing role '{dup}'"
+                            ),
+                        })
+                    elif _institution_role_count(r, target_inst_id) >= ROLE_CAP_PER_INSTITUTION:
+                        result["action_taken"] = "role_rejected_institution_cap"
+                        result["summary"] = (
+                            f"Role '{role_title}' rejected: institution "
+                            f"'{target_inst_id}' at role cap "
+                            f"({ROLE_CAP_PER_INSTITUTION})"
+                        )
+                        _session_append(r, {
+                            "kind": "role_proposal_failed",
+                            "actor": NPC_NAME,
+                            "body": (
+                                f"proposed role '{role_title}' but institution "
+                                f"'{target_inst_id}' is at its role cap"
+                            ),
+                        })
+                    else:
+                        r.sadd("role:index", role_id)
+                        r.hset(role_id, mapping={
+                            "institution_id": target_inst_id,
+                            "title": role_title,
+                            "scope": scope,
+                            "authority": authority,
+                            "holder_char_id": "",
+                            "proposed_by": CHAR_ID,
+                            "status": "proposed",
+                            "created_at": now_iso,
+                        })
+                        r.sadd(f"{target_inst_id}:roles", role_id)
+                        r.hincrby(f"npc_stats:{CHAR_ID}", "roles_proposed", 1)
+                        inst_rec = r.hgetall(target_inst_id)
+                        result["action_taken"] = "role_proposed"
+                        result["role_id"] = role_id
+                        result["institution_id"] = target_inst_id
+                        result["role_title"] = role_title
+                        result["summary"] = f"Proposed role '{role_title}' in {inst_rec.get('name', target_inst_id)}"
+                        logger.info("[%s] Proposed role: %s in %s", CHAR_ID, role_title, target_inst_id)
+                        _session_append(r, {
+                            "kind": "role_proposed",
+                            "actor": NPC_NAME,
+                            "title": role_title,
+                            "body": f"proposed role '{role_title}' (authority: {authority}) in {inst_rec.get('name', target_inst_id)} — scope: {scope[:120]}",
+                        })
         except Exception as e:
             result["action_taken"] = f"role_error: {e}"
             logger.error("[%s] Role proposal failed: %s", CHAR_ID, e)
