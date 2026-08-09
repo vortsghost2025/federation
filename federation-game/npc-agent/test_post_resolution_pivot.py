@@ -263,6 +263,35 @@ class TestPostResolutionPivot:
         assert "resonance" not in (state.get("open_question") or "")
 
 
+def test_novel_goal_chosen_when_next_question_reenters_recent_theme(monkeypatch):
+    """When the LLM's next_question re-enters a recent theme, the novelty gate
+    replaces it with a novel proposed goal (post_resolution_novel)."""
+
+    def fake_call_llm(system, prompt, model="", r=None, call_label=""):
+        return {"content": '{"candidates":[{"objective":"Map the outer veil of known space","why_novel":"new"},{"objective":"resonance lattice survey","why_novel":"old"},{"objective":"Chart a trade corridor to the diaspora","why_novel":"different"}]}'}
+
+    import npc_llm_client
+    monkeypatch.setattr(npc_llm_client, "call_llm", fake_call_llm)
+
+    r, pid, cid, now, state_key = TestPostResolutionPivot()._setup({
+        "convergence_state": _make_convergence_state(
+            resolved=True, blocked=["resonance", "lattice"],
+            next_q="How does resonance affect the lattice?")
+    })
+    # Seed a recent completed goal so _recent_theme_terms has cooling terms.
+    r.lists["npc_pair:char_001__char_306:completed_goals"] = [
+        json.dumps({"goal": "report on deep signals", "conclusion": "resonance", "resolved_at": now})
+    ]
+    result = {"category": "create_artifact", "action_taken": "artifact_created",
+              "artifact_title": "Test Artifact", "ts": now}
+    nh._sync_pair_workspace(r, {"category": "create_artifact"}, result, "Archimedes Prime", cid)
+    state = r.hgetall(state_key)
+    oq = state.get("open_question", "")
+    assert oq == "Map the outer veil of known space"
+    assert state.get("open_question_source") == "post_resolution_novel"
+    assert "resonance" not in oq.lower()
+
+
 if __name__ == "__main__":
     t = TestPostResolutionPivot()
     t.test_next_question_accepted_when_no_blocked_terms()
