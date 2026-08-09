@@ -674,6 +674,30 @@ def _sync_pair_workspace(r, decision: dict, result: dict, npc_name: str = "", ch
         cid,
     )
 
+    # Record a concrete outcome when a real consequence is now visible, so the
+    # outcome-feedback ledger is not left as a pile of "awaiting" placeholders.
+    try:
+        if answering_partner_question and mapping.get("partner_answer"):
+            # The prior open question produced a concrete answer.
+            _record_outcome_consequence(
+                r,
+                state.get("last_open_question_sent_to_partner", "") or focus,
+                "partner answered: " + _compact_text(mapping["partner_answer"], 200),
+                consequence={"kind": "partner_answer", "from": cid},
+                char_id=cid,
+            )
+        elif result.get("artifact_title"):
+            # A produced artifact is a durable outcome in itself.
+            _record_outcome_consequence(
+                r,
+                result["artifact_title"],
+                "produced durable work",
+                consequence={"kind": "artifact", "chars": len(str(result.get("message_body") or ""))},
+                char_id=cid,
+            )
+    except Exception:
+        pass
+
     # Stage 4A: pair convergence state reducer — runs after both chars have
     # fresh output since the last convergence update. Overwrites in place.
     _compute_convergence_state(r, pid, cid, now)
@@ -1067,11 +1091,15 @@ def _semantic_tokenize(text: str, min_len: int = 3) -> list[str]:
 
 
 def _semantic_overlap(a_text: str, b_text: str) -> float:
-    """Cosine/Jaccard similarity between two texts by content-token overlap.
+    """Similarity between two texts by content-token overlap (0..1).
 
-    Returns a float 0..1. Uses the smaller token set as the denominator so a
-    long artifact compared against a short near-duplicate still scores high
-    when the short one is fully contained in spirit.
+    Uses a blended similarity that resists false positives when one text is
+    much shorter than the other. Pure `overlap / min(len)` would score a short
+    artifact at 1.0 whenever its words are a subset of a longer, unrelated
+    piece. Instead, blend the long-text containment (overlap / max) with the
+    short-text coverage (overlap / min): a genuine near-duplicate still scores
+    high on both, but a short generic text inside a long specific one scores
+    low because the long text contains many extra tokens.
     """
     a_tokens = _semantic_tokenize(a_text)
     b_tokens = _semantic_tokenize(b_text)
@@ -1080,10 +1108,16 @@ def _semantic_overlap(a_text: str, b_text: str) -> float:
     a_set = set(a_tokens)
     b_set = set(b_tokens)
     overlap = len(a_set & b_set)
-    denom = min(len(a_set), len(b_set))
-    if denom == 0:
+    larger = max(len(a_set), len(b_set))
+    smaller = min(len(a_set), len(b_set))
+    if smaller == 0 or larger == 0:
         return 0.0
-    return overlap / denom
+    # Weighted blend: 60% containment of the larger text, 40% coverage of the
+    # smaller. A contained short text scores ~0.4, well under the 0.72 gate,
+    # while two near-identical artifacts score ~1.0 on both terms.
+    containment = overlap / larger
+    coverage = overlap / smaller
+    return 0.6 * containment + 0.4 * coverage
 
 
 def _older_artifact_records(r, char_id: str = "", limit: int = SEMANTIC_DEDUP_WINDOW) -> list[dict]:
@@ -1184,6 +1218,72 @@ def _record_outcome_feedback(
             r.expire(pair_key, OUTCOME_TTL)
         except Exception:
             pass
+
+
+def _record_outcome_consequence(
+    r, artifact_title: str, outcome: str,
+    consequence: dict | None = None, char_id: str = "",
+) -> None:
+    """Record a concrete consequence for an artifact, resolving a prior
+    placeholder entry in place when one exists.
+
+    The creation path writes a static "awaiting downstream consequence"
+    record. This is called once a real downstream effect is observed (partner
+    answer, world-state delta, quest progress). To avoid the ledger filling
+    with unresolved placeholders, it promotes a matching placeholder record to
+    the concrete outcome instead of appending a new one.
+    """
+    cid = char_id or CHAR_ID
+    if r is None or not artifact_title:
+        return
+    new_entry = {
+        "ts": int(time.time()),
+        "artifact_title": artifact_title[:200],
+        "outcome": _compact_text(outcome, 300),
+        "consequence": {k: str(v) for k, v in (consequence or {}).items()},
+    }
+    key = _outcome_key(cid)
+    pair_key = _pair_outcome_key(cid)
+    for target in (key, pair_key):
+        if not target:
+            continue
+        try:
+            items = r.lrange(target, 0, -1) or []
+        except Exception:
+            continue
+        resolved = False
+        # Update the newest matching placeholder in place.
+        for i, raw in enumerate(items):
+            try:
+                e = json.loads(raw)
+            except Exception:
+                continue
+            if (e.get("artifact_title", "") == new_entry["artifact_title"]
+                    and "awaiting" in e.get("outcome", "")):
+                items[i] = json.dumps(new_entry, default=str)
+                resolved = True
+                break
+        if resolved:
+            try:
+                r.delete(target)
+                _rewrite_list(r, target, items)
+                r.expire(target, OUTCOME_TTL)
+            except Exception:
+                pass
+        else:
+            # No placeholder to resolve — append as a fresh consequence.
+            try:
+                r.lpush(target, json.dumps(new_entry, default=str))
+                r.ltrim(target, 0, OUTCOME_FEEDBACK_CAP - 1)
+                r.expire(target, OUTCOME_TTL)
+            except Exception:
+                pass
+
+
+def _rewrite_list(r, key: str, items: list) -> None:
+    """Rebuild a list in place (oldest-first ordering preserved in list order)."""
+    for item in items:
+        r.rpush(key, item)
 
 
 def _load_outcome_feedback(r, char_id: str = "", limit: int = 5) -> str:
