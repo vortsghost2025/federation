@@ -65,6 +65,10 @@ _SANDBOX_ALLOWED_NAMES = frozenset({
     "set", "tuple", "chr", "ord", "pow", "divmod", "isinstance", "repr",
     "format", "reversed", "any", "all", "map", "filter", "hex", "oct", "bin",
     "hash", "id", "iter", "next", "slice", "complex", "frozenset",
+    # __name__ is the harmless module-name guard (== "__main__" in the sandbox
+    # runner); it is a plain string and enables no escape, so models may use the
+    # common `if __name__ == "__main__":` idiom.
+    "__name__",
     # exceptions, so `except ValueError:` works
     "Exception", "ArithmeticError", "ValueError", "TypeError", "KeyError",
     "IndexError", "ZeroDivisionError", "OverflowError", "RuntimeError",
@@ -244,7 +248,7 @@ _safe = {"print": print, "len": len, "range": range, "int": int, "float": float,
          "ZeroDivisionError": ZeroDivisionError, "OverflowError": OverflowError,
          "RuntimeError": RuntimeError, "StopIteration": StopIteration,
          "NameError": NameError}
-_globals = {"__builtins__": dict(_safe)}
+_globals = {"__builtins__": dict(_safe), "__name__": "__main__"}
 exec(compile(sys.argv[1], "<sandbox>", "exec"), _globals)
 """
 
