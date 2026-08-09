@@ -32,6 +32,73 @@ from npc_redis_helpers import (
     _record_outcome_feedback,
 )
 
+# ── Artifact title cleaning ──
+# When a create_institution is rejected, the reroute injects system text into
+# the description ("Institution 'X' could not be founded right now, so write a
+# concise artifact..."). If the LLM's rerouted decision omits a clean title, the
+# fallback captured that scaffolding as the artifact title ("Institution 'name'
+# could not be founded right now, so write..."). These strip that scaffolding so
+# artifact titles are clean, in-world labels.
+_TITLE_REROUTE_RE = re.compile(
+    r"Institution\s+['\"]?[^'\"]*['\"]?\s+could not be\s+(?:founded|found|created|established)"
+    r"[^:]*?\s*:\s*",
+    re.I,
+)
+_PLACEHOLDER_TITLES = {
+    "artifact title",
+    "untitled",
+    "title",
+    "new artifact",
+    "artifact",
+    "none",
+    "n/a",
+    "...",
+}
+
+
+def _is_reroute_scaffold(text: str) -> bool:
+    """True when text is (or starts with) the institution-reroute scaffolding
+    or a leftover fragment of it."""
+    low = text.lower()
+    if "institution" in low and "could not" in low:
+        return True
+    return any(frag in low for frag in (
+        "so write a concise artifact",
+        "so write ",
+        "right now, so write",
+        "right now, write",
+        "advances the shared topic",
+        "advances the shared work",
+        "advancing the shared",
+        "in the absence of the",
+    ))
+
+
+def _clean_artifact_title(raw_title: str, desc: str) -> str:
+    """Return a clean artifact title, stripping system-reroute scaffolding and
+    LLM placeholder titles. Falls back to a cleaned description prefix."""
+    title = _enforce_fourth_wall(raw_title or "").strip()
+    # Strip the reroute scaffolding wherever it appears.
+    title = _TITLE_REROUTE_RE.sub("", title).strip()
+    # A truncated reroute (e.g. "Institution 'X' could not be fou") may not
+    # match the full regex but is still scaffolding — drop it entirely.
+    if _is_reroute_scaffold(title):
+        title = ""
+    # If nothing usable survived, derive a title from the clean description.
+    if not title or title.lower() in _PLACEHOLDER_TITLES or len(title) < 3:
+        clean_desc = _enforce_fourth_wall(desc or "").strip()
+        clean_desc = _TITLE_REROUTE_RE.sub("", clean_desc).strip()
+        # If the description was itself scaffolding, keep only the topic after
+        # the colon (e.g. "Institution ... couldn't be founded ... topic: <X>").
+        if _is_reroute_scaffold(clean_desc):
+            m = re.search(r":\s*(.+)$", clean_desc)
+            clean_desc = (m.group(1).strip() if m else "")
+        # Take the first sentence/phrase of the cleaned description.
+        m = re.match(r"^([^.!?\n]+)", clean_desc)
+        title = (m.group(1) if m else clean_desc)[:60].strip() if clean_desc else "Untitled"
+    return _compact_text(title, 60) or "Untitled"
+
+
 # ── Institution bloat guards ──
 _MAX_INSTITUTIONS_PER_NPC = 8
 _TOTAL_INSTITUTION_LIMIT = 20
@@ -307,7 +374,7 @@ def execute_decision(decision: dict, r, contacts: dict):
             result["action_taken"] = "no_target"
 
     elif cat == "create_artifact":
-        title = decision.get("title", desc[:60] if desc else "Untitled")
+        title = _clean_artifact_title(decision.get("title", ""), desc)
         # Two dedup gates: the existing title-based Jaccard gate, plus a new
         # content-level semantic gate that catches re-publishing the SAME body
         # under a slightly different title (the historical "Void Oracle
