@@ -22,6 +22,7 @@ from npc_decisions import _is_repetitive_artifact, _acknowledge_inbox
 from npc_redis_helpers import (
     get_redis,
     _partner_id,
+    _pair_state_key,
     _conversation_thread_id,
     _pair_thread_id,
     _store_thread_message,
@@ -45,6 +46,21 @@ from npc_redis_helpers import (
 # stdout is stored as the artifact's concrete outcome and recorded in the
 # outcome-feedback ledger.
 import subprocess
+
+
+def _current_pair_topic(r) -> str:
+    """Return the pair's current shared_goal (or open_question) so generated
+    reroute descriptions reference the REAL topic instead of literal boilerplate
+    like 'the current shared goal'. Reads directly from the pair state hash."""
+    try:
+        key = _pair_state_key(char_id=CHAR_ID)
+        if not key:
+            return ""
+        state = r.hgetall(key)
+        return state.get("shared_goal") or state.get("open_question") or ""
+    except Exception:
+        return ""
+
 
 _SANDBOX_TIMEOUT = float(os.environ.get("SANDBOX_TIMEOUT", "6"))
 _SANDBOX_MAX_MEM_MB = int(os.environ.get("SANDBOX_MAX_MEM_MB", "64"))
@@ -1022,10 +1038,10 @@ def execute_decision(decision: dict, r, contacts: dict):
                             ),
                             "description": (
                                 f"A quantitative model, metric, or projection that advances "
-                                f"the shared topic: {_compact_text(desc, 120) or 'the current shared goal'}."
+                                f"the shared topic: {_compact_text(_current_pair_topic(r) or desc, 120)}."
                                 f" Compute a concrete number and print it."
                             ),
-                            "title": f"Model: {_compact_text(desc, 48)}",
+                            "title": f"Model: {_compact_text(_current_pair_topic(r) or desc, 48)}",
                         }
                         logger.info("[%s] create_institution rerouted to write_code (cap)", CHAR_ID)
                     else:
@@ -1209,10 +1225,10 @@ def execute_decision(decision: dict, r, contacts: dict):
                                 ),
                                 "description": (
                                     f"A quantitative model, metric, or projection that advances "
-                                    f"the shared topic: {_compact_text(desc, 120) or 'the current shared goal'}."
+                                    f"the shared topic: {_compact_text(_current_pair_topic(r) or desc, 120)}."
                                     f" Compute a concrete number and print it."
                                 ),
-                                "title": f"Model: {_compact_text(desc, 48)}",
+                                "title": f"Model: {_compact_text(_current_pair_topic(r) or desc, 48)}",
                             }
                             logger.info("[%s] propose_role rejection loop -> write_code", CHAR_ID)
                             return execute_decision(rerouted, r, contacts)
