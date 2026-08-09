@@ -260,6 +260,61 @@ def scan_backend_errors(window=200) -> list:
     return errors[-10:]
 
 
+def _redis_get(key) -> str:
+    """Read a redis string key via docker exec ("" on any failure)."""
+    return run(
+        ["docker", "exec", "federation-game-redis-1", "redis-cli", "GET", key]
+    ).strip()
+
+
+def check_semantic_health() -> dict:
+    """Read the semantic dedup + goal progress reports written by the
+    watchdog monitors and surface them in the supervisor status.
+
+    These reports are standalone facts (not blocking tasks) so the agent can
+    see semantic-bloat/no-novelty trends without the supervisor spamming the
+    queue. If a semantic duplicate CLUSTER is present, append a task.
+    """
+    info = {"semantic_duplicates": 0, "goal_count": 0, "goal_stall_hours": None}
+
+    raw_sem = _redis_get("fed:semantic:report")
+    if raw_sem:
+        try:
+            sem = json.loads(raw_sem)
+            info["semantic_duplicates"] = int(sem.get("semantic_duplicate_clusters", 0))
+        except Exception:
+            pass
+
+    raw_goal = _redis_get("fed:goal:report")
+    if raw_goal:
+        try:
+            goal = json.loads(raw_goal)
+            info["goal_count"] = int(goal.get("completed_goal_count", 0))
+            info["goal_stall_hours"] = goal.get("last_completion_age_hours")
+        except Exception:
+            pass
+
+    if info["semantic_duplicates"] > 0:
+        append_task(
+            "semantic_bloat",
+            f"{info['semantic_duplicates']} semantic duplicate cluster(s) "
+            "detected in recent pair artifacts",
+            "Pair may be re-publishing the same content under new titles; "
+            "review the semantic_monitor report.",
+            priority="high",
+        )
+    if info["goal_count"] == 0:
+        append_task(
+            "goal_progress",
+            "Councilor pair has not completed any shared goal yet",
+            "Monitor whether the pair converges on a resolvable objective "
+            "rather than orbiting open questions forever.",
+            priority="medium",
+        )
+
+    return info
+
+
 def append_task(category, title, detail, priority="normal"):
     """Add a task to the queue if an identical pending one doesn't exist."""
     queue = _read_json(QUEUE_FILE, [])
@@ -334,6 +389,9 @@ def cycle(verbose=False) -> dict:
             priority="high",
         )
 
+    # 6. Semantic health (artifact near-duplicates + goal progress)
+    semantic = check_semantic_health()
+
     snapshot = {
         "ts": now_iso(),
         "runtime_truth": truth,
@@ -341,6 +399,7 @@ def cycle(verbose=False) -> dict:
         "tick_ok": tick.get("ok"),
         "backend_error_count": len(backend_errors),
         "bloat": bloat,
+        "semantic": semantic,
         "queue": _read_json(QUEUE_FILE, [])[-20:],
     }
     _write_json(STATUS_FILE, snapshot)

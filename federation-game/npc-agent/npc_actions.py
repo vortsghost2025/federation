@@ -28,6 +28,8 @@ from npc_redis_helpers import (
     _sync_pair_workspace,
     _session_append,
     _acknowledge_operator_directive,
+    _semantic_artifact_dedup_blocked,
+    _record_outcome_feedback,
 )
 
 # ── Institution bloat guards ──
@@ -306,14 +308,20 @@ def execute_decision(decision: dict, r, contacts: dict):
 
     elif cat == "create_artifact":
         title = decision.get("title", desc[:60] if desc else "Untitled")
-        if r is not None and _is_repetitive_artifact(r, title):
-            logger.info("[%s] Dedup gate blocked artifact '%s' (too similar to recent)", CHAR_ID, title)
+        # Two dedup gates: the existing title-based Jaccard gate, plus a new
+        # content-level semantic gate that catches re-publishing the SAME body
+        # under a slightly different title (the historical "Void Oracle
+        # Anomalies" loop). We generate content first so the semantic gate can
+        # compare it, but a title gate hit still short-circuits cheaply.
+        title_blocked = r is not None and _is_repetitive_artifact(r, title)
+        if title_blocked:
+            logger.info("[%s] Dedup gate blocked artifact '%s' (title too similar to recent)", CHAR_ID, title)
             result["action_taken"] = "artifact_deferred_dedup"
             result["artifact_title"] = title
             _session_append(r, {
                 "kind": "workspace_sync",
                 "actor": NPC_NAME,
-                "body": f"deferred artifact '{title[:60]}' — content too similar to recent work",
+                "body": f"deferred artifact '{title[:60]}' — title too similar to recent work",
             })
             streak_key = f"npc_dedup_streak:{CHAR_ID}"
             r.incr(streak_key)
@@ -325,50 +333,75 @@ def execute_decision(decision: dict, r, contacts: dict):
             content_prompt = f"Write the full content of this artifact:\n\n{desc}\n\nOutput only the content."
             llm_result = call_llm("You are a creative writer.", content_prompt, r=r, call_label="artifact")
             artifact_content = _enforce_fourth_wall(llm_result.get("content", desc))
-            artifact = {
-                "artifact_id": str(uuid.uuid4()),
-                "char_id": CHAR_ID,
-                "char_name": NPC_NAME,
-                "title": _enforce_fourth_wall(title),
-                "artifact_type": "text",
-                "content": artifact_content,
-                "created_at": ts,
-            }
-            r.rpush(f"npc_artifacts:{CHAR_ID}", json.dumps(artifact))
-            r.rpush("npc_artifacts:global", json.dumps(artifact))
-            r.hincrby(f"npc_stats:{CHAR_ID}", "artifacts_created", 1)
-            streak_key = f"npc_dedup_streak:{CHAR_ID}"
-            if r.exists(streak_key):
-                r.delete(streak_key)
-            try:
-                r.delete(f"npc_dedup_topic:{CHAR_ID}")
-            except Exception:
-                pass
-            try:
-                partner_id_local = _partner_id()
-                r.rpush(
-                    f"npc_session:{partner_id_local}",
-                    json.dumps({
-                        "kind": "artifact_published_by_partner",
-                        "actor": NPC_NAME,
-                        "from": CHAR_ID,
-                        "title": title,
-                        "chars": len(artifact_content),
-                        "ts": ts,
-                    }, default=str),
+            # Semantic content gate: catch near-identical bodies under new titles.
+            if r is not None and _semantic_artifact_dedup_blocked(r, title, artifact_content, CHAR_ID):
+                logger.info("[%s] Semantic dedup gate blocked artifact '%s' (content too similar to recent)", CHAR_ID, title)
+                result["action_taken"] = "artifact_deferred_semantic_dedup"
+                result["artifact_title"] = title
+                _session_append(r, {
+                    "kind": "workspace_sync",
+                    "actor": NPC_NAME,
+                    "body": f"deferred artifact '{title[:60]}' — content is a near-duplicate of recent work",
+                })
+                streak_key = f"npc_dedup_streak:{CHAR_ID}"
+                r.incr(streak_key)
+                r.expire(streak_key, 600)
+                dedup_topic = most_common_topic_word([title])
+                if dedup_topic:
+                    r.set(f"npc_dedup_topic:{CHAR_ID}", dedup_topic, ex=600)
+            else:
+                artifact = {
+                    "artifact_id": str(uuid.uuid4()),
+                    "char_id": CHAR_ID,
+                    "char_name": NPC_NAME,
+                    "title": _enforce_fourth_wall(title),
+                    "artifact_type": "text",
+                    "content": artifact_content,
+                    "created_at": ts,
+                }
+                r.rpush(f"npc_artifacts:{CHAR_ID}", json.dumps(artifact))
+                r.rpush("npc_artifacts:global", json.dumps(artifact))
+                r.hincrby(f"npc_stats:{CHAR_ID}", "artifacts_created", 1)
+                streak_key = f"npc_dedup_streak:{CHAR_ID}"
+                if r.exists(streak_key):
+                    r.delete(streak_key)
+                try:
+                    r.delete(f"npc_dedup_topic:{CHAR_ID}")
+                except Exception:
+                    pass
+                try:
+                    partner_id_local = _partner_id()
+                    r.rpush(
+                        f"npc_session:{partner_id_local}",
+                        json.dumps({
+                            "kind": "artifact_published_by_partner",
+                            "actor": NPC_NAME,
+                            "from": CHAR_ID,
+                            "title": title,
+                            "chars": len(artifact_content),
+                            "ts": ts,
+                        }, default=str),
+                    )
+                    r.ltrim(f"npc_session:{partner_id_local}", -SESSION_CAP, -1)
+                except Exception:
+                    pass
+                result["action_taken"] = "artifact_created"
+                result["artifact_title"] = title
+                logger.info("[%s] Created artifact: %s", CHAR_ID, title)
+                _session_append(r, {
+                    "kind": "artifact_created",
+                    "actor": NPC_NAME,
+                    "title": title,
+                    "body": f"{len(artifact_content)} chars; first 80: {artifact_content[:80]}",
+                })
+                # Outcome feedback baseline: record that this artifact was
+                # produced so later outcomes can be attributed to it.
+                _record_outcome_feedback(
+                    r, title,
+                    "artifact published; awaiting downstream consequence",
+                    consequence={"chars": len(artifact_content)},
+                    char_id=CHAR_ID,
                 )
-                r.ltrim(f"npc_session:{partner_id_local}", -SESSION_CAP, -1)
-            except Exception:
-                pass
-            result["action_taken"] = "artifact_created"
-            result["artifact_title"] = title
-            logger.info("[%s] Created artifact: %s", CHAR_ID, title)
-            _session_append(r, {
-                "kind": "artifact_created",
-                "actor": NPC_NAME,
-                "title": title,
-                "body": f"{len(artifact_content)} chars; first 80: {artifact_content[:80]}",
-            })
 
     elif cat == "write_code":
         code_prompt = f"Generate Python code for: {desc}\n\nOutput ONLY valid Python code."
