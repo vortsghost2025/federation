@@ -223,3 +223,6 @@ tools/
 
 # NPC agent workspace scratch (local only)
 federation-game/WORKSPACE/
+
+# Generated monitor reports (not source)
+reports/
