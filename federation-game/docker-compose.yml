@@ -355,6 +355,13 @@
       - MAX_OUTPUT_TOKENS=1024
       - MAX_TOTAL_BUDGET_MS=120000
       - TICK_INTERVAL=120
+      - OLLAMA_BASE_URL=${OLLAMA_BASE_URL}
+      - OLLAMA_API_KEY=${OLLAMA_API_KEY}
+      - OLLAMA_MODEL=${OLLAMA_MODEL}
+      - OLLAMA_TIMEOUT=${OLLAMA_TIMEOUT}
+      - OLLAMA_MAX_ACTIVE=${OLLAMA_MAX_ACTIVE:-1}
+      - OLLAMA_MAX_QUEUE=${OLLAMA_MAX_QUEUE:-3}
+      - OLLAMA_COOLDOWN_SECONDS=${OLLAMA_COOLDOWN_SECONDS:-60}
     volumes:
       - /docker/federation-game/npc-agent:/app:ro
       - /docker/federation-game/shared:/opt/federation_shared:ro
@@ -386,6 +393,13 @@
       - MAX_OUTPUT_TOKENS=1024
       - MAX_TOTAL_BUDGET_MS=120000
       - TICK_INTERVAL=120
+      - OLLAMA_BASE_URL=${OLLAMA_BASE_URL}
+      - OLLAMA_API_KEY=${OLLAMA_API_KEY}
+      - OLLAMA_MODEL=${OLLAMA_MODEL}
+      - OLLAMA_TIMEOUT=${OLLAMA_TIMEOUT}
+      - OLLAMA_MAX_ACTIVE=${OLLAMA_MAX_ACTIVE:-1}
+      - OLLAMA_MAX_QUEUE=${OLLAMA_MAX_QUEUE:-3}
+      - OLLAMA_COOLDOWN_SECONDS=${OLLAMA_COOLDOWN_SECONDS:-60}
       # Operator-only OpenRouter route (OFF by default; see OPERATOR_ROUTE_ENABLED).
       # Enable with ORACLE_OPERATOR_ROUTE_ENABLED=true plus the operator config vars.
       # Reversion: set ORACLE_OPERATOR_ROUTE_ENABLED=false and recreate the container.
