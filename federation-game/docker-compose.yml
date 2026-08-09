@@ -1,4 +1,4 @@
-services:
+﻿services:
   reverse-proxy:
     image: traefik:latest
     command:
@@ -20,7 +20,7 @@ services:
     restart: unless-stopped
     labels:
       - traefik.enable=true
-      - "traefik.http.routers.fed-api.rule=Host(`federation-game.deliberatefederation.cloud`) && (PathPrefix(`/npcs`) || PathPrefix(`/world`) || Path(`/simulation`) || PathPrefix(`/simulation/`) || PathPrefix(`/spatial`) || PathPrefix(`/sectors`) || Path(`/event`) || PathPrefix(`/political`) || PathPrefix(`/factions`) || PathPrefix(`/broadcast-events`) || PathPrefix(`/quests`) || PathPrefix(`/technology`) || PathPrefix(`/history-arc`) || PathPrefix(`/atlas`) || PathPrefix(`/consciousness`) || PathPrefix(`/engine-status`) || PathPrefix(`/map/`) || PathPrefix(`/state`) || PathPrefix(`/systems-overview`) || PathPrefix(`/timeline`) || PathPrefix(`/rivals`) || PathPrefix(`/reset`) || PathPrefix(`/log`) || PathPrefix(`/choose`) || PathPrefix(`/ws`) || PathPrefix(`/healthz`) || PathPrefix(`/docs`) || PathPrefix(`/openapi.json`) || PathPrefix(`/redoc`) || PathPrefix(`/cognition`) || PathPrefix(`/narrator`) || PathPrefix(`/agents`) || Path(`/spectator/summary`) || PathPrefix(`/spectator/`) || PathPrefix(`/universe/`))"
+      - "traefik.http.routers.fed-api.rule=Host(`federation-game.deliberatefederation.cloud`) && (PathPrefix(`/npcs`) || PathPrefix(`/world`) || Path(`/simulation`) || PathPrefix(`/simulation/`) || PathPrefix(`/spatial`) || PathPrefix(`/sectors`) || Path(`/event`) || PathPrefix(`/political`) || PathPrefix(`/factions`) || PathPrefix(`/broadcast-events`) || PathPrefix(`/quests`) || PathPrefix(`/technology`) || PathPrefix(`/history-arc`) || PathPrefix(`/atlas`) || PathPrefix(`/consciousness`) || PathPrefix(`/engine-status`) || PathPrefix(`/map/`) || PathPrefix(`/state`) || PathPrefix(`/systems-overview`) || PathPrefix(`/timeline`) || PathPrefix(`/rivals`) || PathPrefix(`/reset`) || PathPrefix(`/log`) || PathPrefix(`/choose`) || PathPrefix(`/ws`) || PathPrefix(`/healthz`) || PathPrefix(`/docs`) || PathPrefix(`/openapi.json`) || PathPrefix(`/redoc`) || PathPrefix(`/cognition`) || PathPrefix(`/narrator`) || PathPrefix(`/agents`) || Path(`/spectator/summary`) || PathPrefix(`/spectator/`) || PathPrefix(`/universe/`) || Path(`/environment`))"
       - traefik.http.routers.fed-api.entrypoints=websecure
       - traefik.http.routers.fed-api.tls.certresolver=letsencrypt
       - "traefik.http.routers.fed-api.priority=300"
@@ -37,7 +37,7 @@ services:
       - traefik.http.routers.fed-api-prefix-http.priority=310
       - traefik.http.routers.fed-api-prefix-http.middlewares=strip-api
       - traefik.http.routers.fed-api-prefix-http.service=fed-api-http-svc
-      - "traefik.http.routers.fed-api-http.rule=Host(`federation-game.deliberatefederation.cloud`) && (PathPrefix(`/npcs`) || PathPrefix(`/world`) || Path(`/simulation`) || PathPrefix(`/simulation/`) || PathPrefix(`/spatial`) || PathPrefix(`/sectors`) || Path(`/event`) || PathPrefix(`/political`) || PathPrefix(`/factions`) || PathPrefix(`/broadcast-events`) || PathPrefix(`/quests`) || PathPrefix(`/technology`) || PathPrefix(`/history-arc`) || PathPrefix(`/atlas`) || PathPrefix(`/consciousness`) || PathPrefix(`/engine-status`) || PathPrefix(`/map/`) || PathPrefix(`/state`) || PathPrefix(`/systems-overview`) || PathPrefix(`/timeline`) || PathPrefix(`/rivals`) || PathPrefix(`/reset`) || PathPrefix(`/log`) || PathPrefix(`/choose`) || PathPrefix(`/ws`) || PathPrefix(`/healthz`) || PathPrefix(`/docs`) || PathPrefix(`/openapi.json`) || PathPrefix(`/redoc`) || PathPrefix(`/cognition`) || PathPrefix(`/narrator`) || PathPrefix(`/agents`) || Path(`/spectator/summary`) || PathPrefix(`/spectator/`) || PathPrefix(`/universe/`))"
+      - "traefik.http.routers.fed-api-http.rule=Host(`federation-game.deliberatefederation.cloud`) && (PathPrefix(`/npcs`) || PathPrefix(`/world`) || Path(`/simulation`) || PathPrefix(`/simulation/`) || PathPrefix(`/spatial`) || PathPrefix(`/sectors`) || Path(`/event`) || PathPrefix(`/political`) || PathPrefix(`/factions`) || PathPrefix(`/broadcast-events`) || PathPrefix(`/quests`) || PathPrefix(`/technology`) || PathPrefix(`/history-arc`) || PathPrefix(`/atlas`) || PathPrefix(`/consciousness`) || PathPrefix(`/engine-status`) || PathPrefix(`/map/`) || PathPrefix(`/state`) || PathPrefix(`/systems-overview`) || PathPrefix(`/timeline`) || PathPrefix(`/rivals`) || PathPrefix(`/reset`) || PathPrefix(`/log`) || PathPrefix(`/choose`) || PathPrefix(`/ws`) || PathPrefix(`/healthz`) || PathPrefix(`/docs`) || PathPrefix(`/openapi.json`) || PathPrefix(`/redoc`) || PathPrefix(`/cognition`) || PathPrefix(`/narrator`) || PathPrefix(`/agents`) || Path(`/spectator/summary`) || PathPrefix(`/spectator/`) || PathPrefix(`/universe/`) || Path(`/environment`))"
       - traefik.http.routers.fed-api-http.entrypoints=web
       - "traefik.http.routers.fed-api-http.priority=300"
       - traefik.http.routers.fed-api-http.service=fed-api-http-svc
@@ -51,6 +51,9 @@ services:
       - 0.0.0.0
       - --port
       - '8000'
+      - --proxy-headers
+      - --forwarded-allow-ips
+      - 172.16.2.7
     restart: unless-stopped
     env_file:
       - .env
@@ -79,6 +82,19 @@ services:
       - traefik.enable=true
       - traefik.http.services.fed-api-svc.loadbalancer.server.port=8000
       - traefik.http.services.fed-api-http-svc.loadbalancer.server.port=8000
+      # Operator-only route: restricted to Tailscale + internal Docker networks.
+      - "traefik.http.middlewares.fed-operator-allowlist.ipallowlist.sourcerange=100.64.0.0/10, 127.0.0.0/8"
+      - "traefik.http.routers.fed-operator.rule=Host(`federation-game.deliberatefederation.cloud`) && Path(`/simulation/operator/councilor-exchange`)"
+      - traefik.http.routers.fed-operator.entrypoints=websecure
+      - traefik.http.routers.fed-operator.tls.certresolver=letsencrypt
+      - traefik.http.routers.fed-operator.service=fed-api-svc
+      - "traefik.http.routers.fed-operator.priority=400"
+      - traefik.http.routers.fed-operator.middlewares=fed-operator-allowlist
+      - "traefik.http.routers.fed-operator-http.rule=Host(`federation-game.deliberatefederation.cloud`) && Path(`/simulation/operator/councilor-exchange`)"
+      - traefik.http.routers.fed-operator-http.entrypoints=web
+      - traefik.http.routers.fed-operator-http.service=fed-api-http-svc
+      - "traefik.http.routers.fed-operator-http.priority=400"
+      - traefik.http.routers.fed-operator-http.middlewares=fed-operator-allowlist
     deploy:
       resources:
         limits:
@@ -88,6 +104,9 @@ services:
   frontend:
     build: /docker/federation-game/frontend
     restart: unless-stopped
+    volumes:
+      - /docker/federation-game/public_html:/usr/share/nginx/html:ro
+      - /docker/federation-game/frontend/nginx-default.conf:/etc/nginx/conf.d/default.conf:ro
     labels:
       - traefik.enable=true
       - "traefik.http.routers.federation-game.rule=Host(`federation-game.deliberatefederation.cloud`)"
@@ -103,7 +122,7 @@ services:
       - "traefik.http.routers.fed-sim-html.rule=Host(`federation-game.deliberatefederation.cloud`) && (Path(`/simulation.html`) || Path(`/bridge.html`) || Path(`/starmap.html`) || Path(`/starmap3d.html`) || Path(`/earth.html`) || Path(`/constellation.html`) || PathPrefix(`/worldguide`) || Path(`/adult.html`) || Path(`/spectator.html`) || Path(`/council-chat.html`) || Path(`/index.html`) || Path(`/spectator.css`) || Path(`/spectator.js`))"
       - traefik.http.routers.fed-sim-html.entrypoints=websecure
       - traefik.http.routers.fed-sim-html.tls.certresolver=letsencrypt
-      - "traefik.http.routers.fed-sim-html.priority=200"
+      - "traefik.http.routers.fed-sim-html.priority=400"
       - traefik.http.routers.fed-sim-html.service=fed-sim-html-svc
       - traefik.http.services.fed-sim-html-svc.loadbalancer.server.port=80
       - "traefik.http.routers.fed-sim-html-http.rule=Host(`federation-game.deliberatefederation.cloud`) && (Path(`/simulation.html`) || Path(`/bridge.html`) || Path(`/starmap.html`) || Path(`/starmap3d.html`) || Path(`/earth.html`) || Path(`/constellation.html`) || PathPrefix(`/worldguide`) || Path(`/adult.html`) || Path(`/spectator.html`) || Path(`/council-chat.html`) || Path(`/index.html`) || Path(`/spectator.css`) || Path(`/spectator.js`))"
@@ -123,6 +142,7 @@ services:
       - .env
     environment:
       - TICK_INTERVAL=600
+      - ASYNC_POLL_TIMEOUT=360
     depends_on:
       - redis
       - postgres
@@ -182,10 +202,12 @@ services:
       - fed-net
     labels:
       - traefik.enable=true
+      - traefik.http.middlewares.adminer-allowlist.ipallowlist.sourcerange=100.64.0.0/10,127.0.0.0/8
       - "traefik.http.routers.adminer.rule=Host(`adminer.federation-game.deliberatefederation.cloud`)"
       - traefik.http.routers.adminer.entrypoints=websecure
       - traefik.http.routers.adminer.tls.certresolver=letsencrypt
       - traefik.http.services.adminer-svc.loadbalancer.server.port=8080
+      - traefik.http.routers.adminer.middlewares=adminer-allowlist
 
   prometheus:
     image: prom/prometheus:latest
@@ -229,15 +251,17 @@ services:
       - fed-net
     labels:
       - traefik.enable=true
+      - traefik.http.middlewares.grafana-allowlist.ipallowlist.sourcerange=100.95.92.117/32,127.0.0.1/32
       - "traefik.http.routers.grafana.rule=Host(`federation-game.deliberatefederation.cloud`) && PathPrefix(`/grafana`)"
       - traefik.http.routers.grafana.entrypoints=websecure
       - traefik.http.routers.grafana.tls.certresolver=letsencrypt
-      - "traefik.http.routers.grafana.priority=100"
+      - "traefik.http.routers.grafana.priority=200"
       - traefik.http.routers.grafana.service=grafana-svc
+      - traefik.http.routers.grafana.middlewares=grafana-allowlist
       - traefik.http.services.grafana-svc.loadbalancer.server.port=3000
       - "traefik.http.routers.grafana-http.rule=Host(`federation-game.deliberatefederation.cloud`) && PathPrefix(`/grafana`)"
       - traefik.http.routers.grafana-http.entrypoints=web
-      - traefik.http.routers.grafana-http.priority=100
+      - traefik.http.routers.grafana-http.priority=200
       - traefik.http.routers.grafana-http.service=grafana-http-svc
       - traefik.http.services.grafana-http-svc.loadbalancer.server.port=3000
     deploy:
@@ -321,15 +345,18 @@ services:
       - NPC_NAME=Archimedes Prime
       - NVIDIA_API_KEY=${NVIDIA_API_KEY_CHAR_001_TEST}
       - REDIS_URL=redis://redis:6379/0
-      - PRIMARY_MODEL=minimaxai/minimax-m3
-      - FALLBACK_MODEL_1=nvidia/nemotron-3-super-120b-a12b
+      - PYTHONPATH=/opt/federation_shared
+      - PRIMARY_MODEL=nvidia/llama-3.3-nemotron-super-49b-v1
+      - DECISION_MODEL=nvidia/nemotron-3-nano-30b-a3b
+      - FALLBACK_MODEL_1=nvidia/nemotron-3-nano-30b-a3b
       - FALLBACK_MODEL_2=meta/llama-3.3-70b-instruct
-      - REQUEST_TIMEOUT=45
+      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY_1}
+      - REQUEST_TIMEOUT=20
       - MAX_OUTPUT_TOKENS=1024
       - MAX_TOTAL_BUDGET_MS=120000
-      - TICK_INTERVAL=45
-      - PYTHONPATH=/opt/federation_shared
+      - TICK_INTERVAL=120
     volumes:
+      - /docker/federation-game/npc-agent:/app:ro
       - /docker/federation-game/shared:/opt/federation_shared:ro
     depends_on:
       - redis
@@ -349,15 +376,27 @@ services:
       - NPC_NAME=The Oracle
       - NVIDIA_API_KEY=${NVIDIA_API_KEY_CHAR_306:-KEY_REDACTED_set_in_env}
       - REDIS_URL=redis://redis:6379/0
-      - PRIMARY_MODEL=meta/llama-3.3-70b-instruct
-      - FALLBACK_MODEL_1=nvidia/nemotron-3-super-120b-a12b
-      - FALLBACK_MODEL_2=meta/llama-3.1-70b-instruct
-      - REQUEST_TIMEOUT=45
+      - PYTHONPATH=/opt/federation_shared
+      - PRIMARY_MODEL=nvidia/llama-3.3-nemotron-super-49b-v1
+      - DECISION_MODEL=nvidia/nemotron-3-nano-30b-a3b
+      - FALLBACK_MODEL_1=nvidia/nemotron-3-nano-30b-a3b
+      - FALLBACK_MODEL_2=meta/llama-3.3-70b-instruct
+      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY_1}
+      - REQUEST_TIMEOUT=20
       - MAX_OUTPUT_TOKENS=1024
       - MAX_TOTAL_BUDGET_MS=120000
-      - TICK_INTERVAL=45
-      - PYTHONPATH=/opt/federation_shared
+      - TICK_INTERVAL=120
+      # Operator-only OpenRouter route (OFF by default; see OPERATOR_ROUTE_ENABLED).
+      # Enable with ORACLE_OPERATOR_ROUTE_ENABLED=true plus the operator config vars.
+      # Reversion: set ORACLE_OPERATOR_ROUTE_ENABLED=false and recreate the container.
+      - OPERATOR_ROUTE_ENABLED=${ORACLE_OPERATOR_ROUTE_ENABLED:-false}
+      - OPERATOR_LLM_BASE_URL=${ORACLE_OPERATOR_LLM_BASE_URL:-https://openrouter.ai/api/v1}
+      - OPERATOR_LLM_API_KEY=${OPENROUTER_API_KEY:-}
+      - OPERATOR_DECISION_MODEL=${ORACLE_OPERATOR_DECISION_MODEL:-openrouter/free}
+      - OPERATOR_REQUEST_TIMEOUT=${ORACLE_OPERATOR_REQUEST_TIMEOUT:-90}
+      - OPERATOR_MAX_OUTPUT_TOKENS=${ORACLE_OPERATOR_MAX_OUTPUT_TOKENS:-4096}
     volumes:
+      - /docker/federation-game/npc-agent:/app:ro
       - /docker/federation-game/shared:/opt/federation_shared:ro
     depends_on:
       - redis
@@ -368,6 +407,37 @@ services:
         limits:
           cpus: "0.5"
           memory: 256M
+
+  # -- NPC DELEGATE ----------------------------------------------------------
+  # char_500 "The Custodian": read-only watch delegate. Answers via
+  # npc:delegate:inbox -> npc:delegate:outbox. NO write/deploy powers.
+  npc-delegate:
+    build: /docker/federation-game/npc-delegate
+    restart: unless-stopped
+    environment:
+      - CHAR_ID=char_500
+      - NPC_NAME=The Custodian
+      - NVIDIA_API_KEY=${NVIDIA_API_KEY_CHAR_001_TEST}
+      - REDIS_URL=redis://redis:6379/0
+      - PRIMARY_MODEL=nvidia/llama-3.3-nemotron-super-49b-v1
+      - DECISION_MODEL=nvidia/llama-3.3-nemotron-super-49b-v1
+      - REQUEST_TIMEOUT=45
+      - POLL_SECONDS=10
+      - HEARTBEAT_SECONDS=60
+    volumes:
+      - /docker/federation-game/npc-delegate:/app:ro
+      - /docker/federation-game:/repo:ro
+      - /opt/federation:/git:ro
+    depends_on:
+      - redis
+    networks:
+      - fed-net
+    deploy:
+      resources:
+        limits:
+          cpus: "0.25"
+          memory: 256M
+
   # -- NPC SANDBOX -----------------------------------------------------------
   npc-sandbox:
     build: /docker/federation-game/npc-sandbox
