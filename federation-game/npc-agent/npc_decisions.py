@@ -875,11 +875,11 @@ Respond in this exact JSON format (no markdown, no explanation):
             )
         dedup_count = recent_artifact_dedup_count(r)
         dedup_topic = dedup_blocked_topic(r)
-        if dedup_count >= 2 and dedup_topic:
+        if dedup_count >= 3 and dedup_topic:
             _topic_blocked_for_dedup = dedup_topic
             top_npcs = top_neighborhood_npcs(r, 3)
             npc_hint = f" Your neighborhood scan shows these NPCs in notable states: {top_npcs}." if top_npcs else ""
-            if dedup_count >= 3:
+            if dedup_count >= 4:
                 force_constraint += (
                     "\n\nESCALATING DEDUP (streak=" + str(dedup_count) + "): "
                     f"You have been blocked from \"{dedup_topic}\" {dedup_count} times in a row. "

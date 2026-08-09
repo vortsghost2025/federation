@@ -236,6 +236,7 @@ class Character:
     created_turn: int = 0
     rumor_level: float = 0.0  # How much others talk about this character
     corruption_level: float = 0.0  # 0.0 normal, 1.0 fully corrupted
+    pre_corruption_status: Optional[str] = None  # status before corruption
 
     def __post_init__(self):
         """Validate personality traits"""
@@ -698,13 +699,38 @@ class NPCSystem:
         r = _get_redis()
 
         for char in self.characters.values():
-            # Character corruption growth
+            # Character corruption growth — resisted by wisdom, with a
+            # slow natural decay so corruption is not a one-way spiral.
+            # Environment factors (season, temperature, resource_flux) affect
+            # the growth rate. Resource flux acts as a multiplier. Extreme
+            # temperature (<10°C or >30°C) adds a small stress bump.
             if char.corruption_level > 0:
-                char.corruption_level = min(
-                    1.0, char.corruption_level + random.uniform(0.01, 0.05)
-                )
+                # Base growth resisted by wisdom
+                growth = random.uniform(0.01, 0.05) * max(0.2, 1.0 - char.wisdom)
+                # Apply environment modifiers
+                try:
+                    _world = r.hgetall("world_state")
+                    flux = float(_world.get("resource_flux", "1.0"))
+                    temp = float(_world.get("temperature", "20"))
+                except Exception:
+                    flux = 1.0
+                    temp = 20.0
+                growth *= flux
+                if temp < 10.0 or temp > 30.0:
+                    # Extra stress in extreme temperatures
+                    growth += 0.01
+                char.corruption_level = min(1.0, char.corruption_level + growth)
 
-                if char.corruption_level >= 1.0:
+
+                # Slow decay: wise/loyal characters shed corruption
+                if random.random() < (0.05 + char.wisdom * 0.1):
+                    char.corruption_level = max(
+                        0.0, char.corruption_level - random.uniform(0.01, 0.03)
+                    )
+
+                was_corrupted = char.status == CharacterStatus.CORRUPTED
+                if char.corruption_level >= 1.0 and not was_corrupted:
+                    char.pre_corruption_status = char.status.value
                     char.status = CharacterStatus.CORRUPTED
                     events.append(
                         {
@@ -713,6 +739,30 @@ class NPCSystem:
                             "message": f"{char.name} has been fully corrupted!",
                         }
                     )
+                elif (
+                    was_corrupted
+                    and char.corruption_level < 0.5
+                    and char.pre_corruption_status
+                ):
+                    # Redemption: corruption receded, character recovers
+                    try:
+                        char.status = CharacterStatus(char.pre_corruption_status)
+                    except ValueError:
+                        char.status = CharacterStatus.ACTIVE
+                    char.pre_corruption_status = None
+                    events.append(
+                        {
+                            "type": "character_redemption",
+                            "character": char.name,
+                            "message": f"{char.name} has been redeemed from corruption!",
+                        }
+                    )
+                    # Mark redemption in Redis so the worker can offer a
+                    # restorative quest (consumed by process_redemptions).
+                    try:
+                        r.set(f"npc:redeemed:{char.char_id}", char.name, ex=86400)
+                    except Exception:
+                        pass
 
             # Companion betrayal check
             if char.char_id in self.companions:
@@ -1390,6 +1440,20 @@ def build_unique_npcs() -> List[Character]:
             cunning=0.9,
             personality_type=CharacterArchetype.ROGUE,
             status=CharacterStatus.TRAVELING,
+        ),
+        Character(
+            char_id="char_500",
+            name="The Custodian",
+            title="Watchful Archivist",
+            description="A quiet archivist who watches the federation's pulse and verifies what is real. Bound by a read-only mandate.",
+            loyalty=0.9,
+            ambition=0.0,
+            wisdom=0.9,
+            charisma=0.3,
+            cunning=0.1,
+            personality_type=CharacterArchetype.GUARDIAN,
+            affiliation="preservation_society",
+            status=CharacterStatus.ACTIVE,
         ),
     ]
     return characters

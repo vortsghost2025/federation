@@ -1028,17 +1028,20 @@ class NPCQuestEngine:
         try:
             r = self._get_redis()
 
+            # Morale/stability live on a 0-100 scale in world_state (matching
+            # simulation_engine's WORLD_DEFAULTS and _clamp). The QuestReward
+            # boosts are expressed on a -1.0..1.0 scale, so rescale by 100.
             if rewards.morale_boost != 0.0:
-                current = float(r.hget("world_state", "morale") or 0.5)
-                new_val = min(1.0, max(0.0, current + rewards.morale_boost))
+                current = float(r.hget("world_state", "morale") or 55)
+                new_val = min(100.0, max(0.0, current + rewards.morale_boost * 100))
                 r.hset("world_state", "morale", new_val)
-                deltas["morale"] = rewards.morale_boost
+                deltas["morale"] = rewards.morale_boost * 100
 
             if rewards.stability_boost != 0.0:
-                current = float(r.hget("world_state", "stability") or 0.5)
-                new_val = min(1.0, max(0.0, current + rewards.stability_boost))
+                current = float(r.hget("world_state", "stability") or 65)
+                new_val = min(100.0, max(0.0, current + rewards.stability_boost * 100))
                 r.hset("world_state", "stability", new_val)
-                deltas["stability"] = rewards.stability_boost
+                deltas["stability"] = rewards.stability_boost * 100
 
             if rewards.resources != 0:
                 current = int(float(r.hget("world_state", "treasury") or 0))
