@@ -149,13 +149,39 @@ def check_tick_health() -> dict:
     return {"ok": not errors, "errors": errors, "detail": "ok"}
 
 
-def _redis_keys(pattern) -> list:
-    """Return matching redis keys via docker exec redis-cli."""
+def _redis_scard(key) -> int:
+    """Return the cardinality of a Redis set via SCARD (non-blocking)."""
     out = run(
         ["docker", "exec", "federation-game-redis-1", "redis-cli",
-         "KEYS", pattern]
-    )
-    return [k for k in out.splitlines() if k]
+         "SCARD", key]
+    ).strip()
+    try:
+        return int(out)
+    except (ValueError, TypeError):
+        return 0
+
+
+def _redis_sscan_members(key, batch=200) -> list:
+    """Iterate a Redis set fully via SSCAN batches (non-blocking).
+
+    Returns all member strings. Never uses KEYS. SSCAN is cursor-based and
+    does not block Redis the way a full KEYS scan does.
+    """
+    members = []
+    cursor = "0"
+    while True:
+        out = run(
+            ["docker", "exec", "federation-game-redis-1", "redis-cli",
+             "SSCAN", key, cursor, "COUNT", str(batch)]
+        )
+        lines = [l for l in out.splitlines() if l]
+        if not lines:
+            break
+        cursor = lines[0].strip()
+        members.extend(lines[1:])
+        if cursor == "0":
+            break
+    return members
 
 
 # Role-title suffixes that indicate generated governance positions. Shared
@@ -163,7 +189,8 @@ def _redis_keys(pattern) -> list:
 _ROLE_SUFFIXES = (
     "_analyst", "_coordinator", "_steward", "_officer", "_auditor",
     "_arbiter", "_envoy", "_liaison", "_enforcer", "_overseer", "_manager",
-    "_advisor", "_administrator", "_director",
+    "_advisor", "_administrator", "_director", "_curator", "_specialist",
+    "_counselor", "_planner", "_spokesperson", "_representative",
 )
 
 # Thresholds above which the world is considered "bloated" (historical
@@ -178,40 +205,41 @@ _BLOAT_THRESHOLDS = {
 def check_subsystem_bloat() -> dict:
     """Detect institution/role/workflow bloat and semantic role duplication.
 
-    Returns a dict with counts and a list of issues (empty = healthy). This is
-    the monitor instrumentation that lets the Custodian/architect notice the
-    "combinatorial title generation" pathology instead of it silently piling up.
+    Uses the curated Redis indexes (role:index, workflow:index,
+    institution:index) via SCARD for counts and SSCAN for role-name
+    duplication analysis. No recurring KEYS on DB0 (avoids blocking Redis).
+
+    Returns a dict with counts and a list of issues (empty = healthy).
     """
     issues = []
-    counts = {"roles": 0, "workflows": 0, "institutions": 0}
 
-    roles = _redis_keys("role:*")
-    workflows = _redis_keys("workflow:*")
-    institutions = _redis_keys("institution:*")
+    # Counts come from the curated indexes via SCARD (non-blocking).
+    counts = {
+        "roles": _redis_scard("role:index"),
+        "workflows": _redis_scard("workflow:index"),
+        "institutions": _redis_scard("institution:index"),
+    }
 
-    counts["roles"] = len(roles)
-    counts["workflows"] = len(workflows)
-    counts["institutions"] = len(institutions)
-
-    for label, key_list in (("roles", roles),):
-        # Semantic duplication: count how many roles share the same
-        # significant content tokens after dropping the title suffix.
-        base_counts = {}
-        for r in key_list:
-            name = r.split(":", 1)[-1]
-            base = name
-            for suf in _ROLE_SUFFIXES:
-                if name.endswith(suf):
-                    base = name[: -len(suf)]
-                    break
-            base_counts[base] = base_counts.get(base, 0) + 1
-        dupes = {b: c for b, c in base_counts.items() if c >= 3}
-        if dupes:
-            top = sorted(dupes.items(), key=lambda x: -x[1])[:5]
-            issues.append(
-                f"{len(dupes)} role base-phrases with >=3 near-duplicate titles "
-                f"(e.g. {', '.join(b for b, _ in top[:3])})"
-            )
+    # Semantic duplication needs individual role names — iterate role:index
+    # with SSCAN (cursor-based, non-blocking) rather than KEYS.
+    role_members = _redis_sscan_members("role:index")
+    base_counts = {}
+    for rid in role_members:
+        name = rid.split(":", 1)[-1]
+        base = name
+        for suf in _ROLE_SUFFIXES:
+            if name.endswith(suf):
+                base = name[: -len(suf)]
+                break
+        base_counts[base] = base_counts.get(base, 0) + 1
+    dupes = {b: c for b, c in base_counts.items() if c >= 3}
+    duplicate_cluster_count = len(dupes)
+    if dupes:
+        top = sorted(dupes.items(), key=lambda x: -x[1])[:5]
+        issues.append(
+            f"{duplicate_cluster_count} role base-phrases with >=3 "
+            f"near-duplicate titles (e.g. {', '.join(b for b, _ in top[:3])})"
+        )
 
     for label, threshold in _BLOAT_THRESHOLDS.items():
         if counts[label] > threshold:
@@ -219,7 +247,7 @@ def check_subsystem_bloat() -> dict:
                 f"{counts[label]} {label} exceeds threshold {threshold}"
             )
 
-    counts["duplicate_role_clusters"] = len(issues)
+    counts["duplicate_role_clusters"] = duplicate_cluster_count
     return {"counts": counts, "issues": issues}
 
 
