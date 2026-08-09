@@ -106,9 +106,11 @@ OLLAMA_HEAVY_MODEL = os.environ.get("OLLAMA_HEAVY_MODEL", "qwen2.5-coder:7b")
 OLLAMA_HEAVY_KEEP_ALIVE = os.environ.get("OLLAMA_HEAVY_KEEP_ALIVE", "3m")
 OLLAMA_HEAVY_ENABLED = os.environ.get("OLLAMA_HEAVY_ENABLED", "") == "1"
 
-# Backpressure: max 1 active call, max 3 queued, cooldown 60s on 500/client-abort
-OLLAMA_MAX_ACTIVE = int(os.environ.get("OLLAMA_MAX_ACTIVE", "1"))
-OLLAMA_MAX_QUEUE = int(os.environ.get("OLLAMA_MAX_QUEUE", "3"))
+# Backpressure: max 2 active calls, max 5 queued, cooldown 60s on 500/client-abort
+# (2 active matches nvidia_nim_client.py so both backend clients throttle the
+# same local Ollama consistently; 1 was too restrictive for 37 NPCs per tick).
+OLLAMA_MAX_ACTIVE = int(os.environ.get("OLLAMA_MAX_ACTIVE", "2"))
+OLLAMA_MAX_QUEUE = int(os.environ.get("OLLAMA_MAX_QUEUE", "5"))
 OLLAMA_COOLDOWN_SECONDS = int(os.environ.get("OLLAMA_COOLDOWN_SECONDS", "60"))
 
 _ollama_available: Optional[bool] = None  # None = not checked yet
