@@ -11,6 +11,7 @@ import time
 import json
 import logging
 import signal
+import random
 
 import apprise
 import redis
@@ -34,10 +35,39 @@ log = logging.getLogger("worker")
 # ── Redis ──────────────────────────────────────────────────
 r = redis.from_url(REDIS_URL, decode_responses=True)
 
+# Initialize world state (if missing) – runs once at worker startup
+def init_world_state():
+    try:
+        defaults = {
+            "season": "spring",
+            "temperature": "20",  # Celsius, simple string for now
+            "resource_flux": "1.0",  # multiplier for resource generation
+        }
+        for key, val in defaults.items():
+            if not r.hexists("world_state", key):
+                r.hset("world_state", key, val)
+        log.info("World state environment keys ensured")
+    except Exception as e:
+        log.warning(f"Failed to initialize world state: {e}")
+
+# Run the initializer at import time
+init_world_state()
+
 # ── State ──────────────────────────────────────────────────
 tick_count = 0
 last_tick_time = 0
 running = True
+
+# Designed permanent antagonists are created already-corrupted (see
+# npcs.build_antagonists) and are NOT anomalies. They are excluded from
+# corruption-health ALERTS so the monitor doesn't spam every tick, but they
+# remain listed in fed:npc_health:corrupted for informational tracking.
+_DESIGNED_ANTAGONIST_NPCS = frozenset({
+    "char_201",  # Lord Malaxis
+    "char_202",  # The Void Oracle (corruption 1.0)
+    "char_203",  # Baroness Greed
+    "char_204",  # General Devastation
+})
 
 
 def handle_signal(signum, frame):
@@ -788,6 +818,15 @@ def run_tick():
         else:
             log.error(f" {name}: failed ({err})")
 
+    # ── Corrupted-NPC health check ─────────────────────
+    check_corrupted_npcs()
+
+    # ── Redemption quests ──────────────────────────────
+    process_redemptions()
+
+    # ── Rumour feed ────────────────────────────────────
+    publish_rumors()
+
     # ── Spatial tick ────────────────────────────────────
     if os.getenv("SPATIAL_ENABLED", "true").lower() in ("true", "1", "yes"):
         try:
@@ -841,6 +880,9 @@ def run_tick():
     except Exception as _e:
         log.warning(f"  Crisis decay failed: {_e}")
 
+    # Update world environment for this tick (season, temperature, flux)
+    update_environment()
+
     # ── Publish tick to Redis ──────────────────────────
     try:
         r.publish(
@@ -892,7 +934,221 @@ def run_tick():
         log.warning(f"Event detection failed: {e}")
 
 
+# ── Environment update ───────────────────────────────────────
+
+
+def update_environment():
+    """Rotate season, adjust temperature, and tweak resource flux.
+    This runs once per tick after crisis decay, ensuring the world
+    environment evolves over time."""
+    try:
+        # Retrieve current world state (may contain many other keys)
+        world = r.hgetall("world_state")
+        # Season cycle
+        seasons = ["spring", "summer", "autumn", "winter"]
+        cur_season = world.get("season", "spring")
+        try:
+            idx = seasons.index(cur_season)
+        except ValueError:
+            idx = 0
+        next_season = seasons[(idx + 1) % len(seasons)]
+        # Temperature drift – simple random walk, clamp 0‑35°C
+        try:
+            cur_temp = int(world.get("temperature", "20"))
+        except Exception:
+            cur_temp = 20
+        delta = random.randint(-2, 2)
+        new_temp = max(0, min(35, cur_temp + delta))
+        # Resource flux – small random multiplier around 1.0
+        try:
+            cur_flux = float(world.get("resource_flux", "1.0"))
+        except Exception:
+            cur_flux = 1.0
+        new_flux = round(max(0.5, min(2.0, cur_flux + random.uniform(-0.05, 0.05))), 2)
+        # Persist updates
+        r.hset(
+            "world_state",
+            mapping={
+                "season": next_season,
+                "temperature": str(new_temp),
+                "resource_flux": str(new_flux),
+            },
+        )
+        log.info(
+            f"World environment updated: season={next_season}, temp={new_temp}, flux={new_flux}"
+        )
+    except Exception as e:
+        log.warning(f"Failed to update environment: {e}")
+
+
 # ── Health check ───────────────────────────────────────────
+
+
+def check_corrupted_npcs():
+    """Scan NPC states and raise a warning when NPCs are corrupted
+    for more than one consecutive tick. Writes a summary to Redis
+    (fed:npc_health:corrupted) so monitors can alert without spamming
+    every tick."""
+    try:
+        keys = r.keys("npc_state:*")
+        corrupted = []
+        for key in keys:
+            status = r.hget(key, "status")
+            if status == "corrupted":
+                corrupted.append(key.replace("npc_state:", ""))
+        corrupted.sort()
+
+        # Split designed antagonists out of the alerting path. They were born
+        # corrupted on purpose, so they are not anomalies to escalate.
+        emergent = [c for c in corrupted if c not in _DESIGNED_ANTAGONIST_NPCS]
+        designed_only = all(c in _DESIGNED_ANTAGONIST_NPCS for c in corrupted)
+
+        prev_raw = r.get("fed:npc_health:corrupted_prev")
+        prev = set(json.loads(prev_raw)) if prev_raw else set()
+        new_corrupted = [c for c in emergent if c not in prev]
+        persistent = [c for c in emergent if c in prev]
+
+        # Track current set for the next tick
+        r.set("fed:npc_health:corrupted_prev", json.dumps(emergent), ex=86400 * 7)
+        r.hset(
+            "fed:npc_health:corrupted",
+            mapping={
+                "ts": str(int(time.time())),
+                "count": str(len(emergent)),
+                "new": json.dumps(new_corrupted),
+                "persistent": json.dumps(persistent),
+                "npcs": json.dumps(emergent),
+                "designed_antagonists": json.dumps(
+                    [c for c in corrupted if c in _DESIGNED_ANTAGONIST_NPCS]
+                ),
+            },
+        )
+        if designed_only and not emergent:
+            log.info(
+                f" Corrupted NPCs are designed antagonists only: {corrupted} (no alert)"
+            )
+        elif new_corrupted:
+            log.warning(
+                f" Corrupted NPC ALERT: new={new_corrupted} persistent={persistent}"
+            )
+        elif persistent:
+            log.warning(f" Corrupted NPC alert (persistent): {persistent}")
+        else:
+            log.info(" No emergent corrupted NPCs this tick")
+    except Exception as e:
+        log.warning(f" Corrupted-NPC health check failed: {e}")
+
+
+# Restorative quests offered to a redeemed NPC as a "second chance"
+_REDEMPTION_QUESTS = [
+    "cultural_renaissance",
+    "diplomatic_mastery",
+    "alliance_of_equals",
+    "resource_abundance",
+]
+
+
+def process_redemptions():
+    """Offer a restorative quest to NPCs that just recovered from corruption.
+    Reads npc:redeemed:<char_id> markers set by advacne_turn, assigns a quest
+    via the quest engine, and clears the marker (only once)."""
+    try:
+        markers = [k for k in r.keys("npc:redeemed:*")]
+        if not markers:
+            return
+        from npc_quest_engine import NPCQuestEngine
+        from quests import create_quest_library
+
+        _r = r
+        qs = create_quest_library()
+        engine = NPCQuestEngine(quest_system=qs, redis_client=_r)
+
+        for marker in markers:
+            char_id = marker.replace("npc:redeemed:", "")
+            # Only assign if not already on a quest for this NPC
+            existing = _r.hkeys(f"npc_quests:active:{char_id}") or []
+            if existing:
+                # Redeemed NPC already has an active quest — still clear marker
+                _r.delete(marker)
+                continue
+            quest_id = None
+            for candidate in _REDEMPTION_QUESTS:
+                if candidate in qs.quests:
+                    quest_id = candidate
+                    break
+            if quest_id is None:
+                # Fallback: let the engine select one randomly
+                quest_id = engine.select_quest_for_npc(
+                    char_id, affiliation="federation", personality_type="hero"
+                )
+            if quest_id:
+                ok, msg = engine.accept_quest(char_id, quest_id)
+                log.info(
+                    f" Redemption quest for {char_id}: {quest_id} -> "
+                    f"{'assigned' if ok else msg}"
+                )
+            _r.delete(marker)
+    except Exception as e:
+        log.warning(f" Redemption quest processing failed: {e}")
+
+
+# ── Rumour feed ────────────────────────────────────────────
+_RUMOR_SEASONS = {
+    "spring": "spring rains swell the rivers, easing travel and trade, but lows linger",
+    "summer": "the long summer stretches harvests and tempers alike",
+    "autumn": "autumn winds warn of a hard season ahead for the unprepared",
+    "winter": "a bitter winter grips the land; supplies and patience run thin",
+}
+
+
+def publish_rumors():
+    """Emit 1-2 context-aware gossip lines each tick derived from world
+    state (season, temperature, morale/crisis). Pushes to the shared
+    npc_rumors list (capped) so NPCs and the digest can reference them."""
+    try:
+        world = r.hgetall("world_state")
+        season = world.get("season", "spring")
+        temp = world.get("temperature", "20")
+        morale = world.get("morale", "50")
+        stability = world.get("stability", "50")
+        flux = world.get("resource_flux", "1.0")
+
+        items = []
+        season_line = _RUMOR_SEASONS.get(season)
+        if season_line and random.random() < 0.6:
+            items.append("Seasons: %s." % season_line)
+        try:
+            f = float(flux)
+            if f < 0.8:
+                items.append("Markets whisper that resources are scarce this turning (flux %.2f)." % f)
+            elif f > 1.2:
+                items.append("Bounty is up — trade caravans multiply (flux %.2f)." % f)
+        except Exception:
+            pass
+        try:
+            if float(morale) < 20:
+                items.append("Spirits are low; many speak of leaving for safer skies.")
+            elif float(stability) < 20:
+                items.append("Rumors of unrest grow where order wanes.")
+        except Exception:
+            pass
+
+        if not items:
+            items.append("The %s air carries only idle chatter (temp %s°C)." % (season, temp))
+
+        entry = {
+            "ts": int(time.time()),
+            "season": season,
+            "temperature": temp,
+            "rumors": items[:2],
+        }
+        payload = json.dumps(entry)
+        r.lpush("npc_rumors", payload)
+        r.ltrim("npc_rumors", 0, 49)
+        r.set("npc_rumors:latest", payload, ex=86400)
+        log.info(" Rumours pushed: %s", "; ".join(items[:2]))
+    except Exception as e:
+        log.warning(f" Rumour generation failed: {e}")
 
 
 def health_check():

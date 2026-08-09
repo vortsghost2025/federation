@@ -276,15 +276,15 @@ def _neighborhood_snapshot(r, max_chars: int = 400) -> str:
     max_chars of formatted text — enough to notice Shadowborn's disinformation
     or Baroness Greed's heist without drowning the prompt.
     """
-    logger.info("[%s] neighborhood: starting snapshot...", CHAR_ID)
+    logger.debug("[%s] neighborhood: starting snapshot...", CHAR_ID)
     partner_id = _partner_id()
-    logger.info("[%s] neighborhood: partner_id=%s", CHAR_ID, partner_id)
+    logger.debug("[%s] neighborhood: partner_id=%s", CHAR_ID, partner_id)
     entries: list[tuple[int, str, str, str]] = []  # (score, id, name, line)
 
     try:
         # First, get all npc_state keys (materialize list to close connection)
         all_state_keys = list(r.keys("npc_state:*"))
-        logger.info("[%s] neighborhood: found %d npc_state keys", CHAR_ID, len(all_state_keys))
+        logger.debug("[%s] neighborhood: found %d npc_state keys", CHAR_ID, len(all_state_keys))
 
         # Batch-read all npc_state hashes
         pipe = r.pipeline(transaction=False)
@@ -338,7 +338,7 @@ def _neighborhood_snapshot(r, max_chars: int = 400) -> str:
         return ""
 
     if entries:
-        logger.info("[%s] neighborhood: %d notable NPCs: %s", CHAR_ID, len(entries),
+        logger.debug("[%s] neighborhood: %d notable NPCs: %s", CHAR_ID, len(entries),
                     "; ".join(e[3] for e in entries[:5]))
 
     if not entries:
@@ -357,7 +357,7 @@ def _neighborhood_snapshot(r, max_chars: int = 400) -> str:
         budget -= len(line) + 2
 
     result = "\n".join(lines) if len(lines) > 1 else ""
-    logger.info("[%s] neighborhood: returning %d chars", CHAR_ID, len(result))
+    logger.debug("[%s] neighborhood: returning %d chars", CHAR_ID, len(result))
     return result
 
 

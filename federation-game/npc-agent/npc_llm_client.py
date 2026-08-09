@@ -16,7 +16,7 @@ FALLBACK_KEY_2 = os.environ.get("FALLBACK_KEY_2", "") or None
 PRIMARY_MODEL = os.environ.get("PRIMARY_MODEL", "meta/llama-3.3-70b-instruct")
 FALLBACK_MODEL_1 = os.environ.get("FALLBACK_MODEL_1", "") or None
 FALLBACK_MODEL_2 = os.environ.get("FALLBACK_MODEL_2", "") or None
-DECISION_MODEL = os.environ.get("DECISION_MODEL", FALLBACK_MODEL_1)
+DECISION_MODEL = os.environ.get("DECISION_MODEL", "nvidia/nemotron-3-nano-30b-a3b")
 OPENROUTER_API_KEY = os.environ.get("OPENROUTER_API_KEY", "")
 OR_FREE_POOL = [
     "nvidia/nemotron-3-ultra-550b-a55b:free",

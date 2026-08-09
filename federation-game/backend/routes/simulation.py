@@ -1026,3 +1026,22 @@ async def simulation_nim_stats():
         return {"status": "ok", **stats}
     except Exception as e:
         return {"status": "error", "error": str(e)}
+
+
+# ---------------------------------------------------------------------------
+# GET /environment — world environment variables (season, temperature, flux)
+# ---------------------------------------------------------------------------
+
+
+@router.get("/environment")
+async def get_environment():
+    """Expose the current world environment variables from Redis."""
+    from redis import from_url
+
+    _r = from_url(
+        os.getenv("REDIS_URL", "redis://redis:6379/0"), decode_responses=True
+    )
+    data = _r.hgetall("world_state")
+    if not data:
+        raise HTTPException(status_code=404, detail="World state not initialized")
+    return data
