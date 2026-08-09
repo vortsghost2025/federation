@@ -581,12 +581,32 @@ def _sync_pair_workspace(r, decision: dict, result: dict, npc_name: str = "", ch
                 _blocked = [t for t in _blocked_raw if isinstance(t, str) and t.strip()]
             else:
                 _blocked = []
-            if _next_q and (not _blocked or not any(
-                    t and t.lower() in _next_q.lower() for t in _blocked)):
+            # Recent-theme cooldown: derive cooling terms from recently
+            # completed goals so old families revive later instead of being
+            # banned forever.
+            _recent_terms = _recent_theme_terms(r, cid)
+            _combined_blocked = list(dict.fromkeys(_blocked + _recent_terms))
+            # Novelty gate: if the LLM's next_question re-enters recent themes,
+            # fall back to an autonomous novel next-goal proposal.
+            _novel_next, _novel_candidates = _propose_novel_next_goal(r, _cc, _combined_blocked, cid)
+            _reenters_recent = bool(_next_q) and bool(_combined_blocked) and any(
+                t and t.lower() in _next_q.lower() for t in _combined_blocked
+            )
+            if _reenters_recent and _novel_next:
+                mapping["open_question"] = _novel_next
+                mapping["open_question_from"] = "system"
+                mapping["open_question_ts"] = str(now)
+                mapping["open_question_source"] = "post_resolution_novel"
+            elif _next_q and not _reenters_recent:
                 mapping["open_question"] = _next_q
                 mapping["open_question_from"] = "system"
                 mapping["open_question_ts"] = str(now)
                 mapping["open_question_source"] = "post_resolution_pivot"
+            elif _novel_next:
+                mapping["open_question"] = _novel_next
+                mapping["open_question_from"] = "system"
+                mapping["open_question_ts"] = str(now)
+                mapping["open_question_source"] = "post_resolution_novel"
             else:
                 mapping["open_question"] = _default_post_resolution_question()
                 mapping["open_question_from"] = "system"
@@ -802,6 +822,10 @@ def _compute_convergence_state(r, partner_id: str, cid: str, now: int) -> None:
             # Stage 4D: snapshot the shared_goal and open_question at resolution time
             conv["resolved_shared_goal"] = shared_goal
             conv["resolved_open_question"] = open_q
+            # Durable completion memory: persist this resolved goal so the pair
+            # cannot rediscover it later and so a recent-theme novelty gate can
+            # steer the next goal into genuinely new territory.
+            _record_goal_completion(r, conv, partner_id, cid)
         else:
             # Preserve existing resolution state
             conv["resolved"] = prev_resolved
@@ -834,6 +858,158 @@ def _compute_convergence_state(r, partner_id: str, cid: str, now: int) -> None:
         logger.info("[%s/%s] convergence_state updated v%d", cid, partner_id, conv["version"])
     except Exception as ex:
         logger.debug("[%s/%s] convergence reducer: %s", cid, partner_id, ex)
+
+
+# ── Goal progression: durable completion memory + recent-theme novelty ──
+# A completed goal is written to a durable list so the pair cannot "rediscover"
+# it later. Recent-theme cooldown derives banned terms from recently completed
+# goals (with a window), so old families cool off rather than being banned
+# forever. Novelty scoring lets the agents choose genuinely different next goals.
+COMPLETED_GOALS_MAX = 20            # cap on durable completion records kept
+RECENT_COMPLETION_WINDOW = 8        # how many recent goals feed the novelty gate
+
+
+def _completed_goals_key(char_id: str = "") -> str:
+    cid = char_id or CHAR_ID
+    pid = _partner_id(cid)
+    if not pid:
+        return ""
+    return f"npc_pair:{_pair_slug(cid, pid)}:completed_goals"
+
+
+def _recent_completed_goals(r, char_id: str = "", limit: int = RECENT_COMPLETION_WINDOW) -> list:
+    """Return the most recent completed-goal records (dicts), oldest first."""
+    key = _completed_goals_key(char_id)
+    if not key:
+        return []
+    try:
+        raw_list = r.lrange(key, 0, limit - 1)
+    except Exception:
+        return []
+    out = []
+    for line in raw_list or []:
+        try:
+            rec = json.loads(line) if isinstance(line, str) else line
+            if isinstance(rec, dict):
+                out.append(rec)
+        except (json.JSONDecodeError, ValueError):
+            continue
+    return out
+
+
+def _recent_theme_terms(r, char_id: str = "") -> list:
+    """Derive recently-cooling theme terms from recently completed goals.
+
+    These are the families to avoid re-entering as the NEXT shared goal. They
+    are drawn only from the recent window, so an old family can return later
+    once it falls out of the window (a cooldown, not a permanent ban)."""
+    terms = []
+    for rec in _recent_completed_goals(r, char_id):
+        g = (rec.get("goal") or "")
+        q = (rec.get("open_question") or "")
+        a = (rec.get("conclusion") or "")
+        text = f"{g} {q} {a}".lower()
+        for term in KNOWN_BLOCKED_TERMS:
+            if term and term in text and term not in terms:
+                terms.append(term)
+    return terms
+
+
+def _record_goal_completion(r, conv: dict, partner_id: str, char_id: str = "") -> None:
+    """Persist a durable completion record for a resolved shared goal.
+
+    Written once per resolved goal (dedup by goal text) so the pair has lasting
+    memory of what was finished and what resulted — even after the transient
+    convergence_state is lost or the context window rolls over."""
+    goal = conv.get("resolved_shared_goal") or ""
+    if not goal:
+        return
+    key = _completed_goals_key(char_id)
+    if not key:
+        return
+    # Dedup: skip if this exact goal is already recorded.
+    for rec in _recent_completed_goals(r, char_id, limit=COMPLETED_GOALS_MAX):
+        if (rec.get("goal") or "") == goal:
+            return
+    record = {
+        "goal": goal,
+        "conclusion": conv.get("resolved_answer") or conv.get("current_best_answer") or "",
+        "resolved_question": conv.get("resolved_question") or "",
+        "open_question": conv.get("resolved_open_question") or "",
+        "agreement": conv.get("agreement") or "",
+        "disagreement": conv.get("disagreement") or "",
+        "blocked_topic_terms": conv.get("blocked_topic_terms") or [],
+        "resolved_at": conv.get("resolved_at") or int(time.time()),
+        "source_ids": conv.get("source_ids") or [],
+    }
+    try:
+        r.rpush(key, json.dumps(record, default=str))
+        r.ltrim(key, -COMPLETED_GOALS_MAX, -1)
+        logger.info("[%s/%s] recorded completed goal: %s", char_id or CHAR_ID, partner_id,
+                    _compact_text(goal, 80))
+    except Exception as e:
+        logger.debug("[%s] goal completion record failed: %s", char_id or CHAR_ID, e)
+
+
+def _propose_novel_next_goal(r, conv: dict, blocked_terms: list, char_id: str = ""):
+    """Autonomously propose + select a genuinely novel next shared goal.
+
+    Returns (selected_goal_or_empty, candidates_list). Asks the councilors to
+    propose candidate objectives that materially differ from recently resolved
+    work, scores them against the recent-goal context for novelty, rejects
+    obvious repetitions, and selects one. The agents choose *what* comes next;
+    this only supplies memory, consequences, and anti-loop scaffolding."""
+    recent = _recent_completed_goals(r, char_id)
+    recent_text = " | ".join(
+        f"{rec.get('goal','')} -> {rec.get('conclusion','')}" for rec in recent
+    ) or "none yet"
+    candidate_prompt = (
+        "Propose 3 candidate next shared objectives for the Federation councilor "
+        "pair. They must materially differ from the recently completed work below. "
+        "Do NOT reuse those themes. Return JSON only: "
+        '{"candidates":[{"objective":"...","why_novel":"..."} x3]}\n\n'
+        f"Recently completed:\n{_compact_text(recent_text, 500)}\n"
+        f"Blocked/cooling terms to avoid: {', '.join(blocked_terms) if blocked_terms else 'none'}\n"
+    )
+    candidate_system = (
+        "You propose novel, distinct world-building objectives. Each must be a "
+        "concrete, actionable next project, clearly different from the recently "
+        "completed goals. Output ONLY a JSON object with a 'candidates' array of "
+        "3 objects, each with 'objective' and 'why_novel'. Keep each objective "
+        "under 120 chars."
+    )
+    candidates = []
+    try:
+        from npc_llm_client import call_llm, DECISION_MODEL
+        raw = call_llm(candidate_system, candidate_prompt, model=DECISION_MODEL or "", r=r, call_label="propose_next_goals")
+        content = (raw.get("content") or "").strip()
+        js = content.find("{")
+        je = content.rfind("}")
+        if js >= 0 and je > js:
+            content = content[js:je + 1]
+        parsed = json.loads(content)
+        for c in parsed.get("candidates", []):
+            obj = (c.get("objective") or "").strip()
+            if obj:
+                candidates.append(c)
+    except Exception:
+        candidates = []
+
+    # Novelty gate: reject candidates that re-enter recent themes or blocked terms.
+    survivors = []
+    for c in candidates:
+        obj = (c.get("objective") or "").lower()
+        if blocked_terms and any(t and t.lower() in obj for t in blocked_terms):
+            continue
+        if any(t and t.lower() in obj for t in KNOWN_BLOCKED_TERMS):
+            continue
+        survivors.append(c.get("objective"))
+
+    if not survivors:
+        return "", survivors
+    # Prefer the first surviving candidate (agents already proposed them in
+    # novelty order); keep the rest as options for the pair's own mechanism.
+    return survivors[0], survivors
 
 
 def _log_llm_call(r, call_label, model, system_prompt, user_prompt, response, success, error, latency_ms, char_id: str = ""):
