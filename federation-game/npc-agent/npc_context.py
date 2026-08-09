@@ -118,8 +118,13 @@ def _rh():
         _pair_recent_journal,
         _recent_thread_messages,
         _session_transcript,
+        _load_outcome_feedback,
+        _refresh_reflections,
+        _load_reflections,
     )
-    return _partner_id, _recent_decisions, _compact_text, _pair_state, _pair_recent_journal, _recent_thread_messages, _session_transcript
+    return (_partner_id, _recent_decisions, _compact_text, _pair_state,
+            _pair_recent_journal, _recent_thread_messages, _session_transcript,
+            _load_outcome_feedback, _refresh_reflections, _load_reflections)
 
 
 # ══════════════════════════════════════════════════════════════════
@@ -633,7 +638,15 @@ def think_about_world(r, contacts: dict | None = None, char_id: str = "") -> str
     """
     cid = char_id or CHAR_ID
     _contacts = contacts or {}
-    _partner_id_fn, _recent_decisions, _compact_text, _pair_state, _pair_recent_journal, _recent_thread_messages_fn, _session_transcript = _rh()
+    (_partner_id_fn, _recent_decisions, _compact_text, _pair_state,
+     _pair_recent_journal, _recent_thread_messages_fn, _session_transcript,
+     _load_outcome_feedback, _refresh_reflections, _load_reflections) = _rh()
+
+    # Reflect: distill recent pair activity into durable insights (once per tick).
+    try:
+        _refresh_reflections(r, cid)
+    except Exception:
+        pass
 
     logger.info("[%s] think_about_world: building context...", cid)
     parts = [f"--- {NPC_NAME} ({cid}) — Tick@{time.strftime('%H:%M:%S')} ---"]
@@ -853,6 +866,22 @@ def think_about_world(r, contacts: dict | None = None, char_id: str = "") -> str
                 f"{effect_rec.get('outcome', '?')} "
                 f"({effect_rec.get('artifact_kind', '?')}) — "
                 f"{effect_rec.get('effects', '')}")
+    except Exception:
+        pass
+
+    # ── Outcome feedback: what your past work actually produced ──
+    try:
+        outcome_feedback = _load_outcome_feedback(r, cid)
+        if outcome_feedback:
+            parts.append(outcome_feedback)
+    except Exception:
+        pass
+
+    # ── Reflections: distilled insights from recent work (aliveness) ──
+    try:
+        reflections = _load_reflections(r, cid)
+        if reflections:
+            parts.append(reflections)
     except Exception:
         pass
 

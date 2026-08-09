@@ -1015,6 +1015,378 @@ def _propose_novel_next_goal(r, conv: dict, blocked_terms: list, char_id: str = 
     return survivors[0], survivors
 
 
+# ══════════════════════════════════════════════════════════════════
+#  Semantic deduplication + outcome feedback
+# ══════════════════════════════════════════════════════════════════
+#
+# The existing guards (topic fatigue, title Jaccard, dedup streak) only work
+# on TITLES and single content words. The pair historically re-published the
+# same *content* under slightly different titles ("Void Oracle Anomalies:
+# A Comprehensive Analysis" then "Anomalies of the Void Oracle: Full Study").
+# This adds:
+#   1. Content-level semantic similarity (token overlap on the artifact body,
+#      not just the title) so near-identical writing is caught.
+#   2. Outcome feedback: a durable record of what CONSEQUENCE an artifact or
+#      decision produced (world-state delta, partner response, quest progress).
+#      That outcome is injected back into the decision prompt so the agent
+#      learns from its own results instead of repeating blind attempts.
+#   3. Cross-pair semantic memory: a shared ledger of "what produced what" so
+#      both councilors converge on what works rather than both rediscovering
+#      the same dead ends.
+
+SEMANTIC_DEDUP_WINDOW = int(os.environ.get("SEMANTIC_DEDUP_WINDOW", "12"))
+SEMANTIC_SIMILARITY_THRESHOLD = float(os.environ.get("SEMANTIC_SIMILARITY_THRESHOLD", "0.72"))
+OUTCOME_TTL = int(os.environ.get("OUTCOME_TTL", str(86400 * 14)))
+OUTCOME_FEEDBACK_CAP = int(os.environ.get("OUTCOME_FEEDBACK_CAP", "40"))
+
+_SEMANTIC_STOP_WORDS = frozenset({
+    "the", "of", "and", "a", "an", "to", "in", "for", "on", "with", "from",
+    "by", "at", "is", "it", "as", "be", "or", "that", "this", "its", "are",
+    "was", "but", "not", "all", "being", "have", "has", "been", "will",
+    "would", "could", "should", "may", "might", "shall", "do", "does", "did",
+    "no", "nor", "so", "up", "out", "about", "into", "over", "after", "before",
+    "between", "under", "above", "below", "also", "very", "just", "more",
+    "some", "any", "each", "every", "both", "few", "most", "other", "such",
+    "only", "own", "same", "than", "too", "well", "now", "even", "back",
+    "still", "here", "there", "then", "when", "where", "why", "how", "what",
+    "which", "who", "whom", "analysis", "report", "overview", "summary",
+    "data", "assessment", "recommendation", "implication", "strategy",
+    "strategic", "response", "impact", "update", "review", "comprehensive",
+    "final", "interim",
+})
+
+
+def _semantic_tokenize(text: str, min_len: int = 3) -> list[str]:
+    """Tokenize text into lowercased content words (stop words removed)."""
+    if not text:
+        return []
+    return [
+        w for w in re.findall(r"[a-zA-Z]{3,}", (text or "").lower())
+        if w not in _SEMANTIC_STOP_WORDS
+    ]
+
+
+def _semantic_overlap(a_text: str, b_text: str) -> float:
+    """Cosine/Jaccard similarity between two texts by content-token overlap.
+
+    Returns a float 0..1. Uses the smaller token set as the denominator so a
+    long artifact compared against a short near-duplicate still scores high
+    when the short one is fully contained in spirit.
+    """
+    a_tokens = _semantic_tokenize(a_text)
+    b_tokens = _semantic_tokenize(b_text)
+    if not a_tokens or not b_tokens:
+        return 0.0
+    a_set = set(a_tokens)
+    b_set = set(b_tokens)
+    overlap = len(a_set & b_set)
+    denom = min(len(a_set), len(b_set))
+    if denom == 0:
+        return 0.0
+    return overlap / denom
+
+
+def _older_artifact_records(r, char_id: str = "", limit: int = SEMANTIC_DEDUP_WINDOW) -> list[dict]:
+    """Return recent artifact records (oldest-first) for a char, best-effort."""
+    cid = char_id or CHAR_ID
+    try:
+        raw = r.lrange(f"npc_artifacts:{cid}", -max(limit, 1), -1)
+    except Exception:
+        return []
+    out = []
+    for item in raw or []:
+        try:
+            out.append(json.loads(item) if isinstance(item, str) else item)
+        except Exception:
+            continue
+    return out
+
+
+def _find_semantic_duplicate_artifact(
+    r, title: str, content: str, char_id: str = "",
+    threshold: float = SEMANTIC_SIMILARITY_THRESHOLD,
+) -> dict | None:
+    """Return a prior artifact whose CONTENT is semantically near-identical.
+
+    Checks both the proposing agent's own recent artifacts and the partner's,
+    so neither councilor re-publishes the other's recent work under a new
+    title. Returns the matched artifact dict or None.
+    """
+    if r is None:
+        return None
+    cid = char_id or CHAR_ID
+    probe_text = f"{title or ''} {content or ''}"
+    # Own artifacts
+    for art in _older_artifact_records(r, cid):
+        art_text = f"{art.get('title', '')} {art.get('content', '')}"
+        if _semantic_overlap(probe_text, art_text) >= threshold:
+            return art
+    # Partner artifacts (cross-pair dedup)
+    pid = _partner_id(cid)
+    if pid:
+        for art in _older_artifact_records(r, pid):
+            art_text = f"{art.get('title', '')} {art.get('content', '')}"
+            if _semantic_overlap(probe_text, art_text) >= threshold:
+                return art
+    return None
+
+
+# ── Outcome feedback ──────────────────────────────────────────────
+# A durable hash (per char) of recent {artifact_title, outcome, ts} plus a
+# shared pair ledger. The outcome is whatever the artifact/decision produced:
+# a world-state delta, a partner response, a quest completion, or a dead end.
+# It is injected into context so the agent learns from results.
+
+def _outcome_key(char_id: str = "") -> str:
+    cid = char_id or CHAR_ID
+    return f"npc_outcomes:{cid}"
+
+
+def _pair_outcome_key(char_id: str = "") -> str:
+    cid = char_id or CHAR_ID
+    pid = _partner_id(cid)
+    if not pid:
+        return ""
+    return f"npc_pair:{_pair_slug(cid, pid)}:outcomes"
+
+
+def _record_outcome_feedback(
+    r, artifact_title: str, outcome: str,
+    consequence: dict | None = None, char_id: str = "",
+) -> None:
+    """Persist a durable outcome record for a produced artifact/decision.
+
+    Stores a bounded list per char AND appends to the shared pair ledger so
+    both councilors see what produced what. The outcome text is injected back
+    into the cognition prompt by _load_outcome_feedback.
+    """
+    cid = char_id or CHAR_ID
+    if r is None or not artifact_title:
+        return
+    entry = {
+        "ts": int(time.time()),
+        "artifact_title": artifact_title[:200],
+        "outcome": _compact_text(outcome, 300),
+        "consequence": {k: str(v) for k, v in (consequence or {}).items()},
+    }
+    try:
+        key = _outcome_key(cid)
+        r.lpush(key, json.dumps(entry, default=str))
+        r.ltrim(key, 0, OUTCOME_FEEDBACK_CAP - 1)
+        r.expire(key, OUTCOME_TTL)
+    except Exception:
+        pass
+    pair_key = _pair_outcome_key(cid)
+    if pair_key:
+        try:
+            r.lpush(pair_key, json.dumps(entry, default=str))
+            r.ltrim(pair_key, 0, OUTCOME_FEEDBACK_CAP - 1)
+            r.expire(pair_key, OUTCOME_TTL)
+        except Exception:
+            pass
+
+
+def _load_outcome_feedback(r, char_id: str = "", limit: int = 5) -> str:
+    """Return a compact prompt-injection string of recent outcomes.
+
+    Includes both the agent's own outcomes and the shared pair ledger so the
+    next decision is informed by what previously worked or failed.
+    """
+    cid = char_id or CHAR_ID
+    if r is None:
+        return ""
+    lines: list[str] = []
+    seen: set[str] = set()
+    try:
+        for raw in r.lrange(_outcome_key(cid), 0, limit - 1):
+            try:
+                e = json.loads(raw)
+                key = (e.get("artifact_title", "") + "|" + e.get("outcome", ""))[:80]
+                if key in seen:
+                    continue
+                seen.add(key)
+                lines.append(f"  • {e.get('artifact_title', '?')} → {e.get('outcome', '')}")
+            except Exception:
+                continue
+    except Exception:
+        pass
+    pair_key = _pair_outcome_key(cid)
+    if pair_key:
+        try:
+            for raw in r.lrange(pair_key, 0, limit - 1):
+                try:
+                    e = json.loads(raw)
+                    key = (e.get("artifact_title", "") + "|" + e.get("outcome", ""))[:80]
+                    if key in seen:
+                        continue
+                    seen.add(key)
+                    lines.append(f"  • [shared] {e.get('artifact_title', '?')} → {e.get('outcome', '')}")
+                except Exception:
+                    continue
+        except Exception:
+            pass
+    if not lines:
+        return ""
+    return "## Outcomes you have produced\n" + "\n".join(lines[:10])
+
+
+def _semantic_artifact_dedup_blocked(r, title: str, content: str, char_id: str = "") -> bool:
+    """Best-effort guard: True when content is semantically near-identical to a
+    recent artifact (breaks re-publishing under a new title)."""
+    if r is None:
+        return False
+    hit = _find_semantic_duplicate_artifact(r, title, content, char_id)
+    if hit and hit.get("title"):
+        logger.info(
+            "[%s] semantic dedup blocked '%s' ~ '%s'",
+            char_id or CHAR_ID, title[:60], str(hit.get("title"))[:60],
+        )
+        return True
+    return False
+
+
+# ══════════════════════════════════════════════════════════════════
+#  Reflection layer (from Generative Agents / Smallville)
+# ══════════════════════════════════════════════════════════════════
+# Generative agents feel alive partly because they REFLECT: instead of only
+# recalling raw memories, they periodically synthesize recent experience into
+# higher-level insights ("what have I learned?", "what is changing in the
+# world around me?"). Those reflections are stored durably and retrieved
+# alongside raw memories so the next decision is guided by distilled
+# understanding rather than a flat log.
+#
+# This adds a lightweight, deterministic (no extra LLM call per tick) reflection
+# that distills the pair's recent journal + outcomes into a small set of
+# durable insights. It complements npc_memory_bridge.py (raw memory) and the
+# outcome-feedback ledger (consequences) by abstracting upward.
+
+REFLECTIONS_CAP = int(os.environ.get("REFLECTIONS_CAP", "12"))
+REFLECTION_SOURCE_WINDOW = int(os.environ.get("REFLECTION_SOURCE_WINDOW", "10"))
+
+
+def _reflections_key(char_id: str = "") -> str:
+    cid = char_id or CHAR_ID
+    return f"npc_reflections:{cid}"
+
+
+def _record_reflection(r, insight: str, char_id: str = "") -> None:
+    """Persist a distilled insight (dedup by text, bounded list)."""
+    cid = char_id or CHAR_ID
+    if r is None or not insight:
+        return
+    entry = {
+        "ts": int(time.time()),
+        "insight": _compact_text(insight, 240),
+    }
+    try:
+        key = _reflections_key(cid)
+        existing = [json.loads(x).get("insight", "") for x in r.lrange(key, 0, -1)
+                    if isinstance(x, str)]
+    except Exception:
+        existing = []
+    if entry["insight"] in existing:
+        return
+    try:
+        r.lpush(key, json.dumps(entry, default=str))
+        r.ltrim(key, 0, REFLECTIONS_CAP - 1)
+        r.expire(key, 86400 * 30)
+    except Exception:
+        pass
+
+
+def _derive_reflections_from_journal(r, char_id: str = "") -> list:
+    """Deterministically distill recent pair activity into a few insights.
+
+    Follows the Generative Agents reflection spirit without an extra LLM call:
+    cluster recent journal entries by category and surface the dominant
+    patterns (what the pair is doing, whether it is progressing or repeating).
+    """
+    cid = char_id or CHAR_ID
+    if r is None:
+        return []
+    pid = _partner_id(cid)
+    if not pid:
+        return []
+    journal = _pair_recent_journal(r, pid, REFLECTION_SOURCE_WINDOW, cid)
+    if not journal:
+        return []
+    counts: dict[str, int] = {}
+    for entry in journal:
+        cat = entry.get("category", "?")
+        counts[cat] = counts.get(cat, 0) + 1
+    if not counts:
+        return []
+
+    top_cat, top_count = max(counts.items(), key=lambda kv: kv[1])
+    total = len(journal)
+    insights = []
+    if top_count >= 3:
+        insights.append(
+            f"Recent work has concentrated on {top_cat} ({top_count} of last {total} moves)."
+        )
+    # Progression vs repetition signal: if most entries are 'rest'/'investigate'
+    # with no artifact, the pair may be circling without building.
+    productive = sum(counts.get(c, 0) for c in
+                     ("create_artifact", "write_code", "read_artifacts", "send_message"))
+    if total >= 4 and productive <= 1:
+        insights.append(
+            "Little durable output recently — more reflecting than building."
+        )
+    elif productive >= (total * 0.5):
+        insights.append(
+            "Consistently producing durable work (artifacts/code/messages)."
+        )
+
+    dedup_seen = set()
+    out = []
+    for ins in insights:
+        if ins not in dedup_seen:
+            dedup_seen.add(ins)
+            out.append(ins)
+    return out
+
+
+def _refresh_reflections(r, char_id: str = "") -> None:
+    """Run the reflection derivation and persist any new insights.
+
+    Called once per tick (cheap, bounded). Insights are deduped so they only
+    appear when they meaningfully change.
+    """
+    cid = char_id or CHAR_ID
+    if r is None:
+        return
+    try:
+        for insight in _derive_reflections_from_journal(r, cid):
+            _record_reflection(r, insight, cid)
+    except Exception:
+        pass
+
+
+def _load_reflections(r, char_id: str = "", limit: int = 4) -> str:
+    """Return a compact prompt-injection string of distilled insights."""
+    cid = char_id or CHAR_ID
+    if r is None:
+        return ""
+    try:
+        raw = r.lrange(_reflections_key(cid), 0, max(limit, 1) - 1)
+    except Exception:
+        return ""
+    if not raw:
+        return ""
+    lines = []
+    for item in raw:
+        try:
+            e = json.loads(item)
+            insight = e.get("insight", "")
+            if insight:
+                lines.append(f"  • {insight}")
+        except Exception:
+            continue
+    if not lines:
+        return ""
+    return "## Reflections (what recent work taught you)\n" + "\n".join(lines)
+
+
 def _log_llm_call(r, call_label, model, system_prompt, user_prompt, response, success, error, latency_ms, char_id: str = ""):
     cid = char_id or CHAR_ID
     entry = {
