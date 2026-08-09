@@ -29,6 +29,13 @@ KNOWN_BLOCKED_TERMS = [
     "anchor network",
     "resonance",
     "lattice",
+    # Governance / influence-family terms the pair historically fixates on.
+    "equitable stakeholder influence",
+    "stakeholder influence",
+    "trust-measurement framework",
+    "network upgrade weighting",
+    "weighted influence",
+    "governance model",
 ]
 
 
@@ -597,6 +604,9 @@ def _sync_pair_workspace(r, decision: dict, result: dict, npc_name: str = "", ch
                 mapping["open_question_from"] = "system"
                 mapping["open_question_ts"] = str(now)
                 mapping["open_question_source"] = "post_resolution_novel"
+                # Advance the shared goal so the pair is not wed to the resolved
+                # theme forever — the novel goal becomes the new shared_goal.
+                mapping["shared_goal"] = _novel_next
             elif _next_q and not _reenters_recent:
                 mapping["open_question"] = _next_q
                 mapping["open_question_from"] = "system"
@@ -607,6 +617,8 @@ def _sync_pair_workspace(r, decision: dict, result: dict, npc_name: str = "", ch
                 mapping["open_question_from"] = "system"
                 mapping["open_question_ts"] = str(now)
                 mapping["open_question_source"] = "post_resolution_novel"
+                # Advance the shared goal to the novel next objective.
+                mapping["shared_goal"] = _novel_next
             else:
                 mapping["open_question"] = _default_post_resolution_question()
                 mapping["open_question_from"] = "system"
