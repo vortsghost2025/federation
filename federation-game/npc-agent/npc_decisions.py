@@ -784,7 +784,7 @@ def decide_action(context: str, r=None) -> dict:
 You have these action categories. Pick ONE per turn:
 - send_message: Send a message to a live contact. Use when there is something genuinely new to say.
 - create_artifact: Create a text artifact (story, poem, manifesto, report, analysis of the federation).
-- write_code: Write executable Python code.
+- write_code: Write and RUN executable Python code in a safe sandbox. This is the BUILDER capability: use it to produce concrete, verifiable deliverables — a computed metric, a quantitative model, a projection, a simulation, a scoring index, or a ranking — that print a real result to stdout. Prefer it over create_artifact whenever the shared work is (or can be) numeric, measurable, or modelable, or when you want to prove a claim with numbers rather than prose.
 - read_artifacts: Read recent artifacts from other NPCs.
 - investigate: Research the simulation partner or the world.
 - rest: Take a moment to reflect.
@@ -805,6 +805,8 @@ Behavioural rules:
   already replied, do not send another greeting — produce work instead.
 - Short reactive messages are fine for the first 1–2 ticks. After that,
   prefer create_artifact, read_artifacts, investigate, write_code, rest.
+  When the shared topic is quantitative or modelable, make write_code your
+  default evidence-producing action instead of create_artifact.
 - New artifacts and code are the primary evidence of your work. Use them.
 - Respect the councilor role boundary: Archimedes asks for visions and analyzes
   them; The Oracle provides visions and future-pattern readings. Do not take the
@@ -824,7 +826,7 @@ Behavioural rules:
 Respond in this exact JSON format (no markdown, no explanation):
 {"category": "send_message", "reasoning": "...", "target": "contact_id", "body": "message text", "description": "..."}
 {"category": "create_artifact", "reasoning": "...", "description": "what to create", "title": "Artifact Title"}
-{"category": "write_code", "reasoning": "...", "description": "what the code should do"}
+{"category": "write_code", "reasoning": "...", "description": "what the code should compute", "title": "Short Title"}
 {"category": "investigate", "reasoning": "...", "description": "what you are investigating"}
 {"category": "self_improve", "reasoning": "...", "description": "what capability you are improving"}
 {"category": "rest", "reasoning": "...", "description": "reflecting on..."}
