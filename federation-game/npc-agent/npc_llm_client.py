@@ -38,6 +38,27 @@ MAX_OUTPUT_TOKENS = int(os.environ.get("MAX_OUTPUT_TOKENS", "1024"))
 NVIDIA_BASE = "https://integrate.api.nvidia.com/v1"
 OR_BASE = "https://openrouter.ai/api/v1/chat/completions"
 
+# ── Local Ollama fallback (last resort) ─────────────────────────────
+# Used only after NVIDIA + OpenRouter both fail, to avoid burning paid quota
+# on retries. Strictly throttled to protect the user's desktop (RTX 5060):
+# max 1 active inference, a tiny queue, and a cooldown after errors, mirroring
+# the backend llm_router safety rails. Reads the same env knobs that already
+# exist in .env (OLLAMA_BASE_URL / OLLAMA_API_KEY / OLLAMA_MODEL).
+OLLAMA_BASE_URL = os.environ.get("OLLAMA_BASE_URL", "http://100.95.92.117:11434/v1").rstrip("/")
+OLLAMA_API_KEY = os.environ.get("OLLAMA_API_KEY", "")
+OLLAMA_MODEL = os.environ.get("OLLAMA_MODEL", "qwen2.5-coder:3b-instruct-q4_K_M")
+OLLAMA_TIMEOUT = float(os.environ.get("OLLAMA_TIMEOUT", "45"))
+# Strict backpressure: at most 1 active call, at most 3 queued, 60s cooldown
+# after an error so a failing Ollama does not hammer the user's machine.
+OLLAMA_MAX_ACTIVE = int(os.environ.get("OLLAMA_MAX_ACTIVE", "1"))
+OLLAMA_MAX_QUEUE = int(os.environ.get("OLLAMA_MAX_QUEUE", "3"))
+OLLAMA_COOLDOWN_SECONDS = int(os.environ.get("OLLAMA_COOLDOWN_SECONDS", "60"))
+_ollama_active = 0
+_ollama_queued = 0
+_ollama_cooldown_until = 0.0
+_ollama_available = None  # None = not checked yet
+_ollama_last_check = 0.0
+
 # ── Operator-only OpenRouter route (Patch A2 escalation tier) ────────────────
 #
 # Ordinary NPC cognition stays on the NVIDIA route. Only the two operator call
@@ -342,6 +363,91 @@ def call_llm_operator(system_prompt: str, user_prompt: str, r=None, call_label: 
         return {"content": "", "error": err_msg, "attribution": {
             "requested_model": requested_model, "actual_model": "",
             "provider": "operator_openrouter", "error_category": category, "is_repair": is_repair}}
+def _check_ollama_available() -> bool:
+    """Best-effort, cached reachability probe for the local Ollama server.
+    Returns True only if /models responds. Caches for 60s to avoid spamming."""
+    global _ollama_available, _ollama_last_check
+    now = time.monotonic()
+    if _ollama_available is not None and (now - _ollama_last_check) < 60:
+        return _ollama_available
+    _ollama_last_check = now
+    try:
+        with httpx.Client(timeout=5) as client:
+            resp = client.get(f"{OLLAMA_BASE_URL}/models",
+                              headers={"Authorization": f"Bearer {OLLAMA_API_KEY}"}
+                              if OLLAMA_API_KEY else {})
+            _ollama_available = resp.status_code == 200
+    except Exception:
+        _ollama_available = False
+    return _ollama_available
+
+
+def _call_ollama(system_prompt: str, user_prompt: str, r=None, call_label: str = "") -> dict:
+    """Call local Ollama with strict throttling (max 1 active, queue cap,
+    cooldown on error). Returns {"content": ..., "model": ...} or an error dict.
+    Never raises; always returns a dict with a 'content' key."""
+    from npc_redis_helpers import _log_llm_call
+    global _ollama_active, _ollama_queued, _ollama_cooldown_until
+
+    now = time.monotonic()
+    if now < _ollama_cooldown_until:
+        return {"content": "", "error": f"ollama cooling down ({int(_ollama_cooldown_until - now)}s)"}
+    if _ollama_active >= OLLAMA_MAX_ACTIVE:
+        if _ollama_queued >= OLLAMA_MAX_QUEUE:
+            return {"content": "", "error": "ollama queue full (backpressure)"}
+        _ollama_queued += 1
+        try:
+            # Wait briefly for a slot (cap the wait so we never hang the tick).
+            waited = 0.0
+            while _ollama_active >= OLLAMA_MAX_ACTIVE and waited < 10.0:
+                time.sleep(0.25)
+                waited += 0.25
+            if _ollama_active >= OLLAMA_MAX_ACTIVE:
+                return {"content": "", "error": "ollama busy (no slot freed in 10s)"}
+        finally:
+            _ollama_queued -= 1
+
+    _ollama_active += 1
+    start = time.monotonic()
+    try:
+        body = {
+            "model": OLLAMA_MODEL,
+            "messages": [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt},
+            ],
+            "temperature": 0.7,
+            "max_tokens": MAX_OUTPUT_TOKENS,
+            "stream": False,
+        }
+        with httpx.Client(timeout=OLLAMA_TIMEOUT) as client:
+            resp = client.post(
+                f"{OLLAMA_BASE_URL}/chat/completions",
+                headers=({"Authorization": f"Bearer {OLLAMA_API_KEY}"} if OLLAMA_API_KEY else {}),
+                json=body,
+            )
+            resp.raise_for_status()
+            data = resp.json()
+            content = data["choices"][0]["message"]["content"].strip()
+            elapsed_ms = int((time.monotonic() - start) * 1000)
+            logger.info("[%s] Ollama OK — model: %s (%dms)", CHAR_ID, OLLAMA_MODEL, elapsed_ms)
+            if r:
+                _log_llm_call(r, call_label, OLLAMA_MODEL, system_prompt, user_prompt, content, True, "", elapsed_ms)
+            return {"content": content, "model": OLLAMA_MODEL}
+    except Exception as e:
+        elapsed_ms = int((time.monotonic() - start) * 1000)
+        status = getattr(getattr(e, "response", None), "status_code", 0)
+        err_msg = str(e)[:200]
+        if status in (500, 503) or "connect" in err_msg.lower():
+            _ollama_cooldown_until = time.monotonic() + OLLAMA_COOLDOWN_SECONDS
+        logger.warning("[%s] Ollama call failed (HTTP %s, %dms): %s", CHAR_ID, status, elapsed_ms, err_msg)
+        if r:
+            _log_llm_call(r, call_label, OLLAMA_MODEL, system_prompt, user_prompt, "", False, err_msg, elapsed_ms)
+        return {"content": "", "error": err_msg}
+    finally:
+        _ollama_active -= 1
+
+
 def call_llm(system_prompt: str, user_prompt: str, model: str = "", r=None, call_label: str = "") -> dict:
     from npc_redis_helpers import _log_llm_call
 
@@ -449,5 +555,18 @@ def call_llm(system_prompt: str, user_prompt: str, model: str = "", r=None, call
     or_result = _call_openrouter_free(system_prompt, user_prompt, r, call_label)
     if or_result.get("content"):
         return or_result
+
+    # ── Last resort: local Ollama (RTX 5060) ────────────────────────
+    # Only reached when NVIDIA + OpenRouter both failed. Throttled to 1 active
+    # call so it can never flood the user's local machine.
+    if _check_ollama_available():
+        logger.warning("[%s] NIM + OR failed; trying local Ollama (%s)", CHAR_ID, OLLAMA_MODEL)
+        ollama_result = _call_ollama(system_prompt, user_prompt, r, call_label)
+        if ollama_result.get("content"):
+            return ollama_result
+        or_error = or_result.get("error", "")
+        ollama_error = ollama_result.get("error", "")
+        return {"content": "", "error": f"All models failed. NIM: {last_error}; OR: {or_error}; Ollama: {ollama_error}"}
+
     logger.error("[%s] All NIM + OR free models failed. Last NIM: %s | OR: %s", CHAR_ID, last_error, or_result.get("error", ""))
     return {"content": "", "error": f"All models failed. NIM: {last_error}; OR: {or_result.get('error', '')}"}
