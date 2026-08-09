@@ -584,7 +584,7 @@ ASYNC_STATUS_MAP = {
 }
 
 # How long to poll for completion before giving up (seconds)
-ASYNC_POLL_TIMEOUT = int(os.getenv("ASYNC_POLL_TIMEOUT", "240"))
+ASYNC_POLL_TIMEOUT = int(os.getenv("ASYNC_POLL_TIMEOUT", "360"))
 # How often to poll the status endpoint (seconds)
 ASYNC_POLL_INTERVAL = int(os.getenv("ASYNC_POLL_INTERVAL", "5"))
 
