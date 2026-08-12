@@ -188,7 +188,7 @@ def _collect_notifications(r):
         return
     _notification_backlog_gauge.clear()
     npc_ids = []
-    for key in r.scan_iter("npc:system_notifications:*"):
+    for key in r.scan_iter("npc:system_notifications:*", count=500):
         npc_id = key.split(":")[-1]
         if npc_id:
             npc_ids.append(npc_id)

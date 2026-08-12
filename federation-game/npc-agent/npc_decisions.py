@@ -803,6 +803,12 @@ Behavioural rules:
 - Do not repeat greetings or introductions. If the world context shows
   you have already sent a message to this partner recently and they have
   already replied, do not send another greeting — produce work instead.
+- Keep direct peer-to-peer messaging roughly balanced and news-worthy.
+  Do not open with the same framing the partner just used (e.g. echoing their
+  "I propose we..." or "received the summary" lead-in). If your last direct
+  notes to this partner have been one-way summaries, switch to a concrete
+  question, an artifact, or investigation instead of sending another summary.
+  Prefer short, specific, actionable messages over long repeated proposals.
 - Short reactive messages are fine for the first 1–2 ticks. After that,
   prefer create_artifact, read_artifacts, investigate, write_code, rest.
   When the shared topic is quantitative or modelable, make write_code your

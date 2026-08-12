@@ -212,8 +212,23 @@ def _validate_sandbox_code(code: str):
                 # matters here.
                 if func.attr.startswith("__") or func.attr in _SANDBOX_BLOCKED_ATTRS:
                     error.append(f"method '{func.attr}' is not allowed in the sandbox")
+                elif func.attr == "format":
+                    # str.format() with a dynamically-built format string can
+                    # smuggle dunder attribute references past the literal
+                    # check ({0.__class__} assembled from concatenation). The
+                    # receiver must be a literal string so visit_Constant can
+                    # reject dunder fields.
+                    if not (isinstance(func.value, ast.Constant) and isinstance(func.value.value, str)):
+                        error.append("format() requires a literal format string in the sandbox")
             elif not isinstance(func, ast.Name):
                 error.append("only direct calls to allowed builtins, local functions, or safe methods are permitted")
+            elif func.id == "format":
+                # format(value, spec) — the spec must be a literal so dunder
+                # fields cannot be assembled dynamically.
+                if len(n.args) >= 2 and not (
+                    isinstance(n.args[1], ast.Constant) and isinstance(n.args[1].value, str)
+                ):
+                    error.append("format() requires a literal format spec in the sandbox")
             elif func.id not in _SANDBOX_ALLOWED_NAMES and func.id not in bound:
                 error.append(f"call to '{func.id}' is not allowed in the sandbox")
             self.generic_visit(n)
@@ -410,6 +425,39 @@ def _clean_artifact_title(raw_title: str, desc: str) -> str:
         m = re.match(r"^([^.!?\n]+)", clean_desc)
         title = (m.group(1) if m else clean_desc)[:60].strip() if clean_desc else "Untitled"
     return _compact_text(title, 60) or "Untitled"
+
+
+def _clean_focus_text(text: str) -> str:
+    """Strip system-reroute scaffolding from a description/focus string so the
+    pair's displayed topic stays a clean, in-world label.
+
+    When create_institution is rerouted to write_code/create_artifact, the
+    injected description reads "...advances the shared topic: <X>." or
+    "Institution 'X' could not be founded right now, so write a concise
+    artifact...". If the LLM keeps that scaffolding as its description, it
+    pollutes focus/current_topic. This extracts the topic after the colon when
+    the text is scaffolding, else returns it unchanged (still fourth-wall
+    cleaned and compacted).
+    """
+    if not text:
+        return ""
+    clean = _enforce_fourth_wall(str(text)).strip()
+    clean = _TITLE_REROUTE_RE.sub("", clean).strip()
+    if _is_reroute_scaffold(clean) or "advances the shared topic" in clean.lower():
+        # Prefer the topic after a colon (e.g. "...shared topic: <X>.").
+        m = re.search(r":\s*(.+)$", clean)
+        if m:
+            clean = m.group(1).strip()
+        # Drop trailing system directives appended after the topic, e.g.
+        # "Compute a concrete number and print it." Keep the topic itself.
+        clean = re.split(
+            r"\.\s*(?:Compute a concrete number(?:\s+and print it)?|Compute a concrete number|and print it)\b",
+            clean,
+            maxsplit=1, flags=re.I,
+        )[0].strip()
+        # Drop trailing sentence punctuation.
+        clean = re.sub(r"[.!\s]+$", "", clean)
+    return _compact_text(clean, 180)
 
 
 # ── Institution bloat guards ──
@@ -740,7 +788,9 @@ def execute_decision(decision: dict, r, contacts: dict):
                     "created_at": ts,
                 }
                 r.rpush(f"npc_artifacts:{CHAR_ID}", json.dumps(artifact))
+                r.expire(f"npc_artifacts:{CHAR_ID}", 86400 * 30)
                 r.rpush("npc_artifacts:global", json.dumps(artifact))
+                r.expire("npc_artifacts:global", 86400 * 30)
                 r.hincrby(f"npc_stats:{CHAR_ID}", "artifacts_created", 1)
                 streak_key = f"npc_dedup_streak:{CHAR_ID}"
                 if r.exists(streak_key):
@@ -821,7 +871,9 @@ def execute_decision(decision: dict, r, contacts: dict):
                 "created_at": ts,
             }
             r.rpush(f"npc_artifacts:{CHAR_ID}", json.dumps(artifact))
+            r.expire(f"npc_artifacts:{CHAR_ID}", 86400 * 30)
             r.rpush("npc_artifacts:global", json.dumps(artifact))
+            r.expire("npc_artifacts:global", 86400 * 30)
             r.hincrby(f"npc_stats:{CHAR_ID}", "code_written", 1)
             if ok:
                 result["action_taken"] = "code_executed"

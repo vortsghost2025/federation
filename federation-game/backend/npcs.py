@@ -795,7 +795,31 @@ class NPCSystem:
                 )
                 r.expire(f"npc_state:{char.char_id}", 86400 * 7)
             except Exception:
-                pass  # Redis write failure is non-fatal
+                try:
+                    # Log all failures with context, catching WRONGTYPE explicitly
+                    import traceback
+                    _exc = traceback.format_exc()
+                    logger.warning(
+                        "npc_state write failed for %s: %s",
+                        char.char_id,
+                        _exc.split("\n")[-2].strip(),
+                    )
+                    # If WRONGTYPE (string key where hash expected), delete and retry
+                    if "WRONGTYPE" in _exc or "wrong type" in _exc.lower():
+                        r.delete(f"npc_state:{char.char_id}")
+                        r.hset(
+                            f"npc_state:{char.char_id}",
+                            mapping={
+                                "corruption_level": str(char.corruption_level),
+                                "rumor_level": str(char.rumor_level),
+                                "status": char.status.value,
+                                "last_updated": str(int(datetime.now().timestamp())),
+                            },
+                        )
+                        r.expire(f"npc_state:{char.char_id}", 86400 * 7)
+                        logger.info("npc_state:%s recovered from WRONGTYPE", char.char_id)
+                except Exception:
+                    pass  # self-heal attempt failure is truly non-fatal
 
         return events
 

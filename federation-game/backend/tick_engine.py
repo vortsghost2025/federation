@@ -41,21 +41,60 @@ def _get_observer_redis():
     )
 
 
+def _json_safe(value):
+    """JSON-serialize defensively: fall back to repr() for non-serializable objects."""
+    try:
+        return json.dumps(value, default=str)
+    except (TypeError, ValueError) as exc:
+        logger.warning(
+            "last_result json.dumps failed (%s); using repr fallback", exc
+        )
+        return json.dumps({"_serialize_error": str(exc), "_repr": repr(value)})
+
+
+def _summarize_tick_result(result):
+    """Build a small, serializable last_result summary.
+
+    The full `details` payload from run_simulation_operator_tick can be large or
+    contain non-JSON-serializable objects (datetime, Decimal, custom classes),
+    which silently killed the success-path HSET via the old `except: pass` in
+    _set_tick_redis. Return only top-level status and per-section counts so the
+    hash write stays small and always serializable.
+    """
+    summary = {"status": result.get("status")}
+    details = result.get("details")
+    if isinstance(details, dict):
+        for sec, val in details.items():
+            if isinstance(val, dict):
+                summary[sec] = {
+                    k: v
+                    for k, v in val.items()
+                    if isinstance(v, (int, float, str, bool, list, dict, type(None)))
+                }
+            elif isinstance(val, (int, float, str, bool, list, type(None))):
+                summary[sec] = val
+    elif isinstance(details, (str, int, float, bool, type(None))):
+        summary["details"] = details
+    summary["_capped"] = True
+    return summary
+
+
 def _set_tick_redis(key, mapping):
-    """Write tick status fields to Redis (best-effort)."""
+    """Write tick status fields to Redis (best-effort, but logged on failure)."""
     try:
         r = _get_observer_redis()
         if r:
-            # Convert all values to strings for Redis hash storage
+            # Convert values to strings for Redis hash storage. Use defensive
+            # serializer so one bad object never silently kills the whole write.
             str_mapping = {
-                k: (json.dumps(v) if isinstance(v, (dict, list)) else str(v))
+                k: (_json_safe(v) if isinstance(v, (dict, list)) else str(v))
                 for k, v in mapping.items()
                 if v is not None
             }
             if str_mapping:
                 r.hset(key, mapping=str_mapping)
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.warning("HSET %s failed: %s", key, exc)
 
 
 def _get_tick_redis(key):
@@ -103,7 +142,9 @@ def _run_tick_background():
         )
     try:
         result = {"status": "completed", "details": "Tick executed"}
-        _set_tick_redis(_TICK_REDIS_KEY, {"last_result": result})
+        _set_tick_redis(
+            _TICK_REDIS_KEY, {"last_result": _summarize_tick_result(result)}
+        )
     except Exception as e:
         logger.error("Background tick failed: %s", e)
         _set_tick_redis(_TICK_REDIS_KEY, {"last_error": str(e)})
@@ -169,7 +210,9 @@ def _run_autonomous_tick_background(
         except Exception:
             logger.warning("Auto-save snapshot after autonomous tick failed")
         result = {"status": "completed", "details": results}
-        _set_tick_redis(_AUTO_TICK_REDIS_KEY, {"last_result": result})
+        _set_tick_redis(
+            _AUTO_TICK_REDIS_KEY, {"last_result": _summarize_tick_result(result)}
+        )
         if WATCHDOG_AVAILABLE:
             complete_tick(watchdog_id)
     except Exception as e:

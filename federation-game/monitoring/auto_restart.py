@@ -24,7 +24,7 @@ from redis_helper import (
 )
 
 COOLDOWN_SECONDS = 900  # 15 minutes
-RESTART_THRESHOLD = 4
+RESTART_THRESHOLD = 15
 
 
 def check():

@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <link rel="icon" href="data:," />
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Orbitron:wght@400;700;900&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="constellation.css">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Federation &mdash; Living Constellation</title>
+</head>
+<body>
+
+<canvas id="canvas"></canvas>
+
+<div id="hud">
+<div class="hud-row" id="hr-tension"><span class="hud-label">Tension</span><div class="hud-bar"><div class="hud-fill" id="hf-tension" style="background:#ef5350"></div></div><span class="hud-val" id="hv-tension">0</span></div>
+<div class="hud-row" id="hr-stability"><span class="hud-label">Stability</span><div class="hud-bar"><div class="hud-fill" id="hf-stability" style="background:#66bb6a"></div></div><span class="hud-val" id="hv-stability">0</span></div>
+<div class="hud-row" id="hr-morale"><span class="hud-label">Morale</span><div class="hud-bar"><div class="hud-fill" id="hf-morale" style="background:#ffd700"></div></div><span class="hud-val" id="hv-morale">0</span></div>
+<div class="hud-row" id="hr-threat"><span class="hud-label">Threat</span><div class="hud-bar"><div class="hud-fill" id="hf-threat" style="background:#f44336"></div></div><span class="hud-val" id="hv-threat">0</span></div>
+<div class="hud-row" id="hr-anomaly"><span class="hud-label">Anomaly</span><div class="hud-bar"><div class="hud-fill" id="hf-anomaly" style="background:#ab47bc"></div></div><span class="hud-val" id="hv-anomaly">0</span></div>
+<div class="hud-row" id="hr-resource"><span class="hud-label">Resource</span><div class="hud-bar"><div class="hud-fill" id="hf-resource" style="background:#26c6da"></div></div><span class="hud-val" id="hv-resource">0</span></div>
+</div>
+
+<div id="tick-hud">
+<div id="tick-ring"></div>
+<span id="tick-text">Awaiting data</span>
+</div>
+
+<div id="legend"></div>
+
+<nav id="nav">
+<a href="/bridge.html">Bridge</a>
+<a href="/simulation.html">Live Sim</a>
+<a href="/starmap.html">Star Map</a>
+<a href="/spectator.html">Spectator</a>
+<a href="/npc-logs.html">NPC Logs</a>
+<a href="/worldguide.html">World Guide</a>
+<a href="/earth.html">Earth</a>
+<a href="/constellation.html" class="active">Constellation</a>
+</nav>
+
+<div id="tooltip">
+<div id="tt-name"></div>
+<div id="tt-faction"></div>
+<div id="tt-archetype"></div>
+<div id="tt-mood"></div>
+<div id="tt-thought"></div>
+</div>
+
+    <script src="fed-fetch.js"></script>
+    <script src="error-reporter.js"></script>
+    <script src="constellation.js"></script>
+</body>
+</html>

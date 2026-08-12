@@ -99,7 +99,7 @@
       resources:
         limits:
           cpus: "1.0"
-          memory: 512M
+          memory: 1G
 
   frontend:
     build: /docker/federation-game/frontend
@@ -131,6 +131,14 @@
       - traefik.http.services.fed-sim-html-http-svc.loadbalancer.server.port=80
     depends_on:
       - backend
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - "wget -q -O /dev/null http://127.0.0.1/ || exit 1"
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
     networks:
       - fed-net
 
@@ -142,14 +150,30 @@
       - .env
     environment:
       - TICK_INTERVAL=600
-      - ASYNC_POLL_TIMEOUT=360
+      - ASYNC_POLL_TIMEOUT=1850
     depends_on:
       - redis
       - postgres
+      - backend
     networks:
       - fed-net
     volumes:
       - /docker/federation-game/backend:/app:ro
+    healthcheck:
+      test:
+        - CMD
+        - python3
+        - -c
+        - "import os,redis; redis.Redis.from_url(os.getenv('REDIS_URL','redis://redis:6379/0'), socket_connect_timeout=2).ping()"
+      interval: 60s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 512M
 
   postgres:
     image: postgres:15-alpine
@@ -192,6 +216,11 @@
       - redis_data:/data
     networks:
       - fed-net
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 1G
 
   adminer:
     image: adminer:latest
@@ -373,7 +402,7 @@
       resources:
         limits:
           cpus: "0.5"
-          memory: 256M
+          memory: 512M
 
   npc-agent-306:
     build: /docker/federation-game/npc-agent
@@ -420,7 +449,7 @@
       resources:
         limits:
           cpus: "0.5"
-          memory: 256M
+          memory: 512M
 
   # -- NPC DELEGATE ----------------------------------------------------------
   # char_500 "The Custodian": read-only watch delegate. Answers via
@@ -450,7 +479,7 @@
       resources:
         limits:
           cpus: "0.25"
-          memory: 256M
+          memory: 512M
 
   # -- NPC SANDBOX -----------------------------------------------------------
   npc-sandbox:

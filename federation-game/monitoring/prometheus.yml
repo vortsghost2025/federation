@@ -3,27 +3,28 @@ global:
   evaluation_interval: 60s
 
 scrape_configs:
-  # Prometheus itself
   - job_name: 'prometheus'
     static_configs:
       - targets: ['localhost:9090']
 
-  # Node system metrics
   - job_name: 'node'
     static_configs:
       - targets: ['node-exporter:9100']
 
-  # Redis
   - job_name: 'redis'
     static_configs:
       - targets: ['redis-exporter:9121']
 
-  # PostgreSQL
   - job_name: 'postgres'
     static_configs:
       - targets: ['postgres-exporter:9187']
 
-  # Docker containers
   - job_name: 'cadvisor'
     static_configs:
       - targets: ['cadvisor:8080']
+
+  - job_name: 'federation-app'
+    scrape_interval: 30s
+    static_configs:
+      - targets: ['backend:8000']
+    metrics_path: '/metrics'

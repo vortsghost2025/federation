@@ -553,8 +553,8 @@ def run_simulation_operator_tick(
                 decisions,
                 progress_callback=lambda phase, payload: _progress_status(tick_id, phase, payload),
                 cognition_overrides={
-                    "max_llm_calls_per_tick": 1,
-                    "ambient_trigger_rate": 0.0,
+                    "max_llm_calls_per_tick": MAX_LLM_CALLS_PER_TICK,
+                    "ambient_trigger_rate": AMBIENT_TRIGGER_RATE,
                 },
                 narration_llm_enabled=False,
             )

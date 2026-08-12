@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <link rel="stylesheet" href="earth.css">
+
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Federation Earth Command</title>
+
+</head>
+<body>
+
+<div id="earth">
+<!-- TOP RIBBON -->
+<div id="top">
+  <span class="page-title">EARTH CMD</span>
+  <span class="top-era" id="top-era">--</span>
+  <div class="top-metric"><span class="tm-label">Trust</span><div class="tm-bar"><div class="tm-fill" id="bar-trust" style="background:var(--cyan)"></div></div><span class="tm-val" id="val-trust">0</span></div>
+  <div class="top-metric"><span class="tm-label">Stability</span><div class="tm-bar"><div class="tm-fill" id="bar-stability" style="background:var(--green)"></div></div><span class="tm-val" id="val-stability">0</span></div>
+  <div class="top-metric"><span class="tm-label">Integrity</span><div class="tm-bar"><div class="tm-fill" id="bar-integrity" style="background:var(--violet)"></div></div><span class="tm-val" id="val-integrity">0</span></div>
+  <div class="top-metric"><span class="tm-label">Rights</span><div class="tm-bar"><div class="tm-fill" id="bar-rights" style="background:var(--cyan)"></div></div><span class="tm-val" id="val-rights">0</span></div>
+  <div id="link-health"><div id="lh-dot" class="ok"></div><span id="lh-label" class="ok">LINK OK</span></div>
+  <button id="audio-toggle" title="Toggle audio" aria-label="Toggle audio on/off">&#9835;</button>
+<nav class="top-nav">
+<a href="/bridge.html">Bridge</a>
+<a href="/starmap.html">Star Map</a>
+<a href="/">Simulator</a>
+<a href="/simulation.html">Live Sim</a>
+<a href="/adult.html">Control</a>
+<a href="/worldguide.html">World Guide</a>
+<a href="/earth.html" class="active">Earth</a>
+<a href="/spectator.html">Spectator</a>
+</nav>
+</div>
+
+<!-- LEFT PANEL: Governance -->
+<div id="left">
+  <div class="console-title">Governance</div>
+  <div class="stat-row"><span class="stat-label">Public Trust</span><span class="stat-val" id="sv-trust" style="color:var(--cyan)">0</span></div>
+  <div class="stat-bar"><div class="stat-fill" id="sbar-trust" style="background:var(--cyan);width:0%"></div></div>
+  <div class="stat-row"><span class="stat-label">Council Support</span><span class="stat-val" id="sv-council" style="color:var(--green)">0</span></div>
+  <div class="stat-bar"><div class="stat-fill" id="sbar-council" style="background:var(--green);width:0%"></div></div>
+  <div class="stat-row"><span class="stat-label">Constitutional Integrity</span><span class="stat-val" id="sv-integrity" style="color:var(--violet)">0</span></div>
+  <div class="stat-bar"><div class="stat-fill" id="sbar-integrity" style="background:var(--violet);width:0%"></div></div>
+  <div class="stat-row"><span class="stat-label">Rights Protection</span><span class="stat-val" id="sv-rights" style="color:var(--cyan)">0</span></div>
+  <div class="stat-bar"><div class="stat-fill" id="sbar-rights" style="background:var(--cyan);width:0%"></div></div>
+  <div class="stat-row"><span class="stat-label">Emergency Powers</span><span class="stat-val" id="sv-emergency" style="color:var(--amber)">0</span></div>
+  <div class="stat-bar"><div class="stat-fill" id="sbar-emergency" style="background:var(--amber);width:0%"></div></div>
+  <div class="stat-row"><span class="stat-label">Active Policy</span><span class="stat-val" id="sv-policy" style="color:var(--dim);font-size:10px">None</span></div>
+
+  <div class="console-title" style="margin-top:8px">Political Engine</div>
+  <div id="political-panel">
+    <div class="pol-row"><span class="pol-label">Status</span><span class="pol-val" id="pol-status" style="color:var(--dim)">--</span></div>
+    <div class="pol-row"><span class="pol-label">Laws Processed</span><span class="pol-val" id="pol-laws" style="color:var(--cyan)">--</span></div>
+  </div>
+
+  <div class="console-title" style="margin-top:8px">Factions</div>
+  <div id="faction-panel" style="font-size:10px">
+    <div class="loading">SCANNING...</div>
+  </div>
+
+  <div class="console-title" style="margin-top:8px">Consciousness</div>
+  <div id="cc-panel">
+    <div class="cc-row"><span class="cc-label">Coherence</span><div class="cc-bar"><div class="cc-fill" id="cc-coherence" style="background:var(--violet)"></div></div><span class="cc-val" id="ccv-coherence">--</span></div>
+    <div class="cc-row"><span class="cc-label">Stability</span><div class="cc-bar"><div class="cc-fill" id="cc-stability" style="background:var(--cyan)"></div></div><span class="cc-val" id="ccv-stability">--</span></div>
+    <div class="cc-row"><span class="cc-label">Awakeness</span><div class="cc-bar"><div class="cc-fill" id="cc-awakeness" style="background:var(--green)"></div></div><span class="cc-val" id="ccv-awakeness">--</span></div>
+    <div class="cc-row"><span class="cc-label">Anxiety</span><div class="cc-bar"><div class="cc-fill" id="cc-anxiety" style="background:var(--red)"></div></div><span class="cc-val" id="ccv-anxiety">--</span></div>
+    <div class="cc-row"><span class="cc-label">Diplomacy</span><div class="cc-bar"><div class="cc-fill" id="cc-diplomacy" style="background:var(--amber)"></div></div><span class="cc-val" id="ccv-diplomacy">--</span></div>
+  </div>
+</div>
+
+<!-- CENTER: World Conditions + Earth Visualization -->
+<div id="center">
+  <canvas id="world-canvas"></canvas>
+  <div id="scanlines"></div>
+  <div id="vignette"></div>
+  <div id="center-overlay">
+    <!-- Era / History bar -->
+    <div id="era-bar">
+      <span class="era-label" id="era-name">-- ERA</span>
+      <span class="era-year" id="era-year">YEAR --</span>
+      <span style="flex:1"></span>
+      <span style="font-size:9px;color:var(--dim)" id="era-status">--</span>
+    </div>
+
+    <!-- World Conditions -->
+    <div>
+      <div class="console-title" style="border-bottom:none;padding:0;margin:0">World Conditions</div>
+      <div class="condition-grid" id="condition-grid">
+        <div class="cond-card"><span class="cond-label">Tension</span><span class="cond-value" id="cv-tension" style="color:var(--red)">--</span><div class="cond-bar"><div class="cond-fill" id="cf-tension" style="background:var(--red)"></div></div></div>
+        <div class="cond-card"><span class="cond-label">Stability</span><span class="cond-value" id="cv-stability" style="color:var(--green)">--</span><div class="cond-bar"><div class="cond-fill" id="cf-stability" style="background:var(--green)"></div></div></div>
+        <div class="cond-card"><span class="cond-label">Morale</span><span class="cond-value" id="cv-morale" style="color:var(--amber)">--</span><div class="cond-bar"><div class="cond-fill" id="cf-morale" style="background:var(--amber)"></div></div></div>
+        <div class="cond-card"><span class="cond-label">Threat</span><span class="cond-value" id="cv-threat" style="color:var(--red)">--</span><div class="cond-bar"><div class="cond-fill" id="cf-threat" style="background:var(--red)"></div></div></div>
+        <div class="cond-card"><span class="cond-label">Anomaly</span><span class="cond-value" id="cv-anomaly" style="color:var(--violet)">--</span><div class="cond-bar"><div class="cond-fill" id="cf-anomaly" style="background:var(--violet)"></div></div></div>
+        <div class="cond-card"><span class="cond-label">Federation</span><span class="cond-value" id="cv-fed" style="color:var(--cyan)">--</span><div class="cond-bar"><div class="cond-fill" id="cf-fed" style="background:var(--cyan)"></div></div></div>
+      </div>
+    </div>
+
+    <!-- Action Buttons -->
+    <div>
+      <div class="action-grid">
+        <button class="action-btn" onclick="processPoliticalTurn()">Process Political Year</button>
+        <button class="action-btn" onclick="advanceHistoryArc()">Advance Timeline</button>
+        <button class="action-btn warn" onclick="saveState()">Save Snapshot</button>
+        <button class="action-btn" onclick="loadState()">Load State</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- RIGHT PANEL: Quests + Events -->
+<div id="right">
+  <div class="console-title">Active Quests</div>
+  <div id="quest-panel" style="max-height:200px;overflow-y:auto">
+    <div class="loading">SCANNING...</div>
+  </div>
+
+  <div class="console-title" style="margin-top:8px">Recent Events</div>
+  <div id="events-panel" style="max-height:200px;overflow-y:auto;font-size:10px">
+    <div class="loading">SCANNING...</div>
+  </div>
+
+  <div class="console-title" style="margin-top:8px">Technologies</div>
+  <div id="tech-panel" style="max-height:180px;overflow-y:auto">
+    <div class="loading">SCANNING...</div>
+  </div>
+
+  <div class="console-title" style="margin-top:8px">Governance Log</div>
+  <div id="governance-log" style="max-height:150px;overflow-y:auto;font-size:10px;color:var(--dim)">
+    <div class="loading">AWAITING DATA</div>
+  </div>
+</div>
+
+<!-- BOTTOM COMMS -->
+<div id="bottom">
+  <span id="comms-label">COMMS</span>
+  <span id="comms-ticker"><span class="loading">ESTABLISHING LINK...</span></span>
+</div>
+</div>
+
+<div id="toast"></div>
+
+    <script src="fed-fetch.js"></script>
+    <script src="error-reporter.js"></script>
+    <script src="earth.js"></script>
+</body>
+</html>

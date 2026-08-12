@@ -1,0 +1,20 @@
+# Secrets — never commit
+.env
+.env.*
+!.env.example
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.venv/
+venv/
+
+# Deploy / runtime artifacts
+*.bak
+*.bak.*
+*.orig
+logs/
+prometheus_data/
+grafana_data/

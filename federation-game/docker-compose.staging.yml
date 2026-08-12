@@ -1,0 +1,7 @@
+services:
+  backend:
+    environment:
+      - DATABASE_URL=postgresql://federation:federation_pwd@postgres:5432/federation_staging
+  postgres:
+    environment:
+      POSTGRES_DB: federation_staging

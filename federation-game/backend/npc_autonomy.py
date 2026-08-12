@@ -406,7 +406,7 @@ def _process_single_npc(npc: Dict) -> Dict[str, Any]:
                 if thought:
                     npc_result["thoughts"].append(thought)
         r = _get_redis()
-        opinion_keys = list(r.scan_iter(f"npc_opinion:{char_id}:*"))
+        opinion_keys = list(r.scan_iter(f"npc_opinion:{char_id}:*", count=200))
         for okey in opinion_keys[:2]:
             if random.random() < 0.3:
                 player_id = okey.split(":")[-1]

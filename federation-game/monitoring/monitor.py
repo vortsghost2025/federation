@@ -27,14 +27,35 @@ from datetime import datetime, timezone
 
 # --- Config ---
 # Backend is NOT exposed on localhost. It runs inside Docker network.
-# Try Docker network IP first, fall back to public URL.
-BACKEND_URL = os.environ.get("FED_BACKEND_URL", "http://172.26.0.11:8000")
+# Resolve the live container IP via docker inspect (container IPs drift on
+# restart, so hardcoding a previous IP silently breaks the watchdog).
+# Falls back to the public domain if docker is unavailable.
+def _resolve_backend_url():
+    override = os.environ.get("FED_BACKEND_URL")
+    if override:
+        return override
+    try:
+        out = subprocess.run(
+            ["docker", "inspect", "-f",
+             "{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}",
+             "federation-game-backend-1"],
+            capture_output=True, text=True, timeout=10,
+        )
+        ip = out.stdout.strip()
+        if ip:
+            return f"http://{ip}:8000"
+    except Exception:
+        pass
+    return "https://federation-game.deliberatefederation.cloud"
+
+BACKEND_URL = _resolve_backend_url()
+PUBLIC_HEALTHZ = "https://federation-game.deliberatefederation.cloud/healthz"  # PROBE-FALLBACK-MARKER
 PUBLIC_URL = "https://federation-game.deliberatefederation.cloud"
 HEALTHZ_PATH = "/healthz"
 ASYNC_STATUS_PATH = "/simulation/autonomous/status"
 HEALTHZ_TIMEOUT = 5
-ASYNC_STALL_SECONDS = 90
-SIM_TICK_STALL_SECONDS = 60
+ASYNC_STALL_SECONDS = 300
+SIM_TICK_STALL_SECONDS = 360
 LLM_ERROR_THRESHOLD = 5  # errors per hour per provider
 
 # --- Alert Formatter ---
@@ -172,6 +193,18 @@ def http_get(url, timeout=5):
         return None, str(e)
 
 
+def healthz_probe(timeout=5):
+    """Probe /healthz with IP-then-public fallback.
+    Docker IPs shift on restart; the public URL works regardless.
+    Returns (status, body, source_tag).
+    """
+    s, b = http_get(f"{BACKEND_URL}{HEALTHZ_PATH}", timeout=timeout)
+    if s == 200:
+        return s, b, "docker"
+    return (*http_get(PUBLIC_HEALTHZ, timeout=timeout), "public")
+
+
+
 # --- Check: Tick ---
 
 
@@ -199,7 +232,7 @@ def check_tick():
         return max_severity
 
     # 2. healthz check
-    status, body = http_get(f"{BACKEND_URL}{HEALTHZ_PATH}", timeout=HEALTHZ_TIMEOUT)
+    status, body, _source = healthz_probe(timeout=HEALTHZ_TIMEOUT)
     if status != 200:
         code = alert(
             "TICK-WATCHDOG",
@@ -357,13 +390,15 @@ def check_llm():
 
     # 3. Ollama reachability (via Tailscale)
     try:
-        sock = socket.create_connection(("100.95.92.117", 11434), timeout=3)
+        ollama_host = os.environ.get("OLLAMA_HOST", "100.95.92.117")
+        ollama_port = int(os.environ.get("OLLAMA_PORT", "11434"))
+        sock = socket.create_connection((ollama_host, ollama_port), timeout=3)
         sock.close()
     except (socket.timeout, socket.error, OSError):
         code = alert(
             "LLM-MONITOR",
             "WARNING",
-            "Ollama unreachable at 100.95.92.117:11434 — local LLM down",
+            f"Ollama unreachable at {ollama_host}:{ollama_port} — local LLM down",
             "TCP connect failed or timed out",
             "Check Ollama on Windows machine: is OLLAMA_HOST=0.0.0.0 set? Is Tailscale connected?",
         )
@@ -505,7 +540,7 @@ def check_deploy():
     max_severity = 0
 
     # 1. healthz
-    status, body = http_get(f"{BACKEND_URL}{HEALTHZ_PATH}", timeout=HEALTHZ_TIMEOUT)
+    status, body, _source = healthz_probe(timeout=HEALTHZ_TIMEOUT)
     if status != 200:
         code = alert(
             "DEPLOY-VERIFY",

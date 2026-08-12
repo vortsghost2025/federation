@@ -122,7 +122,7 @@ def get_npc_events(npc_id=None, tick_id=None, event_type=None, start_ts=None, en
     for item in raw_events:
         try:
             event = json.loads(item)
-        except:
+        except (ValueError, TypeError):
             continue
         if npc_id and event.get('npc_id') != npc_id: continue
         if tick_id and event.get('tick_id') != tick_id: continue

@@ -1,0 +1,685 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Federation &mdash; Simulation Operator Dashboard</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #0a0a0f;
+  --bg-elevated: #11131a;
+  --fg: #e8e8e8;
+  --muted: #6b7280;
+  --accent: #00d4aa;
+  --accent-dim: #00b894;
+  --warning: #fbbf24;
+  --danger: #ef4444;
+  --card: #161a22;
+  --border: #2d3440;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  font-family: 'Share Tech Mono', monospace;
+  background: var(--bg);
+  color: var(--fg);
+  min-height: 100vh;
+  line-height: 1.6;
+}
+
+h1, h2, h3 { font-family: 'Orbitron', sans-serif; }
+
+.container { max-width: 1400px; margin: 0 auto; padding: 2rem; }
+
+header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 2rem;
+  padding-bottom: 1rem;
+  border-bottom: 1px solid var(--border);
+}
+
+h1 { font-size: 1.75rem; color: var(--accent); }
+
+nav.top-nav { display: flex; gap: 1rem; flex-wrap: wrap; }
+nav.top-nav a {
+  color: var(--muted);
+  text-decoration: none;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  font-size: 0.875rem;
+  transition: all 0.2s;
+}
+nav.top-nav a:hover { border-color: var(--accent); color: var(--accent); }
+nav.top-nav a.active { border-color: var(--accent); color: var(--accent); }
+
+.status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 1rem;
+  border-radius: 9999px;
+  font-size: 0.875rem;
+  font-weight: 700;
+}
+.status-running { background: rgba(0, 212, 170, 0.15); color: var(--accent); }
+.status-completed { background: rgba(34, 197, 94, 0.15); color: #22c55e; }
+.status-failed { background: rgba(239, 68, 68, 0.15); color: var(--danger); }
+.status-stale { background: rgba(251, 191, 36, 0.15); color: var(--warning); }
+.status-idle { background: rgba(107, 114, 128, 0.15); color: var(--muted); }
+
+.status-dot {
+  width: 8px; height: 8px; border-radius: 50%;
+  background: currentColor;
+}
+.status-running .status-dot { animation: pulse 2s infinite; }
+@keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+  gap: 1.5rem;
+  margin-bottom: 2rem;
+}
+
+.card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 1.5rem;
+}
+
+.card h2 {
+  font-size: 1rem;
+  color: var(--accent);
+  margin-bottom: 1rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.stat-row {
+  display: flex;
+  justify-content: space-between;
+  padding: 0.5rem 0;
+  border-bottom: 1px solid var(--border);
+}
+.stat-row:last-child { border-bottom: none; }
+.stat-label { color: var(--muted); }
+.stat-value { font-weight: 700; font-family: 'Orbitron', sans-serif; }
+
+.phase-timeline {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  max-height: 500px;
+  overflow-y: auto;
+}
+
+.phase-item {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.75rem;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  transition: all 0.2s;
+}
+.phase-item.completed { border-color: #22c55e; }
+.phase-item.running { border-color: var(--accent); }
+.phase-item.failed { border-color: var(--danger); }
+.phase-item.pending { opacity: 0.4; }
+
+.phase-icon { width: 12px; height: 12px; border-radius: 50%; flex-shrink: 0; }
+.phase-icon.completed { background: #22c55e; }
+.phase-icon.running { background: var(--accent); animation: pulse 1.5s infinite; }
+.phase-icon.failed { background: var(--danger); }
+.phase-icon.pending { background: var(--border); }
+
+.phase-name { flex: 1; font-weight: 500; font-size: 0.875rem; }
+.phase-duration { font-family: 'Orbitron', sans-serif; font-size: 0.75rem; color: var(--muted); }
+
+.ticks-table { width: 100%; border-collapse: collapse; font-size: 0.875rem; }
+.ticks-table th { 
+  text-align: left; 
+  padding: 0.75rem; 
+  color: var(--muted); 
+  font-weight: 500; 
+  border-bottom: 1px solid var(--border);
+  position: sticky;
+  top: 0;
+  background: var(--card);
+}
+.ticks-table td { padding: 0.75rem; border-bottom: 1px solid var(--border); }
+.ticks-table tr:hover td { background: var(--bg); }
+.ticks-empty { text-align: center; color: var(--muted); padding: 2rem; }
+
+.alerts-list { display: flex; flex-direction: column; gap: 0.5rem; max-height: 500px; overflow-y: auto; }
+.alert-item {
+  padding: 0.75rem;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  border-left: 3px solid var(--warning);
+}
+.alert-item.critical { border-left-color: var(--danger); }
+.alert-header { display: flex; justify-content: space-between; margin-bottom: 0.25rem; }
+.alert-reason { font-weight: 600; font-size: 0.875rem; }
+.alert-time { font-size: 0.75rem; color: var(--muted); }
+.alert-details { font-size: 0.75rem; color: var(--muted); font-family: 'Share Tech Mono', monospace; word-break: break-word; }
+
+.btn {
+  background: var(--accent);
+  color: var(--bg);
+  border: none;
+  padding: 0.75rem 1.5rem;
+  border-radius: 6px;
+  font-family: 'Orbitron', sans-serif;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s;
+  font-size: 0.875rem;
+}
+.btn:hover { background: var(--accent-dim); transform: translateY(-1px); }
+.btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.btn-secondary {
+  background: transparent;
+  color: var(--fg);
+  border: 1px solid var(--border);
+}
+
+.card-actions {
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+}
+
+@media (max-width: 768px) {
+  .container { padding: 1rem; }
+  .grid { grid-template-columns: 1fr; }
+  header { flex-direction: column; gap: 1rem; align-items: flex-start; }
+}
+</style>
+</head>
+<body>
+
+<div class="starfield" id="starfield"></div>
+<div id="app">
+<div class="container">
+
+<header>
+<div>
+<h1>Simulation Operator</h1>
+<p style="color: var(--muted); font-size: 0.875rem; margin-top: 0.25rem;">Live simulation health, tick lifecycle, and alerts</p>
+</div>
+<div class="status-badge status-idle" id="statusBadge">
+<span class="status-dot"></span>
+<span id="statusText">IDLE</span>
+</div>
+</header>
+
+<div class="grid">
+<div class="card">
+<h2>Status</h2>
+<div class="stat-row">
+<span class="stat-label">Last Tick</span>
+<span class="stat-value" id="lastTickId">—</span>
+</div>
+<div class="stat-row">
+<span class="stat-label">Started</span>
+<span class="stat-value" id="lastStart">—</span>
+</div>
+<div class="stat-row">
+<span class="stat-label">Ended</span>
+<span class="stat-value" id="lastEnd">—</span>
+</div>
+<div class="stat-row">
+<span class="stat-label">Duration</span>
+<span class="stat-value" id="tickDuration">—</span>
+</div>
+<div class="stat-row">
+<span class="stat-label">NPCs</span>
+<span class="stat-value" id="npcCount">—</span>
+</div>
+<div class="stat-row">
+<span class="stat-label">Decisions</span>
+<span class="stat-value" id="decisionCount">—</span>
+</div>
+<div class="stat-row">
+<span class="stat-label">Errors</span>
+<span class="stat-value" id="errorCount">—</span>
+</div>
+<div class="stat-row">
+<span class="stat-label">Recovery Actions</span>
+<span class="stat-value" id="recoveryCount">—</span>
+</div>
+</div>
+
+<div class="card">
+<h2>Phase Timeline</h2>
+<div class="phase-timeline" id="phaseTimeline">
+<div class="ticks-empty">No tick data yet</div>
+</div>
+</div>
+</div>
+
+<div class="card" style="margin-bottom: 2rem;">
+<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+<h2>Recent Ticks</h2>
+<div class="card-actions">
+<button class="btn" id="triggerBtn">Trigger Tick</button>
+<button class="btn btn-secondary" onclick="refresh()">Refresh</button>
+</div>
+</div>
+<div style="overflow-x: auto;">
+<table class="ticks-table" id="ticksTable">
+<thead>
+<tr>
+<th>Tick ID</th>
+<th>Status</th>
+<th>Duration</th>
+<th>NPCs</th>
+<th>Decisions</th>
+<th>Errors</th>
+<th>Recovery</th>
+</tr>
+</thead>
+<tbody id="ticksBody">
+<tr class="ticks-empty"><td colspan="7">No tick data yet</td></tr>
+</tbody>
+</table>
+</div>
+</div>
+
+<div class="card">
+<h2>Active Alerts</h2>
+<div class="alerts-list" id="alertsList">
+<div class="ticks-empty">No active alerts</div>
+</div>
+</div>
+
+<nav class="top-nav" style="margin-top: 2rem;">
+<a href="simulation.html">Live Sim</a>
+<a href="starmap.html">Starmap</a>
+<a href="bridge.html">Bridge</a>
+<a href="index.html">Simulator</a>
+<a href="npc-logs.html">NPC Logs</a>
+<a href="spectator.html">Spectator</a>
+<a href="operator-dashboard.html" class="active">Operator Dashboard</a>
+</nav>
+
+</div>
+</div>
+
+<script>
+// Configuration
+const API_BASE = '';
+const POLL_INTERVAL = 3000; // 3 seconds
+
+// State
+let statusData = null;
+let alertsData = [];
+let tickTimer = null;
+
+// DOM Elements
+const statusBadge = document.getElementById('statusBadge');
+const statusText = document.getElementById('statusText');
+const lastTickIdEl = document.getElementById('lastTickId');
+const lastStartEl = document.getElementById('lastStart');
+const lastEndEl = document.getElementById('lastEnd');
+const tickDurationEl = document.getElementById('tickDuration');
+const npcCountEl = document.getElementById('npcCount');
+const decisionCountEl = document.getElementById('decisionCount');
+const errorCountEl = document.getElementById('errorCount');
+const recoveryCountEl = document.getElementById('recoveryCount');
+const phaseTimelineEl = document.getElementById('phaseTimeline');
+const ticksBodyEl = document.getElementById('ticksBody');
+const alertsListEl = document.getElementById('alertsList');
+const triggerBtn = document.getElementById('triggerBtn');
+
+// Status mapping
+const statusClasses = {
+    'running': 'status-running',
+    'completed': 'status-completed',
+    'failed': 'status-failed',
+    'stale': 'status-stale',
+    'idle': 'status-idle'
+};
+
+const statusLabels = {
+    'running': 'RUNNING',
+    'completed': 'COMPLETED',
+    'failed': 'FAILED',
+    'stale': 'STALE',
+    'idle': 'IDLE'
+};
+
+// Phase order for timeline
+const PHASE_LABELS = {
+    'npc_autonomy_start': { name: 'NPC Autonomy', isStart: true },
+    'npc_autonomy_complete': { name: 'NPC Autonomy', isStart: false },
+    'step1_faction_context_start': { name: 'Faction Context', isStart: true },
+    'step1_faction_context_complete': { name: 'Faction Context', isStart: false },
+    'step1_5_cognition_start': { name: 'Cognition', isStart: true },
+    'step1_5_cognition_complete': { name: 'Cognition', isStart: false },
+    'step2_decision_effects_start': { name: 'Decision Effects', isStart: true },
+    'step2_decision_effects_complete': { name: 'Decision Effects', isStart: false },
+    'step3_game_state_bridge_start': { name: 'State Bridge', isStart: true },
+    'step3_game_state_bridge_complete': { name: 'State Bridge', isStart: false },
+    'step4_political_bridge_start': { name: 'Political Bridge', isStart: true },
+    'step4_political_bridge_complete': { name: 'Political Bridge', isStart: false },
+    'step4b_consume_pending_start': { name: 'Consume Pending', isStart: true },
+    'step4b_consume_pending_complete': { name: 'Consume Pending', isStart: false },
+    'step5_era_check_start': { name: 'Era Check', isStart: true },
+    'step5_era_check_complete': { name: 'Era Check', isStart: false },
+    'step6_game_events_start': { name: 'Game Events', isStart: true },
+    'step6_game_events_complete': { name: 'Game Events', isStart: false },
+    'step7_npc_quests_start': { name: 'NPC Quests', isStart: true },
+    'step7_npc_quests_complete': { name: 'NPC Quests', isStart: false },
+    'step7_5_relationship_evolution_start': { name: 'Relationships', isStart: true },
+    'step7_5_relationship_evolution_complete': { name: 'Relationships', isStart: false },
+    'step8_faction_tech_start': { name: 'Faction Tech', isStart: true },
+    'step8_faction_tech_complete': { name: 'Faction Tech', isStart: false },
+    'step8_5_diplomacy_start': { name: 'Diplomacy', isStart: true },
+    'step8_5_diplomacy_complete': { name: 'Diplomacy', isStart: false },
+    'step8_6_diplomacy_bridge_start': { name: 'Diplomacy Bridge', isStart: true },
+    'step8_6_diplomacy_bridge_complete': { name: 'Diplomacy Bridge', isStart: false },
+    'step9_narration_start': { name: 'Narration', isStart: true },
+    'step9_narration_complete': { name: 'Narration', isStart: false },
+    'step9_5_memory_harvest_start': { name: 'Memory Harvest', isStart: true },
+    'step9_5_memory_harvest_complete': { name: 'Memory Harvest', isStart: false }
+};
+
+function formatTime(ts) {
+    if (!ts) return '—';
+    return new Date(ts * 1000).toLocaleTimeString();
+}
+
+function formatDuration(ms) {
+    if (!ms && ms !== 0) return '—';
+    if (ms < 1000) return ms.toFixed(0) + 'ms';
+    return (ms / 1000).toFixed(1) + 's';
+}
+
+function formatTimestamp(ts) {
+    if (!ts) return '—';
+    return new Date(ts * 1000).toLocaleString();
+}
+
+function updateStatusBadge(status) {
+    statusBadge.className = 'status-badge ' + (statusClasses[status] || 'status-idle');
+    statusText.textContent = statusLabels[status] || 'UNKNOWN';
+}
+
+async function fetchStatus() {
+    try {
+        const res = await fetch('/simulation/operator/status');
+        if (!res.ok) throw new Error('Status fetch failed');
+        return await res.json();
+    } catch (e) {
+        console.error('Status fetch error:', e);
+        return null;
+    }
+}
+
+function renderStatus(data) {
+    if (!data) return;
+    
+    updateStatusBadge(data.status || 'idle');
+    lastTickIdEl.textContent = data.last_tick_id || '—';
+    lastStartEl.textContent = formatTimestamp(data.last_start);
+    lastEndEl.textContent = formatTimestamp(data.last_end);
+    
+    // Calculate duration if not in last_result
+    if (data.last_result && data.last_result.duration_ms) {
+        tickDurationEl.textContent = formatDuration(data.last_result.duration_ms);
+        npcCountEl.textContent = data.last_result.npc_count || '—';
+        decisionCountEl.textContent = data.last_result.decision_count || '—';
+        errorCountEl.textContent = (data.last_result.errors || []).length;
+        recoveryCountEl.textContent = (data.last_result.recovery_steps || []).length;
+    } else if (data.last_start && data.last_end) {
+        const elapsed = (data.last_end - data.last_start) * 1000;
+        tickDurationEl.textContent = formatDuration(elapsed);
+    }
+}
+
+function renderPhases(data) {
+    if (!data.last_result) {
+        phaseTimelineEl.innerHTML = '<div class="ticks-empty">No phase data available</div>';
+        return;
+    }
+    
+    const result = data.last_result;
+    let html = '';
+    
+    // Group phases by name (start + complete = one phase)
+    const phaseGroups = {};
+    for (const phase in PHASE_LABELS) {
+        const info = PHASE_LABELS[phase];
+        if (info.isStart) {
+            // Find the matching complete key
+            const completeKey = phase.replace('_start', '_complete');
+            if (!phaseGroups[info.name]) phaseGroups[info.name] = {};
+            phaseGroups[info.name].startKey = phase;
+            phaseGroups[info.name].completeKey = completeKey;
+        }
+    }
+    
+    for (const [name, keys] of Object.entries(phaseGroups)) {
+        const completeData = result[keys.completeKey];
+        const startData = result[keys.startKey];
+        
+        let status = 'pending';
+        let duration = '—';
+        
+        if (completeData) {
+            status = 'completed';
+            duration = formatDuration(completeData.duration_ms);
+        } else if (startData) {
+            status = 'running';
+            duration = 'in progress...';
+        }
+        
+        // Check for errors in this phase
+        if (startData && startData.errors && startData.errors.length > 0) {
+            status = 'failed';
+        }
+        
+        html += `
+            <div class="phase-item ${status}">
+                <div class="phase-icon ${status}"></div>
+                <span class="phase-name">${name}</span>
+                <span class="phase-duration">${duration}</span>
+            </div>
+        `;
+    }
+    
+    phaseTimelineEl.innerHTML = html || '<div class="ticks-empty">No phase data</div>';
+}
+
+function renderTicks(data) {
+    if (!data.last_result) {
+        ticksBodyEl.innerHTML = '<tr class="ticks-empty"><td colspan="7">No tick data</td></tr>';
+        return;
+    }
+    
+    const result = data.last_result;
+    const tickId = result.tick_id || '—';
+    const status = data.status || 'unknown';
+    const statusClass = statusClasses[status] || '';
+    const statusLabel = statusLabels[status] || status;
+    
+    const npcCount = result.npc_count || 0;
+    const decisionCount = result.decision_count || 0;
+    const errorCount = (result.errors || []).length;
+    const recoveryCount = (result.recovery_steps || []).length;
+    const duration = result.duration_ms ? formatDuration(result.duration_ms) : '—';
+    
+    ticksBodyEl.innerHTML = `
+        <tr>
+            <td><code>${tickId}</code></td>
+            <td><span class="status-badge ${statusClass}">${statusLabel}</span></td>
+            <td>${duration}</td>
+            <td>${npcCount}</td>
+            <td>${decisionCount}</td>
+            <td>${errorCount}</td>
+            <td>${recoveryCount}</td>
+        </tr>
+    `;
+}
+
+async function loadAlerts() {
+    try {
+        // Try to fetch alerts from Redis via a dedicated endpoint or status key
+        const res = await fetch('/simulation/operator/status');
+        if (!res.ok) return;
+        const data = await res.json();
+        
+        // Check for alerts in the status (we expose them via status hash)
+        // For now, show validation failures as alerts
+        const failures = (data.last_validation && data.last_validation.failures) || [];
+        const warnings = (data.last_validation && data.last_validation.warnings) || [];
+        
+        alertsData = [];
+        
+        failures.forEach(f => {
+            alertsData.push({
+                severity: 'critical',
+                reason: f.check || 'validation_failure',
+                time: data.last_end || data.last_start,
+                details: f.message || JSON.stringify(f)
+            });
+        });
+        
+        warnings.forEach(w => {
+            alertsData.push({
+                severity: w.severity || 'warning',
+                reason: w.check || 'validation_warning',
+                time: data.last_end || data.last_start,
+                details: w.message || JSON.stringify(w)
+            });
+        });
+        
+        renderAlerts();
+    } catch (e) {
+        console.error('Alerts fetch error:', e);
+    }
+}
+
+function renderAlerts() {
+    if (alertsData.length === 0) {
+        alertsListEl.innerHTML = '<div class="ticks-empty">No active alerts</div>';
+        return;
+    }
+    
+    alertsListEl.innerHTML = alertsData.map(a => `
+        <div class="alert-item ${a.severity === 'critical' ? 'critical' : ''}">
+            <div class="alert-header">
+                <span class="alert-reason">${a.reason}</span>
+                <span class="alert-time">${formatTimestamp(a.time)}</span>
+            </div>
+            <div class="alert-details">${a.details}</div>
+        </div>
+    `).join('');
+}
+
+async function refresh() {
+    const status = await fetchStatus();
+    if (status) {
+        statusData = status;
+        renderStatus(status);
+        renderPhases(status);
+        renderTicks(status);
+    }
+}
+
+async function triggerTick() {
+    triggerBtn.disabled = true;
+    const originalText = triggerBtn.textContent;
+    triggerBtn.textContent = 'Triggering...';
+    
+    try {
+        const res = await fetch('/simulation/operator/tick', { method: 'POST' });
+        const data = await res.json();
+        
+        if (res.status === 202) {
+            triggerBtn.textContent = 'Triggered!';
+            // Poll for completion
+            let attempts = 0;
+            tickTimer = setInterval(async () => {
+                attempts++;
+                if (attempts > 30 || !statusData || statusData.status !== 'running') {
+                    clearInterval(tickTimer);
+                    tickTimer = null;
+                    await refresh();
+                    await loadAlerts();
+                    triggerBtn.disabled = false;
+                    triggerBtn.textContent = originalText;
+                } else {
+                    await refresh();
+                }
+            }, 2000);
+        } else {
+            alert('Failed to trigger tick: ' + (data.detail || JSON.stringify(data)));
+            triggerBtn.disabled = false;
+            triggerBtn.textContent = originalText;
+        }
+    } catch (e) {
+        alert('Error triggering tick: ' + e.message);
+        triggerBtn.disabled = false;
+        triggerBtn.textContent = originalText;
+    }
+}
+
+// Add starfield background like other pages
+function createStarfield() {
+    const container = document.getElementById('starfield');
+    container.style.position = 'fixed';
+    container.style.top = '0';
+    container.style.left = '0';
+    container.style.width = '100%';
+    container.style.height = '100%';
+    container.style.zIndex = '-1';
+    
+    for (let i = 0; i < 100; i++) {
+        const star = document.createElement('div');
+        star.style.position = 'absolute';
+        star.style.width = Math.random() * 2 + 'px';
+        star.style.height = star.style.width;
+        star.style.background = '#fff';
+        star.style.borderRadius = '50%';
+        star.style.left = Math.random() * 100 + '%';
+        star.style.top = Math.random() * 100 + '%';
+        star.style.opacity = Math.random() * 0.5 + 0.2;
+        container.appendChild(star);
+    }
+}
+
+createStarfield();
+
+// Event handlers
+triggerBtn.addEventListener('click', triggerTick);
+
+// Initial load and polling
+refresh();
+loadAlerts();
+setInterval(() => {
+    refresh();
+    loadAlerts();
+}, POLL_INTERVAL);
+
+// Cleanup on page unload
+window.addEventListener('beforeunload', () => {
+    if (tickTimer) clearInterval(tickTimer);
+});
+</script>
+
+</body>
+</html>

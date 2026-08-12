@@ -21,6 +21,14 @@ OPEN_QUESTION_REPEAT_HOURS = int(os.environ.get("OPEN_QUESTION_REPEAT_HOURS", "6
 QUESTION_TOKEN_RE = re.compile(r"[a-z0-9]+")
 TICK_INTERVAL = int(os.environ.get("TICK_INTERVAL", "30"))
 REDIS_URL = os.environ.get("REDIS_URL", "redis://redis:6379/0")
+# Triggerless post-resolution pivot: when the pair has stayed resolved long
+# enough without a partner send_message (they're stuck in solo-artifact
+# orbit around the resolved goal), the reducer clears open_question so the
+# next _sync_pair_workspace call enters the _post_resolution_default
+# branch and Edit A's loop-guard picks a novel shared goal.
+POST_RESOLUTION_PIVOT_GAP_VERSIONS = int(os.environ.get("POST_RESOLUTION_PIVOT_GAP_VERSIONS", "4"))
+POST_RESOLUTION_PIVOT_GAP_SECONDS = int(os.environ.get("POST_RESOLUTION_PIVOT_GAP_SECONDS", str(60 * 60)))
+POST_RESOLUTION_PIVOT_REARM_VERSIONS = int(os.environ.get("POST_RESOLUTION_PIVOT_REARM_VERSIONS", "3"))
 
 
 KNOWN_BLOCKED_TERMS = [
@@ -256,8 +264,11 @@ def _pair_append_journal(r, partner_id: str, entry: dict, char_id: str = "") -> 
         r.rpush(key, json.dumps(payload, default=str))
         r.ltrim(key, -PAIR_JOURNAL_CAP, -1)
         r.expire(key, PAIR_STATE_TTL)
-    except Exception:
-        pass
+    except Exception as e:
+        logger.warning(
+            "[%s] pair journal append failed for %s: %s",
+            char_id or CHAR_ID, key, e,
+        )
 
 
 def _pair_recent_journal(r, partner_id: str = "", limit: int = 4, char_id: str = "") -> list[dict]:
@@ -310,7 +321,7 @@ def _store_thread_message(r, msg: dict, thread_id: str, char_id: str = "") -> No
         pipe.expire(f"msg:threads:{payload['to_char_id']}", PAIR_STATE_TTL)
         pipe.execute()
     except Exception as e:
-        logger.debug("[%s] thread store failed: %s", cid, e)
+        logger.warning("[%s] thread message store failed: %s", cid, e)
 
 
 def _recent_thread_messages(r, thread_id: str, limit: int = 4) -> list[dict]:
@@ -499,6 +510,12 @@ def _sync_pair_workspace(r, decision: dict, result: dict, npc_name: str = "", ch
     action_taken = result.get("action_taken", "none")
     message_target = result.get("target") or decision.get("target", "")
     is_partner_message = cat == "send_message" and message_target == pid
+    # Lazy import to avoid a circular import (npc_actions imports this module).
+    try:
+        from npc_actions import _clean_focus_text
+    except Exception:
+        _clean_focus_text = lambda t: _compact_text(t, 180)
+    desc = _clean_focus_text(desc)
     focus = _compact_text(body if cat == "send_message" else desc, 180) or _compact_text(reasoning, 180) or cat
     state = _pair_state(r, pid, cid)
     now = int(result.get("ts") or time.time())
@@ -559,7 +576,30 @@ def _sync_pair_workspace(r, decision: dict, result: dict, npc_name: str = "", ch
     # Ensure open_question is always non-blank so the councilors always have
     # an active inquiry to orbit around. Skip if state already has a real
     # open_question, or if this action intentionally cleared it.
-    if not state.get("open_question") and mapping.get("open_question") != "":
+    # Loop guard (added): when the pair has RESOLVED a topic and convergence
+    # has already staged a fresh next_question, force the post-resolution pivot
+    # to consume it even while the headline open_question is still populated.
+    # Without this, the pivot below only fired when open_question first cleared,
+    # which could leave the pair's headline stuck on the resolved topic for
+    # days even though the convergence reducer had already produced a new step.
+    _cc_for_pivot = {}
+    try:
+        _raw_conv_piv = state.get("convergence_state")
+        if _raw_conv_piv:
+            _cc_for_pivot = json.loads(_raw_conv_piv) if isinstance(_raw_conv_piv, str) else {}
+    except Exception:
+        _cc_for_pivot = {}
+    _pending_pivot = (
+        bool(_cc_for_pivot)
+        and _cc_for_pivot.get("resolved", False)
+        and bool((_cc_for_pivot.get("next_question", "") or "").strip())
+        and str(_cc_for_pivot.get("resolved_shared_goal", "") or "") == str(state.get("shared_goal", "") or "")
+        and (state.get("open_question", "") or "") in (
+            "",
+            str(_cc_for_pivot.get("resolved_shared_goal", "") or ""),
+        )
+    )
+    if (not state.get("open_question") and mapping.get("open_question") != "") or _pending_pivot:
         # Stage 4D: after resolution, do not regenerate open_question from
         # the same resolved shared_goal — that re-anchors to the blocked topic.
         _post_resolution_default = False
@@ -593,6 +633,35 @@ def _sync_pair_workspace(r, decision: dict, result: dict, npc_name: str = "", ch
             # banned forever.
             _recent_terms = _recent_theme_terms(r, cid)
             _combined_blocked = list(dict.fromkeys(_blocked + _recent_terms))
+            # Loop guard (added):  extend the blocked-term set with significant
+            # tokens drawn directly from the resolved shared_goal AND the
+            # resolved question.  Without this, the LLM can return a
+            # next_question that semantically echoes the resolved topic
+            # (same nouns/verbs) even when those terms were never added to
+            # convergence_state.blocked_topic_terms — and the pivot branch at
+            # line 619 will then accept it (writing open_question == shared_goal
+            # and re-anchoring the pair to the resolved topic forever).
+            # We strip short stopwords so we don't over-block common words
+            # ("the", "and", "what", "across", etc.) but keep any meaningful
+            # noun-ish/verb-ish token length >= 4.
+            _resolved_topics_text = " ".join([
+                str(state.get("shared_goal", "") or ""),
+                str(_cc.get("resolved_shared_goal", "") or ""),
+                str(_cc.get("resolved_question", "") or ""),
+                str(_cc.get("resolved_answer", "") or ""),
+            ]).lower()
+            _STOPWORDS_RESOLVED = {
+                "the", "and", "for", "with", "from", "that", "this", "what",
+                "how", "should", "could", "would", "across", "between", "into",
+                "their", "these", "those", "must", "mustn", "will", "shall",
+                "have", "been", "were", "they", "them", "than", "when", "where",
+                "which", "whose", "about", "above", "below", "after", "before",
+                "diverse", "various", "ensure", "ensures",
+            }
+            for _tok in _resolved_topics_text.replace(",", " ").replace(".", " ").split():
+                _t = _tok.strip("'-\".;:!?").lower()
+                if len(_t) >= 4 and _t not in _STOPWORDS_RESOLVED and _t not in _combined_blocked:
+                    _combined_blocked.append(_t)
             # Novelty gate: if the LLM's next_question re-enters recent themes,
             # fall back to an autonomous novel next-goal proposal.
             _novel_next, _novel_candidates = _propose_novel_next_goal(r, _cc, _combined_blocked, cid)
@@ -791,7 +860,15 @@ def _compute_convergence_state(r, partner_id: str, cid: str, now: int) -> None:
             prompt_parts.append(f"Previous resolved question: {_compact_text(_resolved_question, 120)}\n")
         prompt_parts.append(
             "IMPORTANT: The councilors have already resolved this topic. "
-            "next_question must open a genuinely new direction, not re-enter the resolved topic or its blocked terms.\n"
+            "next_question MUST open a genuinely new direction. "
+            "RULES for next_question:\n"
+            "  - Do NOT reuse nouns, verbs, or signature terms from the resolved question above.\n"
+            "  - Do NOT echo the resolved answer or shared goal.\n"
+            "  - Do NOT re-enter any term listed in 'avoid these terms'.\n"
+            "  - next_question must be SHORT (<= 25 words) and must name a DIFFERENT "
+            "sub-domain (audit, interoperability, cross-language consistency, "
+            "enforcement, monitoring, cost, adoption, downstream impact, etc.) than the resolved topic.\n"
+            "  - If you cannot propose something clearly new, return an empty string for next_question.\n"
         )
     prompt_parts.append(
         '{"current_best_answer":"","evidence_from_char_001":"","evidence_from_char_306":"","agreement":"","disagreement":"","next_question":""}'
@@ -873,6 +950,12 @@ def _compute_convergence_state(r, partner_id: str, cid: str, now: int) -> None:
             conv["resolved_question"] = conv.get("next_question", "")
             conv["resolved_at"] = now
             conv["plateau_count"] = new_plateau
+            # Snapshot the version we are resolving at so the triggerless
+            # post-resolution pivot can require N reducer runs to have
+            # elapsed before forcing open_question blank.
+            conv["resolved_version"] = (existing.get("version", 0) or 0) + 1
+            # Reset any stale pivot_forced markers from prior cycles.
+            conv["pivot_forced_version"] = 0
             # Extract blocked topic terms from resolved content
             resolved_text = (conv.get("resolved_question", "") + " " + conv.get("resolved_answer", "")).lower()
             # Extract known blocked terms for blocking (resonance) topics
@@ -899,6 +982,8 @@ def _compute_convergence_state(r, partner_id: str, cid: str, now: int) -> None:
             conv["resolved_shared_goal"] = prev_conv.get("resolved_shared_goal", "") or shared_goal
             conv["resolved_open_question"] = prev_conv.get("resolved_open_question", "") or open_q
             conv["plateau_count"] = new_plateau
+            conv["resolved_version"] = prev_conv.get("resolved_version", 0) or 0
+            conv["pivot_forced_version"] = prev_conv.get("pivot_forced_version", 0) or 0
         conv["plateau_topic"] = plateau_topic
         conv["plateau_reason"] = plateau_reason
 
@@ -919,6 +1004,84 @@ def _compute_convergence_state(r, partner_id: str, cid: str, now: int) -> None:
         conv["version"] = existing.get("version", 0) + 1
         _pair_hset(r, partner_id, {"convergence_state": json.dumps(conv, default=str)}, cid)
         logger.info("[%s/%s] convergence_state updated v%d", cid, partner_id, conv["version"])
+
+        # Triggerless post-resolution pivot: see POST_RESOLUTION_PIVOT_GAP_*.
+        try:
+            _force_pivot = False
+            if conv.get("resolved", False):
+                _cur_open_q = state.get("open_question", "") or ""
+                _resolved_at = int(conv.get("resolved_at", 0) or 0)
+                _resolved_version = int(conv.get("resolved_version", 0) or 0)
+                _pivot_forced_version = int(conv.get("pivot_forced_version", 0) or 0)
+                try:
+                    _last_msg_ts = int(state.get("last_message_ts", 0) or 0)
+                except Exception:
+                    _last_msg_ts = 0
+                _cur_version = int(conv.get("version", 0) or 0)
+                _gap_versions = _cur_version - _resolved_version
+                _gap_seconds = now - _resolved_at if _resolved_at else 0
+                _still_on_resolved = bool(_cur_open_q)
+                _no_partner_msg_since = (_last_msg_ts <= _resolved_at)
+                _versions_ready = (_gap_versions >= POST_RESOLUTION_PIVOT_GAP_VERSIONS)
+                _wallclock_ready = (_gap_seconds >= POST_RESOLUTION_PIVOT_GAP_SECONDS)
+                _rearmed = (
+                    _pivot_forced_version == 0
+                    or (_cur_version - _pivot_forced_version) >= POST_RESOLUTION_PIVOT_REARM_VERSIONS
+                )
+                if (_still_on_resolved and _no_partner_msg_since
+                        and _versions_ready and _wallclock_ready and _rearmed):
+                    _force_pivot = True
+                if (_pivot_forced_version > 0
+                        and (_cur_version - _pivot_forced_version) < POST_RESOLUTION_PIVOT_REARM_VERSIONS):
+                    _force_pivot = False
+            if _force_pivot:
+                _pivot_trigger = {
+                    "open_question": "",
+                    "open_question_from": "",
+                    "open_question_ts": "",
+                    "open_question_source": "",
+                    "last_open_question_sent_to_partner": "",
+                    "last_open_question_ts": "",
+                }
+                _pair_hset(r, partner_id, _pivot_trigger, cid)
+                conv["pivot_forced_version"] = int(conv.get("version", 0) or 0)
+                _pair_hset(
+                    r, partner_id,
+                    {"convergence_state": json.dumps(conv, default=str)},
+                    cid,
+                )
+                _pair_append_journal(
+                    r, partner_id,
+                    {
+                        "ts": now,
+                        "actor": cid,
+                        "actor_name": "system",
+                        "category": "force_pivot",
+                        "action": "post_resolution_pivot_forced",
+                        "summary": (
+                            "system cleared open_question after "
+                            f"{int(conv.get('version','0') or 0) - int(conv.get('resolved_version','0') or 0)} "
+                            "reducer runs with no partner message since resolution; "
+                            "next sync will propose a novel shared goal via the loop-guard."
+                        ),
+                        "thread_id": "",
+                        "open_question_ref": "",
+                        "open_question_source": "post_resolution_pivot_forced",
+                    },
+                    cid,
+                )
+                logger.info(
+                    "[%s/%s] triggerless post-resolution pivot armed at v%d "
+                    "(resolved at v%d, gap %d versions / %ds, no partner send_message)",
+                    cid, partner_id,
+                    int(conv.get("version", 0) or 0),
+                    int(conv.get("resolved_version", 0) or 0),
+                    int(conv.get("version", 0) or 0) - int(conv.get("resolved_version", 0) or 0),
+                    now - int(conv.get("resolved_at", 0) or 0),
+                )
+        except Exception as _piv_exc:
+            logger.debug("[%s/%s] triggerless pivot check failed: %s",
+                         cid, partner_id, _piv_exc)
     except Exception as ex:
         logger.debug("[%s/%s] convergence reducer: %s", cid, partner_id, ex)
 
@@ -1334,8 +1497,11 @@ def _record_outcome_consequence(
         try:
             r.eval(_OUTCOME_CONSEQUENCE_LUA, 1, target, new_json,
                    OUTCOME_FEEDBACK_CAP, OUTCOME_TTL)
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning(
+                "[%s] outcome consequence record failed for %s: %s",
+                cid, target, e,
+            )
 
 
 def _load_outcome_feedback(r, char_id: str = "", limit: int = 5) -> str:
@@ -1556,6 +1722,7 @@ def _log_llm_call(r, call_label, model, system_prompt, user_prompt, response, su
         key = f"npc_llm_logs:{cid}"
         r.lpush(key, json.dumps(entry))
         r.ltrim(key, 0, 199)
+        r.expire(key, 86400 * 30)
         r.hincrby(f"npc_stats:{cid}", "llm_calls", 1)
         if success:
             r.hincrby(f"npc_stats:{cid}", "llm_success", 1)
@@ -1564,6 +1731,7 @@ def _log_llm_call(r, call_label, model, system_prompt, user_prompt, response, su
         r.hset(f"npc_stats:{cid}", "last_model", model)
         r.hset(f"npc_stats:{cid}", "last_call_label", call_label)
         r.hset(f"npc_stats:{cid}", "last_ts", str(int(time.time())))
+        r.expire(f"npc_stats:{cid}", 86400 * 30)
     except Exception:
         pass
 
@@ -1578,6 +1746,7 @@ def _session_append(r, entry: dict, char_id: str = "") -> None:
         key = f"npc_session:{cid}"
         r.rpush(key, json.dumps(entry, default=str))
         r.ltrim(key, -SESSION_CAP, -1)
+        r.expire(key, 86400 * 30)
     except Exception as e:
         logger.debug("[%s] session append failed: %s", cid, e)
 
@@ -1661,6 +1830,7 @@ def _acknowledge_operator_directive(r, directive_id: str = "", char_id: str = ""
                     "status": status,
                     "ts": _now_ts(),
                 }, default=str),
+                ex=86400 * 30,
             )
         except Exception:
             pass
@@ -1696,6 +1866,7 @@ def _record_operator_ack_history(r, directive_id: str = "", status: str = "compl
             }, default=str),
         )
         r.ltrim(f"operator_ack_history:{cid}", 0, 19)
+        r.expire(f"operator_ack_history:{cid}", 86400 * 30)
     except Exception:
         pass
 

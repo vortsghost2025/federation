@@ -1,0 +1,339 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Federation &mdash; Live Simulation</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="simulation.css?v=2">
+
+</head>
+<body>
+
+<div class="starfield" id="starfield"></div>
+<div id="app">
+<header id="top">
+<div class="top-row">
+<span class="top-row-label">Degradation vs Runway</span>
+<div class="split-bar-container">
+<div class="split-bar-left degradation-fill" id="deg-fill" style="width:0"></div>
+<div class="split-bar-right runway-fill" id="runway-fill" style="width:100%"></div>
+</div>
+<div class="split-metric-chips">
+<span class="split-chip degradation" id="chip-morale">M &#8212;</span>
+<span class="split-chip degradation" id="chip-stability">S &#8212;</span>
+<span class="split-chip degradation" id="chip-anomaly">A &#8212;</span>
+</div>
+<span class="split-severity nominal" id="deg-sev">NOMINAL</span>
+<div class="top-tick-display" title="Federation Calendar: tick-to-date conversion">
+<span class="top-tick-label">Federation Date</span>
+<span class="top-tick-val" id="fed-date">&#8212;</span>
+</div>
+<div class="top-tick-display" style="border-left:none;padding-left:8px">
+<span class="top-tick-label">Tick</span>
+<span class="top-tick-val tick-raw" id="tick-count">&#8212;</span>
+</div>
+<div class="time-since">
+<span class="time-since-label">Last Tick</span>
+<span class="time-since-val" id="time-since">&#8212;</span>
+</div>
+</div>
+<div class="top-row">
+<span class="top-row-label">Threat vs Buffer</span>
+<div class="split-bar-container">
+<div class="split-bar-left threat-fill" id="threat-fill" style="width:0"></div>
+<div class="split-bar-right buffer-fill" id="buffer-fill" style="width:100%"></div>
+</div>
+<div class="split-metric-chips">
+<span class="split-chip threat" id="chip-threat">T &#8212;</span>
+<span class="split-chip threat" id="chip-tension">X &#8212;</span>
+<span class="split-chip buffer" id="chip-resources">R &#8212;</span>
+</div>
+<span class="split-severity nominal" id="threat-sev">NOMINAL</span>
+<nav class="top-nav" aria-label="Main navigation">
+<a href="bridge.html">Bridge</a>
+<a href="starmap.html">Starmap</a>
+<a href="/">Simulator</a>
+<a href="simulation.html" class="active">Live Sim</a>
+<a href="adult.html">Control</a>
+<a href="worldguide.html">World Guide</a>
+<a href="earth.html">Earth</a>
+<a href="spectator.html">Spectator</a>
+<button class="help-btn" onclick="toggleHelp()" aria-label="How to read this page" title="How to read this page">?</button>
+<button class="rm-toggle-btn" id="rm-toggle" onclick="toggleReadableMode()" aria-label="Toggle readable mode" title="Toggle readable mode">Aa</button>
+</nav>
+</div>
+</header>
+
+<!-- FEDERATION STATUS BRIEF -->
+<div id="fed-brief">
+<div class="brief-row">
+<span class="brief-state-badge" id="brief-state-badge" aria-live="polite">INITIALIZING</span>
+<span class="brief-meta" id="brief-meta">Loading simulation...</span>
+</div>
+<div class="brief-headline" id="brief-headline">Connecting to Federation systems...</div>
+<div class="brief-developments" id="brief-developments"></div>
+<div class="brief-watch" id="brief-watch"></div>
+</div>
+
+<!-- SITUATION SUMMARY BAR -->
+<div id="situation">
+<div class="sit-card" id="sit-current">
+<div class="sit-card-label">Current Situation</div>
+<div class="sit-card-value" id="sit-current-text" aria-live="polite">Loading world state...</div>
+</div>
+<div class="sit-card sit-risk" id="sit-risk">
+<div class="sit-card-label">Main Risk</div>
+<div class="sit-card-value" id="sit-risk-text">&#8212;</div>
+</div>
+<div class="sit-card sit-watch" id="sit-watch" style="flex:2.5">
+<div class="sit-card-label">Watchlist <span style="font-weight:400;font-size:0.625rem;letter-spacing:0.5px;color:var(--dim)">(click to highlight)</span></div>
+<div class="watchlist" id="watchlist-cards">
+<div class="sit-card-value" id="sit-watch-text">&#8212;</div>
+</div>
+</div>
+</div>
+
+<!-- HELP OVERLAY -->
+<div class="help-overlay" id="help-overlay" role="dialog" aria-label="How to read this page">
+<div class="help-box">
+<button class="help-close" onclick="toggleHelp()">&#10005; Close</button>
+<h2>How to Read This Page</h2>
+<h3>What Is This?</h3>
+<div class="help-section">
+<p>This is a <strong>living simulation</strong> &#8212; 39 AI-controlled characters (NPCs) organized into 8 factions are running autonomously right now. No player is controlling them. They think, decide, act, and react to each other every few seconds (each cycle is called a <strong>tick</strong>).</p>
+<p>Your job as a viewer is to <strong>watch civilization emerge</strong>. Factions form alliances, declare rivalries, research technology, pass laws, and respond to world events &#8212; all without human input.</p>
+</div>
+<h3>Top Banner &#8212; Is The World Healthy?</h3>
+<div class="help-section">
+<p>Two split-bars show system health at a glance:</p>
+<ul>
+<li><strong>Degradation vs Runway</strong> &#8212; Red side = how bad things are (low Morale, low Stability, high Anomaly). Green side = how much buffer remains. When red dominates, the system is in trouble.</li>
+<li><strong>Threat vs Buffer</strong> &#8212; Red side = external danger (Threat, Tension). Blue side = resources available to absorb it. When red dominates, the federation is under pressure.</li>
+</ul>
+<p>Each bar has <strong>metric chips</strong> (M=Morale, S=Stability, A=Anomaly, T=Threat, X=Tension, R=Resources) and a <strong>severity badge</strong> (NOMINAL / ELEVATED / HIGH / SEVERE / CRITICAL).</p>
+</div>
+<h3>Cascade Pipeline &#8212; What Just Happened?</h3>
+<div class="help-section">
+<p>When one event triggers reactions in multiple NPCs, the <strong>cascade pipeline</strong> shows the domino chain:</p>
+<ul>
+<li><strong style="color:#F44336">Root Trigger</strong> &#8212; The original event, highlighted in red with a pulse.</li>
+<li><strong style="color:#CE93D8">Depth Badges</strong> &#8212; D1, D2, D3... show how far the reaction spread.</li>
+<li><strong>Tone Tags</strong> &#8212; fear, conflict, caution, support, celebration show the emotional color.</li>
+</ul>
+</div>
+<h3>NPC Cards &#8212; Who Is Affected?</h3>
+<div class="help-section">
+<p>NPC card borders light up based on cascade involvement:</p>
+<ul>
+<li><span class="color-swatch" style="background:#F44336"></span><strong>Red border + pulse</strong> = TRIGGER (started the chain)</li>
+<li><span class="color-swatch" style="background:#CE93D8"></span><strong>Violet border</strong> = REACTOR (directly reacted)</li>
+<li><span class="color-swatch" style="background:#FF9800"></span><strong>Amber border</strong> = AFFECTED (impacted indirectly)</li>
+</ul>
+<p>Use the <strong>FILTER ON/OFF</strong> toggle to hide idle NPCs and focus on active participants.</p>
+</div>
+<h3>Left Panel &#8212; Who Has Power?</h3>
+<div class="help-section">
+<p>Each card is one of the 8 factions. Key info:</p>
+<ul>
+<li><strong>Power number</strong> &#8212; How strong the faction is overall.</li>
+<li><strong>Cohesion bar</strong> &#8212; How united the faction&#39;s members are. Green = united, Red = fractured.</li>
+<li><strong>Colored dots</strong> &#8212; Stance toward each other faction: <span class="color-swatch" style="background:#4CAF50"></span>Ally, <span class="color-swatch" style="background:#FFC107"></span>Neutral, <span class="color-swatch" style="background:#F44336"></span>Enemy</li>
+</ul>
+<p><strong>Click a faction card</strong> to expand details. <strong>Faction Tech tab</strong> shows research progress.</p>
+</div>
+<h3>Bottom Bar &#8212; What Is Unresolved?</h3>
+<div class="help-section">
+<p>Era progress and pending items &#8212; how much backlog pressure the simulation has.</p>
+</div>
+<h3>What to Watch For</h3>
+<div class="help-section">
+<ul>
+<li><strong>CRITICAL or SEVERE severity labels</strong> = Something needs attention now.</li>
+<li><strong>Red dominating the split bars</strong> = System is degrading fast.</li>
+<li><strong>Pulsing root trigger in pipeline</strong> = A cascade chain is active.</li>
+<li><strong>Faction cohesion dropping</strong> = Members turning on each other.</li>
+</ul>
+</div>
+</div>
+</div>
+
+<section id="left" class="panel">
+<div class="intro-box">
+<strong>Federation Simulation</strong> &#8212; 39 autonomous NPCs across 8 factions evolve without player input. Click any card to expand details.
+<div class="intro-legend">
+<div class="legend-item"><div class="legend-dot" style="background:var(--green)"></div> Ally</div>
+<div class="legend-item"><div class="legend-dot" style="background:#FFC107"></div> Neutral</div>
+<div class="legend-item"><div class="legend-dot" style="background:var(--red)"></div> Enemy</div>
+</div>
+</div>
+<div class="tab-bar" id="left-tabs" role="tablist">
+<button class="tab-btn active-amber" data-tab="factions" role="tab" onclick="switchLeftTab('factions')">Factions</button>
+<button class="tab-btn" data-tab="faction-tech" role="tab" onclick="switchLeftTab('faction-tech')">Faction Tech</button>
+</div>
+<div class="tab-content visible" id="left-factions">
+<div class="rm-collapse-toggle" id="rm-toggle-factions" onclick="rmToggleSection('left-factions')" style="display:none">&#x25BC; Who Has Power?</div>
+<div class="section-title amber">Who Has Power?</div>
+<div id="faction-list"></div>
+</div>
+<div class="tab-content" id="left-faction-tech">
+<div class="section-title amber">Faction Tech Research</div>
+<div id="tech-list"></div>
+</div>
+</section>
+
+<section id="center" class="panel">
+<div id="human-briefing" class="human-briefing">
+<div class="hb-label">10-Second Briefing</div>
+<div class="hb-headline" id="hb-headline" aria-live="polite">Loading the current story...</div>
+<div class="hb-grid">
+<div class="hb-card"><div class="hb-card-label">What is this?</div><div class="hb-card-text" id="hb-what">A living AI society is running without player control.</div></div>
+<div class="hb-card"><div class="hb-card-label">What changed?</div><div class="hb-card-text" id="hb-changed">Waiting for NPC decisions and events.</div></div>
+<div class="hb-card"><div class="hb-card-label">Why care?</div><div class="hb-card-text" id="hb-care">Watch who gains influence, who forms alliances, and who creates risk.</div></div>
+</div>
+<div class="hb-actions">
+<button onclick="aiChatAsk('What is this simulation?')">What is this simulation?</button>
+<button onclick="aiChatAsk('How does it work?')">How does it work?</button>
+<button onclick="aiChatAsk('Explain what is happening right now.')">Explain now</button>
+</div>
+</div>
+<div id="npc-reality-feed" class="npc-reality-feed">
+<div class="nrf-header">
+<div><div class="nrf-label">NPC Reality Feed</div><div class="nrf-subtitle">Who is talking, deciding, planning, and reacting right now</div></div>
+<a class="nrf-open-logs" href="npc-logs.html">Open full logs</a>
+</div>
+<div class="nrf-filters" id="nrf-filters">
+<button class="active" data-filter="all" onclick="setNpcRealityFilter('all')">All</button>
+<button data-filter="chat" onclick="setNpcRealityFilter('chat')">Conversations</button>
+<button data-filter="decision" onclick="setNpcRealityFilter('decision')">Decisions</button>
+<button data-filter="plan" onclick="setNpcRealityFilter('plan')">Plans</button>
+<button data-filter="cognition" onclick="setNpcRealityFilter('cognition')">Cognition</button>
+<button data-filter="alliance" onclick="setNpcRealityFilter('alliance')">Alliances</button>
+<button data-filter="conflict" onclick="setNpcRealityFilter('conflict')">Conflict</button>
+</div>
+<div class="nrf-list" id="npc-reality-list"><div class="nrf-empty">Loading NPC communications...</div></div>
+</div>
+<div id="quick-status" class="qs-panel" style="display:none">
+<div class="qs-header">&#x1F4CA; Quick Status <span class="qs-tick" id="qs-tick"></span></div>
+<div class="qs-body" id="qs-body" aria-live="polite"></div>
+</div>
+<div id="rm-summary" class="rm-summary" style="display:none">
+<div class="rm-summary-header">&#x1F4CB; What Is Happening? <span class="rm-summary-tick" id="rm-summary-tick"></span></div>
+<div class="rm-summary-body" id="rm-summary-body" aria-live="polite"></div>
+</div>
+<div class="rm-prog-bar" id="rm-prog-bar" style="display:none">
+<button class="rm-prog-btn active" data-rm-panel="rm-panel-summary" onclick="switchRMPanel('rm-panel-summary')">&#x1F4CB; Summary</button>
+<button class="rm-prog-btn" data-rm-panel="rm-panel-events" onclick="switchRMPanel('rm-panel-events')">&#x1F4E1; Events</button>
+<button class="rm-prog-btn" data-rm-panel="rm-panel-details" onclick="switchRMPanel('rm-panel-details')">&#x2139;&#xFE0F; Details</button>
+<button class="rm-prog-btn" data-rm-panel="rm-panel-advanced" onclick="switchRMPanel('rm-panel-advanced')">&#x2699;&#xFE0F; Advanced</button>
+</div>
+<div id="rm-panel-summary" class="rm-prog-panel visible">
+<div id="situation-room" class="sitroom">
+<div class="sitroom-label">Situation Room</div>
+<div id="sitroom-headline" class="sitroom-headline">Awaiting intelligence report...</div>
+<div id="sitroom-body"></div>
+</div>
+</div>
+<div id="rm-panel-events" class="rm-prog-panel">
+<div id="activity-log" class="activity-log">
+<div class="activity-log-bar" id="activity-log-bar" onclick="toggleActivityLog()" tabindex="0" role="button" aria-expanded="false">
+<span class="activity-log-arrow">&#9654;</span>
+<span class="activity-log-label">Activity Log</span>
+<span class="activity-log-summary" id="activity-log-summary">No recent activity</span>
+</div>
+<div class="activity-log-content" id="activity-log-content">
+<div class="activity-log-pad">
+<div id="cascade-pipeline"></div>
+<div id="event-chains"></div>
+<div class="raw-toggle" id="raw-toggle" onclick="toggleRaw()" tabindex="0" role="button" aria-expanded="false">Raw Events</div>
+<div class="raw-events-wrap" id="raw-wrap">
+<div class="event-feed" id="event-feed"></div>
+</div>
+</div>
+</div>
+</div>
+</div>
+<div id="rm-panel-details" class="rm-prog-panel">
+<p style="color:var(--dim);padding:10px;font-size:1rem;">Select a faction or NPC card to view details here.</p>
+</div>
+<div id="rm-panel-advanced" class="rm-prog-panel">
+<p style="color:var(--dim);padding:10px;font-size:1rem;">Advanced telemetry and debug information.</p>
+</div>
+<div class="signal-lost" id="signal-lost-center">
+<span class="signal-lost-text">SIGNAL LOST</span>
+</div>
+</section>
+
+<section id="right" class="panel">
+<div class="tab-bar" id="right-tabs" role="tablist">
+<button class="tab-btn active-violet" data-tab="npcs" role="tab" onclick="switchRightTab('npcs')">Characters</button>
+<button class="tab-btn" data-tab="npc-quests" role="tab" onclick="switchRightTab('npc-quests')">Story Log</button>
+<button class="tab-btn" data-tab="choices" role="tab" onclick="switchRightTab('choices')">Decisions</button>
+</div>
+<div class="tab-content visible" id="right-npcs">
+<div class="rm-collapse-toggle" id="rm-toggle-npcs" onclick="rmToggleSection('npc-grid')" style="display:none">&#x25BC; Character Roster</div>
+<div class="section-title violet">Character Roster <span id="npc-count" style="font-size:0.8125rem;color:var(--dim);font-weight:400"></span></div>
+<div class="npc-noise-toggle" id="npc-noise-toggle" onclick="toggleNpcFilter()" tabindex="0" role="button" aria-pressed="false">
+<span class="npc-noise-toggle-label">Show All Characters</span>
+<span class="npc-noise-toggle-count" id="npc-active-count"></span>
+</div>
+<div class="npc-grid" id="npc-grid"></div>
+</div>
+<div class="tab-content" id="right-npc-quests">
+<div class="section-title violet">Story Log <span class="section-sub">What the agents are doing right now</span></div>
+<div class="quest-health" id="quest-health" style="display:none">
+<div class="sit-card-label">Quest Health</div>
+<div class="qh-grid" id="qh-grid"></div>
+<div class="qh-type-list" id="qh-types"></div>
+</div>
+<div id="quest-detail-area"></div>
+<div class="quest-log" id="quest-log"></div>
+</div>
+<div class="tab-content" id="right-choices">
+<div class="section-title violet">Faction Decisions <span class="section-sub">How the powers are shaping the story</span></div>
+<div class="choice-narrative" id="choice-narrative"></div>
+<div id="faction-choice-detail-area"></div>
+<div class="choice-list" id="choice-list"></div>
+</div>
+</section>
+
+<footer id="bottom">
+<div class="bottom-era" id="era-name">&#8212;</div>
+<div class="bottom-progress">
+<span class="bottom-progress-label">Next Era</span>
+<div class="bottom-progress-bar"><div class="bottom-progress-fill" id="era-fill" style="width:0"></div></div>
+<span class="bottom-progress-pct" id="era-pct">0%</span>
+</div>
+<div class="bottom-triggers" id="era-triggers"></div>
+<div class="bottom-pending" id="pending-items">What Is Unresolved: <strong>&#8212;</strong></div>
+</footer>
+
+<!-- FEDERATION INTELLIGENCE DRAWER -->
+<div class="ai-chat" id="ai-chat">
+<div class="ai-chat-label">Federation Intelligence</div>
+<div class="ai-chat-messages" id="ai-chat-messages"></div>
+<div class="ai-chat-input-row">
+<input class="ai-chat-input" id="ai-chat-input" type="text" placeholder="Ask about the simulation..." maxlength="300" autocomplete="off">
+<button class="ai-chat-send" id="ai-chat-send" onclick="aiChatSend()">Ask</button>
+</div>
+<div class="ai-chat-suggestions" id="ai-chat-suggestions">
+<span class="ai-chat-suggestion" onclick="aiChatAsk(this.textContent)">What is this simulation?</span>
+<span class="ai-chat-suggestion" onclick="aiChatAsk(this.textContent)">How does it work?</span>
+<span class="ai-chat-suggestion" onclick="aiChatAsk(this.textContent)">Explain what is happening right now.</span>
+<span class="ai-chat-suggestion" onclick="aiChatAsk(this.textContent)">Who is talking to who?</span>
+<span class="ai-chat-suggestion" onclick="aiChatAsk(this.textContent)">What are the NPCs planning?</span>
+<span class="ai-chat-suggestion" onclick="aiChatAsk(this.textContent)">Which NPC should I watch?</span>
+</div>
+<a href="/spectator.html">Open Spectator View</a>
+</div>
+</div>
+
+    <script src="fed-fetch.js"></script>
+    <script src="error-reporter.js"></script>
+    <script src="simulation.js?v=2"></script>
+
+<div id="ai-chat-toggle" onclick="toggleChatDrawer()" aria-label="Toggle Federation Intelligence" role="button" tabindex="0">FI</div>
+</body>
+</html>

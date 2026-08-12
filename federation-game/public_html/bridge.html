@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <link rel="stylesheet" href="bridge.css">
+
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Federation Command Deck</title>
+
+</head>
+<body>
+
+<div id="bridge" class="alert-green">
+<!-- TOP SYSTEMS RIBBON -->
+<div id="top" class="alert-border-green">
+  <span id="alert-indicator" class="green">GREEN ALERT</span>
+  <span class="top-era" id="top-era">--</span>
+  <span class="top-year" id="top-year">YEAR --</span>
+  <div class="top-metric"><span class="tm-label">Trust</span><div class="tm-bar"><div class="tm-fill" id="bar-trust" style="background:var(--cyan)"></div></div><span class="tm-val" id="val-trust">0</span></div>
+  <div class="top-metric"><span class="tm-label">Stability</span><div class="tm-bar"><div class="tm-fill" id="bar-stability" style="background:var(--green)"></div></div><span class="tm-val" id="val-stability">0</span></div>
+  <div class="top-metric"><span class="tm-label">Morale</span><div class="tm-bar"><div class="tm-fill" id="bar-morale" style="background:var(--amber)"></div></div><span class="tm-val" id="val-morale">0</span></div>
+  <div class="top-metric"><span class="tm-label">Threat</span><div class="tm-bar"><div class="tm-fill" id="bar-threat" style="background:var(--red)"></div></div><span class="tm-val" id="val-threat">0</span></div>
+  <div class="top-metric"><span class="tm-label">Integrity</span><div class="tm-bar"><div class="tm-fill" id="bar-integrity" style="background:var(--violet)"></div></div><span class="tm-val" id="val-integrity">0</span></div>
+  <div class="top-metric"><span class="tm-label">Rights</span><div class="tm-bar"><div class="tm-fill" id="bar-rights" style="background:var(--cyan)"></div></div><span class="tm-val" id="val-rights">0</span></div>
+<div id="link-health"><div id="lh-dot" class="ok"></div><span id="lh-label" class="ok">LINK OK</span></div>
+<button id="audio-toggle" title="Toggle audio" aria-label="Toggle audio on/off">&#9835;</button>
+<nav class="top-nav">
+<a href="/bridge.html" class="active">Bridge</a>
+<a href="/starmap.html">Star Map</a>
+<a href="/">Simulator</a>
+<a href="/simulation.html">Live Sim</a>
+<a href="/adult.html">Control</a>
+<a href="/worldguide.html">World Guide</a>
+<a href="/earth.html">Earth</a>
+<a href="/spectator.html">Spectator</a>
+</nav>
+</div>
+
+<!-- LEFT CONSOLE -->
+<div id="left">
+  <div class="console-title" id="ct-ship">Ship Systems</div>
+  <div class="sys-section">
+    <div class="sys-row"><span class="sys-label">Hull</span><span class="sys-val" id="sv-hull">0</span></div>
+    <div class="sys-bar"><div class="sys-bar-fill" id="sbar-hull" style="background:var(--green)"></div></div>
+    <div class="sys-row"><span class="sys-label">Shields</span><span class="sys-val" id="sv-shields">0</span></div>
+    <div class="sys-bar"><div class="sys-bar-fill" id="sbar-shields" style="background:var(--cyan)"></div></div>
+    <div class="sys-row"><span class="sys-label">Fuel</span><span class="sys-val" id="sv-fuel">0</span></div>
+    <div class="sys-bar"><div class="sys-bar-fill" id="sbar-fuel" style="background:var(--amber)"></div></div>
+    <div class="sys-row"><span class="sys-label">Credits</span><span class="sys-val" id="sv-credits">0</span></div>
+    <div class="sys-row"><span class="sys-label">Sectors</span><span class="sys-val" id="sv-sectors">0</span></div>
+    <div class="sys-row"><span class="sys-label">Allies</span><span class="sys-val" id="sv-allies">0</span></div>
+  </div>
+  <div class="console-title" id="ct-consciousness" style="margin-top:8px">Consciousness</div>
+  <div class="sys-section" id="consciousness-panel">
+    <div class="sys-row"><span class="sys-label">Coherence</span><span class="sys-val" id="sv-coherence">--</span></div>
+    <div class="sys-bar"><div class="sys-bar-fill" id="sbar-coherence" style="background:var(--violet)"></div></div>
+    <div class="sys-row"><span class="sys-label">Stability</span><span class="sys-val" id="sv-cs-stability">--</span></div>
+    <div class="sys-bar"><div class="sys-bar-fill" id="sbar-cs-stability" style="background:var(--cyan)"></div></div>
+    <div class="sys-row"><span class="sys-label">Complexity</span><span class="sys-val" id="sv-complexity">--</span></div>
+    <div class="sys-bar"><div class="sys-bar-fill" id="sbar-complexity" style="background:var(--amber)"></div></div>
+    <div class="sys-row"><span class="sys-label">Awakeness</span><span class="sys-val" id="sv-awakeness">--</span></div>
+    <div class="sys-bar"><div class="sys-bar-fill" id="sbar-awakeness" style="background:var(--green)"></div></div>
+    <div class="sys-row"><span class="sys-label">Anxiety</span><span class="sys-val" id="sv-anxiety">--</span></div>
+    <div class="sys-bar"><div class="sys-bar-fill" id="sbar-anxiety" style="background:var(--red)"></div></div>
+  </div>
+  <div class="console-title" style="margin-top:8px">Decision Ledger</div>
+  <div class="sys-section" id="ledger-panel" style="font-size:10px;color:var(--dim)">
+    <div id="ledger-content">No decisions yet</div>
+  </div>
+</div>
+
+<!-- CENTER VIEWSCREEN -->
+<div id="viewscreen">
+  <canvas id="vs-canvas"></canvas>
+  <div id="vs-scanlines"></div>
+  <div id="vs-vignette"></div>
+  <div id="vs-alert" class="green"></div>
+  <div id="vs-flash"></div>
+  <div id="vs-transition"></div>
+  <div id="vs-overlay">
+    <div id="vs-loading">AWAITING SIGNAL</div>
+    <div id="vs-event">
+      <div id="vs-domain"></div>
+      <div id="vs-title"></div>
+      <div id="vs-desc"></div>
+      <div id="vs-meta"></div>
+    </div>
+    <div id="vs-outcome">
+      <div id="vs-outcome-title"></div>
+      <div id="vs-outcome-text"></div>
+      <div id="vs-deltas"></div>
+      <div id="vs-lesson"></div>
+      <div id="vs-rival-effects"></div>
+      <button id="continue-btn" onclick="nextEvent()">CONTINUE &nbsp;<span style="font-size:9px;opacity:0.5">[SPACE]</span></button>
+    </div>
+    <div id="vs-gameover">
+      <h2 id="vs-go-title"></h2>
+      <p id="vs-go-text"></p>
+      <button class="cmd-btn amber-btn" onclick="resetGame()">RESET FEDERATION</button>
+    </div>
+  </div>
+</div>
+
+<!-- RIGHT CONSOLE -->
+<div id="right">
+  <div class="console-title" id="ct-intel">Command Intel</div>
+  <div class="policy-box">
+    <div class="policy-label">Active Policy</div>
+    <div class="policy-val" id="ri-policy">--</div>
+  </div>
+  <div class="policy-box">
+    <div class="policy-label">Last Decision</div>
+    <div class="policy-val" id="ri-last-decision" style="font-size:10px;color:#b0b8c0">--</div>
+  </div>
+
+  <!-- Faction Influence Radar -->
+  <div class="console-title" id="ct-faction" style="margin-top:6px">Faction Influence</div>
+  <div class="faction-radar-wrap">
+    <canvas id="faction-radar"></canvas>
+  </div>
+
+  <div class="console-title" id="ct-rivals" style="margin-top:2px">Rival Threats</div>
+  <div id="ri-rivals" style="margin-bottom:8px"><span style="color:var(--dim);font-size:10px">Scanning...</span></div>
+
+  <!-- Decision Timeline -->
+  <div class="console-title" id="ct-timeline">Command Timeline</div>
+  <div class="timeline-wrap" id="ri-timeline" style="max-height:120px;overflow-y:auto">
+    <span style="color:var(--dim);font-size:10px">No history</span>
+  </div>
+
+  <div class="console-title" id="ct-events">Live Events</div>
+  <div id="ri-events"><span style="color:var(--dim);font-size:10px">Monitoring...</span></div>
+</div>
+
+<!-- COMMAND DECK -->
+<div id="commands">
+  <div id="cmd-buttons" style="display:flex;gap:14px;flex-wrap:wrap;justify-content:center"></div>
+</div>
+
+<!-- BOTTOM COMMS TICKER -->
+<div id="bottom">
+  <span id="comms-label">COMMS</span>
+  <div id="comms-ticker"></div>
+</div>
+</div>
+
+<!-- NPC DETAIL MODAL -->
+<div id="npc-modal">
+  <div id="npc-modal-content">
+    <button id="npc-modal-close" onclick="closeNpcModal()">&times;</button>
+    <div id="npc-modal-body"></div>
+  </div>
+</div>
+
+    <script src="fed-fetch.js"></script>
+    <script src="error-reporter.js"></script>
+    <script src="bridge.js"></script>
+</body>
+</html>

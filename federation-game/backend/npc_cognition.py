@@ -1146,6 +1146,28 @@ def run_cognition(
                 except Exception:
                     pass
 
+                # Long-term memory (durable, importance-ranked). Leaders now get
+                # real persistent memory like the dedicated pair containers, so
+                # they retain history across ticks and restarts instead of only
+                # transient decisions. Low-significance events are filtered by
+                # npc_memory's threshold; never break cognition on memory failure.
+                try:
+                    from npc_memory import record_memory
+
+                    record_memory(
+                        char_id=cid,
+                        event={
+                            "type": "decision",
+                            "category": decision.get("category", "unknown"),
+                            "content": decision.get("description") or decision.get("summary") or "",
+                            "action_desc": decision.get("description") or "",
+                            "reasoning": decision.get("reasoning", ""),
+                            "ts": int(now),
+                        },
+                    )
+                except Exception:
+                    pass
+
                 # Set cooldown
                 _set_cooldown(cid, LEADER_COOLDOWN)
                 log_npc_activity(cid, "cognition", {
@@ -1330,6 +1352,28 @@ def run_cognition(
                             "last_ts": str(now),
                             "last_category": decision["category"],
                             "last_trigger": top_trigger["trigger_type"],
+                        },
+                    )
+                except Exception:
+                    pass
+
+                # Long-term memory (durable, importance-ranked). Specialists now
+                # get real persistent memory like leaders and the dedicated pair
+                # containers, so they retain history across ticks and restarts.
+                # Low-significance events are filtered by npc_memory's threshold;
+                # never break specialist cognition on memory failure.
+                try:
+                    from npc_memory import record_memory
+
+                    record_memory(
+                        char_id=cid,
+                        event={
+                            "type": "decision",
+                            "category": decision.get("category", "unknown"),
+                            "content": decision.get("description") or decision.get("summary") or "",
+                            "action_desc": decision.get("description") or "",
+                            "reasoning": decision.get("reasoning", ""),
+                            "ts": int(now),
                         },
                     )
                 except Exception:

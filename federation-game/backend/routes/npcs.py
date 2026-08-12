@@ -69,7 +69,7 @@ async def npc_activity_stats():
     r = _get_observer_redis()
     categories = {"decision": 0, "interaction": 0, "cognition": 0, "chat": 0, "quest": 0}
 
-    for key in r.scan_iter(match="npc_activity:*"):
+    for key in r.scan_iter(match="npc_activity:*", count=500):
         key = key.decode() if isinstance(key, bytes) else key
         try:
             entries = r.zrange(key, 0, -1)
@@ -245,7 +245,7 @@ async def get_npc_quest_chains(char_id: str):
         pattern = f"npc_quests:chain_progress:{char_id}:*"
         keys = [
             k.decode() if isinstance(k, bytes) else k
-            for k in _r.scan_iter(match=pattern)
+            for k in _r.scan_iter(match=pattern, count=500)
         ]
 
         chains = []

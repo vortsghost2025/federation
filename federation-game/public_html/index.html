@@ -1,0 +1,284 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <link rel="stylesheet" href="index.css">
+
+    <meta charset="UTF-8">
+    <link rel="icon" href="data:," />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FEDERATION STARSHIP</title>
+    
+</head>
+<body>
+    <!-- Turn 0 Tutorial Overlay -->
+    <div class="tutorial-overlay" id="tutorialOverlay">
+        <div class="tutorial-content">
+            <h2>Welcome to Federation Starship</h2>
+            <p>This game simulates the governance of the Federation. Your objective is to keep the Federation stable, maintain public trust, and support the Council while exploring and developing technology.</p>
+            <ul>
+                <li><strong>Turn:</strong> Advances after each decision.</li>
+                <li><strong>Metrics (Stability, Trust, Council Support, Constitution):</strong> Influence the outcome of Council Proposals.</li>
+                <li><strong>Engine Systems:</strong> Quests, Factions, Technology, NPCs, and more are visible in the Adult Control Plane.</li>
+                <li>Make choices, see the impact, and aim for a thriving Federation.</li>
+            </ul>
+            <button onclick="dismissTutorial()">Got it! Let’s play</button>
+        </div>
+    </div>
+    <div class="stars" id="stars"></div>
+
+    <div class="top-bar">
+        <div class="ship-name" id="shipName">USS FEDERATION</div>
+    </div>
+
+<!-- Landing Strip - Navigation -->
+<div class="landing-strip">
+<a href="/" class="landing-tab active" aria-current="page">
+<span class="tab-icon">🚀</span><span class="tab-label">Starship Simulator</span>
+</a>
+<div class="landing-divider"></div>
+<a href="/simulation.html" class="landing-tab">
+<span class="tab-icon">🧬</span><span class="tab-label">Live Sim</span>
+</a>
+<div class="landing-divider"></div>
+<a href="/adult.html" class="landing-tab">
+<span class="tab-icon">⚖️</span><span class="tab-label">Adult Control Plane</span>
+</a>
+<div class="landing-divider"></div>
+<a href="/bridge.html" class="landing-tab">
+<span class="tab-icon">📚</span><span class="tab-label">Command Deck Archive</span>
+</a>
+<div class="landing-divider"></div>
+<a href="/earth.html" class="landing-tab">
+<span class="tab-icon">🌍</span><span class="tab-label">Earth Command</span>
+</a>
+<div class="landing-divider"></div>
+<a href="/worldguide.html" class="landing-tab">
+<span class="tab-icon">&#128218;</span><span class="tab-label">World Guide</span>
+</a>
+<div class="landing-divider"></div>
+<a href="/spectator.html" class="landing-tab">
+<span class="tab-icon">👁</span><span class="tab-label">Spectator</span>
+</a>
+</div>
+
+    <div class="main-container">
+        <!-- Left Panel - Ship Status -->
+        <div class="left-panel">
+            <div class="status-block">
+                <h2>SHIP STATUS</h2>
+                <div class="stat-row">
+                    <span class="stat-label">CREDITS</span>
+                    <span class="stat-value" id="credits">1000</span>
+                </div>
+                <div class="stat-row">
+                    <span class="stat-label">FUEL</span>
+                    <span class="stat-value" id="fuel">100</span>
+                </div>
+                <div class="progress-bar">
+                    <div class="progress-fill fuel" id="fuelBar" style="width: 100%"></div>
+                </div>
+                <div class="stat-row">
+                    <span class="stat-label">SHIELDS</span>
+                    <span class="stat-value" id="shields">100</span>
+                </div>
+                <div class="progress-bar">
+                    <div class="progress-fill shields" id="shieldsBar" style="width: 100%"></div>
+                </div>
+                <div class="stat-row">
+                    <span class="stat-label">HULL</span>
+                    <span class="stat-value" id="hull">100</span>
+                </div>
+                <div class="progress-bar">
+                    <div class="progress-fill hull" id="hullBar" style="width: 100%"></div>
+                </div>
+                <div class="stat-row">
+                    <span class="stat-label">MORALE</span>
+                    <span class="stat-value" id="morale">80</span>
+                </div>
+                <div class="progress-bar">
+                    <div class="progress-fill morale" id="moraleBar" style="width: 80%"></div>
+                </div>
+            </div>
+            <div class="status-block">
+                <h2>MISSION</h2>
+                <div class="stat-row">
+                    <span class="stat-label">SECTORS</span>
+                    <span class="stat-value" id="sectors">1</span>
+                </div>
+                <div class="stat-row">
+                    <span class="stat-label">ALLIES</span>
+                    <span class="stat-value" id="allies">0</span>
+                </div>
+            </div>
+            <div class="status-block">
+                <h2>GOVERNANCE</h2>
+                <div class="stat-row">
+                    <span class="stat-label">STABILITY</span>
+                    <span class="stat-value" id="stability">70</span>
+                </div>
+                <div class="progress-bar">
+                    <div class="progress-fill stability" id="stabilityBar" style="width: 70%"></div>
+                </div>
+                <div class="stat-row">
+                    <span class="stat-label">PUBLIC TRUST</span>
+                    <span class="stat-value" id="publicTrust">65</span>
+                </div>
+                <div class="progress-bar">
+                    <div class="progress-fill trust" id="trustBar" style="width: 65%"></div>
+                </div>
+                <div class="stat-row">
+                    <span class="stat-label">COUNCIL</span>
+                    <span class="stat-value" id="councilSupport">55</span>
+                </div>
+                <div class="progress-bar">
+                    <div class="progress-fill council" id="councilBar" style="width: 55%"></div>
+                </div>
+                <div class="stat-row">
+                    <span class="stat-label">CONSTITUTION</span>
+                    <span class="stat-value" id="constitution">80</span>
+                </div>
+                <div class="progress-bar">
+                    <div class="progress-fill stability" id="constitutionBar" style="width: 80%"></div>
+                </div>
+                <div class="stat-row">
+                    <span class="stat-label">RIGHTS</span>
+                    <span class="stat-value" id="rights">80</span>
+                </div>
+                <div class="progress-bar">
+                    <div class="progress-fill trust" id="rightsBar" style="width: 80%"></div>
+                </div>
+                <div class="stat-row">
+                    <span class="stat-label">EMERGENCY</span>
+                    <span class="stat-value" id="emergency">0</span>
+                </div>
+  <div class="progress-bar">
+  <div class="progress-fill hull" id="emergencyBar" style="width: 0%"></div>
+  </div>
+  </div>
+  <div class="status-block">
+  <h2>RIVAL FEDERATIONS</h2>
+  <div id="rivalList" style="max-height: 200px; overflow-y: auto;">
+  <div style="color: var(--lcars-tan); font-size: 0.85rem;">Scanning...</div>
+  </div>
+  <div style="margin-top: 8px; display: flex; gap: 6px;">
+  <button class="action-btn" onclick="fetchRivals()" style="padding: 6px 12px; font-size: 0.75rem;">SCAN</button>
+  <span style="color: var(--lcars-blue); font-size: 0.75rem;" id="rivalCount">0 detected</span>
+  </div>
+  </div>
+  </div>
+
+        <!-- Center Panel - Main View -->
+        <div class="center-panel">
+            <div class="main-view" id="mainView">
+                <div class="loading" id="loading">INITIALIZING SYSTEMS...</div>
+                <div id="eventContent" style="display: none;">
+                    <div class="event-icon" id="eventIcon"></div>
+                    <div class="event-title" id="eventTitle"></div>
+                    <div class="event-description" id="eventDesc"></div>
+                    <div class="event-meta" id="eventMeta"></div>
+                    <div class="choices-container" id="choices"></div>
+                </div>
+            </div>
+  <div class="bottom-bar">
+  <div class="turn-display">TURN: <span id="turn">1</span></div>
+  <div class="turn-display">STARDATE: <span id="stardate">47634.44</span></div>
+  <button class="bottom-btn" onclick="showTutorial()">HOW TO PLAY</button>
+  <button class="bottom-btn" onclick="resetGame()">RESET</button>
+  </div>
+        </div>
+
+        <!-- Right Panel - Actions -->
+        <div class="right-panel">
+            <div class="action-block">
+                <button class="action-btn orange" onclick="explore()">EXPLORE</button>
+                <button class="action-btn blue" onclick="newEvent()">NEW MISSION</button>
+                <button class="action-btn" onclick="resetGame()">RESET</button>
+                <a class="mode-link" href="/adult.html">Adult Control Plane</a>
+                <a class="mode-link" href="/bridge.html">Command Deck Archive</a>
+            </div>
+            <div class="action-block">
+                <h2 style="color: var(--lcars-purple); margin-bottom: 10px;">TECHNOLOGY</h2>
+                <ul class="tech-list" id="techList">
+                    <li>None discovered</li>
+                </ul>
+            </div>
+            <div class="action-block">
+                <h2 style="color: var(--lcars-purple); margin-bottom: 10px;">ACTIVE POLICY</h2>
+                <div class="stat-label">STATUS</div>
+                <div class="stat-value" id="governanceStatus" style="font-size: 1rem; color: var(--lcars-blue); margin-bottom: 10px;">DELIBERATIVE REPUBLIC</div>
+                <div class="stat-value" id="activePolicy" style="font-size: 1rem; color: var(--lcars-tan);">Exploration Charter</div>
+                <ul class="tech-list" id="policyLog">
+                    <li>No council decisions yet</li>
+                </ul>
+            </div>
+            <div class="action-block">
+                <h2 style="color: var(--lcars-purple); margin-bottom: 10px;">DECISION LEDGER</h2>
+  <ul class="tech-list ledger-list" id="decisionLedger">
+  <li>No decisions recorded</li>
+  </ul>
+  </div>
+  <div class="action-block">
+  <h2 style="color: var(--lcars-blue); margin-bottom: 10px;">CONSCIOUSNESS</h2>
+  <div id="consciousnessPanel">
+  <div class="consciousness-row">
+  <span class="consciousness-label">Identity</span>
+  <span class="consciousness-value" id="csIdentity">0.80</span>
+  </div>
+  <div class="consciousness-bar"><div class="consciousness-fill identity" id="csIdentityBar" style="width: 80%"></div></div>
+  <div class="consciousness-row">
+  <span class="consciousness-label">Anxiety</span>
+  <span class="consciousness-value" id="csAnxiety">0.20</span>
+  </div>
+  <div class="consciousness-bar"><div class="consciousness-fill anxiety" id="csAnxietyBar" style="width: 20%"></div></div>
+  <div class="consciousness-row">
+  <span class="consciousness-label">Confidence</span>
+  <span class="consciousness-value" id="csConfidence">0.90</span>
+  </div>
+  <div class="consciousness-bar"><div class="consciousness-fill confidence" id="csConfidenceBar" style="width: 90%"></div></div>
+  <div class="consciousness-row">
+  <span class="consciousness-label">Expansion</span>
+  <span class="consciousness-value" id="csExpansion">0.50</span>
+  </div>
+  <div class="consciousness-bar"><div class="consciousness-fill expansion" id="csExpansionBar" style="width: 50%"></div></div>
+  <div class="consciousness-row">
+  <span class="consciousness-label">Diplomacy</span>
+  <span class="consciousness-value" id="csDiplomacy">0.60</span>
+  </div>
+  <div class="consciousness-bar"><div class="consciousness-fill diplomacy" id="csDiplomacyBar" style="width: 60%"></div></div>
+  </div>
+  <div id="consciousnessTags" style="margin-top: 8px;"></div>
+  </div>
+  <div class="action-block">
+  <h2 style="color: var(--lcars-yellow); margin-bottom: 10px;">SYSTEMS STATUS</h2>
+  <div class="systems-bar" id="systemsBar"></div>
+  <div style="color: var(--lcars-tan); font-size: 0.75rem;" id="systemsCount">11/12 loaded</div>
+  </div>
+        </div>
+    </div>
+
+<!-- Outcome Overlay -->
+<div class="outcome-overlay" id="outcomeOverlay">
+  <div class="outcome-card">
+    <div class="outcome-victory" id="outcomeVictory" style="display:none;"></div>
+    <div class="outcome-text" id="outcomeText"></div>
+    <div class="outcome-deltas" id="outcomeDeltas"></div>
+    <div class="outcome-explain-box" id="outcomeExplainBox"></div>
+    <div class="outcome-lesson" id="outcomeLesson"></div>
+    <div id="outcomeSubsections"></div>
+    <button class="continue-btn" onclick="closeOutcome()">CONTINUE</button>
+  </div>
+</div>
+
+    <!-- Game Over Screen -->
+    <div class="game-over" id="gameOver">
+        <div class="game-over-text" id="gameOverText">GAME OVER</div>
+        <div class="final-stats" id="finalStats"></div>
+        <button class="continue-btn" onclick="resetGame()">PLAY AGAIN</button>
+    </div>
+
+    
+    <script src="fed-fetch.js"></script>
+    <script src="error-reporter.js"></script>
+    <script src="index.js"></script>
+</body>
+</html>

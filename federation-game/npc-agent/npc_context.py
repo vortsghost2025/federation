@@ -145,7 +145,7 @@ def neighborhood_snapshot(r, max_chars: int = 400, char_id: str = "") -> str:
     entries: list[tuple[int, str, str, str]] = []
 
     try:
-        all_state_keys = list(r.scan_iter(match="npc_state:*"))
+        all_state_keys = list(r.scan_iter(match="npc_state:*", count=500))
         logger.debug("[%s] neighborhood: found %d npc_state keys", cid, len(all_state_keys))
 
         pipe = r.pipeline(transaction=False)
@@ -241,7 +241,7 @@ def promote_events_to_inbox(r, max_events: int = 5, max_chars: int = 120, char_i
                 break
             try:
                 event = json.loads(event_json)
-            except:
+            except (ValueError, TypeError):
                 continue
 
             action = event.get("action_type", "") or event.get("interaction_type", "") or event.get("event_type", "")
@@ -326,7 +326,7 @@ def active_topic_cooldowns(r, char_id: str = "", limit: int = 3) -> list[tuple[s
     prefix = f"npc_topic_cooldown:{cid}:"
     rows: list[tuple[str, int]] = []
     try:
-        keys = list(r.scan_iter(match=f"{prefix}*"))
+        keys = list(r.scan_iter(match=f"{prefix}*", count=500))
     except Exception:
         return []
     for key in keys:
@@ -491,7 +491,7 @@ def top_neighborhood_npcs(r, n: int = 3, char_id: str = "") -> str:
     cid = char_id or CHAR_ID
     _partner_id_fn, *_ = _rh()
     try:
-        all_state_keys = list(r.scan_iter(match="npc_state:*"))
+        all_state_keys = list(r.scan_iter(match="npc_state:*", count=500))
         pipe = r.pipeline(transaction=False)
         for k in all_state_keys:
             pipe.hgetall(k)

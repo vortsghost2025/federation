@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Federation — Spectator</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>👁</text></svg>">
+<link rel="stylesheet" href="spectator.v2.css?v=2">
+</head>
+<body>
+
+<header role="banner" class="world-header" id="world-header">
+  <div class="logo">SPECTATOR<span class="logo-sub">observer console</span></div>
+  <div class="vibe-gauges" id="vibe-gauges" aria-label="World mood">
+    <div class="gauge"><span class="gauge-label">Anxiety</span><div class="gauge-bar"><div class="gauge-fill anxiety" id="g-anxiety" style="width:0" role="progressbar" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100" aria-label="Anxiety"></div></div><span class="gauge-val" id="gv-anxiety">—</span></div>
+    <div class="gauge"><span class="gauge-label">Confidence</span><div class="gauge-bar"><div class="gauge-fill confidence" id="g-confidence" style="width:0" role="progressbar" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100" aria-label="Confidence"></div></div><span class="gauge-val" id="gv-confidence">—</span></div>
+    <div class="gauge"><span class="gauge-label">Expansion</span><div class="gauge-bar"><div class="gauge-fill expansion" id="g-expansion" style="width:0" role="progressbar" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100" aria-label="Expansion"></div></div><span class="gauge-val" id="gv-expansion">—</span></div>
+    <div class="gauge"><span class="gauge-label">Morale</span><div class="gauge-bar"><div class="gauge-fill morale" id="g-morale" style="width:0" role="progressbar" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100" aria-label="Morale"></div></div><span class="gauge-val" id="gv-morale">—</span></div>
+  </div>
+  <div class="headline" id="headline" aria-live="polite">Listening for signal...</div>
+  <div class="faction-pulse" id="faction-pulse" aria-label="Faction power levels"></div>
+</header>
+
+<main role="main" class="feed" id="feed" aria-label="Event timeline">
+  <div class="empty-state" id="empty-state">The Federation is thinking. First tick incoming...</div>
+</main>
+
+<aside role="complementary" class="sidebar" id="sidebar" aria-label="Relationships and context">
+  <section class="panel" id="panel-relationships">
+    <h2>Relationships</h2>
+    <div id="rel-content" class="rel-content">Loading connections...</div>
+  </section>
+  <section class="panel" id="panel-narrator">
+    <h2>The Story So Far</h2>
+    <div id="narrator-content" class="narrator-content">No narration yet.</div>
+  </section>
+</aside>
+
+<div class="assistant-float" id="assistant-float" role="form" aria-label="Ask the Oracle">
+  <div class="assistant-title">ASK THE ORACLE</div>
+  <div id="assistant-answer" class="assistant-answer" aria-live="polite"></div>
+  <form id="assistant-form" class="assistant-form">
+    <input type="text" id="question-input" class="assistant-input" placeholder="What do you want to know?" aria-label="Your question">
+    <button type="submit" class="btn btn-primary">Ask</button>
+  </form>
+</div>
+
+<footer role="contentinfo" class="controls-bar">
+  <button id="refresh-btn" class="btn btn-secondary" aria-label="Refresh now">⟳ Refresh</button>
+  <button id="pause-btn" class="btn btn-secondary" aria-label="Pause auto refresh">⏸ Pause</button>
+  <button id="read-btn" class="btn btn-secondary" aria-label="Read latest events aloud">🔊 Read Aloud</button>
+  <a href="/starmap.html" class="btn btn-link" aria-label="Open starmap in new tab" target="_blank">Starmap ↗</a>
+</footer>
+
+<script src="spectator.v2.js?v=2"></script>
+</body>
+</html>

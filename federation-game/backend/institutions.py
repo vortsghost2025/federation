@@ -20,6 +20,12 @@ NPC_OUTCOME_HISTORY_KEY = "npc:{npc_id}:workflow_outcomes"
 NPC_RECENT_OUTCOMES_KEY = "npc:{npc_id}:recent_outcomes"
 MAX_RECENT_OUTCOMES = 20
 
+# Completed workflows keep their per-workflow detail hash for this long, then
+# the hash self-expires so completed institutional history does not accumulate
+# forever in Redis. The completed-ID set is small (id-only); the heavy detail
+# is what this bounds. Env-overridable.
+WORKFLOW_ARCHIVE_TTL_DAYS = int(os.environ.get("WORKFLOW_ARCHIVE_TTL_DAYS", "30"))
+
 # ── Phase 1A.2: Atomic Consequence Commit ───────────────────
 # Only workflows created at or after this UTC timestamp produce outcome effects.
 # Protects against backlog dumps of pre-existing workflows.
@@ -350,6 +356,12 @@ def advance_workflow(r, workflow_id, now=None, execution_cycle_id=""):
         _decrement_inst_counter(r, institution_id, "active_workflows")
         _increment_inst_counter(r, institution_id, "completed_workflows")
         _record_outcome(r, workflow_id, record, next_status, execution_cycle_id)
+        # Archive: expire the per-workflow detail hash so completed history
+        # does not accumulate unbounded. The id-only completed set stays small.
+        try:
+            r.expire(workflow_id, WORKFLOW_ARCHIVE_TTL_DAYS * 86400)
+        except Exception:
+            pass
 
     return True, next_status
 
@@ -382,6 +394,11 @@ def override_workflow_status(r, workflow_id, new_status, now=None, execution_cyc
         _decrement_inst_counter(r, institution_id, "active_workflows")
         _increment_inst_counter(r, institution_id, "completed_workflows")
         _record_outcome(r, workflow_id, record, new_status, execution_cycle_id)
+        # Archive: bound the completed workflow detail hash (see advance_workflow).
+        try:
+            r.expire(workflow_id, WORKFLOW_ARCHIVE_TTL_DAYS * 86400)
+        except Exception:
+            pass
     elif not is_terminal and not was_active:
         r.srem(COMPLETED_WORKFLOWS_KEY, workflow_id)
         r.sadd(ACTIVE_WORKFLOWS_KEY, workflow_id)

@@ -211,7 +211,7 @@ def spectator_scenes(limit: int = Query(60, ge=10, le=200), page: int = Query(0,
         try:
             import redis as _redis, os
             r = _redis.from_url(os.environ.get("REDIS_URL", "redis://redis:6379/0"), decode_responses=True)
-            for key in r.scan_iter("npc:*"):
+            for key in r.scan_iter("npc:*", count=500):
                 if ":name" in key:
                     char_id = key.split(":")[1] if ":" in key else ""
                     npc_names[char_id] = r.get(key)
@@ -620,7 +620,7 @@ def _collect_npc_name_map(rows):
         try:
             import redis as _redis, os as _os
             r = _redis.from_url(_os.environ.get("REDIS_URL", "redis://redis:6379/0"), decode_responses=True)
-            for key in r.scan_iter("npc:*"):
+            for key in r.scan_iter("npc:*", count=500):
                 if ":name" in key:
                     char_id = key.split(":")[1] if ":" in key else ""
                     if char_id:
@@ -1067,6 +1067,7 @@ def spectator_agency():
             "action_by_char": action_by_char,
             "category_by_char": category_by_char,
             "journal": pair_journal,
+            "beats": pair_journal,
             "active_thread": pair_thread,
             "founded_areas": _build_founded_areas(r, pair_slug),
         }
