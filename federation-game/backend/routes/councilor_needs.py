@@ -45,7 +45,7 @@ def get_councilor_areas(request: Request, _: None = Depends(require_operator)):
 
 
 @router.get("/councilor/needs")
-def get_needs(npc_id: Optional[str] = None):
+def get_needs(npc_id: Optional[str] = None, _: None = Depends(require_operator)):
     r = _r(None)
     needs = get_open_needs(r, npc_id=npc_id)
     return {"needs": needs, "count": len(needs)}
@@ -64,7 +64,7 @@ class NeedFiling(BaseModel):
 
 
 @router.post("/councilor/needs")
-def create_need(filing: NeedFiling):
+def create_need(filing: NeedFiling, request: Request, _: None = Depends(require_operator)):
     r = _r(None)
     result = file_npc_need(
         r,
@@ -97,7 +97,7 @@ class CloseNeedPayload(BaseModel):
 
 
 @router.post("/councilor/needs/{need_id}/close")
-def close_need(need_id: str, payload: CloseNeedPayload = CloseNeedPayload()):
+def close_need(need_id: str, payload: CloseNeedPayload = CloseNeedPayload(), _: None = Depends(require_operator)):
     r = _r(None)
     closed = 0
     npc_id = None
@@ -132,7 +132,7 @@ def close_need(need_id: str, payload: CloseNeedPayload = CloseNeedPayload()):
 
 
 @router.get("/councilor/needs/{npc_id}/notifications")
-def get_notifications(npc_id: str):
+def get_notifications(npc_id: str, _: None = Depends(require_operator)):
     r = _r(None)
     key = f"npc:system_notifications:{npc_id}"
     count = r.llen(key)
@@ -146,7 +146,7 @@ def get_notifications(npc_id: str):
 
 
 @router.delete("/councilor/needs/{npc_id}/notifications")
-def clear_notifications(npc_id: str):
+def clear_notifications(npc_id: str, _: None = Depends(require_operator)):
     r = _r(None)
     key = f"npc:system_notifications:{npc_id}"
     count = r.llen(key)
