@@ -589,15 +589,25 @@ def _sync_pair_workspace(r, decision: dict, result: dict, npc_name: str = "", ch
             _cc_for_pivot = json.loads(_raw_conv_piv) if isinstance(_raw_conv_piv, str) else {}
     except Exception:
         _cc_for_pivot = {}
-    _pending_pivot = (
+    # A "retained resolution" means convergence_state still carries a
+    # resolved_shared_goal for the CURRENT shared_goal (a past resolution that
+    # was never consumed by a pivot). This is true even after `resolved` has
+    # flipped False, which happens when a prior pivot reset convergence_state
+    # but the reducer re-resolved or left residue. Firing the pivot on a
+    # retained resolution advances the pair off the stuck theme exactly once;
+    # the success path below wipes resolved_shared_goal so it cannot loop.
+    _retained_resolution = (
         bool(_cc_for_pivot)
-        and _cc_for_pivot.get("resolved", False)
-        and bool((_cc_for_pivot.get("next_question", "") or "").strip())
+        and bool((_cc_for_pivot.get("resolved_shared_goal", "") or "").strip())
         and str(_cc_for_pivot.get("resolved_shared_goal", "") or "") == str(state.get("shared_goal", "") or "")
         and (state.get("open_question", "") or "") in (
             "",
             str(_cc_for_pivot.get("resolved_shared_goal", "") or ""),
         )
+    )
+    _pending_pivot = (
+        _retained_resolution
+        and bool((_cc_for_pivot.get("next_question", "") or "").strip())
     )
     if (not state.get("open_question") and mapping.get("open_question") != "") or _pending_pivot:
         # Stage 4D: after resolution, do not regenerate open_question from
@@ -609,7 +619,7 @@ def _sync_pair_workspace(r, decision: dict, result: dict, npc_name: str = "", ch
                 _cc = json.loads(_cr) if isinstance(_cr, str) else {}
             except Exception:
                 _cc = {}
-            if _cc and _cc.get("resolved", False) and _cc.get("resolved_shared_goal") and \
+            if _cc and ((_cc.get("resolved", False) or _retained_resolution)) and _cc.get("resolved_shared_goal") and \
                state.get("shared_goal", "") == _cc["resolved_shared_goal"]:
                 _post_resolution_default = True
         if _post_resolution_default:
