@@ -171,9 +171,12 @@ def _recent_action_desc(r, char_id):
 def _pick_varied_phrase(r, char_id, category, phrases, max_similarity=0.85):
     """Pick a phrase from `phrases` that differs from the NPC's most recent one.
 
-    Falls back to a random pick when there is no recent memory, when all
-    phrases look similar (short pools), or when the read fails — never blocks
-    the decision path.
+    Rejects phrases that are near-duplicates of the recent action_desc (score
+    above `max_similarity`), then samples uniformly from the remaining
+    candidates so the pool rotates across ALL distinct phrases rather than the
+    fixed two lowest-similarity cells. Falls back to a random pick when there
+    is no recent memory, every phrase looks like a repeat, or the read fails —
+    never blocks the decision path.
     """
     try:
         if not phrases:
@@ -183,15 +186,21 @@ def _pick_varied_phrase(r, char_id, category, phrases, max_similarity=0.85):
         recent = _recent_action_desc(r, char_id)
         if not recent:
             return random.choice(phrases)
-        # Score each candidate by similarity to the recent phrase; pick the
-        # least-similar one, breaking ties at random so the pool doesn't drift
-        # toward a single deterministic order over time.
-        scored = []
-        for p in phrases:
-            sim = SequenceMatcher(None, recent.lower(), p.lower()).ratio()
-            scored.append((sim, p))
+        # Reject only near-duplicates of the recent phrase.
+        acceptable = [
+            p for p in phrases
+            if SequenceMatcher(None, recent.lower(), p.lower()).ratio() <= max_similarity
+        ]
+        if acceptable:
+            return random.choice(acceptable)
+        # Every candidate resembles the recent phrase (short pool or long recent
+        # text). Fall back to the least-similar so we still avoid the exact cell.
+        scored = [
+            (SequenceMatcher(None, recent.lower(), p.lower()).ratio(), p)
+            for p in phrases
+        ]
         min_sim = min(s for s, _ in scored)
-        low = [p for s, p in scored if s <= min_sim + 0.02]
-        return random.choice(low) if low else random.choice(phrases)
+        lowest = [p for s, p in scored if s <= min_sim + 0.001]
+        return random.choice(lowest) if lowest else random.choice(phrases)
     except Exception:
         return random.choice(phrases) if phrases else "made a decision"
