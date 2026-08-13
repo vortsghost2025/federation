@@ -2,6 +2,7 @@
 
 import json
 import logging
+import os
 from datetime import datetime, timezone
 
 log = logging.getLogger("institutions")
@@ -188,10 +189,50 @@ def _rebuild_inst_counters(r):
         r.set(f"{inst_id}:completed_workflows", str(completed_count))
 
 
+# ---------------------------------------------------------------------------
+# Title-based workflow dedup — mirrors backend/institutions.py
+# NPC-authored workflow titles are free-form LLM text that frequently re-emits
+# the same proposal/sector under lightly different casing or punctuation.
+# Because ensure_workflow keys per-source-artifact by uuid (and every NPC
+# artifact carries a fresh uuid), identical conceptual proposals mint brand-new
+# workflows every time, which is the root cause of the 600+ role/workflow bloat
+# seen in metrics. Normalizing a single concept to one canonical key lets us
+# anchor repeat emits to the already-created workflow instead of minting more.
+# ---------------------------------------------------------------------------
+
+TITLE_DEDUPE_TTL_SEC = max(
+    int(os.environ.get("WORKFLOW_TITLE_DEDUPE_TTL_DAYS", "30")) * 86400, 86400
+)
+
+
+def _normalize_workflow_title(raw_title, wf_type):
+    """Return a stable, case/whitespace-normalized title for dedup purposes."""
+    if raw_title is None:
+        return (wf_type or "untitled").lower()
+    text = " ".join(str(raw_title).lower().split())
+    # Collapse leading templated base-phrases NPCs prefix onto proposals
+    for prefix in ("proposal:", "analysis:", "for review:", "review:", "action:"):
+        if text.startswith(prefix):
+            text = text[len(prefix):].strip()
+            break
+    id_text = text or (wf_type or "untitled")
+    # Drop trailing category/byline fragments so "X (Research Division Council)"
+    # collapses onto "X" too.
+    if " (" in id_text:
+        id_text = id_text.split(" (", 1)[0].strip()
+    return id_text or (wf_type or "untitled")
+
+
 def ensure_workflow(r, councilor_id, artifact, role_ctx, wf_type, now=None):
     """Create one workflow of the given type per source artifact id.
 
     Returns the workflow_id (existing or newly created).
+
+    Dedup chain:
+      1. Same source artifact uuid → existing workflow (original behavior).
+      2. Same normalized title (same wf_type + councilor_id) within TTL →
+         the already-anchored workflow for that concept (prevents bloat from
+         repeat LLM emits with fresh uuids but identical conceptual title).
     """
     if wf_type not in VALID_WORKFLOW_TYPES:
         raise ValueError(f"Unknown workflow type: {wf_type!r}")
@@ -203,8 +244,36 @@ def ensure_workflow(r, councilor_id, artifact, role_ctx, wf_type, now=None):
     if existing:
         return existing
 
+    # Near-duplicate collapse: if a workflow for the SAME normalized concept
+    # title already exists (and is still within its dedup window), anchor to it
+    # instead of minting a new workflow per fresh artifact uuid.
+    title_lookup_key = "workflow:title:{}:{}:{}".format(
+        wf_type,
+        councilor_id,
+        _normalize_workflow_title(artifact.get("title"), wf_type),
+    )
+    anchored = r.get(title_lookup_key)
+    if anchored:
+        r.set(workflow_lookup_key, anchored)
+        return anchored
+
     defaults = WORKFLOW_DEFAULTS.get(wf_type, {"artifact_kind": wf_type, "label": wf_type})
     workflow_id = f"workflow:{wf_type}:{artifact_id}"
+    # Atomically claim the canonical title anchor BEFORE creating the workflow
+    # record. SET NX EX is the single source of truth for "which workflow owns
+    # this normalized title". If another reconciler won the race, reuse its
+    # workflow instead of minting a duplicate.
+    won_anchor = r.set(
+        title_lookup_key,
+        workflow_id,
+        nx=True,
+        ex=TITLE_DEDUPE_TTL_SEC,
+    )
+    if not won_anchor:
+        winner = r.get(title_lookup_key) or workflow_id
+        r.set(workflow_lookup_key, winner)
+        return winner
+
     workflow_record = {
         "type": wf_type,
         "institution_id": role_ctx["institution_id"],
