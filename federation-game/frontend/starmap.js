@@ -1088,6 +1088,15 @@ function buildNodesSpatial() {
     }
     npcs = Array.from(npcMap.values());
   }
+  // Build a fast lookup of npc_id -> spatial location record so we can read
+  // movement_progress / destination_sector_id in the per-NPC render loop below.
+  // Without this the canvas sub-position was a static per-id hash and NPCs only
+  // visibly moved on the rare tick their sector_id actually flipped — making
+  // the starmap look frozen even though the backend was advancing every tick.
+  const npcLocMap = {};
+  for (const loc of npcLocations) {
+    npcLocMap[loc.npc_id] = loc;
+  }
   const factions = mapData.factions || {};
   const territories = mapData.faction_territories || [];
   const sectors = mapData.sectors || [];
@@ -1306,21 +1315,48 @@ function buildNodesSpatial() {
       const ringR = baseRadius + ring * ringSpacing;
       const angleStep = (Math.PI * 2) / Math.max(1, slotsInRing);
       const subAngle = slotInRing * angleStep + rng() * angleStep * 0.4;
-      const x = center.cx + jitterX + Math.cos(subAngle) * (ringR + rng() * 6);
-      const y = center.cy + jitterY + Math.sin(subAngle) * (ringR + rng() * 6);
+      // Orbit-ring placement around the anchor (faction centroid or sector center)
+      let orbitX = center.cx + jitterX + Math.cos(subAngle) * (ringR + rng() * 6);
+      let orbitY = center.cy + jitterY + Math.sin(subAngle) * (ringR + rng() * 6);
+
+      // SPATIAL-05: In-transit NPCs drift visually toward their destination
+      // sector centroid each tick. Reads movement_progress from npc_locations
+      // (already merged into npcLocMap above). Falls back to npc field if the
+      // location record is stale or missing.
+      const loc = npcLocMap[npc.id] || npc;
+      const destId = loc.destination_sector_id || '';
+      const progress = Number(loc.movement_progress);
+      const currentTask = loc.current_task || '';
+      const hasProgress = Number.isFinite(progress) && progress > 0.001;
+      const destPos = destId && destId !== secId ? spatialSectors[destId] : null;
+      let x = orbitX, y = orbitY, inTransit = false;
+      if (destPos && hasProgress) {
+        inTransit = true;
+        // Clamp progress to [0.05, 1.0] so an NPC that just departed is visibly
+        // a few pixels off the anchor, not perfectly overlapping it.
+        const p = Math.min(1.0, Math.max(0.05, progress));
+        x = orbitX + (destPos.cx - orbitX) * p;
+        y = orbitY + (destPos.cy - orbitY) * p;
+      }
+
       const age = npc.last_active ? (now - npc.last_active) : 9999;
       const activity = Math.max(0.2, 1 - age / 3600);
       // SPATIAL-03C: Smaller NPC dots — was 3+activity*5, now 2+activity*3
       const radius = 2 + activity * 3;
       const fColor = aff && factions[aff] ? factions[aff].color : '#9e9e9e';
+      // SPATIAL-05: Brighten NPCs that are actively moving so the eye catches motion.
+      const motionBoost = inTransit ? 0.4 : 0;
+      const finalRadius = radius + motionBoost;
       nodes.push({
-        id: npc.id, name: npc.name || npc.id, x, y, radius,
+        id: npc.id, name: npc.name || npc.id, x, y, radius: finalRadius,
         color: npc.mood_color || '#9e9e9e',
         npc, category: npc.category || 'unknown',
         faction: aff || null,
         activity, age,
         factionColor: fColor,
-        sectorId: secId
+        sectorId: secId,
+        inTransit, movementProgress: hasProgress ? progress : 0,
+        currentTask
       });
     });
   }
