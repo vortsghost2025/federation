@@ -965,7 +965,7 @@ def spectator_agency():
     _key_labels = {}
     for _cid in AGENCY_ENABLED_NPCS:
         _env_name = f"NPC_KEY_{_cid.upper()}"
-        _val = _os.environ.get(_env_name, "")
+        _val = os.environ.get(_env_name, "")
         if _cid in CONTAINERIZED_NPCS or _val:
             _key_labels[_cid] = "dedicated key"
         else:
