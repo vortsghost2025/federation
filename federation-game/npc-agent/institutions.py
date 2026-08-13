@@ -254,8 +254,20 @@ def ensure_workflow(r, councilor_id, artifact, role_ctx, wf_type, now=None):
     )
     anchored = r.get(title_lookup_key)
     if anchored:
-        r.set(workflow_lookup_key, anchored)
-        return anchored
+        # Guard against a stale anchor: the title key can outlive the workflow
+        # hash (diverging TTLs, a winner crash between SET NX EX and hash
+        # creation, or manual deletion). Only reuse an anchor whose workflow
+        # record actually exists — otherwise clear the stale key and fall
+        # through to create a fresh one so the concept isn't poisoned for the
+        # anchor TTL.
+        if r.exists(anchored):
+            r.set(workflow_lookup_key, anchored)
+            return anchored
+        try:
+            r.delete(title_lookup_key)
+            r.delete(workflow_lookup_key)
+        except Exception:
+            pass
 
     defaults = WORKFLOW_DEFAULTS.get(wf_type, {"artifact_kind": wf_type, "label": wf_type})
     workflow_id = f"workflow:{wf_type}:{artifact_id}"
@@ -271,8 +283,29 @@ def ensure_workflow(r, councilor_id, artifact, role_ctx, wf_type, now=None):
     )
     if not won_anchor:
         winner = r.get(title_lookup_key) or workflow_id
-        r.set(workflow_lookup_key, winner)
-        return winner
+        # Only resolve the artifact pointer to the winner's workflow if that
+        # workflow actually exists. If the winner is a stale anchor pointing at
+        # nothing, fall through to create a fresh record.
+        if winner and r.exists(winner):
+            r.set(workflow_lookup_key, winner)
+            return winner
+        try:
+            r.delete(title_lookup_key)
+        except Exception:
+            pass
+        won_anchor = r.set(
+            title_lookup_key,
+            workflow_id,
+            nx=True,
+            ex=TITLE_DEDUPE_TTL_SEC,
+        )
+        if not won_anchor:
+            # Somebody else re-claimed the anchor in the microsecond window.
+            # Resolve their workflow if it exists; otherwise bail to create.
+            winner2 = r.get(title_lookup_key) or workflow_id
+            if winner2 and r.exists(winner2):
+                r.set(workflow_lookup_key, winner2)
+                return winner2
 
     workflow_record = {
         "type": wf_type,

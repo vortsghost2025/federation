@@ -247,10 +247,11 @@ _TICK_LLM_BUDGET = 20
 _tick_llm_calls = 0
 _tick_llm_lock = threading.Lock()
 
-# DECISION_DESCRIPTIONS lives in npc_decisions.py (the canonical make_decision
-# path) and is a dict-of-lists of varied phrases so NPCs don't emit byte-
-# identical beats across ticks. The single-string copy that used to live here
-# was dead drift — kill the duplication rather than letting them diverge.
+# THIS module (npc_autonomy) is the canonical home of make_decision — every
+# live caller imports it from here. npc_decisions.py is a thin shared module
+# holding only the varied-phrase data + helper (DECISION_DESCRIPTIONS,
+# ACTION_DESCRIPTION_VARIANTS, _pick_varied_phrase) imported below, so the
+# decision loop and the phrasing pools have exactly one definition each.
 try:
     from npc_decisions import DECISION_DESCRIPTIONS  # noqa: F401
     from npc_decisions import _pick_varied_phrase, ACTION_DESCRIPTION_VARIANTS  # noqa: F401
