@@ -694,6 +694,17 @@ def _build_leader_system_prompt(
 
     recent_thoughts = context.get("recent_thoughts", [])[:2]
 
+    # ── Long-term persistent memory context ──────────────────────
+    # Surface the NPC's persistent npc_memory zset entries so the LLM
+    # can reference past experiences when deciding what to do next.
+    # This mirrors the pair-NPC CouncilorMemory.get_context_for_prompt.
+    memory_ctx = ""
+    try:
+        from npc_memory import get_context_for_prompt
+        memory_ctx = get_context_for_prompt(char_id, max_memories=5)
+    except Exception:
+        pass
+
     # ── NPC Agency context: artifacts and messages ──────────────
     char_id = npc.get("char_id", "")
     is_agency_npc = char_id in AGENCY_ENABLED_NPCS
@@ -737,6 +748,9 @@ YOUR RECENT ACTIONS:
 YOUR RECENT THOUGHTS:
 {chr(10).join(f"- {t}" for t in recent_thoughts) if recent_thoughts else "No recent thoughts."}
 
+YOUR PAST MEMORIES (persistent, across many ticks):
+{memory_ctx or "No persistent memories yet."}
+
 ARTIFACTS & CREATIONS:
 {artifact_ctx}
 
@@ -776,6 +790,14 @@ def _build_specialist_system_prompt(npc: Dict, context: Dict, world_state: Dict)
     artifact_ctx = get_npc_artifact_context(char_id) if is_agency_npc else ""
     message_ctx = get_message_context(char_id) if is_agency_npc else ""
 
+    # ── Long-term persistent memory context ──────────────────────
+    memory_ctx = ""
+    try:
+        from npc_memory import get_context_for_prompt
+        memory_ctx = get_context_for_prompt(char_id, max_memories=5)
+    except Exception:
+        pass
+
     base_cats = "advance_goal, investigate, socialize, help_ally, seek_resources, self_improve, explore, react_to_events"
     agency_cats = ", create_artifact, write_code, send_message, read_artifacts"
     agency_contacts = _build_agency_contacts(char_id) if is_agency_npc else ""
@@ -788,6 +810,9 @@ WORLD STATE:
 
 MOOD: {context.get("mood", "neutral")}
 RECENT: {chr(10).join(recent_actions) if recent_actions else "Nothing recent."}
+
+MEMORY (persistent across ticks):
+{memory_ctx or "No persistent memories yet."}
 
 ARTIFACTS & CREATIONS:
 {artifact_ctx}
