@@ -969,8 +969,45 @@ Respond in this exact JSON format (no markdown, no explanation):
                         _loop_match = topic_count >= 3 and _common_topic and (
                             not _conv_topic or _common_topic == _conv_topic
                         )
-                        if _blocked_match or _resolved_match or _loop_match:
+                        # Novel-fixation count-based loop detector: fires on
+                        # pure repetition count WITHOUT requiring the topic to
+                        # be in the hardcoded KNOWN_BLOCKED_TERMS list. Ends
+                        # the whack-a-mole pattern of manually adding each new
+                        # fixation word. When the agent has repeated the same
+                        # word in 4+ of 5 recent turns AND the partner's recent
+                        # artifacts also mention the same word, this is the
+                        # "both echoing each other" loop signature — block the
+                        # partner_artifact reset so the cooldown accumulates.
+                        _novel_loop_match = False
+                        if (
+                            not _loop_match
+                            and topic_count >= 4
+                            and len(sources) >= 5
+                            and not _blocked_match
+                        ):
+                            try:
+                                _pa = r.lrange(f"npc_artifacts:{partner_id}", -5, -1) if r else []
+                                _partner_has_topic = any(
+                                    common.lower() in (json.loads(a).get("title", "") if isinstance(a, str) else "").lower()
+                                    for a in _pa
+                                    if a and (isinstance(a, str) or isinstance(a, dict))
+                                )
+                                if _partner_has_topic:
+                                    _novel_loop_match = True
+                            except Exception:
+                                pass
+                        if _blocked_match or _resolved_match or _loop_match or _novel_loop_match:
+                            if _novel_loop_match:
+                                logger.info(
+                                    "[%s] novel_loop_detected topic=%s count=%d window=%d (not in KNOWN_BLOCKED_TERMS; partner artifacts echo)",
+                                    CHAR_ID, common, topic_count, len(sources),
+                                )
                             evidence_reason = ""
+                            if _novel_loop_match:
+                                logger.info(
+                                    "[%s] novel_loop_detected topic=%s count=%d window=%d (not in KNOWN_BLOCKED_TERMS; partner artifacts echo)",
+                                    CHAR_ID, common, topic_count, len(sources),
+                                )
                     if evidence_reason:
                         logger.info(
                             "[%s] topic_fatigue_reset topic=%s reason=%s",
@@ -1070,9 +1107,13 @@ Respond in this exact JSON format (no markdown, no explanation):
 
                 if _resolved and _nq:
                     force_constraint += (
-                        "\n\nRESOLUTION PRESSURE: The current question has been resolved. "
-                        "You must advance beyond the resolved answer with a NEW downstream question. "
-                        f"Resolved answer: \"{_ans[:100]}\""
+                        "\n\nRESOLUTION OPTION: The current question has been resolved. "
+                        "You may EITHER advance with a genuinely NEW downstream question, "
+                        "OR CLOSE this topic as complete and pivot to an entirely different "
+                        "subject — your active quest progress, or a relationship with a "
+                        "character outside the pair you have not yet pursued. "
+                        "Do NOT re-open the same question. "
+                        f"Resolved answer was: \"{_ans[:100]}\""
                         f" Blocked topics: {', '.join(_blocked[:2]) if _blocked else 'none'}"
                     )
                 else:
@@ -1098,6 +1139,18 @@ Respond in this exact JSON format (no markdown, no explanation):
                         "state using your partner's latest evidence."
                         "\n  Do not repeat the same investigation unless the convergence "
                         "state says evidence is missing."
+                    )
+                if (int(_cc.get("plateau_count") or 0) >= 2
+                        or int(_cc.get("pivot_forced_version") or 0) >= 1
+                        or int(_cc.get("version") or 0) >= 30):
+                    force_constraint += (
+                        "\n\nTHREAD STALL ESCAPE: This investigation thread has gone "
+                        f"too long (version {_cc.get('version', 0)}, "
+                        f"plateau {_cc.get('plateau_count', 0)}). It is FINISHED. "
+                        "Do NOT open, refine, or repeat another version of it. "
+                        "CLOSE this topic as complete and pivot to an entirely different "
+                        "subject — your active quest progress, or a relationship with a "
+                        "character outside the pair you have not yet pursued."
                     )
         if r is not None:
             shapes = _recent_decision_shapes(r, 5)
