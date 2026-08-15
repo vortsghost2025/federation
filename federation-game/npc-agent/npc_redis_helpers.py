@@ -29,6 +29,17 @@ REDIS_URL = os.environ.get("REDIS_URL", "redis://redis:6379/0")
 POST_RESOLUTION_PIVOT_GAP_VERSIONS = int(os.environ.get("POST_RESOLUTION_PIVOT_GAP_VERSIONS", "4"))
 POST_RESOLUTION_PIVOT_GAP_SECONDS = int(os.environ.get("POST_RESOLUTION_PIVOT_GAP_SECONDS", str(60 * 60)))
 POST_RESOLUTION_PIVOT_REARM_VERSIONS = int(os.environ.get("POST_RESOLUTION_PIVOT_REARM_VERSIONS", "3"))
+# Macro-topic-longevity safety valve. The normal triggerless pivot only fires
+# when the pair goes silent after resolution (no partner send_message). A single
+# partner message past resolve makes _no_partner_msg_since permanently False,
+# blocking the pivot for the entire resolved cycle — observed 22 convergence
+# versions and 11h on one resolved goal with active messaging and zero pivots.
+# These extreme thresholds (5x the normal version gap, 3x the normal wallclock)
+# override the silence check so a resolved goal cannot persist beyond ~20
+# versions / ~3h even during active collaboration. The pair keeps all artifacts
+# and memories; only the stale shared_goal rotates to a novel one.
+POST_RESOLUTION_PIVOT_MAX_VERSIONS = int(os.environ.get("POST_RESOLUTION_PIVOT_MAX_VERSIONS", str(4 * 5)))
+POST_RESOLUTION_PIVOT_MAX_SECONDS = int(os.environ.get("POST_RESOLUTION_PIVOT_MAX_SECONDS", str(60 * 60 * 3)))
 
 
 KNOWN_BLOCKED_TERMS = [
@@ -1084,6 +1095,19 @@ def _compute_convergence_state(r, partner_id: str, cid: str, now: int) -> None:
                 if (_still_on_resolved and _no_partner_msg_since
                         and _versions_ready and _wallclock_ready and _rearmed):
                     _force_pivot = True
+                elif (_still_on_resolved and _rearmed
+                        and _gap_versions >= POST_RESOLUTION_PIVOT_MAX_VERSIONS
+                        and _gap_seconds >= POST_RESOLUTION_PIVOT_MAX_SECONDS):
+                    _force_pivot = True
+                    logger.info(
+                        "[%s/%s] macro-longevity pivot armed at v%d "
+                        "(resolved at v%d, gap %d versions / %ds, partner "
+                        "messaging active — overriding silence check)",
+                        cid, partner_id,
+                        int(conv.get("version", 0) or 0),
+                        int(conv.get("resolved_version", 0) or 0),
+                        _gap_versions, _gap_seconds,
+                    )
                 if (_pivot_forced_version > 0
                         and (_cur_version - _pivot_forced_version) < POST_RESOLUTION_PIVOT_REARM_VERSIONS):
                     _force_pivot = False
