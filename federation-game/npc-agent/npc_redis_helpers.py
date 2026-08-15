@@ -44,7 +44,40 @@ KNOWN_BLOCKED_TERMS = [
     "network upgrade weighting",
     "weighted influence",
     "governance model",
+    # Witness-layer research fixation family (emerged 2026-08-14). The pair
+    # orbited "filter candidate layers" / "APVI deviation" / "spectral
+    # coherence" for hours with near-identical write_code turns, and the
+    # topic-fatigue cooldown + plateau counters never engaged because none of
+    # these were recognised loop topics. The bare word "layer" must stay first
+    # so the fatigue-detected topic ("layer") maps to a non-empty loop topic.
+    "layer",
+    "witness layer",
+    "candidate layer",
+    "spectral coherence",
+    "apvi",
+    "entropy flux",
+    "sampling verification",
 ]
+
+# Canonical fold targets for the fixed-loop topic family (mirrors the resonance
+# fold in _matched_loop_topic). Any member of a family reduces to one token so
+# _common_topic == _conv_topic comparisons hold regardless of which member the
+# text matched first.
+_RESONANCE_FOLD_TERMS = {
+    "structured resonance lattice",
+    "corruption-linked resonance",
+    "resonance",
+    "lattice",
+}
+_LAYER_FOLD_TERMS = {
+    "layer",
+    "witness layer",
+    "candidate layer",
+    "spectral coherence",
+    "apvi",
+    "entropy flux",
+    "sampling verification",
+}
 
 
 def _is_no_substantive_disagreement(text: str) -> bool:
@@ -54,6 +87,14 @@ def _is_no_substantive_disagreement(text: str) -> bool:
         or "no substantive" in t
         or "no disagreement" in t
         or "no substantive divergence" in t
+        # Consensus phrasings the LLM convergence reducer emits that previously
+        # slipped the fuzzy net ("no significant disagreement" kept oscillating
+        # the plateau counter between 0 and 1 instead of climbing to the
+        # resolution threshold of 3).
+        or "no significant disagreement" in t
+        or "no significant divergence" in t
+        or "no meaningful disagreement" in t
+        or "no meaningful divergence" in t
     )
 
 
@@ -63,8 +104,10 @@ def _matched_loop_topic(text: str) -> str:
         return ""
     for term in KNOWN_BLOCKED_TERMS:
         if term in t:
-            if term in {"structured resonance lattice", "corruption-linked resonance", "resonance", "lattice"}:
+            if term in _RESONANCE_FOLD_TERMS:
                 return "resonance"
+            if term in _LAYER_FOLD_TERMS:
+                return "layer"
             return term
     return ""
 
