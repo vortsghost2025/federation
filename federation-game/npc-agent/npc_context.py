@@ -357,11 +357,19 @@ def record_topic_fatigue(r, topic: str, window_minutes: int = TOPIC_FATIGUE_WIND
         r.expire(counter_key, max(window_minutes, 1) * 60)
     except Exception:
         return 0, 0
+    duration_seconds = max(cooldown_minutes, 1) * 60
     existing = topic_cooldown_remaining(r, topic, cid)
     if existing > 0:
-        return count, existing
+        try:
+            r.expire(cooldown_key, duration_seconds)
+        except Exception:
+            pass
+        logger.info(
+            "[%s] topic_cooldown_extended topic=%s remaining_s=%d -> minutes=%d",
+            cid, topic, existing, cooldown_minutes,
+        )
+        return count, duration_seconds
     if count >= threshold:
-        duration_seconds = max(cooldown_minutes, 1) * 60
         try:
             r.set(cooldown_key, topic, ex=duration_seconds)
         except Exception:

@@ -934,9 +934,15 @@ Respond in this exact JSON format (no markdown, no explanation):
                         "[%s] topic_cooldown_active topic=%s remaining_s=%d",
                         CHAR_ID, common, cooldown_remaining,
                     )
+                    _fc, _cd = record_topic_fatigue(r, common)
+                    if _cd:
+                        logger.info(
+                            "[%s] topic_cooldown_extended topic=%s prev_remaining_s=%d refreshed_s=%d",
+                            CHAR_ID, common, cooldown_remaining, _cd,
+                        )
                     force_constraint += (
                         "\n\nTOPIC COOLDOWN ACTIVE: The topic \""
-                        f"{common}\" is on cooldown for about {max(1, (cooldown_remaining + 59) // 60)} more minute(s). "
+                        f"{common}\" is on cooldown for about {max(1, (_cd or cooldown_remaining) + 59) // 60} more minute(s). "
                         "You must choose a different topic this turn."
                     )
                 else:
@@ -1003,11 +1009,6 @@ Respond in this exact JSON format (no markdown, no explanation):
                                     CHAR_ID, common, topic_count, len(sources),
                                 )
                             evidence_reason = ""
-                            if _novel_loop_match:
-                                logger.info(
-                                    "[%s] novel_loop_detected topic=%s count=%d window=%d (not in KNOWN_BLOCKED_TERMS; partner artifacts echo)",
-                                    CHAR_ID, common, topic_count, len(sources),
-                                )
                     if evidence_reason:
                         logger.info(
                             "[%s] topic_fatigue_reset topic=%s reason=%s",
