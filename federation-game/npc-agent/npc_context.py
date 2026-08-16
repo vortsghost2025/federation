@@ -98,7 +98,8 @@ _TOPIC_STOP_WORDS = {"the", "of", "and", "a", "an", "to", "in", "for", "on", "wi
                       "assessment", "strategic", "recommendation", "overview",
                       "comprehensive", "updated", "interim", "final", "review",
                       "implication", "response", "data", "summary", "integration",
-                      "federation"}
+                      "federation",
+                      "npc", "nps", "character", "char_id"}
 
 _COSMIC_VISIONARY = {"char_306"}
 _COSMIC_SCIENTIFIC = {"char_001", "char_104", "char_105", "char_404", "char_406"}
