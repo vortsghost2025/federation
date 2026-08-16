@@ -1162,12 +1162,19 @@ def _compute_convergence_state(r, partner_id: str, cid: str, now: int) -> None:
                 _pair_hset(r, partner_id, _pivot_trigger, cid)
                 conv["pivot_forced_version"] = int(conv.get("version", 0) or 0)
                 conv["unresolved_start_version"] = int(conv.get("version", 0) or 0)
+                _pivot_reason = conv.get("unresolved_pivot_reason", "")
+                if _pivot_reason == "unresolved_longevity":
+                    conv["resolved"] = True
+                    conv["resolved_at"] = now
+                    conv["resolved_version"] = int(conv.get("version", 0) or 0)
+                    conv["resolved_shared_goal"] = state.get("shared_goal", "") or ""
+                    conv["resolved_question"] = state.get("open_question", "") or ""
+                    conv["resolved_answer"] = conv.get("current_best_answer", "") or ""
                 _pair_hset(
                     r, partner_id,
                     {"convergence_state": json.dumps(conv, default=str)},
                     cid,
                 )
-                _pivot_reason = conv.get("unresolved_pivot_reason", "")
                 _gap_summary = (
                     f"unresolved goal persisted for {_unresolved_gap} "
                     "convergence versions without resolution; "
