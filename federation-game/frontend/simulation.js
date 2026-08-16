@@ -13,39 +13,39 @@ if (val == null) return {label:'\u2014',cls:'sev-stable'};
 var v = Math.round(val);
 switch(metric) {
 case 'morale':
-if (v<=20) return {label:'CRITICAL',cls:'sev-critical'};
-if (v<=45) return {label:'WEAK',cls:'sev-weak'};
-if (v<=75) return {label:'STABLE',cls:'sev-stable'};
+if (v<=30) return {label:'CRITICAL',cls:'sev-critical'};
+if (v<=50) return {label:'WEAK',cls:'sev-weak'};
+if (v<=70) return {label:'WATCH',cls:'sev-watch'};
 return {label:'STRONG',cls:'sev-strong'};
 case 'threat':
-if (v<=25) return {label:'SAFE',cls:'sev-safe'};
-if (v<=55) return {label:'WATCH',cls:'sev-watch'};
-if (v<=80) return {label:'HIGH',cls:'sev-high'};
-return {label:'SEVERE',cls:'sev-severe'};
+if (v>70) return {label:'CRITICAL',cls:'sev-critical'};
+if (v>55) return {label:'HIGH',cls:'sev-high'};
+if (v>40) return {label:'WATCH',cls:'sev-watch'};
+return {label:'SAFE',cls:'sev-safe'};
 case 'tension':
-if (v<=25) return {label:'LOW',cls:'sev-low'};
-if (v<=55) return {label:'MODERATE',cls:'sev-medium'};
-if (v<=80) return {label:'HIGH',cls:'sev-high'};
-return {label:'SEVERE',cls:'sev-severe'};
+if (v>70) return {label:'CRITICAL',cls:'sev-critical'};
+if (v>55) return {label:'HIGH',cls:'sev-high'};
+if (v>40) return {label:'MODERATE',cls:'sev-medium'};
+return {label:'LOW',cls:'sev-safe'};
 case 'stability':
-if (v<=25) return {label:'FRAGILE',cls:'sev-fragile'};
+if (v<=30) return {label:'CRITICAL',cls:'sev-critical'};
 if (v<=50) return {label:'UNSTABLE',cls:'sev-unstable'};
-if (v<=75) return {label:'STABLE',cls:'sev-stable'};
+if (v<=70) return {label:'WATCH',cls:'sev-watch'};
 return {label:'STRONG',cls:'sev-strong'};
 case 'anomaly':
-if (v<=25) return {label:'NORMAL',cls:'sev-normal'};
-if (v<=55) return {label:'STRANGE',cls:'sev-strange'};
-if (v<=80) return {label:'UNSTABLE',cls:'sev-unstable'};
-return {label:'BREACH',cls:'sev-breach'};
+if (v>70) return {label:'BREACH',cls:'sev-breach'};
+if (v>55) return {label:'UNSTABLE',cls:'sev-unstable'};
+if (v>40) return {label:'STRANGE',cls:'sev-strange'};
+return {label:'NORMAL',cls:'sev-normal'};
 case 'resources':
-if (v<=20) return {label:'SCARCE',cls:'sev-critical'};
-if (v<=45) return {label:'LOW',cls:'sev-weak'};
-if (v<=75) return {label:'ADEQUATE',cls:'sev-stable'};
+if (v<=30) return {label:'CRITICAL',cls:'sev-critical'};
+if (v<=50) return {label:'LOW',cls:'sev-weak'};
+if (v<=70) return {label:'WATCH',cls:'sev-watch'};
 return {label:'ABUNDANT',cls:'sev-strong'};
 case 'cascade':
 if (v<=40) return {label:'CALM',cls:'sev-calm'};
-if (v<=65) return {label:'ACTIVE',cls:'sev-active'};
-if (v<=80) return {label:'HOT',cls:'sev-hot'};
+if (v<=55) return {label:'ACTIVE',cls:'sev-active'};
+if (v<=70) return {label:'HOT',cls:'sev-hot'};
 return {label:'OVERHEATING',cls:'sev-overheating'};
 default:
 return {label:'\u2014',cls:'sev-stable'};

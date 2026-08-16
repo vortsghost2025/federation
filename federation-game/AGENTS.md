@@ -326,4 +326,80 @@ zoom-enabled phone. Honor this in every session:
     (e.g. `step7_npc_quests`: accepted / progressed / completed / errors)
 - Keep secrets out of files and commits entirely.
 
+## Delegate agent: char_500 "The Custodian"
+
+A read-only watch delegate NPC, running as its own container
+(`federation-game-npc-delegate-1`, service `npc-delegate`). It watches Redis
+and the repo, and answers questions via an inbox/outbox message queue. It has
+NO write, deploy, restart, or shell powers by design (stage 1; mutating
+actions are a future stage-2 feature behind operator approval).
+
+- Source: `/docker/federation-game/npc-delegate/` (Dockerfile + npc_delegate.py,
+  mounted ro into the container; `/docker/federation-game` is mounted ro at
+  `/repo` and `/opt/federation` at `/git` for md5/git reads).
+- In-world: registered in `backend/npcs.py` (`build_unique_npcs`) and excluded
+  from the autonomy loop via `EXTERNAL_AGENT_NPCS` in `.env`
+  (`char_001,char_306,char_500`). Roster total is 40; processed per tick is 37.
+- Message protocol (Redis, JSON):
+  - inbox: `RPUSH npc:delegate:inbox {"msg_id","from","ts","text"}`
+  - reply: `npc:delegate:outbox` (list) and `npc:delegate:last_reply` (latest)
+  - identity/activity: `npc_state:char_500`, `npc_actions:char_500`,
+    `npc_activity:char_500` — appears in `/npc-digest`.
+- Tools: `digest`, `npc_lookup`, `pair_state`, `tick_status`, `errors_scan`,
+  `verify_files` (md5 of live runtime files), `git_head`.
+- Model: `nvidia/llama-3.3-nemotron-super-49b-v1` (nano rambles with big
+  contexts; if it is switched back, expect retry-parse failures).
+- To ask it something live: push to inbox, then read `last_reply` after ~1 min.
+
+## Environment subsystem
+
+A lightweight "living world" layer driven by the worker each tick. It adds
+environment variables to the existing `world_state` Redis hash and makes NPCs
+react to them.
+
+- Keys added: `season`, `temperature`, `resource_flux`. Added on worker start
+  via `init_world_state()` (only if missing — never clobbers the crisis-decay
+  keys already in `world_state`).
+- Per tick the worker calls `update_environment()`:
+  - rotates `season`: spring → summer → autumn → winter
+  - drifts `temperature` ±2°C (clamped 0–35)
+  - drifts `resource_flux` ±0.05 (clamped 0.5–2.0)
+- NPC reaction lives in `backend/npcs.py` → `NPCSystem.advance_turn()`:
+  corruption growth is scaled by `resource_flux`, with an extra stress bump
+  (+0.01) when `temperature` is below 10°C or above 30°C.
+- Observer endpoint: `GET /environment` (added to the Traefik API path rules).
+  Public URL: `https://federation-game.deliberatefederation.cloud/environment`.
+- To seed/environment-check manually:
+  ```bash
+  docker exec federation-game-redis-1 redis-cli HGETALL world_state
+  curl -s https://federation-game.deliberatefederation.cloud/environment
+  ```
+
+## Corruption, redemption, and world-life features
+
+Mechanics that keep NPCs persistent and the world dynamic.
+
+- **Corruption decay + redemption** (`backend/npcs.py` `advance_turn`): growth
+  is resisted by wisdom and moderated by the environment; wise NPCs shed
+  corruption over time. When a corrupted NPC drops below 0.5 corruption it is
+  redeemed to its pre-corruption status and fires a `character_redemption`
+  event (was: corruption was a monotonic one-way doom spiral with no recovery).
+- **Redemption quests** (`backend/worker.py` `process_redemptions`): on
+  redemption, `advance_turn` writes a `npc:redeemed:<char_id>` marker (1-day
+  TTL). The worker consumes it and assigns a restorative "second-chance" quest
+  (`cultural_renaissance`, `diplomatic_mastery`, `alliance_of_equals`, or
+  `resource_abundance`) if the NPC has no active quest.
+- **Corrupted-NPC health alert** (`backend/worker.py` `check_corrupted_npcs`):
+  every tick scans `npc_state:*` for `status=corrupted`, logs WARNING on new
+  or persistent corruption, and writes `fed:npc_health:corrupted` (count, new,
+  persistent, npcs) for the Hermes digest/monitor to consume.
+- **Rumour feed** (`backend/worker.py` `publish_rumors`): emits 1–2
+  context-aware gossip lines per tick from world state (season, temperature,
+  morale/stability, resource flux). Pushed to the `npc_rumors` list (capped at
+  50) and `npc_rumors:latest`. Covers common failure cases: worker.py is
+  restored from `/opt/federation` git when corrupted — always md5-verify after
+  any worker/npc edit (`cd99cfda...` is the known-good worker base hash; the
+  session-to-session live hash changes as features land).
+
+
 

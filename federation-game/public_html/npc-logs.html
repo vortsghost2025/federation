@@ -1,0 +1,335 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>NPC Activity Logs - Federation Dashboard</title>
+  <style>
+    body { background: #0a0a1a; color: #e0e0ff; font-family: 'Courier New', monospace; padding: 20px; margin: 0; }
+    .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+    .header h1 { color: #a0a0ff; font-size: 24px; margin: 0; }
+    .filters { display: flex; gap: 15px; margin-bottom: 20px; flex-wrap: wrap; align-items: center; }
+    .filters select, .filters input { background: #151525; border: 1px solid #3a3a6a; color: #e0e0ff; padding: 8px; border-radius: 4px; }
+    .filters label { color: #a0a0ff; font-size: 14px; }
+    .logs-table { width: 100%; border-collapse: collapse; }
+    .logs-table th, .logs-table td { padding: 10px; text-align: left; border-bottom: 1px solid #2a2a4a; }
+    .logs-table th { background: #1a1a3a; color: #c0c0ff; cursor: pointer; }
+    .logs-table th:hover { background: #252555; }
+    .logs-table tr:hover { background: #12122a; }
+    .category-badge { padding: 2px 8px; border-radius: 3px; font-size: 12px; }
+    .cat-decision { background: #4a6a8a; }
+    .cat-interaction { background: #5a7a4a; }
+    .cat-cognition { background: #7a4a7a; }
+    .cat-chat { background: #8a5a4a; }
+    .export-btn { background: #4a6a8a; color: #fff; border: none; padding: 10px 20px; border-radius: 4px; cursor: pointer; font-size: 14px; }
+    .export-btn:hover { background: #5a7a9a; }
+    .stats-bar { display: flex; gap: 20px; margin-bottom: 15px; font-size: 14px; color: #a0a0ff; }
+    .stats-bar div { background: #151525; padding: 10px 15px; border-radius: 4px; }
+    .panel { background: #101024; border: 1px solid #303068; border-radius: 8px; padding: 16px; margin: 18px 0; }
+    .panel h2 { margin: 0 0 12px; color: #d6d6ff; font-size: 20px; }
+    .dashboard-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px; }
+    .fleet-card { background: #171733; border: 1px solid #383878; border-radius: 6px; padding: 12px; line-height: 1.5; }
+    .fleet-card button { margin-top: 8px; background: #2f5f8f; color: #fff; border: 0; border-radius: 4px; padding: 8px 10px; cursor: pointer; }
+    .fleet-card.alert { border-color: #ffb347; box-shadow: 0 0 0 1px #ffb34744 inset; }
+    .metric { color: #b8f7ff; font-weight: bold; }
+    .muted { color: #9a9ac8; }
+    .alert-list { display: grid; gap: 8px; }
+    .alert-row { background: #301c16; border: 1px solid #aa5735; color: #ffd6c9; padding: 10px; border-radius: 4px; }
+    .turn-item { background: #14142c; border-left: 4px solid #6060cc; margin: 10px 0; padding: 10px; }
+    .comparison-table { width: 100%; border-collapse: collapse; }
+    .comparison-table th, .comparison-table td { border-bottom: 1px solid #303068; padding: 8px; text-align: left; }
+    #compare-filter { min-width: 360px; min-height: 100px; background: #151525; border: 1px solid #3a3a6a; color: #e0e0ff; padding: 8px; border-radius: 4px; }
+    .loading { color: #ffaa00; }
+    .error { color: #ff6666; }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <h1>NPC Activity Logs</h1>
+    <button class="export-btn" onclick="exportToCSV()">Export CSV</button>
+  </div>
+
+  <div class="stats-bar" id="stats-bar">
+    <div class="loading">Loading statistics...</div>
+  </div>
+
+  <div class="filters">
+    <label>NPC: <select id="npc-filter" onchange="onNpcFilterChange()"><option value="all">All NPCs</option></select></label>
+    <label>Category: <select id="category-filter" onchange="loadLogs()"><option value="all">All</option><option value="decision">Decision</option><option value="interaction">Interaction</option><option value="cognition">Cognition</option><option value="chat">Chat</option></select></label>
+    <label>Search: <input type="text" id="search-filter" placeholder="Search..." oninput="debounceSearch()"></label>
+  </div>
+
+  <section class="panel">
+    <h2>Fleet Overview</h2>
+    <div id="fleet-overview" class="dashboard-grid"><div class="loading">Loading turn analysis...</div></div>
+  </section>
+
+  <section class="panel">
+    <h2>NPC Detail</h2>
+    <div id="npc-detail" class="muted">Pick an NPC to see full prompt, memory, provider, and output traces.</div>
+  </section>
+
+  <section class="panel">
+    <h2>Comparison View</h2>
+    <label>Pick 2-5 NPCs:<br><select id="compare-filter" multiple onchange="renderComparison()"></select></label>
+    <div id="comparison-view" style="margin-top:12px"></div>
+  </section>
+
+  <section class="panel">
+    <h2>Alerts</h2>
+    <div id="alert-view" class="alert-list"><div class="loading">Loading alerts...</div></div>
+  </section>
+
+  <table class="logs-table" id="logs-table">
+    <thead>
+      <tr><th onclick="sortTable(0)">NPC</th><th onclick="sortTable(1)">Category</th><th onclick="sortTable(2)">Timestamp</th><th>Details</th></tr>
+    </thead>
+    <tbody id="logs-body"><tr><td colspan="4" class="loading">Loading logs...</td></tr></tbody>
+  </table>
+
+<script src="/fed-fetch.js"></script>
+<script>
+let allLogs = [];
+let currentLogs = [];
+let allKnownNpcIds = [];
+let sortCol = 2;
+let sortDir = -1;
+let turnAnalysis = { fleet: [], alerts: [] };
+let turnDetailCache = {};
+
+function apiFetch(url) {
+  return fedFetch('nlog', url).catch(e => { console.error(e); return null; });
+}
+
+function npcId(log) {
+  return log.char_id || log.npc_char_id || '';
+}
+
+function entryType(log) {
+  const d = entryDetails(log);
+  return log.type || log.category || d.category || log.entry_type || '';
+}
+
+function entryDetails(log) {
+  return log.data || log.details || {};
+}
+
+function entryTime(log) {
+  const ts = Number(log.timestamp || 0);
+  return ts < 1000000000000 ? ts * 1000 : ts;
+}
+
+function escapeHtml(value) {
+  return String(value).replace(/[&<>"]/g, ch => ({
+    '&': '&amp;',
+    '<': '&lt;',
+    '>': '&gt;',
+    '"': '&quot;'
+  }[ch]));
+}
+
+function onNpcFilterChange() {
+  loadLogs();
+  const npc = document.getElementById('npc-filter').value;
+  if (npc && npc !== 'all') loadNpcTurnDetail(npc);
+}
+
+function fmtPct(value) {
+  return Math.round(Number(value || 0) * 100) + '%';
+}
+
+function fmtTs(ts) {
+  return ts ? new Date(Number(ts) * 1000).toLocaleString() : 'never';
+}
+
+function renderFleetOverview() {
+  const el = document.getElementById('fleet-overview');
+  const fleet = turnAnalysis.fleet || [];
+  if (!fleet.length) {
+    el.innerHTML = '<div class="muted">No NPC turn traces yet. The next cognition tick will populate this.</div>';
+    return;
+  }
+  el.innerHTML = fleet.slice(0, 39).map(row => {
+    const alertClass = row.anomalies && row.anomalies.length ? ' alert' : '';
+    const status = row.online ? 'ONLINE' : 'QUIET';
+    return `<div class="fleet-card${alertClass}"><strong>${escapeHtml(row.npc_id)}</strong> <span class="metric">${status}</span><br>` +
+      `<span class="muted">${escapeHtml(row.usual_behavior || '')}</span><br>` +
+      `Latency: <span class="metric">${escapeHtml(row.avg_latency_ms)}ms</span><br>` +
+      `Errors: <span class="metric">${fmtPct(row.error_rate)}</span> Fallbacks: <span class="metric">${fmtPct(row.fallback_rate)}</span><br>` +
+      `Memory: <span class="metric">${fmtPct(row.memory_usage_rate)}</span> Provider: ${escapeHtml(Object.keys(row.providers || {})[0] || 'unknown')}<br>` +
+      `<span class="muted">${escapeHtml(row.recent_change || '')}</span><br>` +
+      `<button onclick="loadNpcTurnDetail('${escapeHtml(row.npc_id)}')">Open detail</button></div>`;
+  }).join('');
+}
+
+async function loadNpcTurnDetail(npcId) {
+  const detail = document.getElementById('npc-detail');
+  detail.innerHTML = '<div class="loading">Loading ' + escapeHtml(npcId) + ' turn traces...</div>';
+  const data = await apiFetch('/api/npc-turns?npc_id=' + encodeURIComponent(npcId) + '&limit=20&include_events=true');
+  const rows = data?.results || [];
+  turnDetailCache[npcId] = rows;
+  if (!rows.length) {
+    detail.innerHTML = '<div class="muted">No turn traces for ' + escapeHtml(npcId) + ' yet.</div>';
+    return;
+  }
+  detail.innerHTML = rows.map(row => {
+    const memory = (row.memory_events || []).map(e => `${e.source}: ${e.content}`).join('\n').slice(0, 1200);
+    return `<div class="turn-item"><strong>${escapeHtml(fmtTs(row.timestamp))}</strong> ` +
+      `<span class="metric">${escapeHtml(row.model_provider || 'unknown')}/${escapeHtml(row.model_name || 'unknown')}</span> ` +
+      `${row.error_code ? '<span class="error">' + escapeHtml(row.error_code) + '</span>' : ''}<br>` +
+      `<div class="muted">Trace: ${escapeHtml(row.trace_id || '')} | Latency: ${escapeHtml(row.latency_ms || 0)}ms | Fallback: ${row.fallback_used ? 'yes' : 'no'}</div>` +
+      `<details><summary>Prompt</summary><pre>${escapeHtml(row.system_prompt_text || '')}\n\nUSER: ${escapeHtml(row.input_text || '')}</pre></details>` +
+      `<details><summary>Memory / Retrieved Facts</summary><pre>${escapeHtml(memory || JSON.stringify(row.retrieved_facts || {}, null, 2))}</pre></details>` +
+      `<details open><summary>Output</summary><pre>${escapeHtml(row.output_text || '')}</pre></details></div>`;
+  }).join('');
+}
+
+function renderComparison() {
+  const el = document.getElementById('comparison-view');
+  const select = document.getElementById('compare-filter');
+  let ids = [...select.selectedOptions].map(o => o.value).slice(0, 5);
+  if (!ids.length) ids = (turnAnalysis.fleet || []).slice(0, 5).map(row => row.npc_id);
+  const rows = ids.map(id => (turnAnalysis.fleet || []).find(row => row.npc_id === id)).filter(Boolean);
+  if (!rows.length) {
+    el.innerHTML = '<div class="muted">No comparable turn traces yet.</div>';
+    return;
+  }
+  el.innerHTML = '<table class="comparison-table"><thead><tr><th>NPC</th><th>Provider</th><th>Model</th><th>Latency</th><th>Error</th><th>Fallback</th><th>Anomalies</th></tr></thead><tbody>' +
+    rows.map(row => `<tr><td>${escapeHtml(row.npc_id)}</td><td>${escapeHtml(Object.keys(row.providers || {})[0] || 'unknown')}</td><td>${escapeHtml(Object.keys(row.models || {})[0] || 'unknown')}</td><td>${escapeHtml(row.avg_latency_ms)}ms</td><td>${fmtPct(row.error_rate)}</td><td>${fmtPct(row.fallback_rate)}</td><td>${escapeHtml((row.anomalies || []).join(', ') || 'none')}</td></tr>`).join('') +
+    '</tbody></table>';
+}
+
+function renderAlerts() {
+  const el = document.getElementById('alert-view');
+  const alerts = turnAnalysis.alerts || [];
+  if (!alerts.length) {
+    el.innerHTML = '<div class="muted">No current trace alerts.</div>';
+    return;
+  }
+  el.innerHTML = alerts.slice(0, 50).map(a => `<div class="alert-row"><strong>${escapeHtml(a.npc_id)}</strong> ${escapeHtml(a.type)} <span class="muted">${escapeHtml(fmtTs(a.last_turn_ts))}</span></div>`).join('');
+}
+
+async function loadTurnAnalysis() {
+  const data = await apiFetch('/api/npc-turns/analyze?limit=1000');
+  if (data && data.status === 'ok') turnAnalysis = data;
+  renderFleetOverview();
+  renderComparison();
+  renderAlerts();
+}
+
+function loadLogs() {
+  const npc = document.getElementById('npc-filter').value;
+  const cat = document.getElementById('category-filter').value;
+  const term = document.getElementById('search-filter').value.toLowerCase();
+  
+  if (!allLogs.length) {
+    currentLogs = [];
+    renderLogs([]);
+    return;
+  }
+  
+  let filtered = allLogs.filter(l => {
+    if (npc !== 'all' && npcId(l) !== npc) return false;
+    if (cat !== 'all' && entryType(l) !== cat) return false;
+    if (term && !JSON.stringify(l).toLowerCase().includes(term)) return false;
+    return true;
+  });
+  
+  filtered.sort((a, b) => {
+    const values = [npcId, entryType, entryTime];
+    const valA = values[sortCol](a);
+    const valB = values[sortCol](b);
+    return sortDir * (typeof valA === 'string' ? valA.localeCompare(valB) : valA - valB);
+  });
+  
+  currentLogs = filtered;
+  renderLogs(filtered);
+}
+
+function renderLogs(logs) {
+  const tbody = document.getElementById('logs-body');
+  tbody.innerHTML = logs.length ? logs.map(l => {
+    const type = entryType(l);
+    const catClass = 'cat-' + type.replace(/[^a-z0-9_-]/gi, '');
+    const ts = new Date(entryTime(l)).toLocaleString();
+    const details = escapeHtml(JSON.stringify(entryDetails(l), null, 2));
+    return `<tr><td>${escapeHtml(npcId(l))}</td><td><span class="category-badge ${catClass}">${escapeHtml(type)}</span></td><td>${ts}</td><td><pre style="margin:0;white-space:pre-wrap;word-break:break-all;font-size:12px;max-width:600px;overflow-x:auto">${details}</pre></td></tr>`;
+  }).join('') : '<tr><td colspan="4" style="color:#ff6666">No logs found</td></tr>';
+}
+
+function sortTable(col) {
+  sortDir = sortCol === col ? -sortDir : 1;
+  sortCol = col;
+  loadLogs();
+}
+
+function debounceSearch() {
+  clearTimeout(window.searchTimer);
+  window.searchTimer = setTimeout(loadLogs, 300);
+}
+
+function exportToCSV() {
+  const rows = currentLogs.length ? currentLogs : allLogs;
+  if (!rows.length) return;
+  const csv = ['npc_char_id,category,timestamp,details'];
+  rows.forEach(l => {
+    csv.push(`"${npcId(l)}","${entryType(l)}","${new Date(entryTime(l)).toISOString()}","${JSON.stringify(entryDetails(l)).replace(/"/g, '""')}"`);
+  });
+  const blob = new Blob([csv.join('\n')], { type: 'text/csv' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'npc-logs-' + new Date().toISOString().slice(0,10) + '.csv';
+  a.click();
+}
+
+async function loadStats() {
+  const s = await apiFetch('/api/npcs/stats');
+  const sb = document.getElementById('stats-bar');
+  if (s && s.total_entries !== undefined) {
+    sb.innerHTML = `<div>Total: ${s.total_entries}</div><div>Decisions: ${s.categories?.decision || 0}</div><div>Interactions: ${s.categories?.interaction || 0}</div><div>Cognitions: ${s.categories?.cognition || 0}</div><div>Chats: ${s.categories?.chat || 0}</div>`;
+  } else {
+    sb.innerHTML = '<div class="error">Failed to load stats</div>';
+  }
+}
+
+async function loadAllLogs() {
+  if (!allKnownNpcIds.length) await loadNpcOptions();
+  const npcs = allKnownNpcIds.length ? allKnownNpcIds : [];
+  if (!npcs.length) { renderLogs([]); return; }
+  const promises = npcs.map(id => apiFetch('/api/npc-logs?char_id=' + id + '&limit=200').then(d => d?.results || []));
+  const results = await Promise.all(promises);
+  allLogs = results.flat().sort((a, b) => entryTime(b) - entryTime(a));
+  loadLogs();
+}
+
+async function loadNpcOptions() {
+  const data = await apiFetch('/api/npcs?limit=200');
+  const npcs = data?.npcs || [];
+  allKnownNpcIds = npcs.map(n => n.char_id).filter(Boolean);
+
+  const select = document.getElementById('npc-filter');
+  const compare = document.getElementById('compare-filter');
+  const selected = select.value;
+  const compareSelected = new Set([...compare.selectedOptions].map(option => option.value));
+  select.innerHTML = '<option value="all">All NPCs</option>' + npcs.map(n => {
+    const label = n.name ? `${n.char_id} - ${n.name}` : n.char_id;
+    return `<option value="${escapeHtml(n.char_id)}">${escapeHtml(label)}</option>`;
+  }).join('');
+  compare.innerHTML = npcs.map(n => {
+    const label = n.name ? `${n.char_id} - ${n.name}` : n.char_id;
+    const selectedAttr = compareSelected.has(n.char_id) ? ' selected' : '';
+    return `<option value="${escapeHtml(n.char_id)}"${selectedAttr}>${escapeHtml(label)}</option>`;
+  }).join('');
+  if ([...select.options].some(option => option.value === selected)) select.value = selected;
+}
+
+loadStats();
+loadAllLogs();
+loadTurnAnalysis();
+setInterval(loadStats, 30000);
+setInterval(loadAllLogs, 60000);
+setInterval(loadTurnAnalysis, 60000);
+</script>
+</body>
+</html>

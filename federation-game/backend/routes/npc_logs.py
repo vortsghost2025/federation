@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 import json
+import os
 import re
+import redis as _redis
 from fastapi import APIRouter, Query
 from fastapi.responses import PlainTextResponse
 from typing import Optional
@@ -9,6 +11,25 @@ from collections import Counter, defaultdict
 from federation_game_db import db_manager, NpcActionLog
 
 router = APIRouter(prefix="", tags=["npc-logs"])
+
+# Module-level lazy Redis connection pool shared across handlers.
+# Avoids creating a new connection per request, which under 30s polling
+# from multiple viewer tabs exhausts Redis connections.
+_pool = None
+
+
+def _get_redis():
+    global _pool
+    if _pool is None:
+        _pool = _redis.ConnectionPool.from_url(
+            os.environ.get("REDIS_URL", "redis://redis:6379/0"),
+            max_connections=10,
+            decode_responses=True,
+            socket_connect_timeout=3,
+            socket_timeout=3,
+        )
+    return _redis.Redis(connection_pool=_pool)
+
 
 def _avg(values):
     values = [v for v in values if isinstance(v, (int, float))]
@@ -209,9 +230,8 @@ def spectator_scenes(limit: int = Query(60, ge=10, le=200), page: int = Query(0,
     # Fallback: scan Redis for NPC names if game_state didn't work
     if not npc_names:
         try:
-            import redis as _redis, os
-            r = _redis.from_url(os.environ.get("REDIS_URL", "redis://redis:6379/0"), decode_responses=True)
-            for key in r.scan_iter("npc:*"):
+            r = _get_redis()
+            for key in r.scan_iter("npc:*", count=500):
                 if ":name" in key:
                     char_id = key.split(":")[1] if ":" in key else ""
                     npc_names[char_id] = r.get(key)
@@ -618,9 +638,8 @@ def _collect_npc_name_map(rows):
         pass
     if not npc_names:
         try:
-            import redis as _redis, os as _os
-            r = _redis.from_url(_os.environ.get("REDIS_URL", "redis://redis:6379/0"), decode_responses=True)
-            for key in r.scan_iter("npc:*"):
+            r = _get_redis()
+            for key in r.scan_iter("npc:*", count=500):
                 if ":name" in key:
                     char_id = key.split(":")[1] if ":" in key else ""
                     if char_id:
@@ -926,19 +945,12 @@ def spectator_agency():
     activity for each NPC in the AGENCY_ENABLED_NPCS set, so the
     spectator can render a live NPC Agency monitoring panel.
     """
-    import os as _os
-    import redis as _redis_mod
     import json as _json
     import time as _time
 
     r = None
     try:
-        r = _redis_mod.from_url(
-            _os.environ.get("REDIS_URL", "redis://redis:6379/0"),
-            decode_responses=True,
-            socket_connect_timeout=3,
-            socket_timeout=3,
-        )
+        r = _get_redis()
     except Exception:
         pass
 
@@ -953,7 +965,7 @@ def spectator_agency():
     _key_labels = {}
     for _cid in AGENCY_ENABLED_NPCS:
         _env_name = f"NPC_KEY_{_cid.upper()}"
-        _val = _os.environ.get(_env_name, "")
+        _val = os.environ.get(_env_name, "")
         if _cid in CONTAINERIZED_NPCS or _val:
             _key_labels[_cid] = "dedicated key"
         else:
@@ -1067,6 +1079,7 @@ def spectator_agency():
             "action_by_char": action_by_char,
             "category_by_char": category_by_char,
             "journal": pair_journal,
+            "beats": pair_journal,
             "active_thread": pair_thread,
             "founded_areas": _build_founded_areas(r, pair_slug),
         }

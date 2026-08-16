@@ -146,7 +146,7 @@ def get_faction_home(faction_id: str) -> Optional[FactionHome]:
 
 def get_all_faction_homes() -> List[FactionHome]:
     r = get_redis()
-    keys = r.keys(f"{PREFIX_FACTION_HOME}*")
+    keys = r.scan_iter(f"{PREFIX_FACTION_HOME}*", count=500)
     homes = []
     for key in keys:
         raw = r.get(key)
@@ -207,7 +207,7 @@ def get_sector_territories(sector_id: str) -> List[FactionTerritory]:
 def get_all_territories() -> List[FactionTerritory]:
     """Get all territory records."""
     r = get_redis()
-    keys = r.keys(f"{PREFIX_TERRITORY}*")
+    keys = r.scan_iter(f"{PREFIX_TERRITORY}*", count=500)
     territories = []
     for key in keys:
         # Only parse keys that match "territory:{faction_id}:{sector_id}" pattern
@@ -258,7 +258,7 @@ def get_npcs_in_sector(sector_id: str) -> List[NpcLocation]:
 
 def get_all_npc_locations() -> List[NpcLocation]:
     r = get_redis()
-    keys = r.keys(f"{PREFIX_NPC_LOCATION}*")
+    keys = r.scan_iter(f"{PREFIX_NPC_LOCATION}*", count=500)
     locations = []
     for key in keys:
         # Only parse direct npc_location:{id} or npc_location:{type}:{id} keys
@@ -350,7 +350,7 @@ def get_faction_discoveries(faction_id: str) -> List[WorldDiscovery]:
 
 def get_all_discoveries() -> List[WorldDiscovery]:
     r = get_redis()
-    keys = r.keys(f"{PREFIX_DISCOVERY}*")
+    keys = r.scan_iter(f"{PREFIX_DISCOVERY}*", count=500)
     discoveries = []
     for key in keys:
         # Only parse direct discovery:{a}:{b} keys
@@ -381,7 +381,7 @@ def delete_all_spatial_data() -> int:
     ]
     deleted = 0
     for pattern in patterns:
-        keys = r.keys(pattern)
+        keys = list(r.scan_iter(pattern, count=500))
         if keys:
             deleted += r.delete(*keys)
     return deleted

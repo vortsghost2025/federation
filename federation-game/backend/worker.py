@@ -33,7 +33,14 @@ logging.basicConfig(
 log = logging.getLogger("worker")
 
 # ── Redis ──────────────────────────────────────────────────
-r = redis.from_url(REDIS_URL, decode_responses=True)
+# Socket timeouts keep the worker from hanging indefinitely when Redis is slow
+# or unreachable; it degrades gracefully instead of blocking on first call.
+r = redis.from_url(
+    REDIS_URL,
+    decode_responses=True,
+    socket_connect_timeout=5,
+    socket_timeout=5,
+)
 
 # Initialize world state (if missing) – runs once at worker startup
 def init_world_state():
@@ -990,7 +997,7 @@ def check_corrupted_npcs():
     (fed:npc_health:corrupted) so monitors can alert without spamming
     every tick."""
     try:
-        keys = r.keys("npc_state:*")
+        keys = list(r.scan_iter("npc_state:*", count=500))
         corrupted = []
         for key in keys:
             status = r.hget(key, "status")
@@ -1023,6 +1030,7 @@ def check_corrupted_npcs():
                 ),
             },
         )
+        r.expire("fed:npc_health:corrupted", 86400 * 7)
         if designed_only and not emergent:
             log.info(
                 f" Corrupted NPCs are designed antagonists only: {corrupted} (no alert)"
@@ -1053,7 +1061,7 @@ def process_redemptions():
     Reads npc:redeemed:<char_id> markers set by advacne_turn, assigns a quest
     via the quest engine, and clears the marker (only once)."""
     try:
-        markers = [k for k in r.keys("npc:redeemed:*")]
+        markers = [k for k in r.scan_iter("npc:redeemed:*", count=500)]
         if not markers:
             return
         from npc_quest_engine import NPCQuestEngine

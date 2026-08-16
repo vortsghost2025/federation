@@ -98,7 +98,8 @@ _TOPIC_STOP_WORDS = {"the", "of", "and", "a", "an", "to", "in", "for", "on", "wi
                       "assessment", "strategic", "recommendation", "overview",
                       "comprehensive", "updated", "interim", "final", "review",
                       "implication", "response", "data", "summary", "integration",
-                      "federation"}
+                      "federation",
+                      "npc", "nps", "character", "char_id"}
 
 _COSMIC_VISIONARY = {"char_306"}
 _COSMIC_SCIENTIFIC = {"char_001", "char_104", "char_105", "char_404", "char_406"}
@@ -145,7 +146,7 @@ def neighborhood_snapshot(r, max_chars: int = 400, char_id: str = "") -> str:
     entries: list[tuple[int, str, str, str]] = []
 
     try:
-        all_state_keys = list(r.scan_iter(match="npc_state:*"))
+        all_state_keys = list(r.scan_iter(match="npc_state:*", count=500))
         logger.debug("[%s] neighborhood: found %d npc_state keys", cid, len(all_state_keys))
 
         pipe = r.pipeline(transaction=False)
@@ -241,7 +242,7 @@ def promote_events_to_inbox(r, max_events: int = 5, max_chars: int = 120, char_i
                 break
             try:
                 event = json.loads(event_json)
-            except:
+            except (ValueError, TypeError):
                 continue
 
             action = event.get("action_type", "") or event.get("interaction_type", "") or event.get("event_type", "")
@@ -326,7 +327,7 @@ def active_topic_cooldowns(r, char_id: str = "", limit: int = 3) -> list[tuple[s
     prefix = f"npc_topic_cooldown:{cid}:"
     rows: list[tuple[str, int]] = []
     try:
-        keys = list(r.scan_iter(match=f"{prefix}*"))
+        keys = list(r.scan_iter(match=f"{prefix}*", count=500))
     except Exception:
         return []
     for key in keys:
@@ -357,11 +358,19 @@ def record_topic_fatigue(r, topic: str, window_minutes: int = TOPIC_FATIGUE_WIND
         r.expire(counter_key, max(window_minutes, 1) * 60)
     except Exception:
         return 0, 0
+    duration_seconds = max(cooldown_minutes, 1) * 60
     existing = topic_cooldown_remaining(r, topic, cid)
     if existing > 0:
-        return count, existing
+        try:
+            r.expire(cooldown_key, duration_seconds)
+        except Exception:
+            pass
+        logger.info(
+            "[%s] topic_cooldown_extended topic=%s remaining_s=%d -> minutes=%d",
+            cid, topic, existing, cooldown_minutes,
+        )
+        return count, duration_seconds
     if count >= threshold:
-        duration_seconds = max(cooldown_minutes, 1) * 60
         try:
             r.set(cooldown_key, topic, ex=duration_seconds)
         except Exception:
@@ -378,8 +387,15 @@ def text_mentions_topic(text: str, topic: str) -> bool:
     if not text or not topic:
         return False
     normalized = normalize_topic_label(text)
-    if normalized:
-        return normalized == topic
+    if normalized and normalized == topic:
+        return True
+    # Substring fallback — critical for the cooldown hard-guard. The normalizer
+    # picks a single representative word (first most-common token), so a
+    # write_code description like "Load candidate_witness_layers.csv, filter
+    # rows where Sampled is false" normalizes to "load" (≠ "layers") and the
+    # cooldown redirect never fires, letting identical filter scripts repeat
+    # for hours. Fall through to the substring check so the matched loop topic
+    # ("layers") is still detected when it appears anywhere in the decision text.
     return topic.lower() in text.lower()
 
 
@@ -491,7 +507,7 @@ def top_neighborhood_npcs(r, n: int = 3, char_id: str = "") -> str:
     cid = char_id or CHAR_ID
     _partner_id_fn, *_ = _rh()
     try:
-        all_state_keys = list(r.scan_iter(match="npc_state:*"))
+        all_state_keys = list(r.scan_iter(match="npc_state:*", count=500))
         pipe = r.pipeline(transaction=False)
         for k in all_state_keys:
             pipe.hgetall(k)
@@ -715,6 +731,72 @@ def think_about_world(r, contacts: dict | None = None, char_id: str = "") -> str
                 parts.append("Last 3 ticks (newest first):")
                 for line in category_seq:
                     parts.append(f"  - {line}")
+    except Exception:
+        pass
+
+    # ── Your wider world: allies and rivals beyond the pair ──
+    # Surfaces the durable relationship scores the simulation tracks but the
+    # agent has never read, EXCLUDING the partner (pair bond is already in the
+    # shared workspace below). Gives the agent a reason to reach beyond the dyad.
+    try:
+        rels = r.hgetall(f"npc_relationships:{cid}")
+        if rels:
+            _partner_rid = _partner_id_fn(char_id=cid)
+            _ext = {}
+            for _k, _v in rels.items():
+                if _k == _partner_rid or _k == cid:
+                    continue
+                try:
+                    _ext[_k] = float(_v)
+                except (TypeError, ValueError):
+                    continue
+            if _ext:
+                _ranked = sorted(_ext.items(), key=lambda kv: kv[1], reverse=True)
+                _allies = _ranked[:5]
+                _rival_pool = [x for x in _ranked if x not in _allies]
+                _rivals = list(reversed(_rival_pool))[:3]
+                _rlines = []
+                if _allies:
+                    _a = ", ".join(
+                        f"{_NPC_ROSTER.get(k, (k, ''))[0]} ({v:.0f})" for k, v in _allies
+                    )
+                    _rlines.append(f"  Trusted beyond the pair: {_a}")
+                if _rivals:
+                    _rb = ", ".join(
+                        f"{_NPC_ROSTER.get(k, (k, ''))[0]} ({v:.0f})" for k, v in _rivals
+                    )
+                    _rlines.append(f"  Most strained ties: {_rb}")
+                if _rlines:
+                    parts.append("Your wider world (relationships outside the pair):")
+                    parts.extend(_rlines)
+    except Exception:
+        pass
+
+    # ── Standing obligations: active quests you carry ──
+    # The sim tracks per-NPC quests in npc_quests:active:{cid} but the agent has
+    # never read them. Surfacing progress (e.g. tech_research 11/18) turns
+    # ambient thoughts into goal-directed behaviour.
+    try:
+        _qraw = r.hgetall(f"npc_quests:active:{cid}")
+        if _qraw:
+            _qlines = []
+            for _qid, _qjson in _qraw.items():
+                try:
+                    _q = json.loads(_qjson)
+                except (json.JSONDecodeError, TypeError):
+                    continue
+                _title = _q.get("title", _qid)
+                _objs = _q.get("objectives", []) or []
+                _qparts = [f"  • {_title}"]
+                for _o in _objs[:3]:
+                    _cur = _o.get("current", 0)
+                    _tgt = _o.get("target", 0)
+                    _odesc = (_o.get("description") or _o.get("objective_id") or "")[:60]
+                    _qparts.append(f"      - {_odesc}: {_cur}/{_tgt}")
+                _qlines.append("\n".join(_qparts))
+            if _qlines:
+                parts.append("Standing obligations (quests you carry):")
+                parts.extend(_qlines)
     except Exception:
         pass
 

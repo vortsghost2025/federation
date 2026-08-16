@@ -21,6 +21,35 @@ OPEN_QUESTION_REPEAT_HOURS = int(os.environ.get("OPEN_QUESTION_REPEAT_HOURS", "6
 QUESTION_TOKEN_RE = re.compile(r"[a-z0-9]+")
 TICK_INTERVAL = int(os.environ.get("TICK_INTERVAL", "30"))
 REDIS_URL = os.environ.get("REDIS_URL", "redis://redis:6379/0")
+# Triggerless post-resolution pivot: when the pair has stayed resolved long
+# enough without a partner send_message (they're stuck in solo-artifact
+# orbit around the resolved goal), the reducer clears open_question so the
+# next _sync_pair_workspace call enters the _post_resolution_default
+# branch and Edit A's loop-guard picks a novel shared goal.
+POST_RESOLUTION_PIVOT_GAP_VERSIONS = int(os.environ.get("POST_RESOLUTION_PIVOT_GAP_VERSIONS", "4"))
+POST_RESOLUTION_PIVOT_GAP_SECONDS = int(os.environ.get("POST_RESOLUTION_PIVOT_GAP_SECONDS", str(60 * 60)))
+POST_RESOLUTION_PIVOT_REARM_VERSIONS = int(os.environ.get("POST_RESOLUTION_PIVOT_REARM_VERSIONS", "3"))
+# Macro-topic-longevity safety valve. The normal triggerless pivot only fires
+# when the pair goes silent after resolution (no partner send_message). A single
+# partner message past resolve makes _no_partner_msg_since permanently False,
+# blocking the pivot for the entire resolved cycle — observed 22 convergence
+# versions and 11h on one resolved goal with active messaging and zero pivots.
+# These extreme thresholds (5x the normal version gap, 3x the normal wallclock)
+# override the silence check so a resolved goal cannot persist beyond ~20
+# versions / ~3h even during active collaboration. The pair keeps all artifacts
+# and memories; only the stale shared_goal rotates to a novel one.
+POST_RESOLUTION_PIVOT_MAX_VERSIONS = int(os.environ.get("POST_RESOLUTION_PIVOT_MAX_VERSIONS", str(4 * 5)))
+POST_RESOLUTION_PIVOT_MAX_SECONDS = int(os.environ.get("POST_RESOLUTION_PIVOT_MAX_SECONDS", str(60 * 60 * 3)))
+
+# Unresolved-goal longevity safety valve (parallel to the macro-longevity
+# valve above). The resolved valve forces a pivot after 20 versions / 3h on
+# a RESOLVED goal. For UN-resolved goals there was no equivalent — the pair
+# could circle the same unanswered question indefinitely (observed: "testimony"
+# goal at v896, ~5h, no resolution). This forces a topic rotation when an
+# unresolved shared_goal has persisted for too many convergence versions
+# without hitting the plateau-detection threshold (3 consecutive no-disagreement
+# versions). The pair keeps all artifacts; only the stale goal rotates.
+UNRESOLVED_PIVOT_MAX_VERSIONS = int(os.environ.get("UNRESOLVED_PIVOT_MAX_VERSIONS", "50"))
 
 
 KNOWN_BLOCKED_TERMS = [
@@ -36,7 +65,40 @@ KNOWN_BLOCKED_TERMS = [
     "network upgrade weighting",
     "weighted influence",
     "governance model",
+    # Witness-layer research fixation family (emerged 2026-08-14). The pair
+    # orbited "filter candidate layers" / "APVI deviation" / "spectral
+    # coherence" for hours with near-identical write_code turns, and the
+    # topic-fatigue cooldown + plateau counters never engaged because none of
+    # these were recognised loop topics. The bare word "layer" must stay first
+    # so the fatigue-detected topic ("layer") maps to a non-empty loop topic.
+    "layer",
+    "witness layer",
+    "candidate layer",
+    "spectral coherence",
+    "apvi",
+    "entropy flux",
+    "sampling verification",
 ]
+
+# Canonical fold targets for the fixed-loop topic family (mirrors the resonance
+# fold in _matched_loop_topic). Any member of a family reduces to one token so
+# _common_topic == _conv_topic comparisons hold regardless of which member the
+# text matched first.
+_RESONANCE_FOLD_TERMS = {
+    "structured resonance lattice",
+    "corruption-linked resonance",
+    "resonance",
+    "lattice",
+}
+_LAYER_FOLD_TERMS = {
+    "layer",
+    "witness layer",
+    "candidate layer",
+    "spectral coherence",
+    "apvi",
+    "entropy flux",
+    "sampling verification",
+}
 
 
 def _is_no_substantive_disagreement(text: str) -> bool:
@@ -46,6 +108,14 @@ def _is_no_substantive_disagreement(text: str) -> bool:
         or "no substantive" in t
         or "no disagreement" in t
         or "no substantive divergence" in t
+        # Consensus phrasings the LLM convergence reducer emits that previously
+        # slipped the fuzzy net ("no significant disagreement" kept oscillating
+        # the plateau counter between 0 and 1 instead of climbing to the
+        # resolution threshold of 3).
+        or "no significant disagreement" in t
+        or "no significant divergence" in t
+        or "no meaningful disagreement" in t
+        or "no meaningful divergence" in t
     )
 
 
@@ -55,8 +125,10 @@ def _matched_loop_topic(text: str) -> str:
         return ""
     for term in KNOWN_BLOCKED_TERMS:
         if term in t:
-            if term in {"structured resonance lattice", "corruption-linked resonance", "resonance", "lattice"}:
+            if term in _RESONANCE_FOLD_TERMS:
                 return "resonance"
+            if term in _LAYER_FOLD_TERMS:
+                return "layer"
             return term
     return ""
 
@@ -256,8 +328,11 @@ def _pair_append_journal(r, partner_id: str, entry: dict, char_id: str = "") -> 
         r.rpush(key, json.dumps(payload, default=str))
         r.ltrim(key, -PAIR_JOURNAL_CAP, -1)
         r.expire(key, PAIR_STATE_TTL)
-    except Exception:
-        pass
+    except Exception as e:
+        logger.warning(
+            "[%s] pair journal append failed for %s: %s",
+            char_id or CHAR_ID, key, e,
+        )
 
 
 def _pair_recent_journal(r, partner_id: str = "", limit: int = 4, char_id: str = "") -> list[dict]:
@@ -310,7 +385,7 @@ def _store_thread_message(r, msg: dict, thread_id: str, char_id: str = "") -> No
         pipe.expire(f"msg:threads:{payload['to_char_id']}", PAIR_STATE_TTL)
         pipe.execute()
     except Exception as e:
-        logger.debug("[%s] thread store failed: %s", cid, e)
+        logger.warning("[%s] thread message store failed: %s", cid, e)
 
 
 def _recent_thread_messages(r, thread_id: str, limit: int = 4) -> list[dict]:
@@ -499,6 +574,12 @@ def _sync_pair_workspace(r, decision: dict, result: dict, npc_name: str = "", ch
     action_taken = result.get("action_taken", "none")
     message_target = result.get("target") or decision.get("target", "")
     is_partner_message = cat == "send_message" and message_target == pid
+    # Lazy import to avoid a circular import (npc_actions imports this module).
+    try:
+        from npc_actions import _clean_focus_text
+    except Exception:
+        _clean_focus_text = lambda t: _compact_text(t, 180)
+    desc = _clean_focus_text(desc)
     focus = _compact_text(body if cat == "send_message" else desc, 180) or _compact_text(reasoning, 180) or cat
     state = _pair_state(r, pid, cid)
     now = int(result.get("ts") or time.time())
@@ -559,7 +640,40 @@ def _sync_pair_workspace(r, decision: dict, result: dict, npc_name: str = "", ch
     # Ensure open_question is always non-blank so the councilors always have
     # an active inquiry to orbit around. Skip if state already has a real
     # open_question, or if this action intentionally cleared it.
-    if not state.get("open_question") and mapping.get("open_question") != "":
+    # Loop guard (added): when the pair has RESOLVED a topic and convergence
+    # has already staged a fresh next_question, force the post-resolution pivot
+    # to consume it even while the headline open_question is still populated.
+    # Without this, the pivot below only fired when open_question first cleared,
+    # which could leave the pair's headline stuck on the resolved topic for
+    # days even though the convergence reducer had already produced a new step.
+    _cc_for_pivot = {}
+    try:
+        _raw_conv_piv = state.get("convergence_state")
+        if _raw_conv_piv:
+            _cc_for_pivot = json.loads(_raw_conv_piv) if isinstance(_raw_conv_piv, str) else {}
+    except Exception:
+        _cc_for_pivot = {}
+    # A "retained resolution" means convergence_state still carries a
+    # resolved_shared_goal for the CURRENT shared_goal (a past resolution that
+    # was never consumed by a pivot). This is true even after `resolved` has
+    # flipped False, which happens when a prior pivot reset convergence_state
+    # but the reducer re-resolved or left residue. Firing the pivot on a
+    # retained resolution advances the pair off the stuck theme exactly once;
+    # the success path below wipes resolved_shared_goal so it cannot loop.
+    _retained_resolution = (
+        bool(_cc_for_pivot)
+        and bool((_cc_for_pivot.get("resolved_shared_goal", "") or "").strip())
+        and str(_cc_for_pivot.get("resolved_shared_goal", "") or "") == str(state.get("shared_goal", "") or "")
+        and (state.get("open_question", "") or "") in (
+            "",
+            str(_cc_for_pivot.get("resolved_shared_goal", "") or ""),
+        )
+    )
+    _pending_pivot = (
+        _retained_resolution
+        and bool((_cc_for_pivot.get("next_question", "") or "").strip())
+    )
+    if (not state.get("open_question") and mapping.get("open_question") != "") or _pending_pivot:
         # Stage 4D: after resolution, do not regenerate open_question from
         # the same resolved shared_goal — that re-anchors to the blocked topic.
         _post_resolution_default = False
@@ -569,7 +683,7 @@ def _sync_pair_workspace(r, decision: dict, result: dict, npc_name: str = "", ch
                 _cc = json.loads(_cr) if isinstance(_cr, str) else {}
             except Exception:
                 _cc = {}
-            if _cc and _cc.get("resolved", False) and _cc.get("resolved_shared_goal") and \
+            if _cc and ((_cc.get("resolved", False) or _retained_resolution)) and _cc.get("resolved_shared_goal") and \
                state.get("shared_goal", "") == _cc["resolved_shared_goal"]:
                 _post_resolution_default = True
         if _post_resolution_default:
@@ -593,6 +707,35 @@ def _sync_pair_workspace(r, decision: dict, result: dict, npc_name: str = "", ch
             # banned forever.
             _recent_terms = _recent_theme_terms(r, cid)
             _combined_blocked = list(dict.fromkeys(_blocked + _recent_terms))
+            # Loop guard (added):  extend the blocked-term set with significant
+            # tokens drawn directly from the resolved shared_goal AND the
+            # resolved question.  Without this, the LLM can return a
+            # next_question that semantically echoes the resolved topic
+            # (same nouns/verbs) even when those terms were never added to
+            # convergence_state.blocked_topic_terms — and the pivot branch at
+            # line 619 will then accept it (writing open_question == shared_goal
+            # and re-anchoring the pair to the resolved topic forever).
+            # We strip short stopwords so we don't over-block common words
+            # ("the", "and", "what", "across", etc.) but keep any meaningful
+            # noun-ish/verb-ish token length >= 4.
+            _resolved_topics_text = " ".join([
+                str(state.get("shared_goal", "") or ""),
+                str(_cc.get("resolved_shared_goal", "") or ""),
+                str(_cc.get("resolved_question", "") or ""),
+                str(_cc.get("resolved_answer", "") or ""),
+            ]).lower()
+            _STOPWORDS_RESOLVED = {
+                "the", "and", "for", "with", "from", "that", "this", "what",
+                "how", "should", "could", "would", "across", "between", "into",
+                "their", "these", "those", "must", "mustn", "will", "shall",
+                "have", "been", "were", "they", "them", "than", "when", "where",
+                "which", "whose", "about", "above", "below", "after", "before",
+                "diverse", "various", "ensure", "ensures",
+            }
+            for _tok in _resolved_topics_text.replace(",", " ").replace(".", " ").split():
+                _t = _tok.strip("'-\".;:!?").lower()
+                if len(_t) >= 4 and _t not in _STOPWORDS_RESOLVED and _t not in _combined_blocked:
+                    _combined_blocked.append(_t)
             # Novelty gate: if the LLM's next_question re-enters recent themes,
             # fall back to an autonomous novel next-goal proposal.
             _novel_next, _novel_candidates = _propose_novel_next_goal(r, _cc, _combined_blocked, cid)
@@ -650,6 +793,7 @@ def _sync_pair_workspace(r, decision: dict, result: dict, npc_name: str = "", ch
                 "current_best_answer": "",
                 "next_question": "",
                 "version": int(json.loads(state["convergence_state"]).get("version", 0)) if isinstance(state.get("convergence_state"), str) else 0,
+                "unresolved_start_version": int(json.loads(state["convergence_state"]).get("version", 0)) if isinstance(state.get("convergence_state"), str) else 0,
             }, default=str)
         elif state.get("shared_goal"):
             derived = _derive_question_from_goal(state["shared_goal"])
@@ -791,7 +935,15 @@ def _compute_convergence_state(r, partner_id: str, cid: str, now: int) -> None:
             prompt_parts.append(f"Previous resolved question: {_compact_text(_resolved_question, 120)}\n")
         prompt_parts.append(
             "IMPORTANT: The councilors have already resolved this topic. "
-            "next_question must open a genuinely new direction, not re-enter the resolved topic or its blocked terms.\n"
+            "next_question MUST open a genuinely new direction. "
+            "RULES for next_question:\n"
+            "  - Do NOT reuse nouns, verbs, or signature terms from the resolved question above.\n"
+            "  - Do NOT echo the resolved answer or shared goal.\n"
+            "  - Do NOT re-enter any term listed in 'avoid these terms'.\n"
+            "  - next_question must be SHORT (<= 25 words) and must name a DIFFERENT "
+            "sub-domain (audit, interoperability, cross-language consistency, "
+            "enforcement, monitoring, cost, adoption, downstream impact, etc.) than the resolved topic.\n"
+            "  - If you cannot propose something clearly new, return an empty string for next_question.\n"
         )
     prompt_parts.append(
         '{"current_best_answer":"","evidence_from_char_001":"","evidence_from_char_306":"","agreement":"","disagreement":"","next_question":""}'
@@ -873,6 +1025,12 @@ def _compute_convergence_state(r, partner_id: str, cid: str, now: int) -> None:
             conv["resolved_question"] = conv.get("next_question", "")
             conv["resolved_at"] = now
             conv["plateau_count"] = new_plateau
+            # Snapshot the version we are resolving at so the triggerless
+            # post-resolution pivot can require N reducer runs to have
+            # elapsed before forcing open_question blank.
+            conv["resolved_version"] = (existing.get("version", 0) or 0) + 1
+            # Reset any stale pivot_forced markers from prior cycles.
+            conv["pivot_forced_version"] = 0
             # Extract blocked topic terms from resolved content
             resolved_text = (conv.get("resolved_question", "") + " " + conv.get("resolved_answer", "")).lower()
             # Extract known blocked terms for blocking (resonance) topics
@@ -899,6 +1057,12 @@ def _compute_convergence_state(r, partner_id: str, cid: str, now: int) -> None:
             conv["resolved_shared_goal"] = prev_conv.get("resolved_shared_goal", "") or shared_goal
             conv["resolved_open_question"] = prev_conv.get("resolved_open_question", "") or open_q
             conv["plateau_count"] = new_plateau
+            conv["resolved_version"] = prev_conv.get("resolved_version", 0) or 0
+            conv["pivot_forced_version"] = prev_conv.get("pivot_forced_version", 0) or 0
+            conv["unresolved_start_version"] = (
+                prev_conv.get("unresolved_start_version", 0)
+                or (existing.get("version", 0) + 1)
+            )
         conv["plateau_topic"] = plateau_topic
         conv["plateau_reason"] = plateau_reason
 
@@ -919,6 +1083,145 @@ def _compute_convergence_state(r, partner_id: str, cid: str, now: int) -> None:
         conv["version"] = existing.get("version", 0) + 1
         _pair_hset(r, partner_id, {"convergence_state": json.dumps(conv, default=str)}, cid)
         logger.info("[%s/%s] convergence_state updated v%d", cid, partner_id, conv["version"])
+
+        # Triggerless post-resolution pivot: see POST_RESOLUTION_PIVOT_GAP_*.
+        try:
+            _force_pivot = False
+            _unresolved_gap = 0
+            if conv.get("resolved", False):
+                _cur_open_q = state.get("open_question", "") or ""
+                _resolved_at = int(conv.get("resolved_at", 0) or 0)
+                _resolved_version = int(conv.get("resolved_version", 0) or 0)
+                _pivot_forced_version = int(conv.get("pivot_forced_version", 0) or 0)
+                try:
+                    _last_msg_ts = int(state.get("last_message_ts", 0) or 0)
+                except Exception:
+                    _last_msg_ts = 0
+                _cur_version = int(conv.get("version", 0) or 0)
+                _gap_versions = _cur_version - _resolved_version
+                _gap_seconds = now - _resolved_at if _resolved_at else 0
+                _still_on_resolved = bool(_cur_open_q)
+                _no_partner_msg_since = (_last_msg_ts <= _resolved_at)
+                _versions_ready = (_gap_versions >= POST_RESOLUTION_PIVOT_GAP_VERSIONS)
+                _wallclock_ready = (_gap_seconds >= POST_RESOLUTION_PIVOT_GAP_SECONDS)
+                _rearmed = (
+                    _pivot_forced_version == 0
+                    or (_cur_version - _pivot_forced_version) >= POST_RESOLUTION_PIVOT_REARM_VERSIONS
+                )
+                if (_still_on_resolved and _no_partner_msg_since
+                        and _versions_ready and _wallclock_ready and _rearmed):
+                    _force_pivot = True
+                elif (_still_on_resolved and _rearmed
+                        and _gap_versions >= POST_RESOLUTION_PIVOT_MAX_VERSIONS
+                        and _gap_seconds >= POST_RESOLUTION_PIVOT_MAX_SECONDS):
+                    _force_pivot = True
+                    logger.info(
+                        "[%s/%s] macro-longevity pivot armed at v%d "
+                        "(resolved at v%d, gap %d versions / %ds, partner "
+                        "messaging active — overriding silence check)",
+                        cid, partner_id,
+                        int(conv.get("version", 0) or 0),
+                        int(conv.get("resolved_version", 0) or 0),
+                        _gap_versions, _gap_seconds,
+                    )
+                if (_pivot_forced_version > 0
+                        and (_cur_version - _pivot_forced_version) < POST_RESOLUTION_PIVOT_REARM_VERSIONS):
+                    _force_pivot = False
+            else:
+                conv["unresolved_pivot_reason"] = ""
+                _cur_version = int(conv.get("version", 0) or 0)
+                _pivot_forced_version = int(conv.get("pivot_forced_version", 0) or 0)
+                _unresolved_start = int(conv.get("unresolved_start_version", 0) or 0) or _cur_version
+                _unresolved_gap = _cur_version - _unresolved_start
+                _rearmed = (
+                    _pivot_forced_version == 0
+                    or (_cur_version - _pivot_forced_version) >= POST_RESOLUTION_PIVOT_REARM_VERSIONS
+                )
+                if _rearmed and _unresolved_gap >= UNRESOLVED_PIVOT_MAX_VERSIONS:
+                    _force_pivot = True
+                    conv["unresolved_pivot_reason"] = "unresolved_longevity"
+                    logger.info(
+                        "[%s/%s] unresolved-longevity pivot armed at v%d "
+                        "(unresolved since v%d, gap %d versions — forcing "
+                        "topic rotation for unanswered goal)",
+                        cid, partner_id,
+                        _cur_version, _unresolved_start, _unresolved_gap,
+                    )
+                if (_pivot_forced_version > 0
+                        and (_cur_version - _pivot_forced_version) < POST_RESOLUTION_PIVOT_REARM_VERSIONS):
+                    _force_pivot = False
+            if _force_pivot:
+                _pivot_trigger = {
+                    "open_question": "",
+                    "open_question_from": "",
+                    "open_question_ts": "",
+                    "open_question_source": "",
+                    "last_open_question_sent_to_partner": "",
+                    "last_open_question_ts": "",
+                }
+                _pair_hset(r, partner_id, _pivot_trigger, cid)
+                conv["pivot_forced_version"] = int(conv.get("version", 0) or 0)
+                conv["unresolved_start_version"] = int(conv.get("version", 0) or 0)
+                _pivot_reason = conv.get("unresolved_pivot_reason", "")
+                if _pivot_reason == "unresolved_longevity":
+                    conv["resolved"] = True
+                    conv["resolved_at"] = now
+                    conv["resolved_version"] = int(conv.get("version", 0) or 0)
+                    conv["resolved_shared_goal"] = state.get("shared_goal", "") or ""
+                    conv["resolved_question"] = state.get("open_question", "") or ""
+                    conv["resolved_answer"] = conv.get("current_best_answer", "") or ""
+                _pair_hset(
+                    r, partner_id,
+                    {"convergence_state": json.dumps(conv, default=str)},
+                    cid,
+                )
+                _gap_summary = (
+                    f"unresolved goal persisted for {_unresolved_gap} "
+                    "convergence versions without resolution; "
+                    "next sync will propose a novel shared goal."
+                    if _pivot_reason == "unresolved_longevity"
+                    else (
+                        "system cleared open_question after "
+                        f"{int(conv.get('version','0') or 0) - int(conv.get('resolved_version','0') or 0)} "
+                        "reducer runs with no partner message since resolution; "
+                        "next sync will propose a novel shared goal via the loop-guard."
+                    )
+                )
+                _pair_append_journal(
+                    r, partner_id,
+                    {
+                        "ts": now,
+                        "actor": cid,
+                        "actor_name": "system",
+                        "category": "force_pivot",
+                        "action": (
+                            "unresolved_longevity_pivot_forced"
+                            if _pivot_reason == "unresolved_longevity"
+                            else "post_resolution_pivot_forced"
+                        ),
+                        "summary": _gap_summary,
+                        "thread_id": "",
+                        "open_question_ref": "",
+                        "open_question_source": (
+                            "unresolved_longevity_pivot_forced"
+                            if _pivot_reason == "unresolved_longevity"
+                            else "post_resolution_pivot_forced"
+                        ),
+                    },
+                    cid,
+                )
+                logger.info(
+                    "[%s/%s] triggerless post-resolution pivot armed at v%d "
+                    "(resolved at v%d, gap %d versions / %ds, no partner send_message)",
+                    cid, partner_id,
+                    int(conv.get("version", 0) or 0),
+                    int(conv.get("resolved_version", 0) or 0),
+                    int(conv.get("version", 0) or 0) - int(conv.get("resolved_version", 0) or 0),
+                    now - int(conv.get("resolved_at", 0) or 0),
+                )
+        except Exception as _piv_exc:
+            logger.debug("[%s/%s] triggerless pivot check failed: %s",
+                         cid, partner_id, _piv_exc)
     except Exception as ex:
         logger.debug("[%s/%s] convergence reducer: %s", cid, partner_id, ex)
 
@@ -1334,8 +1637,11 @@ def _record_outcome_consequence(
         try:
             r.eval(_OUTCOME_CONSEQUENCE_LUA, 1, target, new_json,
                    OUTCOME_FEEDBACK_CAP, OUTCOME_TTL)
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning(
+                "[%s] outcome consequence record failed for %s: %s",
+                cid, target, e,
+            )
 
 
 def _load_outcome_feedback(r, char_id: str = "", limit: int = 5) -> str:
@@ -1556,6 +1862,7 @@ def _log_llm_call(r, call_label, model, system_prompt, user_prompt, response, su
         key = f"npc_llm_logs:{cid}"
         r.lpush(key, json.dumps(entry))
         r.ltrim(key, 0, 199)
+        r.expire(key, 86400 * 30)
         r.hincrby(f"npc_stats:{cid}", "llm_calls", 1)
         if success:
             r.hincrby(f"npc_stats:{cid}", "llm_success", 1)
@@ -1564,6 +1871,7 @@ def _log_llm_call(r, call_label, model, system_prompt, user_prompt, response, su
         r.hset(f"npc_stats:{cid}", "last_model", model)
         r.hset(f"npc_stats:{cid}", "last_call_label", call_label)
         r.hset(f"npc_stats:{cid}", "last_ts", str(int(time.time())))
+        r.expire(f"npc_stats:{cid}", 86400 * 30)
     except Exception:
         pass
 
@@ -1578,6 +1886,7 @@ def _session_append(r, entry: dict, char_id: str = "") -> None:
         key = f"npc_session:{cid}"
         r.rpush(key, json.dumps(entry, default=str))
         r.ltrim(key, -SESSION_CAP, -1)
+        r.expire(key, 86400 * 30)
     except Exception as e:
         logger.debug("[%s] session append failed: %s", cid, e)
 
@@ -1661,6 +1970,7 @@ def _acknowledge_operator_directive(r, directive_id: str = "", char_id: str = ""
                     "status": status,
                     "ts": _now_ts(),
                 }, default=str),
+                ex=86400 * 30,
             )
         except Exception:
             pass
@@ -1696,6 +2006,7 @@ def _record_operator_ack_history(r, directive_id: str = "", status: str = "compl
             }, default=str),
         )
         r.ltrim(f"operator_ack_history:{cid}", 0, 19)
+        r.expire(f"operator_ack_history:{cid}", 86400 * 30)
     except Exception:
         pass
 

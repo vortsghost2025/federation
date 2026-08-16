@@ -175,7 +175,7 @@ def _resolve_all_npc_factions(r=None) -> Dict[str, str]:
 
     # Layer on npc_state:* hashes (most authoritative per-NPC)
     try:
-        for key in r.keys("npc_state:*"):
+        for key in r.scan_iter("npc_state:*", count=500):
             parts = key.split(":")
             if len(parts) == 2:
                 npc_id = parts[1]
@@ -208,14 +208,14 @@ def _auto_seed_npc_locations() -> int:
         npc_ids = set()
 
         # Source 1: npc_state:{id} keys
-        state_keys = r.keys("npc_state:*")
+        state_keys = r.scan_iter("npc_state:*", count=500)
         for key in state_keys:
             parts = key.split(":")
             if len(parts) == 2:
                 npc_ids.add(parts[1])
 
         # Source 2: npc_faction_context:{id} keys
-        fc_keys = r.keys("npc_faction_context:*")
+        fc_keys = r.scan_iter("npc_faction_context:*", count=500)
         for key in fc_keys:
             parts = key.split(":")
             if len(parts) == 2:

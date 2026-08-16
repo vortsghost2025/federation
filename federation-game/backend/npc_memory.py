@@ -134,6 +134,64 @@ def get_memories(char_id: str, limit: int = 50, offset: int = 0) -> List[Dict]:
     return memories
 
 
+def get_context_for_prompt(char_id: str, max_memories: int = 5) -> str:
+    """Format the NPC's persistent long-term memory for injection into a prompt.
+
+    Mirrors the pair-NPC CouncilorMemory.get_context_for_prompt pattern: the
+    most recent N entries from the npc_memory:{char_id} zset (scored by ts) are
+    surfaced as bullet points so the LLM can see what the NPC has been doing
+    across ticks. If a reflective summary exists (npc_memory_summary), it is
+    included as a compact preamble.
+
+    Returns "" on no memory, empty summary, or any error — never blocks the
+    caller's prompt assembly. Designed to be dropped directly into a system
+    prompt between RECENT and ARTIFACTS.
+    """
+    try:
+        r = _get_redis()
+        key = MEMORY_ZSET_KEY.format(char_id=char_id)
+        if not r.exists(key):
+            return ""
+        raw = r.zrevrange(key, 0, max_memories - 1, withscores=True)
+        if not raw:
+            return ""
+        lines = []
+        for member, _score in raw:
+            try:
+                mem = json.loads(member)
+            except (json.JSONDecodeError, TypeError):
+                continue
+            etype = mem.get("type", "event")
+            category = mem.get("category", "")
+            desc = (
+                mem.get("action_desc")
+                or mem.get("description")
+                or mem.get("content")
+                or ""
+            )
+            if not desc:
+                continue
+            # Truncate very long descriptions (e.g. dialogue beats with quoted speech)
+            if len(desc) > 150:
+                desc = desc[:147] + "..."
+            label = category or etype
+            lines.append(f"- [{label}] {desc}")
+        if not lines:
+            return ""
+        block = "\n".join(lines)
+        # Optional reflective summary preamble
+        summary = get_memory_summary(char_id) or ""
+        if summary:
+            summary = summary.strip()
+            if len(summary) > 300:
+                summary = summary[:297] + "..."
+            return f"Reflective summary: {summary}\nRecent memories:\n{block}"
+        return f"Recent memories:\n{block}"
+    except Exception as exc:
+        logger.debug("get_context_for_prompt failed for %s: %s", char_id, exc)
+        return ""
+
+
 def get_memory_summary(char_id: str) -> Optional[str]:
     r = _get_redis()
     key = MEMORY_SUMMARY_KEY.format(char_id=char_id)

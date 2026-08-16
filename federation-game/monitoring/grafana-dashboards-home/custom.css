@@ -10,9 +10,7 @@
    ============================================================ */
 
 /* --- Global base font scale --- */
-body {
-  font-size: 18px !important;
-}
+body { font-size: 18px !important; }
 
 /* --- Panel titles (emotion label "panel-title", rendered as <h2>) --- */
 [class*="panel-title"] > h2,
@@ -53,7 +51,6 @@ body.theme-light [class*="panel-container"] {
 }
 
 /* --- Stat / Big Value panel values (inline styles — need !important) --- */
-/* Targets the value container inside BigValue layouts */
 [class*="big-value"] [class*="value"] > div,
 [class*="big-value"] [class*="value-"] div,
 [class*="BigValue"] div[style*="font-size"],
@@ -64,21 +61,18 @@ body.theme-light [class*="panel-container"] {
   color: #e0e0f0 !important;
 }
 
-/* Stat value text spans (FormattedValueDisplay uses inline font-size) */
 [class*="formatted-value-display"] span,
 [class*="formatted-value"] span[style*="font-size"] {
   font-size: 36px !important;
   font-weight: 700 !important;
 }
 
-/* --- Stat panel titles (smaller than values but still enlarged) --- */
 [class*="big-value"] [class*="title"],
 [class*="big-value"] [class*="title-"] {
   font-size: 18px !important;
   font-weight: 600 !important;
 }
 
-/* --- Gauge panel values (SVG text elements) --- */
 [data-testid="gauge container"] svg text,
 [data-testid="gauge container"] svg text[class*="value"],
 [data-testid="gauge track"] + text {
@@ -86,20 +80,17 @@ body.theme-light [class*="panel-container"] {
   fill: #e0e0f0 !important;
 }
 
-/* Gauge name/label below value */
 [data-testid="gauge container"] svg text[class*="name"],
 [data-testid="gauge container"] svg text:last-of-type {
   font-size: 16px !important;
   fill: #c0c0d0 !important;
 }
 
-/* --- Bar gauge values --- */
 [data-testid="Bar gauge value"] {
   font-size: 20px !important;
   font-weight: 700 !important;
 }
 
-/* --- Sidebar menu items --- */
 [data-testid="Sidebar container"] a,
 [data-testid="Sidebar container"] [class*="sidemenu"] a,
 [data-testid="navigation mega-menu"] a,
@@ -107,7 +98,6 @@ body.theme-light [class*="panel-container"] {
   font-size: 16px !important;
 }
 
-/* --- Time picker --- */
 [data-testid="TimePicker Open Button"],
 [data-testid="TimePicker Open Button"] span,
 [data-testid="TimePicker Overlay Content"] span,
@@ -116,19 +106,16 @@ body.theme-light [class*="panel-container"] {
   font-size: 16px !important;
 }
 
-/* Time picker apply button */
 [data-testid="TimePicker submit button"] {
   font-size: 16px !important;
   font-weight: 600 !important;
 }
 
-/* --- Refresh picker --- */
 [data-testid="RefreshPicker run button"],
 [data-testid="RefreshPicker interval button"] {
   font-size: 16px !important;
 }
 
-/* --- Variable dropdowns / template variables --- */
 [data-testid="Dashboard submenu"] a,
 [data-testid="template variable"] a,
 [data-testid="variable-link-wrapper"],
@@ -137,38 +124,32 @@ body.theme-light [class*="panel-container"] {
   font-size: 16px !important;
 }
 
-/* Variable dropdown select container */
 [data-testid="Select container"] input,
 [data-testid="Select container"] span {
   font-size: 16px !important;
 }
 
-/* --- Dashboard controls bar --- */
 [data-testid="dashboard controls"] button,
 [data-testid="dashboard controls"] span {
   font-size: 16px !important;
 }
 
-/* --- VizLayout legend text --- */
 [data-testid="viz-layout-legend"] span,
 [data-testid="viz-layout-legend"] td {
   font-size: 15px !important;
 }
 
-/* --- Tooltip text (graph/panel tooltips) --- */
 [class*="graph-tooltip"] span,
 [class*="tooltip"] span,
 [class*="GraphTooltip"] span {
   font-size: 15px !important;
 }
 
-/* --- Tab labels --- */
 [class*="tab-link"],
 [role="tab"] {
   font-size: 16px !important;
 }
 
-/* --- Table text --- */
 [class*="table-"] td,
 [class*="table-"] th,
 [data-testid="table"] td,
@@ -176,31 +157,24 @@ body.theme-light [class*="panel-container"] {
   font-size: 15px !important;
 }
 
-/* --- Select / dropdown options (used everywhere) --- */
 [data-testid="Select option"] {
   font-size: 15px !important;
 }
 
-/* --- Card headings (dashboard list, etc.) --- */
 [data-testid="Card heading"] {
   font-size: 18px !important;
   font-weight: 600 !important;
 }
 
-/* --- Sidebar dock toggle --- */
 [data-testid="sidebar-dock-toggle"] {
   font-size: 16px !important;
 }
 
-/* --- General button text enlargement --- */
 button span {
   font-size: 15px !important;
 }
 
-/* --- High-contrast: boost border visibility on inputs --- */
-input,
-select,
-textarea {
+input, select, textarea {
   border: 2px solid rgba(255, 255, 255, 0.30) !important;
 }
 
@@ -210,7 +184,6 @@ body.theme-light textarea {
   border: 2px solid rgba(0, 0, 0, 0.30) !important;
 }
 
-/* --- High-contrast: panel content separator --- */
 [data-testid="panel content"] {
   border-top: 1px solid rgba(255, 255, 255, 0.12) !important;
 }
@@ -219,7 +192,6 @@ body.theme-light [data-testid="panel content"] {
   border-top: 1px solid rgba(0, 0, 0, 0.12) !important;
 }
 
-/* --- VizLayout container borders --- */
 [data-testid="viz-layout"] {
   border: 1px solid rgba(255, 255, 255, 0.10) !important;
   border-radius: 4px !important;
@@ -229,7 +201,6 @@ body.theme-light [data-testid="viz-layout"] {
   border: 1px solid rgba(0, 0, 0, 0.10) !important;
 }
 
-/* --- Scrollbar enlargement for easier grab --- */
 ::-webkit-scrollbar {
   width: 14px !important;
   height: 14px !important;
@@ -244,11 +215,7 @@ body.theme-light ::-webkit-scrollbar-thumb {
   background: rgba(0, 0, 0, 0.30) !important;
 }
 
-/* --- Focus rings for keyboard nav (accessibility) --- */
-a:focus-visible,
-button:focus-visible,
-input:focus-visible,
-select:focus-visible {
+a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible {
   outline: 3px solid #6e9fff !important;
   outline-offset: 2px !important;
 }

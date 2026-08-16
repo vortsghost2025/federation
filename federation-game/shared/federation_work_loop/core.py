@@ -551,6 +551,54 @@ def _family_prefix(area_id: str) -> str:
     return "_".join(tokens[:3])
 
 
+# Generation/ordinal markers and clear derivative sub-location suffixes that
+# indicate "yet another re-skin of the same sector" rather than a genuinely
+# distinct place. Deliberately excludes place-type nouns (haven, citadel,
+# valley, veIL, spire, peak, ...) which are real content and can denote
+# distinct locations.
+_VARIANT_TOKENS = {
+    "alpha", "beta", "gamma", "delta", "epsilon", "zeta", "eta", "theta",
+    "prime", "one", "two", "2", "3", "ii", "iii",
+    "annex", "extension", "gateway", "hub", "outpost", "expansion",
+    "edge", "next", "adjacent", "satellite",
+}
+
+
+def _name_tokens(name: str) -> List[str]:
+    """Lowercase word tokens of a name. Generation/ordinal markers and
+    derivative suffixes are stripped only from the END (suffix position), so
+    'Void Echo Haven Alpha' -> the base 'void echo haven', while a leading
+    descriptor like 'crystal' in 'Crystal Haven' is preserved."""
+    words = re.findall(r"[a-z0-9]+", str(name).lower())
+    while words and words[-1] in _VARIANT_TOKENS:
+        words.pop()
+    return words or re.findall(r"[a-z0-9]+", str(name).lower())
+
+
+def _is_near_duplicate_name(proposed: str, existing: str) -> bool:
+    """True when `proposed` is a near-duplicate re-skin of `existing`.
+
+    Catches the pair's historical proliferation of ordinal-suffixed re-skins
+    ('Void Resonance Haven' + _alpha.._eta) where the base word set is identical
+    or nearly so. Deliberately conservative: distinct place-type words
+    ('Crystal Valley' vs 'Crystal Citadel') are NOT treated as duplicates, to
+    avoid over-blocking genuinely different locations ('New Dawn' vs 'New
+    Horizon').
+    """
+    a = _name_tokens(proposed)
+    b = _name_tokens(existing)
+    if not a or not b:
+        return False
+    if set(a) == set(b):
+        return True
+    smaller, bigger = (a, b) if len(a) <= len(b) else (b, a)
+    if len(smaller) < 2 or len(bigger) < 2:
+        return False
+    bigger_set = set(bigger)
+    shared = sum(1 for w in smaller if w in bigger_set)
+    return (shared / len(smaller)) >= 0.7
+
+
 def _count_founded_today(areas: List[Dict[str, Any]], actor_id: str) -> int:
     from datetime import datetime, timezone
 
@@ -705,6 +753,21 @@ def _action_area_found(pair_slug: str, actor_id: str, payload: Dict[str, Any]) -
                     "already exists. Give the new area a different name.",
                     existing_areas,
                 )
+
+    # Semantic near-duplicate: catches ordinal/derivative re-skins the
+    # exact-name check misses ('Void Resonance Haven' vs 'Void Resonance Haven
+    # Zeta'). The same area_id is skipped so a retry with a cosmetic name change
+    # still hits the idempotent path below instead of being rejected.
+    for a in existing_areas:
+        if a.get("area_id") == area_id:
+            continue
+        if _is_near_duplicate_name(name, str(a.get("name", ""))):
+            return _reject_area(
+                actor_id, area_id, "near_duplicate_name",
+                f"Cannot found '{area_id}': '{name}' is a near-duplicate of "
+                f"existing '{a.get('name', '?')}'. Propose a genuinely distinct sector.",
+                existing_areas,
+            )
 
     record = {
         "area_id": area_id,

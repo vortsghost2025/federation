@@ -34,7 +34,9 @@ class FakeRedis:
         )
         return [key for key in all_keys if fnmatch.fnmatch(key, pattern)]
 
-    def set(self, key, value, ex=None):
+    def set(self, key, value, ex=None, nx=False):
+        if nx and key in self.strings:
+            return None
         self.strings[key] = value
         return True
 

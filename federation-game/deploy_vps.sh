@@ -11,31 +11,27 @@ Usage:
   ./deploy_vps.sh check npc-agent [remote_name]
   ./deploy_vps.sh check backend <remote_name>
   ./deploy_vps.sh check backend+worker <remote_name>
-  ./deploy_vps.sh check shared
   ./deploy_vps.sh npc-agent <local_file> [remote_name]
+  ./deploy_vps.sh npc-agent-batch <local_directory>
   ./deploy_vps.sh backend <local_file> <remote_name>
   ./deploy_vps.sh backend+worker <local_file> <remote_name>
-  ./deploy_vps.sh shared
 
 Examples:
   ./deploy_vps.sh check npc-agent
   ./deploy_vps.sh check backend npc_messaging.py
   ./deploy_vps.sh check backend+worker worker.py
-  ./deploy_vps.sh check shared
   ./deploy_vps.sh npc-agent npc-agent/npc_agent.canonical_v2.py
+  ./deploy_vps.sh npc-agent-batch npc-agent/
   ./deploy_vps.sh backend backend/npc_messaging.patched.py npc_messaging.py
   ./deploy_vps.sh backend+worker backend/some_shared_file.py some_shared_file.py
-  ./deploy_vps.sh shared
 
 Notes:
   - npc-agent updates the VPS host copy and restarts BOTH NPC containers.
+  - npc-agent-batch stages ALL .py files, syntax-checks each, then copies
+    atomically to the host directory with a single restart. Use this for
+    extraction-wave deploys to prevent mid-deploy drift (NFM-004).
   - backend updates the mounted host copy and restarts backend.
   - backend+worker updates host/backend and restarts both.
-  - shared syncs shared/federation_work_loop/ to ${APP_ROOT}/shared/ on the host
-    (py-compiles each .py on the VPS temp dir first). It does NOT restart any
-    container — bind-mounted services will see the new host files immediately,
-    but already-running Python processes keep cached modules until they are
-    restarted separately. Use ./deploy_vps.sh backend / npc-agent ... to restart.
 EOF
 }
 
@@ -55,6 +51,36 @@ remote_compile_if_python() {
   local remote_name="$2"
   if [[ "$remote_name" == *.py ]]; then
     ssh "$VPS" "python3 -m py_compile '$tmp_path'"
+  fi
+}
+
+# Wait (up to ~30s) for a container to be running before docker exec works.
+container_alive() {
+  local container="$1"
+  local attempts="${2:-30}"
+  local i
+  for ((i = 0; i < attempts; i++)); do
+    if ssh "$VPS" "docker inspect -f '{{.State.Running}}' $container 2>/dev/null" | grep -q true; then
+      return 0
+    fi
+    sleep 1
+  done
+  echo "ERROR: container $container did not come up within ${attempts}s" >&2
+  return 1
+}
+
+# Warn (non-fatal) if the live host file already differs from the local file
+# being deployed, so an accidental drift is surfaced before overwrite.
+pre_copy_md5_check() {
+  local local_file="$1"
+  local host_target="$2"
+  local local_md5
+  local host_md5
+  local_md5="$(md5sum "$local_file" | awk '{print $1}')"
+  host_md5="$(ssh "$VPS" "md5sum '$host_target' 2>/dev/null" | awk '{print $1}')"
+  if [ -n "$host_md5" ] && [ "$local_md5" != "$host_md5" ]; then
+    printf 'WARN: host %s (%s) != local (%s) — overwriting drifted copy\n' \
+      "$host_target" "$host_md5" "$local_md5" >&2
   fi
 }
 
@@ -104,15 +130,6 @@ check_mode() {
       print_md5_block "container federation-game-worker-1" "docker exec federation-game-worker-1 md5sum /app/$remote_name"
       print_md5_block "status" "docker ps --format 'table {{.Names}}\t{{.Status}}' | grep -E 'backend-1|worker-1'"
       ;;
-    shared)
-      # Verify the on-host shared work-loop package and its mount visibility.
-      print_md5_block "host shared/__init__.py" "md5sum '$APP_ROOT/shared/federation_work_loop/__init__.py'"
-      print_md5_block "host shared/core.py" "md5sum '$APP_ROOT/shared/federation_work_loop/core.py'"
-      print_md5_block "container backend /opt federation_shared" "docker exec federation-game-backend-1 md5sum /opt/federation_shared/federation_work_loop/core.py"
-      print_md5_block "container npc-agent-001 /opt federation_shared" "docker exec federation-game-npc-agent-001-1 md5sum /opt/federation_shared/federation_work_loop/core.py"
-      print_md5_block "container npc-agent-306 /opt federation_shared" "docker exec federation-game-npc-agent-306-1 md5sum /opt/federation_shared/federation_work_loop/core.py"
-      print_md5_block "status" "docker ps --format 'table {{.Names}}\t{{.Status}}' | grep -E 'backend-1|npc-agent-(001|306)'"
-      ;;
     *)
       usage
       exit 1
@@ -136,9 +153,6 @@ if [ "$MODE" = "check" ]; then
   case "$TARGET" in
     npc-agent)
       check_mode "$TARGET" "${3:-npc_agent.py}"
-      ;;
-    shared)
-      check_mode "$TARGET" ""
       ;;
     backend|backend+worker)
       if [ "$#" -lt 3 ]; then
@@ -172,16 +186,81 @@ case "$MODE" in
     echo "==> Uploading NPC agent file"
     scp "$LOCAL_FILE" "$VPS:$TMP_PATH"
     remote_compile_if_python "$TMP_PATH" "$REMOTE_NAME"
+    pre_copy_md5_check "$LOCAL_FILE" "$HOST_TARGET"
     backup_and_copy_host "$TMP_PATH" "$HOST_TARGET"
 
     echo "==> Restarting NPC containers"
     ssh "$VPS" "docker restart federation-game-npc-agent-001-1 federation-game-npc-agent-306-1 >/dev/null"
-    sleep 3
+    container_alive federation-game-npc-agent-001-1
+    container_alive federation-game-npc-agent-306-1
 
     print_md5_block "host" "md5sum '$HOST_TARGET'"
     print_md5_block "container federation-game-npc-agent-001-1" "docker exec federation-game-npc-agent-001-1 md5sum /app/$REMOTE_NAME"
     print_md5_block "container federation-game-npc-agent-306-1" "docker exec federation-game-npc-agent-306-1 md5sum /app/$REMOTE_NAME"
     print_md5_block "status" "docker ps --format 'table {{.Names}}\t{{.Status}}' | grep -E 'npc-agent-(001|306)'"
+    ;;
+
+  npc-agent-batch)
+    SRC_DIR="$LOCAL_FILE"
+    if [ ! -d "$SRC_DIR" ]; then
+      echo "Source must be a directory (e.g. npc-agent/)" >&2
+      exit 1
+    fi
+    STAGING="/tmp/npc-agent-batch/"
+
+    echo "==> Staging ALL files from $SRC_DIR to VPS staging area"
+    ssh "$VPS" "rm -rf '$STAGING' && mkdir -p '$STAGING'"
+    scp "$SRC_DIR"/*.py "$VPS:$STAGING"
+
+    echo "==> Syntax-checking all Python files on VPS"
+    FAILED=0
+    while IFS= read -r f; do
+      fname="$(basename "$f")"
+      if ! ssh "$VPS" "python3 -m py_compile '$STAGING$fname'" 2>/dev/null; then
+        echo "  FAIL: $fname" >&2
+        FAILED=$((FAILED + 1))
+      else
+        echo "  OK: $fname"
+      fi
+    done < <(ssh "$VPS" "cd '$STAGING' && ls *.py" 2>/dev/null || true)
+
+    if [ "$FAILED" -ne 0 ]; then
+      echo "==> ERROR: $FAILED file(s) failed syntax check — deploy ABORTED" >&2
+      ssh "$VPS" "rm -rf '$STAGING'"
+      exit 1
+    fi
+
+    echo "==> All files valid. Copying to $APP_ROOT/npc-agent/ atomically"
+    ssh "$VPS" bash -s -- "$STAGING" "$APP_ROOT/npc-agent" <<'ATOMIC_DEPLOY'
+set -euo pipefail
+STAGING="$1"
+TARGET="$2"
+TS="$(date +%Y%m%d_%H%M%S)"
+for f in "$STAGING"*.py; do
+  fname="$(basename "$f")"
+  if [ -f "$TARGET/$fname" ]; then
+    cp "$TARGET/$fname" "$TARGET/$fname.bak.$TS"
+  fi
+  cp "$f" "$TARGET/$fname"
+done
+ATOMIC_DEPLOY
+
+    echo "==> Single restart of NPC containers"
+    ssh "$VPS" "docker restart federation-game-npc-agent-001-1 federation-game-npc-agent-306-1 >/dev/null"
+    container_alive federation-game-npc-agent-001-1
+    container_alive federation-game-npc-agent-306-1
+
+    echo "==> Verifying"
+    while IFS= read -r f; do
+      fname="$(basename "$f")"
+      print_md5_block "host $fname" "md5sum '$APP_ROOT/npc-agent/$fname'"
+      print_md5_block "container-001 $fname" "docker exec federation-game-npc-agent-001-1 md5sum /app/$fname"
+      print_md5_block "container-306 $fname" "docker exec federation-game-npc-agent-306-1 md5sum /app/$fname"
+    done < <(ssh "$VPS" "cd '$STAGING' && ls *.py" 2>/dev/null || true)
+    print_md5_block "status" "docker ps --format 'table {{.Names}}\t{{.Status}}' | grep -E 'npc-agent-(001|306)'"
+
+    echo "==> Cleaning up staging area"
+    ssh "$VPS" "rm -rf '$STAGING'"
     ;;
 
   backend)
@@ -196,11 +275,12 @@ case "$MODE" in
     echo "==> Uploading backend file"
     scp "$LOCAL_FILE" "$VPS:$TMP_PATH"
     remote_compile_if_python "$TMP_PATH" "$REMOTE_NAME"
+    pre_copy_md5_check "$LOCAL_FILE" "$HOST_TARGET"
     backup_and_copy_host "$TMP_PATH" "$HOST_TARGET"
 
     echo "==> Restarting backend"
     ssh "$VPS" "docker restart federation-game-backend-1 >/dev/null"
-    sleep 3
+    container_alive federation-game-backend-1
 
     print_md5_block "host" "md5sum '$HOST_TARGET'"
     print_md5_block "container federation-game-backend-1" "docker exec federation-game-backend-1 md5sum /app/$REMOTE_NAME"
@@ -219,54 +299,18 @@ case "$MODE" in
     echo "==> Uploading shared backend/worker file"
     scp "$LOCAL_FILE" "$VPS:$TMP_PATH"
     remote_compile_if_python "$TMP_PATH" "$REMOTE_NAME"
+    pre_copy_md5_check "$LOCAL_FILE" "$HOST_TARGET"
     backup_and_copy_host "$TMP_PATH" "$HOST_TARGET"
 
     echo "==> Restarting backend and worker"
     ssh "$VPS" "docker restart federation-game-backend-1 federation-game-worker-1 >/dev/null"
-    sleep 3
+    container_alive federation-game-backend-1
+    container_alive federation-game-worker-1
 
     print_md5_block "host" "md5sum '$HOST_TARGET'"
     print_md5_block "container federation-game-backend-1" "docker exec federation-game-backend-1 md5sum /app/$REMOTE_NAME"
     print_md5_block "container federation-game-worker-1" "docker exec federation-game-worker-1 md5sum /app/$REMOTE_NAME"
     print_md5_block "status" "docker ps --format 'table {{.Names}}\t{{.Status}}' | grep -E 'backend-1|worker-1'"
-    ;;
-
-  shared)
-    LOCAL_SHARED_PKG="$SCRIPT_DIR/shared/federation_work_loop"
-    REMOTE_PARENT="$APP_ROOT/shared"
-    REMOTE_PKG_DIR="$REMOTE_PARENT/federation_work_loop"
-
-    if [ ! -d "$LOCAL_SHARED_PKG" ]; then
-      echo "Local shared package not found: $LOCAL_SHARED_PKG" >&2
-      exit 1
-    fi
-
-    echo "==> Syncing shared/federation_work_loop to VPS (no container restart)"
-
-    # Ensure the parent package dir exists on the host.
-    ssh "$VPS" "mkdir -p '$REMOTE_PKG_DIR'"
-
-    # Upload each .py to /tmp, py-compile on the VPS, then swap into the host
-    # package dir. .py files only; no restart of any container.
-    shopt -s nullglob
-    for LOCAL_PY in "$LOCAL_SHARED_PKG"/*.py; do
-      REMOTE_NAME="$(basename "$LOCAL_PY")"
-      TMP_PATH="/tmp/fwldpy-$REMOTE_NAME"
-      scp "$LOCAL_PY" "$VPS:$TMP_PATH"
-      ssh "$VPS" "python3 -m py_compile '$TMP_PATH'" \
-        || { echo "Remote py_compile FAILED for $REMOTE_NAME" >&2; ssh "$VPS" "rm -f /tmp/fwldpy-*"; exit 1; }
-      backup_and_copy_host "$TMP_PATH" "$REMOTE_PKG_DIR/$REMOTE_NAME"
-      ssh "$VPS" "rm -f '$TMP_PATH'"
-    done
-    shopt -u nullglob
-
-    echo "==> Shared sync complete (host only)."
-    echo "NOTE: running Python processes keep cached modules until restarted separately."
-    print_md5_block "host shared/core.py" "md5sum '$REMOTE_PKG_DIR/core.py'"
-    print_md5_block "container backend /opt federation_shared" "docker exec federation-game-backend-1 md5sum /opt/federation_shared/federation_work_loop/core.py 2>/dev/null || echo NOT_MOUNTED"
-    print_md5_block "container npc-agent-001 /opt federation_shared" "docker exec federation-game-npc-agent-001-1 md5sum /opt/federation_shared/federation_work_loop/core.py 2>/dev/null || echo NOT_MOUNTED"
-    print_md5_block "container npc-agent-306 /opt federation_shared" "docker exec federation-game-npc-agent-306-1 md5sum /opt/federation_shared/federation_work_loop/core.py 2>/dev/null || echo NOT_MOUNTED"
-    print_md5_block "status" "docker ps --format 'table {{.Names}}\t{{.Status}}' | grep -E 'backend-1|npc-agent-(001|306)'"
     ;;
 
   *)

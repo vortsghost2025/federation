@@ -201,7 +201,7 @@ def _load_memory_state() -> Dict[str, Any]:
     category_counts = Counter()
     score_distribution = Counter()
 
-    for key in r.keys("npc_memory:*"):
+    for key in r.scan_iter("npc_memory:*", count=500):
         char_id = key.split(":", 1)[1]
         categories = Counter()
         scores = Counter()

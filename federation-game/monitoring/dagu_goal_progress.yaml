@@ -1,0 +1,15 @@
+description: Goal progress + novelty tracker
+schedule: "*/30 * * * *"
+type: chain
+hist_retention_days: 14
+
+env:
+  - PATH: /usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin
+
+steps:
+  - name: run_goal_monitor
+    run: |
+      python3 /docker/federation-game/monitoring/goal_progress_monitor.py
+      code=$?
+      echo "exit=$code"
+      exit $code

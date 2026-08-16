@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <link rel="stylesheet" href="adult.css">
+
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Federation Control Plane</title>
+    
+</head>
+<body>
+    <header>
+<div class="brand">
+<h1>Federation Control Plane</h1>
+<p>Adult governance simulator: legitimacy, rights, emergency power, and institutional memory.</p>
+</div>
+<div class="turn-badge">Turn <span class="turn-num" id="turnCounter">1</span></div>
+<div class="nav">
+<button class="primary" onclick="resetGame()">Reset</button>
+<button onclick="loadEvent()">Skip Event</button>
+<button onclick="showTutorial()">How to Play</button>
+</div>
+<!-- Landing Strip - Navigation -->
+<div class="landing-strip">
+<a href="/" class="landing-tab">
+<span class="tab-icon">🚀</span><span class="tab-label">Starship Simulator</span>
+</a>
+<div class="landing-divider"></div>
+<a href="/starmap.html" class="landing-tab">
+<span class="tab-icon">🗺️</span><span class="tab-label">Star Map</span>
+</a>
+<div class="landing-divider"></div>
+<a href="/simulation.html" class="landing-tab">
+<span class="tab-icon">🧬</span><span class="tab-label">Live Sim</span>
+</a>
+<div class="landing-divider"></div>
+<a href="/adult.html" class="landing-tab active" aria-current="page">
+<span class="tab-icon">⚖️</span><span class="tab-label">Adult Control Plane</span>
+</a>
+<div class="landing-divider"></div>
+<a href="/bridge.html" class="landing-tab">
+<span class="tab-icon">📚</span><span class="tab-label">Command Deck Archive</span>
+</a>
+<div class="landing-divider"></div>
+<a href="/earth.html" class="landing-tab">
+<span class="tab-icon">🌍</span><span class="tab-label">Earth Command</span>
+</a>
+<div class="landing-divider"></div>
+<a href="/worldguide.html" class="landing-tab">
+<span class="tab-icon">&#128218;</span><span class="tab-label">World Guide</span>
+</a>
+<div class="landing-divider"></div>
+<a href="/spectator.html" class="landing-tab">
+<span class="tab-icon">👁️</span><span class="tab-label">Spectator</span>
+</a>
+</div>
+</header>
+
+<!-- Tutorial Overlay -->
+<div class="tutorial-overlay" id="tutorialOverlay">
+  <div class="tutorial-card">
+    <h2>How to Play the Control Plane</h2>
+    <p>You are governing the Federation. Each turn presents a constitutional constraint — a crisis, policy decision, or external pressure — and you must choose how to respond.</p>
+    <ul>
+      <li><strong>Read the Current Constraint</strong> at the top center. It describes the situation, the domain, what rights are at stake, and the risk level.</li>
+      <li><strong>Choose an action</strong> by clicking one of the large buttons below the constraint. Each choice has different consequences.</li>
+      <li><strong>Review the outcome</strong> — after each choice, an overlay shows what changed: metric deltas, explainability, and any subsystem effects (rival activity, political developments, history arc movement).</li>
+      <li><strong>Monitor your Governance Vectors</strong> in the left column: Stability, Public Trust, Council Support, Constitutional Integrity, Rights Protection, Emergency Power. These determine whether your Federation survives.</li>
+      <li><strong>Watch for the No Gate.</strong> Some choices can be refused by the constitutional lattice if emergency power is too high or provenance is weak. A "NO GATE" label means the system blocked your action.</li>
+      <li><strong>Survive 100 turns</strong> with Stability above 30, Trust above 20, Constitutional Integrity above 20, and Rights above 20 to achieve victory.</li>
+      <li><strong>Rival Federations</strong> act each turn — hostile rivals damage you, friendly rivals offer bonuses. The Consciousness Sheet tracks the Federation's psychological state.</li>
+    </ul>
+    <p>The left column shows governance state, the center is your decision space, and the right column is your decision ledger and institutional thesis.</p>
+    <button onclick="dismissTutorial()">Begin Governing</button>
+  </div>
+</div>
+
+<!-- Outcome Overlay -->
+<div class="outcome-overlay" id="outcomeOverlay">
+  <div class="outcome-card">
+    <div class="outcome-title" id="outcomeTitle"></div>
+    <div class="outcome-deltas" id="outcomeDeltas"></div>
+    <div class="outcome-explain-box" id="outcomeExplain"></div>
+    <div class="outcome-lesson" id="outcomeLesson"></div>
+    <div id="outcomeSubeffects"></div>
+    <button class="continue-btn" onclick="closeOutcome()">Continue</button>
+  </div>
+</div>
+
+<!-- Game Over Overlay -->
+<div class="gameover-overlay" id="gameoverOverlay">
+  <div class="gameover-card">
+    <div class="gameover-text" id="gameoverText"></div>
+    <div class="gameover-stats" id="gameoverStats"></div>
+    <button class="continue-btn" onclick="resetFromGameover()">Play Again</button>
+  </div>
+</div>
+
+<main>
+        <aside class="stack">
+            <section>
+                <h2>Republic State</h2>
+                <div class="status-pill" id="governanceStatus">Loading</div>
+            </section>
+            <section>
+                <h2>WE4FREE Lane Council</h2>
+                <div class="lane-list">
+                    <div class="lane-card"><strong>Archivist</strong><span>Governance root. Owns canonical checkpoints, recovery state, handoff discipline, and provenance boundaries.</span></div>
+                    <div class="lane-card"><strong>Library</strong><span>Evidence and memory lane. Separates source documents from generated reports and keeps reviewable context.</span></div>
+                    <div class="lane-card"><strong>SwarmMind</strong><span>Coordination lane. Routes work and delegates bounded tasks, but cannot override governance authority.</span></div>
+                    <div class="lane-card"><strong>Kernel</strong><span>Infrastructure and identity lane. Tracks runtime capability, signing, local model performance, and trust-store participation.</span></div>
+                    <div class="lane-card"><strong>Control Plane</strong><span>Instrumentation layer. Runs preflight, ledgers, restore packs, local review, and output-contract verification.</span></div>
+                </div>
+            </section>
+            <section>
+                <h2>Governance Vectors</h2>
+                <div class="grid two" id="governanceMetrics"></div>
+            </section>
+<section>
+<h2>Operational Pressure</h2>
+<div class="grid two" id="shipMetrics"></div>
+</section>
+<section>
+<h2>Rival Federations</h2>
+<div class="rival-grid" id="rivalGrid">
+<div style="color: var(--muted); font-size: 0.85rem;">Scanning rival signatures...</div>
+</div>
+</section>
+<section>
+<h2>Consciousness Sheet</h2>
+<div class="cs-grid" id="csGrid">
+<div class="cs-metric">
+<div class="cs-label">Identity</div>
+<div class="cs-value" id="csIdentity" style="color: var(--blue);">0.80</div>
+<div class="bar"><div class="fill good" id="csIdentityBar" style="width: 80%"></div></div>
+</div>
+<div class="cs-metric">
+<div class="cs-label">Anxiety</div>
+<div class="cs-value" id="csAnxiety" style="color: var(--red);">0.20</div>
+<div class="bar"><div class="fill bad" id="csAnxietyBar" style="width: 20%"></div></div>
+</div>
+<div class="cs-metric">
+<div class="cs-label">Confidence</div>
+<div class="cs-value" id="csConfidence" style="color: var(--amber);">0.90</div>
+<div class="bar"><div class="fill good" id="csConfidenceBar" style="width: 90%"></div></div>
+</div>
+<div class="cs-metric">
+<div class="cs-label">Expansion Hunger</div>
+<div class="cs-value" id="csExpansion" style="color: var(--violet);">0.50</div>
+<div class="bar"><div class="fill warn" id="csExpansionBar" style="width: 50%"></div></div>
+</div>
+<div class="cs-metric">
+<div class="cs-label">Diplomacy</div>
+<div class="cs-value" id="csDiplomacy" style="color: var(--green);">0.60</div>
+<div class="bar"><div class="fill good" id="csDiplomacyBar" style="width: 60%"></div></div>
+</div>
+</div>
+<div id="csTags" style="margin-top: 0.5rem;"></div>
+</section>
+</aside>
+
+        <section class="stack">
+            <div>
+                <h2>Current Constraint</h2>
+                <div class="event-title" id="eventTitle">Initializing</div>
+                <p class="event-description" id="eventDescription">Loading simulation state.</p>
+                <div class="event-meta">
+                    <div class="meta-box"><h3>Domain</h3><div id="eventDomain">Pending</div></div>
+                    <div class="meta-box"><h3>Rights At Stake</h3><div id="eventRights">Pending</div></div>
+                    <div class="meta-box"><h3>Risk / Pressure</h3><div id="eventRisk">Pending</div></div>
+                </div>
+                <div class="choices" id="choices"></div>
+            </div>
+<div class="card explain">
+    <h2>Why The Last Decision Moved The System</h2>
+    <div id="lastExplanation" class="thesis">No decision recorded yet.</div>
+  </div>
+  <div class="card" id="turnEffectsCard" style="display: none;">
+    <h2>Turn Effects</h2>
+    <div class="turn-effects" id="turnEffects"></div>
+    <div class="victory-banner" id="victoryBanner" style="display: none;">
+      <div class="victory-text" id="victoryText"></div>
+    </div>
+  </div>
+            <div class="card">
+                <h2>Federation Atlas</h2>
+                <p class="thesis">This simulator is only a public surface. The repo also contains NPC ecosystems, creature codex systems, technology trees, USS Chaosbringer continuity machinery, and the original <a href="/bridge.html">Command Deck archive</a>.</p>
+                <div class="atlas-list" id="federationAtlas">Loading atlas.</div>
+            </div>
+            
+<div class="card">
+<h2>Live Engine Status</h2>
+<div id="engineStatus">Loading engine systems...</div>
+</div>
+<div class="card">
+<h2>Political Engine</h2>
+<div id="politicalStatus">
+<div style="color: var(--muted);">Loading political system...</div>
+</div>
+</div>
+<div class="card">
+<h2>All Systems Overview</h2>
+<div class="systems-grid" id="systemsGrid"></div>
+<div style="color: var(--muted); font-size: 0.8rem; margin-top: 0.5rem;" id="systemsSummary">Loading...</div>
+</div>
+        </section>
+
+        <aside class="stack">
+            <section>
+                <h2>Active Policy</h2>
+                <div class="metric-value" id="activePolicy">Exploration Charter</div>
+            </section>
+            <section>
+                <h2>Decision Ledger</h2>
+                <div class="ledger" id="decisionLedger">No ledger entries yet.</div>
+            </section>
+            <section>
+                <h2>Core Thesis</h2>
+                <p class="thesis"><strong>Governance is state transition discipline.</strong> Every choice mutates constraints. The question is whether the mutation preserves constitutional viability.</p>
+            </section>
+            <section class="no-gate">
+                <h2>No Gate</h2>
+                <p class="thesis"><strong>The lattice can say no.</strong> A tempting action can be rejected when provenance is weak, lane ownership is unclear, or emergency power exceeds constitutional bounds.</p>
+                <p class="thesis">More agents create more ideas, not more truth. Recovery is checkpoint discipline. Continuity is restored through artifacts, not assumed.</p>
+            </section>
+        </aside>
+    </main>
+
+    
+    <script src="fed-fetch.js"></script>
+    <script src="error-reporter.js"></script>
+    <script src="adult.js"></script>
+</body>
+</html>

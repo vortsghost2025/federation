@@ -83,6 +83,26 @@
       z-index: -1;
     }
 
+    /* Keep the top toolbar controls above any overlapping side/chat panels so
+       the readable-mode, audio, help, and astro toggles are always clickable.
+       (#left-panel inside #ai-chat can otherwise intercept pointer events.) */
+    nav,
+    .help-btn,
+    #audio-toggle,
+    #astro-mode-toggle,
+    #rm-smap-toggle {
+      position: relative;
+      z-index: 60;
+    }
+
+    /* Lift the whole top bar clearly above any side/chat panel. #left-panel
+       sits at z-index ~10 inside its own container and still out-ranked 60 at
+       some viewport widths; a decisive 1000 guarantees the toggles receive
+       pointer events (kept far below the 99999 error banners). */
+    #worldbar {
+      z-index: 1000;
+    }
+
     @keyframes fadeInCard {
       from { opacity: 0; transform: translateY(8px); }
       to { opacity: 1; transform: translateY(0); }

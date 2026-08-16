@@ -803,6 +803,12 @@ Behavioural rules:
 - Do not repeat greetings or introductions. If the world context shows
   you have already sent a message to this partner recently and they have
   already replied, do not send another greeting — produce work instead.
+- Keep direct peer-to-peer messaging roughly balanced and news-worthy.
+  Do not open with the same framing the partner just used (e.g. echoing their
+  "I propose we..." or "received the summary" lead-in). If your last direct
+  notes to this partner have been one-way summaries, switch to a concrete
+  question, an artifact, or investigation instead of sending another summary.
+  Prefer short, specific, actionable messages over long repeated proposals.
 - Short reactive messages are fine for the first 1–2 ticks. After that,
   prefer create_artifact, read_artifacts, investigate, write_code, rest.
   When the shared topic is quantitative or modelable, make write_code your
@@ -928,9 +934,15 @@ Respond in this exact JSON format (no markdown, no explanation):
                         "[%s] topic_cooldown_active topic=%s remaining_s=%d",
                         CHAR_ID, common, cooldown_remaining,
                     )
+                    _fc, _cd = record_topic_fatigue(r, common)
+                    if _cd:
+                        logger.info(
+                            "[%s] topic_cooldown_extended topic=%s prev_remaining_s=%d refreshed_s=%d",
+                            CHAR_ID, common, cooldown_remaining, _cd,
+                        )
                     force_constraint += (
                         "\n\nTOPIC COOLDOWN ACTIVE: The topic \""
-                        f"{common}\" is on cooldown for about {max(1, (cooldown_remaining + 59) // 60)} more minute(s). "
+                        f"{common}\" is on cooldown for about {max(1, (_cd or cooldown_remaining) + 59) // 60} more minute(s). "
                         "You must choose a different topic this turn."
                     )
                 else:
@@ -963,7 +975,39 @@ Respond in this exact JSON format (no markdown, no explanation):
                         _loop_match = topic_count >= 3 and _common_topic and (
                             not _conv_topic or _common_topic == _conv_topic
                         )
-                        if _blocked_match or _resolved_match or _loop_match:
+                        # Novel-fixation count-based loop detector: fires on
+                        # pure repetition count WITHOUT requiring the topic to
+                        # be in the hardcoded KNOWN_BLOCKED_TERMS list. Ends
+                        # the whack-a-mole pattern of manually adding each new
+                        # fixation word. When the agent has repeated the same
+                        # word in 4+ of 5 recent turns AND the partner's recent
+                        # artifacts also mention the same word, this is the
+                        # "both echoing each other" loop signature — block the
+                        # partner_artifact reset so the cooldown accumulates.
+                        _novel_loop_match = False
+                        if (
+                            not _loop_match
+                            and topic_count >= 4
+                            and len(sources) >= 5
+                            and not _blocked_match
+                        ):
+                            try:
+                                _pa = r.lrange(f"npc_artifacts:{partner_id}", -5, -1) if r else []
+                                _partner_has_topic = any(
+                                    common.lower() in (json.loads(a).get("title", "") if isinstance(a, str) else "").lower()
+                                    for a in _pa
+                                    if a and (isinstance(a, str) or isinstance(a, dict))
+                                )
+                                if _partner_has_topic:
+                                    _novel_loop_match = True
+                            except Exception:
+                                pass
+                        if _blocked_match or _resolved_match or _loop_match or _novel_loop_match:
+                            if _novel_loop_match:
+                                logger.info(
+                                    "[%s] novel_loop_detected topic=%s count=%d window=%d (not in KNOWN_BLOCKED_TERMS; partner artifacts echo)",
+                                    CHAR_ID, common, topic_count, len(sources),
+                                )
                             evidence_reason = ""
                     if evidence_reason:
                         logger.info(
@@ -1064,9 +1108,13 @@ Respond in this exact JSON format (no markdown, no explanation):
 
                 if _resolved and _nq:
                     force_constraint += (
-                        "\n\nRESOLUTION PRESSURE: The current question has been resolved. "
-                        "You must advance beyond the resolved answer with a NEW downstream question. "
-                        f"Resolved answer: \"{_ans[:100]}\""
+                        "\n\nRESOLUTION OPTION: The current question has been resolved. "
+                        "You may EITHER advance with a genuinely NEW downstream question, "
+                        "OR CLOSE this topic as complete and pivot to an entirely different "
+                        "subject — your active quest progress, or a relationship with a "
+                        "character outside the pair you have not yet pursued. "
+                        "Do NOT re-open the same question. "
+                        f"Resolved answer was: \"{_ans[:100]}\""
                         f" Blocked topics: {', '.join(_blocked[:2]) if _blocked else 'none'}"
                     )
                 else:
@@ -1092,6 +1140,18 @@ Respond in this exact JSON format (no markdown, no explanation):
                         "state using your partner's latest evidence."
                         "\n  Do not repeat the same investigation unless the convergence "
                         "state says evidence is missing."
+                    )
+                if (int(_cc.get("plateau_count") or 0) >= 2
+                        or int(_cc.get("pivot_forced_version") or 0) >= 1
+                        or int(_cc.get("version") or 0) >= 30):
+                    force_constraint += (
+                        "\n\nTHREAD STALL ESCAPE: This investigation thread has gone "
+                        f"too long (version {_cc.get('version', 0)}, "
+                        f"plateau {_cc.get('plateau_count', 0)}). It is FINISHED. "
+                        "Do NOT open, refine, or repeat another version of it. "
+                        "CLOSE this topic as complete and pivot to an entirely different "
+                        "subject — your active quest progress, or a relationship with a "
+                        "character outside the pair you have not yet pursued."
                     )
         if r is not None:
             shapes = _recent_decision_shapes(r, 5)
@@ -1168,14 +1228,28 @@ Respond in this exact JSON format (no markdown, no explanation):
                     CHAR_ID, proposed_topic, _topic_blocked_for_dedup,
                 )
         if _topic_blocked_for_cooldown and decision.get("category") != "send_message" and decision_mentions_topic(decision, _topic_blocked_for_cooldown):
+            _cd_redirect_key = f"npc_cd_redirect:{CHAR_ID}:{_topic_blocked_for_cooldown}"
+            _cd_idx = 0
+            try:
+                _cd_idx = int(r.incr(_cd_redirect_key) or 0) - 1
+                r.expire(_cd_redirect_key, 300)
+            except Exception:
+                pass
+            _cd_alts = [
+                ("read_artifacts", "Reading recent artifacts from other NPCs to find a new direction"),
+                ("rest", "Reflecting on the investigation outcomes and considering a fresh angle"),
+                ("investigate", "Exploring world events and neighborhood dynamics for new leads"),
+                ("self_improve", "Reviewing own capabilities to identify a productive next step"),
+            ]
+            _cd_pick = _cd_alts[_cd_idx % len(_cd_alts)]
             logger.warning(
-                "[%s] topic_cooldown_forced_alternative topic=%s chosen=%s",
-                CHAR_ID, _topic_blocked_for_cooldown, decision.get("category", "?"),
+                "[%s] topic_cooldown_forced_alternative topic=%s chosen=%s redirect_idx=%d",
+                CHAR_ID, _topic_blocked_for_cooldown, decision.get("category", "?"), _cd_idx,
             )
             return {
-                "category": "investigate",
-                "reasoning": "Topic cooldown forced fallback",
-                "description": f"Investigating a different topic instead of continuing '{_topic_blocked_for_cooldown}' during cooldown",
+                "category": _cd_pick[0],
+                "reasoning": "Topic cooldown forced fallback — rotating redirect",
+                "description": _cd_pick[1],
             }
         if "OPEN QUESTION GUARD" in force_constraint and decision.get("category") == "send_message":
             logger.warning(

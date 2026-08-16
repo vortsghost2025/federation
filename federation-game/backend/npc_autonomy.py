@@ -247,19 +247,26 @@ _TICK_LLM_BUDGET = 20
 _tick_llm_calls = 0
 _tick_llm_lock = threading.Lock()
 
-DECISION_DESCRIPTIONS = {
-    "advance_goal": "decided to work toward their goal",
-    "socialize": "decided to seek out conversation",
-    "investigate": "decided to look into something suspicious",
-    "rest": "decided to rest and reflect",
-    "react_to_events": "decided to respond to recent events",
-    "seek_resources": "decided to acquire what they need",
-    "self_improve": "decided to train and improve themselves",
-    "confront_rival": "decided to confront an adversary",
-    "help_ally": "decided to aid a companion",
-    "explore": "decided to explore new territory",
-    "request_capability": "requested missing capability or context",
-}
+# THIS module (npc_autonomy) is the canonical home of make_decision — every
+# live caller imports it from here. npc_decisions.py is a thin shared module
+# holding only the varied-phrase data + helper (DECISION_DESCRIPTIONS,
+# ACTION_DESCRIPTION_VARIANTS, _pick_varied_phrase) imported below, so the
+# decision loop and the phrasing pools have exactly one definition each.
+try:
+    from npc_decisions import DECISION_DESCRIPTIONS  # noqa: F401
+    from npc_decisions import _pick_varied_phrase, ACTION_DESCRIPTION_VARIANTS  # noqa: F401
+except Exception:
+    DECISION_DESCRIPTIONS = {}  # fallback if import order surprises us
+    def _pick_varied_phrase(r, char_id, category, phrases, max_similarity=0.85):
+        # defensive fallback so make_decision doesn't crash if the import
+        # somehow fails — pick a random phrase or single-str fallback.
+        import random as _r
+        if not phrases:
+            return "made a decision"
+        if isinstance(phrases, list):
+            return _r.choice(phrases) if phrases else "made a decision"
+        return phrases
+    ACTION_DESCRIPTION_VARIANTS = {}
 
 MAX_DECISIONS = 10
 MAX_ACTIONS = 8
@@ -406,7 +413,7 @@ def _process_single_npc(npc: Dict) -> Dict[str, Any]:
                 if thought:
                     npc_result["thoughts"].append(thought)
         r = _get_redis()
-        opinion_keys = list(r.scan_iter(f"npc_opinion:{char_id}:*"))
+        opinion_keys = list(r.scan_iter(f"npc_opinion:{char_id}:*", count=200))
         for okey in opinion_keys[:2]:
             if random.random() < 0.3:
                 player_id = okey.split(":")[-1]
@@ -643,7 +650,13 @@ def make_decision(char_id, char_name, archetype, affiliation, mood=""):
     scores = [o["score"] for o in top_options]
     chosen = random.choices(top_options, weights=scores, k=1)[0]
     category = chosen["category"]
-    decision_desc = DECISION_DESCRIPTIONS.get(category, "made a decision")
+    # Pick a varied outer-decision phrasing that differs from the NPC's most
+    # recent memory entry — prevents the same template being frozen into
+    # long-term memory across two consecutive same-category decisions.
+    decision_desc = _pick_varied_phrase(
+        r, char_id, category,
+        DECISION_DESCRIPTIONS.get(category, ["made a decision"]),
+    )
     reasoning = " + ".join(chosen.get("reasons", ["general inclination"]))
 
     action_result = None
@@ -670,9 +683,11 @@ def make_decision(char_id, char_name, archetype, affiliation, mood=""):
         )
         if action_result:
             action_result["action_type"] = "investigation"
-            action_result["description"] = (
-                char_name + " began investigating a matter of concern"
+            tmpl = _pick_varied_phrase(
+                r, char_id, "investigate",
+                ACTION_DESCRIPTION_VARIANTS.get("investigate", ["{name} began investigating a matter of concern"]),
             )
+            action_result["description"] = tmpl.format(name=char_name)
     elif category == "rest":
         action_result = {
             "char_id": char_id,
@@ -709,18 +724,22 @@ def make_decision(char_id, char_name, archetype, affiliation, mood=""):
         )
         if action_result:
             action_result["action_type"] = "acquisition"
-            action_result["description"] = (
-                char_name + " sought out resources and supplies"
+            tmpl = _pick_varied_phrase(
+                r, char_id, "seek_resources",
+                ACTION_DESCRIPTION_VARIANTS.get("seek_resources", ["{name} sought out resources and supplies"]),
             )
+            action_result["description"] = tmpl.format(name=char_name)
     elif category == "self_improve":
         action_result = generate_action(
             char_id, char_name, archetype, affiliation, mood
         )
         if action_result:
             action_result["action_type"] = "training"
-            action_result["description"] = (
-                char_name + " focused on self-improvement and training"
+            tmpl = _pick_varied_phrase(
+                r, char_id, "self_improve",
+                ACTION_DESCRIPTION_VARIANTS.get("self_improve", ["{name} focused on self-improvement and training"]),
             )
+            action_result["description"] = tmpl.format(name=char_name)
 
     elif category == "confront_rival":
         rel = get_npc_relationships(char_id)
@@ -771,9 +790,11 @@ def make_decision(char_id, char_name, archetype, affiliation, mood=""):
         )
         if action_result:
             action_result["action_type"] = "exploration"
-            action_result["description"] = (
-                char_name + " set out to explore uncharted territory"
+            tmpl = _pick_varied_phrase(
+                r, char_id, "explore",
+                ACTION_DESCRIPTION_VARIANTS.get("explore", ["{name} set out to explore uncharted territory"]),
             )
+            action_result["description"] = tmpl.format(name=char_name)
 
     elif category == "request_capability":
         need_type = "information_access"

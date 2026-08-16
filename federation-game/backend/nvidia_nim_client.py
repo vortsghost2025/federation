@@ -21,6 +21,7 @@ npc_autonomy._call_llm() -> NimClient.call(priority=...) -> NIM -> Ollama -> Ope
 """
 
 import asyncio
+import hashlib
 import json
 import logging
 import os
@@ -31,8 +32,49 @@ import urllib.error
 from typing import Dict, List, Optional
 
 import httpx
+import redis
 
 logger = logging.getLogger(__name__)
+
+# Redis-backed dead-key blacklist shared with llm_router. A NIM key that
+# returns 403 (Authorization failed) is marked dead so round-robin rotation
+# across ALL NIM clients skips it instead of burning attempts / tripping
+# per-key circuit breakers.
+NIM_DEAD_KEY_TTL_NC = int(os.environ.get("NIM_DEAD_KEY_TTL", "21600"))
+
+
+def _nc_is_nim_key_dead(key: str) -> bool:
+    try:
+        h = hashlib.md5(key.encode()).hexdigest()[:12]
+        r = redis.Redis.from_url(
+            os.environ.get("REDIS_URL", "redis://redis:6379/0"),
+            decode_responses=True,
+            socket_connect_timeout=5,
+            socket_timeout=5,
+        )
+        return r.get(f"llm_nim_dead_key:{h}") == "1"
+    except Exception:
+        return False
+
+
+def _nc_mark_nim_key_dead(key: str):
+    try:
+        h = hashlib.md5(key.encode()).hexdigest()[:12]
+        r = redis.Redis.from_url(
+            os.environ.get("REDIS_URL", "redis://redis:6379/0"),
+            decode_responses=True,
+            socket_connect_timeout=5,
+            socket_timeout=5,
+        )
+        r.set(f"llm_nim_dead_key:{h}", "1", ex=NIM_DEAD_KEY_TTL_NC)
+        logger.warning(
+            "NimClient: NIM key %s...%s marked dead for %ds (403 auth)",
+            key[:6],
+            key[-4:],
+            NIM_DEAD_KEY_TTL_NC,
+        )
+    except Exception:
+        pass
 
 # ---------------------------------------------------------------------------
 # Configuration -- all from env vars
@@ -279,6 +321,8 @@ class _KeyState:
     CIRCUIT_BREAKER_SECONDS = 60
 
     def is_available(self) -> bool:
+        if _nc_is_nim_key_dead(self.key):
+            return False
         now = time.time()
         if now < self.cooldown_until:
             return False
@@ -639,59 +683,80 @@ class NimClient:
         temperature: float = 0.8,
         priority: str = "local",
     ) -> Optional[str]:
-        """Call OpenRouter free models. Returns content string or None."""
-        key = self._get_openrouter_key()
-        if not key:
+        """Call OpenRouter free models. Returns content string or None.
+
+        Iterates the free-model pool and skips to the next model only when a
+        model is unavailable for the free tier (404/"paid version") so one bad
+        model no longer collapses the whole OpenRouter fallback. Network
+        timeouts still abort the attempt (retrying another model won't help).
+        """
+        pool = OPENROUTER_MODELS.get(priority, OPENROUTER_MODELS["local"])
+        if isinstance(pool, str):
+            pool = [pool]
+        if not pool:
             return None
 
-        model = _get_or_free_model_nim(priority)
+        for model in pool:
+            key = self._get_openrouter_key()
+            if not key:
+                return None
+            try:
+                from openai import AsyncOpenAI
 
-        try:
-            from openai import AsyncOpenAI
-
-            or_client = AsyncOpenAI(
-                base_url="https://openrouter.ai/api/v1",
-                api_key=key,
-                timeout=httpx.Timeout(float(OPENROUTER_TIMEOUT), connect=5.0),
-                max_retries=1,
-            )
-            resp = await asyncio.wait_for(
-                or_client.chat.completions.create(
-                    model=model,
-                    messages=[
-                        {"role": "system", "content": system_prompt},
-                        {"role": "user", "content": user_prompt},
-                    ],
-                    max_tokens=min(max_tokens, 512),
-                    temperature=temperature,
-                    stream=False,
-                    extra_headers={
-                        "HTTP-Referer": "https://federation-game.deliberatefederation.cloud",
-                        "X-Title": "Federation Game LLM Router",
-                    },
-                ),
-                timeout=float(OPENROUTER_TIMEOUT) + 5.0,
-            )
-            content = resp.choices[0].message.content
-            if content:
-                content = content.strip().strip('"').strip("'")
-                if len(content) > 500:
-                    content = content[:500]
-                self._openrouter_calls += 1
-                logger.info(
-                    "OpenRouter: model=%s chars=%d success=True",
-                    model,
-                    len(content),
+                or_client = AsyncOpenAI(
+                    base_url="https://openrouter.ai/api/v1",
+                    api_key=key,
+                    timeout=httpx.Timeout(float(OPENROUTER_TIMEOUT), connect=5.0),
+                    max_retries=1,
                 )
-                return content
-            self._openrouter_failures += 1
-            return None
-        except asyncio.TimeoutError:
-            self._openrouter_failures += 1
-            logger.warning("OpenRouter: timed out (%ds)", OPENROUTER_TIMEOUT)
-        except Exception as exc:
-            self._openrouter_failures += 1
-            logger.warning("OpenRouter: error: %s", str(exc)[:100])
+                resp = await asyncio.wait_for(
+                    or_client.chat.completions.create(
+                        model=model,
+                        messages=[
+                            {"role": "system", "content": system_prompt},
+                            {"role": "user", "content": user_prompt},
+                        ],
+                        max_tokens=min(max_tokens, 512),
+                        temperature=temperature,
+                        stream=False,
+                        extra_headers={
+                            "HTTP-Referer": "https://federation-game.deliberatefederation.cloud",
+                            "X-Title": "Federation Game LLM Router",
+                        },
+                    ),
+                    timeout=float(OPENROUTER_TIMEOUT) + 5.0,
+                )
+                content = resp.choices[0].message.content
+                if content:
+                    content = content.strip().strip('"').strip("'")
+                    if len(content) > 500:
+                        content = content[:500]
+                    self._openrouter_calls += 1
+                    logger.info(
+                        "OpenRouter: model=%s chars=%d success=True",
+                        model,
+                        len(content),
+                    )
+                    return content
+                self._openrouter_failures += 1
+                return None
+            except asyncio.TimeoutError:
+                self._openrouter_failures += 1
+                logger.warning("OpenRouter: timed out (%ds)", OPENROUTER_TIMEOUT)
+                return None  # network problem: not model-specific, stop
+            except Exception as exc:
+                # Skip unavailable-for-free models (404/paid), keep others' errors.
+                msg = str(exc)
+                if ("404" in msg or "unavailable" in msg.lower() or "paid version" in msg.lower()):
+                    self._openrouter_failures += 1
+                    logger.warning(
+                        "OpenRouter: model %s unavailable on free tier, skipping: %s",
+                        model, msg[:90],
+                    )
+                    continue
+                self._openrouter_failures += 1
+                logger.warning("OpenRouter: model %s error: %s", model, msg[:100])
+                return None  # non-404 error: not model-specific, stop
         return None
 
     async def _call_openrouter_paid(
@@ -862,6 +927,13 @@ class NimClient:
                     ks.mark_error()
                     if "429" in exc_str or "rate" in exc_str:
                         ks.mark_rate_limited()
+                    elif "403" in exc_str or "forbidden" in exc_str or "authorization failed" in exc_str:
+                        _nc_mark_nim_key_dead(ks.key)
+                        logger.warning(
+                            "NimClient: %s error (403 auth): %s",
+                            model_id,
+                            exc,
+                        )
                     elif "timeout" in exc_str:
                         logger.warning("NimClient: %s timed out", model_id)
                     else:

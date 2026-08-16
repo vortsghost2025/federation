@@ -20,6 +20,12 @@ NPC_OUTCOME_HISTORY_KEY = "npc:{npc_id}:workflow_outcomes"
 NPC_RECENT_OUTCOMES_KEY = "npc:{npc_id}:recent_outcomes"
 MAX_RECENT_OUTCOMES = 20
 
+# Completed workflows keep their per-workflow detail hash for this long, then
+# the hash self-expires so completed institutional history does not accumulate
+# forever in Redis. The completed-ID set is small (id-only); the heavy detail
+# is what this bounds. Env-overridable.
+WORKFLOW_ARCHIVE_TTL_DAYS = int(os.environ.get("WORKFLOW_ARCHIVE_TTL_DAYS", "30"))
+
 # ── Phase 1A.2: Atomic Consequence Commit ───────────────────
 # Only workflows created at or after this UTC timestamp produce outcome effects.
 # Protects against backlog dumps of pre-existing workflows.
@@ -234,6 +240,41 @@ def _rebuild_inst_counters(r):
         r.set(f"{inst_id}:completed_workflows", str(completed_count))
 
 
+# Preferred normalized lookup keys actually reused by title — the same key is
+# used for index/lookup so a normalized title maps to exactly one workflow.
+TITLE_DEDUPE_TTL_SEC = max(
+    int(os.environ.get("WORKFLOW_TITLE_DEDUPE_TTL_DAYS", "30")) * 86400, 86400
+)
+
+
+def _normalize_workflow_title(raw_title, wf_type):
+    """Return a stable, case/whitespace-normalized title for dedup purposes.
+
+    NPC-authored workflow titles are free-form LLM text that frequently re-emits
+    the same proposal/sector under lightly different casing or punctuation.
+    Because ensure_workflow keys per-source-artifact by uuid (and every NPC
+    artifact carries a fresh uuid), identical conceptual proposals mint brand-new
+    workflows every time, which is the root cause of the 600+ role/workflow bloat
+    seen in metrics. Normalizing a single concept to one canonical key lets us
+    anchor repeat emits to the already-created workflow instead of minting more.
+    """
+    if raw_title is None:
+        return (wf_type or "untitled").lower()
+    text = " ".join(str(raw_title).lower().split())
+    # Collapse leading templated base-phrases NPCs prefix onto proposals
+    # (e.g. "Proposal: Sector 7 Accord" vs "Proposal: Sector 7 Accord").
+    for prefix in ("proposal:", "analysis:", "for review:", "review:", "action:"):
+        if text.startswith(prefix):
+            text = text[len(prefix):].strip()
+            break
+    id_text = text or (wf_type or "untitled")
+    # Drop trailing category/byline fragments so "X (Research Division Council)"
+    # collapses onto "X" too.
+    if " (" in id_text:
+        id_text = id_text.split(" (", 1)[0].strip()
+    return id_text or (wf_type or "untitled")
+
+
 def ensure_workflow(r, councilor_id, artifact, role_ctx, wf_type, now=None):
     """Create one workflow of the given type per source artifact id.
 
@@ -249,8 +290,75 @@ def ensure_workflow(r, councilor_id, artifact, role_ctx, wf_type, now=None):
     if existing:
         return existing
 
+    # Near-duplicate collapse: if a workflow for the SAME normalized concept
+    # title already exists (and is still within its dedup window), anchor to it
+    # instead of minting a new workflow per fresh artifact uuid. This is the
+    # single creation chokepoint, so it bounds unbounded workflow/role bloat.
+    title_lookup_key = "workflow:title:{}:{}:{}".format(
+        wf_type,
+        councilor_id,
+        _normalize_workflow_title(artifact.get("title"), wf_type),
+    )
+    anchored = r.get(title_lookup_key)
+    if anchored:
+        # Guard against a stale anchor: the title key can outlive the workflow
+        # hash (diverging TTLs, a winner crash between SET NX EX and hash
+        # creation, or manual deletion). Only reuse an anchor whose workflow
+        # record actually exists — otherwise clear the stale key and fall
+        # through to create a fresh one so the concept isn't poisoned for the
+        # anchor TTL.
+        if r.exists(anchored):
+            # Keep the per-artifact pointer resolving to the representative
+            # workflow so callers observe idempotent behavior for the concept.
+            r.set(workflow_lookup_key, anchored)
+            return anchored
+        # Stale anchor — delete it and continue to (re)claim a valid one below.
+        try:
+            r.delete(title_lookup_key)
+            r.delete(workflow_lookup_key)
+        except Exception:
+            pass
+
     defaults = WORKFLOW_DEFAULTS.get(wf_type, {"artifact_kind": wf_type, "label": wf_type})
     workflow_id = f"workflow:{wf_type}:{artifact_id}"
+    # Atomically claim the canonical title anchor BEFORE creating the workflow
+    # record. SET NX EX is the single source of truth for "which workflow owns
+    # this normalized title". If another reconciler won the race, reuse its
+    # workflow instead of minting a duplicate (avoids the check-then-set race
+    # that would otherwise re-inflate the workflow count under concurrency).
+    won_anchor = r.set(
+        title_lookup_key,
+        workflow_id,
+        nx=True,
+        ex=TITLE_DEDUPE_TTL_SEC,
+    )
+    if not won_anchor:
+        winner = r.get(title_lookup_key) or workflow_id
+        # Only resolve the artifact pointer to the winner's workflow if that
+        # workflow actually exists. If the winner is a stale anchor pointing at
+        # nothing, fall through to create a fresh record.
+        if winner and r.exists(winner):
+            r.set(workflow_lookup_key, winner)
+            return winner
+        # Winner is stale — clear the anchor so our SET NX below can succeed.
+        try:
+            r.delete(title_lookup_key)
+        except Exception:
+            pass
+        won_anchor = r.set(
+            title_lookup_key,
+            workflow_id,
+            nx=True,
+            ex=TITLE_DEDUPE_TTL_SEC,
+        )
+        if not won_anchor:
+            # Somebody else re-claimed the anchor in the microsecond window.
+            # Resolve their workflow if it exists; otherwise bail to create.
+            winner2 = r.get(title_lookup_key) or workflow_id
+            if winner2 and r.exists(winner2):
+                r.set(workflow_lookup_key, winner2)
+                return winner2
+
     workflow_record = {
         "type": wf_type,
         "institution_id": role_ctx["institution_id"],
@@ -350,6 +458,12 @@ def advance_workflow(r, workflow_id, now=None, execution_cycle_id=""):
         _decrement_inst_counter(r, institution_id, "active_workflows")
         _increment_inst_counter(r, institution_id, "completed_workflows")
         _record_outcome(r, workflow_id, record, next_status, execution_cycle_id)
+        # Archive: expire the per-workflow detail hash so completed history
+        # does not accumulate unbounded. The id-only completed set stays small.
+        try:
+            r.expire(workflow_id, WORKFLOW_ARCHIVE_TTL_DAYS * 86400)
+        except Exception:
+            pass
 
     return True, next_status
 
@@ -382,6 +496,11 @@ def override_workflow_status(r, workflow_id, new_status, now=None, execution_cyc
         _decrement_inst_counter(r, institution_id, "active_workflows")
         _increment_inst_counter(r, institution_id, "completed_workflows")
         _record_outcome(r, workflow_id, record, new_status, execution_cycle_id)
+        # Archive: bound the completed workflow detail hash (see advance_workflow).
+        try:
+            r.expire(workflow_id, WORKFLOW_ARCHIVE_TTL_DAYS * 86400)
+        except Exception:
+            pass
     elif not is_terminal and not was_active:
         r.srem(COMPLETED_WORKFLOWS_KEY, workflow_id)
         r.sadd(ACTIVE_WORKFLOWS_KEY, workflow_id)

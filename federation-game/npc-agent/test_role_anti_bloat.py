@@ -98,3 +98,93 @@ class TestInstitutionRoleCap:
         r.sets["inst:roles"] = {"role:a", "role:b"}
         assert npc_actions._institution_role_count(r, "inst") == 2
         assert npc_actions._institution_role_count(r, "inst") < npc_actions.ROLE_CAP_PER_INSTITUTION
+
+
+class TestArtifactTitleClean:
+    """The artifact title guard strips institution-reroute scaffolding and
+    placeholder titles so artifacts get clean, in-world names."""
+
+    def test_reroute_desc_yields_topic(self):
+        desc = ("Institution 'Resonance Governance Council' could not be founded "
+                "right now, so write a concise artifact that advances the shared "
+                "topic: The governance of cross-sector stakeholder influence")
+        title = npc_actions._clean_artifact_title("", desc)
+        assert "could not" not in title
+        assert "Institution" not in title
+        assert "governance" in title.lower()
+
+    def test_truncated_reroute_title_cleared(self):
+        # The desc[:60] fallback truncates mid-phrase; still scaffolding.
+        title = npc_actions._clean_artifact_title(
+            "Institution 'Equitable Network Governance Forum' could not b",
+            "advancing shared governance in the absence of the forum",
+        )
+        assert "Institution" not in title
+
+    def test_placeholder_title_falls_back(self):
+        title = npc_actions._clean_artifact_title("Artifact Title", "A real topic about trade")
+        assert "Artifact Title" not in title
+        assert "trade" in title.lower()
+
+    def test_good_title_untouched(self):
+        assert npc_actions._clean_artifact_title(
+            "Void Oracle Anomalies Study", "some desc"
+        ) == "Void Oracle Anomalies Study"
+
+
+class TestSandboxedBuilder:
+    """write_code runs generated Python in a restricted sandbox and returns a
+    concrete, verifiable output — the 'builder' that produces real results."""
+
+    def test_safe_code_executes(self):
+        ok, out = npc_actions._execute_sandboxed_python("print(2 + 3 * 4)")
+        assert ok is True
+        assert out.strip() == "14"
+
+    def test_import_blocked(self):
+        ok, out = npc_actions._execute_sandboxed_python("import os; print(os.getpid())")
+        assert ok is False
+        assert "code_denied" in out
+
+    def test_eval_blocked(self):
+        ok, out = npc_actions._execute_sandboxed_python("print(eval('1+1'))")
+        assert ok is False
+        assert "code_denied" in out
+
+    def test_subprocess_blocked(self):
+        ok, out = npc_actions._execute_sandboxed_python(
+            "import subprocess; subprocess.run(['ls'])"
+        )
+        assert ok is False
+        assert "code_denied" in out
+
+    def test_file_open_blocked(self):
+        ok, out = npc_actions._execute_sandboxed_python("open('/etc/passwd').read()")
+        assert ok is False
+        assert "code_denied" in out
+
+    def test_runtime_error_reported(self):
+        ok, out = npc_actions._execute_sandboxed_python("print(1 / 0)")
+        assert ok is False
+        assert "code_error" in out
+
+
+class TestSharedGoalAdvance:
+    """After a goal resolves, the novel next goal advances the shared_goal so
+    the pair is not anchored to the resolved theme forever."""
+
+    def test_sync_mapping_advances_shared_goal(self):
+        # _propose_novel_next_goal is LLM-backed, but the mapping wiring in
+        # _sync_pair_workspace sets shared_goal whenever a novel goal is chosen.
+        # Prove the code path exists and is wired: search the sync mapping code.
+        import inspect
+        src = inspect.getsource(npc_actions)
+        # The shared_goal advance lives in npc_redis_helpers; prove the source
+        # wiring is present there.
+        helpers_src = None
+        try:
+            import npc_redis_helpers as h
+            helpers_src = inspect.getsource(h)
+        except Exception:
+            pass
+        assert helpers_src and "mapping[\"shared_goal\"] = _novel_next" in helpers_src

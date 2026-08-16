@@ -924,17 +924,17 @@ TASK_MODELS = {
     "leader": {
         "primary": {
             "provider": "nim",
-            "model": "meta/llama-3.3-70b-instruct",
+            "model": "nvidia/llama-3.3-nemotron-super-49b-v1.5",
             "max_tokens": 400,
             "temperature": 0.85,
-            "timeout": 30,
+            "timeout": 40,
         },
         "fallback_nim": {
             "provider": "nim",
-            "model": "nvidia/llama-3.3-nemotron-super-49b-v1.5",
+            "model": "meta/llama-3.1-8b-instruct",
             "max_tokens": 300,
             "temperature": 0.85,
-            "timeout": 30,
+            "timeout": 40,
         },
         "fallback_openrouter": {
             "provider": "openrouter",
@@ -954,17 +954,17 @@ TASK_MODELS = {
     "specialist": {
         "primary": {
             "provider": "nim",
-            "model": "meta/llama-3.3-70b-instruct",
+            "model": "nvidia/llama-3.3-nemotron-super-49b-v1.5",
             "max_tokens": 200,
             "temperature": 0.8,
-            "timeout": 30,
+            "timeout": 40,
         },
         "fallback_nim": {
             "provider": "nim",
             "model": "meta/llama-3.1-8b-instruct",
             "max_tokens": 200,
             "temperature": 0.8,
-            "timeout": 30,
+            "timeout": 40,
         },
         "fallback_openrouter": {
             "provider": "openrouter",
@@ -987,14 +987,14 @@ TASK_MODELS = {
             "model": "meta/llama-3.1-8b-instruct",
             "max_tokens": 100,
             "temperature": 0.7,
-            "timeout": 12,
+            "timeout": 20,
         },
         "fallback_nim": {
             "provider": "nim",
-            "model": "nvidia/llama-3.1-nemotron-nano-8b-v1",
+            "model": "nvidia/llama-3.3-nemotron-super-49b-v1.5",
             "max_tokens": 100,
             "temperature": 0.7,
-            "timeout": 12,
+            "timeout": 20,
         },
         "fallback_openrouter": {
             "provider": "openrouter",
@@ -1014,17 +1014,17 @@ TASK_MODELS = {
     "narrator": {
         "primary": {
             "provider": "nim",
-            "model": "meta/llama-3.3-70b-instruct",
-            "max_tokens": 500,
-            "temperature": 0.9,
-            "timeout": 25,
-        },
-        "fallback_nim": {
-            "provider": "nim",
             "model": "nvidia/llama-3.3-nemotron-super-49b-v1.5",
             "max_tokens": 500,
             "temperature": 0.9,
-            "timeout": 35,
+            "timeout": 45,
+        },
+        "fallback_nim": {
+            "provider": "nim",
+            "model": "meta/llama-3.1-8b-instruct",
+            "max_tokens": 500,
+            "temperature": 0.9,
+            "timeout": 45,
         },
         "fallback_openrouter": {
             "provider": "openrouter",
@@ -1047,14 +1047,14 @@ TASK_MODELS = {
             "model": "meta/llama-3.1-8b-instruct",
             "max_tokens": 300,
             "temperature": 0.6,
-            "timeout": 10,
+            "timeout": 20,
         },
         "fallback_nim": {
             "provider": "nim",
-            "model": "nvidia/llama-3.1-nemotron-nano-8b-v1",
+            "model": "nvidia/llama-3.3-nemotron-super-49b-v1.5",
             "max_tokens": 300,
             "temperature": 0.6,
-            "timeout": 10,
+            "timeout": 20,
         },
         "fallback_openrouter": {
             "provider": "openrouter",
@@ -1074,14 +1074,14 @@ TASK_MODELS = {
     "npc_memory": {
         "primary": {
             "provider": "nim",
-            "model": "nvidia/llama-3.1-nemotron-super-49b-v1",
+            "model": "nvidia/llama-3.3-nemotron-super-49b-v1.5",
             "max_tokens": 400,
             "temperature": 0.8,
-            "timeout": 25,
+            "timeout": 35,
         },
         "fallback_nim": {
             "provider": "nim",
-            "model": "nvidia/llama-3.1-nemotron-ultra-251b",
+            "model": "meta/llama-3.1-8b-instruct",
             "max_tokens": 400,
             "temperature": 0.8,
             "timeout": 35,
@@ -1107,12 +1107,49 @@ TASK_MODELS = {
 
 _nim_key_index = 0
 
+# Dead-key blacklist: a NIM key that returns 403 (authorization failed)
+# is marked dead in Redis so round-robin rotation skips it. TTL is long
+# (e.g. 6h) so a permanently revoked key stops poisoning the rotation
+# without a redeploy, while a transient failure can still recover.
+NIM_DEAD_KEY_TTL = int(os.environ.get("NIM_DEAD_KEY_TTL", "21600"))
+
+
+def _nim_key_hash(key: str) -> str:
+    return hashlib.md5(key.encode()).hexdigest()[:12]
+
+
+def _is_nim_key_dead(key: str) -> bool:
+    try:
+        r = _get_redis()
+        return r.get(f"llm_nim_dead_key:{_nim_key_hash(key)}") == "1"
+    except Exception:
+        return False
+
+
+def _mark_nim_key_dead(key: str):
+    try:
+        r = _get_redis()
+        r.set(
+            f"llm_nim_dead_key:{_nim_key_hash(key)}",
+            "1",
+            ex=NIM_DEAD_KEY_TTL,
+        )
+        logger.warning(
+            "NIM key %s...%s marked dead for %ds (403 auth)",
+            key[:6],
+            key[-4:],
+            NIM_DEAD_KEY_TTL,
+        )
+    except Exception:
+        pass
+
 
 def _get_nim_key() -> Optional[str]:
     """Get the next NIM API key using round-robin with LRU awareness.
 
     Picks the key that was used longest ago (LRU), falling back to
-    simple round-robin if Redis tracking is unavailable.
+    simple round-robin if Redis tracking is unavailable. Keys that were
+    previously marked dead (403) are skipped.
     """
     global _nim_key_index
     if not NIM_KEYS:
@@ -1124,7 +1161,9 @@ def _get_nim_key() -> Optional[str]:
     best_idx = 0
 
     for idx, key in enumerate(NIM_KEYS):
-        key_hash = hashlib.md5(key.encode()).hexdigest()[:12]
+        if _is_nim_key_dead(key):
+            continue
+        key_hash = _nim_key_hash(key)
         try:
             last_used = r.get(f"llm_key_last_used:{key_hash}")
             ts = float(last_used) if last_used else 0.0
@@ -1138,7 +1177,7 @@ def _get_nim_key() -> Optional[str]:
 
     # Mark this key as used now
     if best_key:
-        key_hash = hashlib.md5(best_key.encode()).hexdigest()[:12]
+        key_hash = _nim_key_hash(best_key)
         try:
             r.set(f"llm_key_last_used:{key_hash}", str(time.time()), ex=300)
         except Exception:
@@ -1512,6 +1551,10 @@ def _call_provider(
             _gemini_failures += 1
             if e.code == 429:
                 _mark_gemini_depleted()
+        if provider == "nim" and e.code == 403 and key:
+            # Authorization failed — this key is dead; blacklist it so
+            # round-robin rotation stops selecting it.
+            _mark_nim_key_dead(key)
         latency_ms = (time.time() - start) * 1000
         err_body = ""
         try:

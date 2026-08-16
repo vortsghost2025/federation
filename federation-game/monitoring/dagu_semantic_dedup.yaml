@@ -1,0 +1,15 @@
+description: Semantic dedup + outcome feedback monitor
+schedule: "*/15 * * * *"
+type: chain
+hist_retention_days: 14
+
+env:
+  - PATH: /usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin
+
+steps:
+  - name: run_semantic_monitor
+    run: |
+      python3 /docker/federation-game/monitoring/semantic_dedup_monitor.py
+      code=$?
+      echo "exit=$code"
+      exit $code

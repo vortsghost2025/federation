@@ -41,7 +41,7 @@ def _fourth_wall_dirty(text: str) -> bool:
 def _startup_scrub_redis(r, char_id: str = ""):
     n_msgs = 0
     n_sessions = 0
-    for key in r.scan_iter("msg:*"):
+    for key in r.scan_iter("msg:*", count=500):
         if key.endswith(":thread") or key.startswith("msg:threads:") or key.startswith("msg:thread:"):
             continue
         try:
@@ -55,7 +55,7 @@ def _startup_scrub_redis(r, char_id: str = ""):
                 n_msgs += 1
         except Exception:
             pass
-    for key in r.scan_iter("session_log:*"):
+    for key in r.scan_iter("session_log:*", count=500):
         try:
             items = r.lrange(key, 0, -1)
             changed = False
