@@ -1228,14 +1228,28 @@ Respond in this exact JSON format (no markdown, no explanation):
                     CHAR_ID, proposed_topic, _topic_blocked_for_dedup,
                 )
         if _topic_blocked_for_cooldown and decision.get("category") != "send_message" and decision_mentions_topic(decision, _topic_blocked_for_cooldown):
+            _cd_redirect_key = f"npc_cd_redirect:{CHAR_ID}:{_topic_blocked_for_cooldown}"
+            _cd_idx = 0
+            try:
+                _cd_idx = int(r.incr(_cd_redirect_key) or 0) - 1
+                r.expire(_cd_redirect_key, 300)
+            except Exception:
+                pass
+            _cd_alts = [
+                ("read_artifacts", "Reading recent artifacts from other NPCs to find a new direction"),
+                ("rest", "Reflecting on the investigation outcomes and considering a fresh angle"),
+                ("investigate", "Exploring world events and neighborhood dynamics for new leads"),
+                ("self_improve", "Reviewing own capabilities to identify a productive next step"),
+            ]
+            _cd_pick = _cd_alts[_cd_idx % len(_cd_alts)]
             logger.warning(
-                "[%s] topic_cooldown_forced_alternative topic=%s chosen=%s",
-                CHAR_ID, _topic_blocked_for_cooldown, decision.get("category", "?"),
+                "[%s] topic_cooldown_forced_alternative topic=%s chosen=%s redirect_idx=%d",
+                CHAR_ID, _topic_blocked_for_cooldown, decision.get("category", "?"), _cd_idx,
             )
             return {
-                "category": "investigate",
-                "reasoning": "Topic cooldown forced fallback",
-                "description": f"Investigating a different topic instead of continuing '{_topic_blocked_for_cooldown}' during cooldown",
+                "category": _cd_pick[0],
+                "reasoning": "Topic cooldown forced fallback — rotating redirect",
+                "description": _cd_pick[1],
             }
         if "OPEN QUESTION GUARD" in force_constraint and decision.get("category") == "send_message":
             logger.warning(
