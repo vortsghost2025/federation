@@ -41,6 +41,16 @@ POST_RESOLUTION_PIVOT_REARM_VERSIONS = int(os.environ.get("POST_RESOLUTION_PIVOT
 POST_RESOLUTION_PIVOT_MAX_VERSIONS = int(os.environ.get("POST_RESOLUTION_PIVOT_MAX_VERSIONS", str(4 * 5)))
 POST_RESOLUTION_PIVOT_MAX_SECONDS = int(os.environ.get("POST_RESOLUTION_PIVOT_MAX_SECONDS", str(60 * 60 * 3)))
 
+# Unresolved-goal longevity safety valve (parallel to the macro-longevity
+# valve above). The resolved valve forces a pivot after 20 versions / 3h on
+# a RESOLVED goal. For UN-resolved goals there was no equivalent — the pair
+# could circle the same unanswered question indefinitely (observed: "testimony"
+# goal at v896, ~5h, no resolution). This forces a topic rotation when an
+# unresolved shared_goal has persisted for too many convergence versions
+# without hitting the plateau-detection threshold (3 consecutive no-disagreement
+# versions). The pair keeps all artifacts; only the stale goal rotates.
+UNRESOLVED_PIVOT_MAX_VERSIONS = int(os.environ.get("UNRESOLVED_PIVOT_MAX_VERSIONS", "50"))
+
 
 KNOWN_BLOCKED_TERMS = [
     "structured resonance lattice",
@@ -783,6 +793,7 @@ def _sync_pair_workspace(r, decision: dict, result: dict, npc_name: str = "", ch
                 "current_best_answer": "",
                 "next_question": "",
                 "version": int(json.loads(state["convergence_state"]).get("version", 0)) if isinstance(state.get("convergence_state"), str) else 0,
+                "unresolved_start_version": int(json.loads(state["convergence_state"]).get("version", 0)) if isinstance(state.get("convergence_state"), str) else 0,
             }, default=str)
         elif state.get("shared_goal"):
             derived = _derive_question_from_goal(state["shared_goal"])
@@ -1048,6 +1059,10 @@ def _compute_convergence_state(r, partner_id: str, cid: str, now: int) -> None:
             conv["plateau_count"] = new_plateau
             conv["resolved_version"] = prev_conv.get("resolved_version", 0) or 0
             conv["pivot_forced_version"] = prev_conv.get("pivot_forced_version", 0) or 0
+            conv["unresolved_start_version"] = (
+                prev_conv.get("unresolved_start_version", 0)
+                or (existing.get("version", 0) + 1)
+            )
         conv["plateau_topic"] = plateau_topic
         conv["plateau_reason"] = plateau_reason
 
@@ -1072,6 +1087,7 @@ def _compute_convergence_state(r, partner_id: str, cid: str, now: int) -> None:
         # Triggerless post-resolution pivot: see POST_RESOLUTION_PIVOT_GAP_*.
         try:
             _force_pivot = False
+            _unresolved_gap = 0
             if conv.get("resolved", False):
                 _cur_open_q = state.get("open_question", "") or ""
                 _resolved_at = int(conv.get("resolved_at", 0) or 0)
@@ -1111,6 +1127,29 @@ def _compute_convergence_state(r, partner_id: str, cid: str, now: int) -> None:
                 if (_pivot_forced_version > 0
                         and (_cur_version - _pivot_forced_version) < POST_RESOLUTION_PIVOT_REARM_VERSIONS):
                     _force_pivot = False
+            else:
+                conv["unresolved_pivot_reason"] = ""
+                _cur_version = int(conv.get("version", 0) or 0)
+                _pivot_forced_version = int(conv.get("pivot_forced_version", 0) or 0)
+                _unresolved_start = int(conv.get("unresolved_start_version", 0) or 0) or _cur_version
+                _unresolved_gap = _cur_version - _unresolved_start
+                _rearmed = (
+                    _pivot_forced_version == 0
+                    or (_cur_version - _pivot_forced_version) >= POST_RESOLUTION_PIVOT_REARM_VERSIONS
+                )
+                if _rearmed and _unresolved_gap >= UNRESOLVED_PIVOT_MAX_VERSIONS:
+                    _force_pivot = True
+                    conv["unresolved_pivot_reason"] = "unresolved_longevity"
+                    logger.info(
+                        "[%s/%s] unresolved-longevity pivot armed at v%d "
+                        "(unresolved since v%d, gap %d versions — forcing "
+                        "topic rotation for unanswered goal)",
+                        cid, partner_id,
+                        _cur_version, _unresolved_start, _unresolved_gap,
+                    )
+                if (_pivot_forced_version > 0
+                        and (_cur_version - _pivot_forced_version) < POST_RESOLUTION_PIVOT_REARM_VERSIONS):
+                    _force_pivot = False
             if _force_pivot:
                 _pivot_trigger = {
                     "open_question": "",
@@ -1122,10 +1161,24 @@ def _compute_convergence_state(r, partner_id: str, cid: str, now: int) -> None:
                 }
                 _pair_hset(r, partner_id, _pivot_trigger, cid)
                 conv["pivot_forced_version"] = int(conv.get("version", 0) or 0)
+                conv["unresolved_start_version"] = int(conv.get("version", 0) or 0)
                 _pair_hset(
                     r, partner_id,
                     {"convergence_state": json.dumps(conv, default=str)},
                     cid,
+                )
+                _pivot_reason = conv.get("unresolved_pivot_reason", "")
+                _gap_summary = (
+                    f"unresolved goal persisted for {_unresolved_gap} "
+                    "convergence versions without resolution; "
+                    "next sync will propose a novel shared goal."
+                    if _pivot_reason == "unresolved_longevity"
+                    else (
+                        "system cleared open_question after "
+                        f"{int(conv.get('version','0') or 0) - int(conv.get('resolved_version','0') or 0)} "
+                        "reducer runs with no partner message since resolution; "
+                        "next sync will propose a novel shared goal via the loop-guard."
+                    )
                 )
                 _pair_append_journal(
                     r, partner_id,
@@ -1134,16 +1187,19 @@ def _compute_convergence_state(r, partner_id: str, cid: str, now: int) -> None:
                         "actor": cid,
                         "actor_name": "system",
                         "category": "force_pivot",
-                        "action": "post_resolution_pivot_forced",
-                        "summary": (
-                            "system cleared open_question after "
-                            f"{int(conv.get('version','0') or 0) - int(conv.get('resolved_version','0') or 0)} "
-                            "reducer runs with no partner message since resolution; "
-                            "next sync will propose a novel shared goal via the loop-guard."
+                        "action": (
+                            "unresolved_longevity_pivot_forced"
+                            if _pivot_reason == "unresolved_longevity"
+                            else "post_resolution_pivot_forced"
                         ),
+                        "summary": _gap_summary,
                         "thread_id": "",
                         "open_question_ref": "",
-                        "open_question_source": "post_resolution_pivot_forced",
+                        "open_question_source": (
+                            "unresolved_longevity_pivot_forced"
+                            if _pivot_reason == "unresolved_longevity"
+                            else "post_resolution_pivot_forced"
+                        ),
                     },
                     cid,
                 )
