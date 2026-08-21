@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Federation Galaxy Map</title>
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#000;color:#e0e0e0;font-family:'Share Tech Mono',monospace;overflow:hidden;height:100vh}
+#c{display:block;width:100%;height:100%}
+#labels{position:fixed;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:5}
+.lbl{position:absolute;font-family:'Orbitron',monospace;font-size:13px;font-weight:700;letter-spacing:2px;
+  text-transform:uppercase;white-space:nowrap;pointer-events:auto;cursor:pointer;padding:2px 6px;
+  text-shadow:0 0 8px currentColor,0 2px 4px rgba(0,0,0,0.9);transition:font-size 0.2s}
+.lbl:hover{font-size:16px!important}
+.lbl-sector{color:#4fc3f7}
+.lbl-sector.contested{color:#ef5350;text-shadow:0 0 12px #ef5350,0 2px 4px rgba(0,0,0,0.9)}
+.lbl-npc{font-size:11px;font-family:'Share Tech Mono',monospace;letter-spacing:1px;font-weight:400}
+.lbl-home{font-size:15px;color:#ffd700}
+.lbl-faction{font-size:12px;letter-spacing:3px}
+
+#topbar{position:fixed;top:0;left:0;right:0;height:52px;background:linear-gradient(180deg,rgba(8,12,24,0.95),rgba(8,12,24,0.7));
+  border-bottom:1px solid rgba(79,195,247,0.15);display:flex;align-items:center;padding:0 20px;gap:16px;z-index:20}
+#topbar h1{font-family:'Orbitron',monospace;font-size:16px;letter-spacing:3px;color:#4fc3f7;font-weight:700}
+.gauge{display:flex;align-items:center;gap:6px;font-size:12px;letter-spacing:1px}
+.gauge-bar{width:60px;height:6px;background:rgba(255,255,255,0.08);border-radius:3px;overflow:hidden}
+.gauge-fill{height:100%;border-radius:3px;transition:width 1s}
+#tick{margin-left:auto;font-size:12px;color:#78909c;letter-spacing:1px}
+#tick-dot{display:inline-block;width:8px;height:8px;border-radius:50%;background:#4caf50;margin-right:6px;box-shadow:0 0 6px #4caf50}
+
+#modebar{position:fixed;top:60px;left:16px;display:flex;flex-direction:column;gap:6px;z-index:20}
+.mode-btn{background:rgba(8,12,24,0.85);border:1px solid rgba(79,195,247,0.2);color:#78909c;
+  font-family:'Orbitron',monospace;font-size:11px;letter-spacing:2px;padding:8px 14px;border-radius:6px;
+  cursor:pointer;text-align:left;transition:all 0.15s}
+.mode-btn:hover{border-color:#4fc3f7;color:#4fc3f7}
+.mode-btn.active{background:rgba(79,195,247,0.15);border-color:#4fc3f7;color:#4fc3f7;box-shadow:0 0 12px rgba(79,195,247,0.3)}
+.mode-btn .key{font-size:9px;opacity:0.5;margin-right:6px}
+
+#zoombar{position:fixed;bottom:80px;left:50%;transform:translateX(-50%);display:flex;gap:4px;z-index:20;
+  background:rgba(8,12,24,0.85);border:1px solid rgba(79,195,247,0.15);border-radius:8px;padding:6px}
+.zoom-btn{background:transparent;border:1px solid transparent;color:#546e7a;
+  font-family:'Orbitron',monospace;font-size:11px;letter-spacing:2px;padding:6px 14px;border-radius:4px;
+  cursor:pointer;transition:all 0.15s}
+.zoom-btn:hover{color:#4fc3f7;border-color:rgba(79,195,247,0.3)}
+.zoom-btn.active{background:rgba(79,195,247,0.15);color:#4fc3f7;border-color:#4fc3f7}
+
+#panel{position:fixed;right:16px;top:64px;width:380px;max-height:calc(100vh - 160px);background:rgba(8,12,24,0.95);
+  border:1px solid rgba(79,195,247,0.2);border-radius:10px;padding:16px;z-index:20;overflow-y:auto;display:none;
+  backdrop-filter:blur(10px);box-shadow:0 8px 32px rgba(0,0,0,0.7)}
+#panel.show{display:block}
+#panel-close{position:absolute;top:8px;right:12px;background:none;border:none;color:#78909c;font-size:20px;cursor:pointer}
+#panel-close:hover{color:#ef5350}
+#p-name{font-family:'Orbitron',monospace;font-size:18px;font-weight:700;color:#ffd700;margin-bottom:4px}
+#p-title{font-size:13px;color:#4fc3f7;margin-bottom:8px;letter-spacing:1px}
+#p-faction{font-size:13px;color:#78909c;margin-bottom:12px}
+#p-body{font-size:13px;line-height:1.6;color:#b0bec5}
+#p-body .row{display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid rgba(255,255,255,0.04)}
+#p-body .row-label{color:#78909c}
+#p-body .row-val{color:#e0e0e0;text-align:right;max-width:60%;word-break:break-word}
+#p-thought{margin-top:10px;padding:8px 10px;background:rgba(171,71,188,0.08);border-left:3px solid #ab47bc;
+  border-radius:0 4px 4px 0;font-style:italic;color:#ce93d8;font-size:13px;line-height:1.5}
+#p-control{margin-top:12px}
+#p-control .ctrl-row{display:flex;justify-content:space-between;padding:3px 0;font-size:12px}
+#p-control .ctrl-bar{flex:1;margin:0 8px;height:6px;background:rgba(255,255,255,0.08);border-radius:3px;overflow:hidden;position:relative}
+#p-control .ctrl-fill{height:100%;border-radius:3px}
+#p-control .ctrl-name{width:90px;color:#78909c}
+
+#help-bar{position:fixed;bottom:16px;left:50%;transform:translateX(-50%);background:rgba(8,12,24,0.85);
+  border:1px solid rgba(79,195,247,0.15);border-radius:8px;padding:8px 20px;font-size:12px;color:#546e7a;
+  letter-spacing:1px;z-index:20;white-space:nowrap}
+#help-bar kbd{background:rgba(79,195,247,0.1);border:1px solid rgba(79,195,247,0.2);border-radius:3px;
+  padding:1px 6px;color:#4fc3f7;font-size:11px;margin:0 2px}
+
+#nav-link{position:fixed;bottom:16px;right:16px;z-index:20}
+#nav-link a{color:#78909c;font-size:12px;text-decoration:none;padding:6px 12px;border:1px solid rgba(79,195,247,0.15);
+  border-radius:6px;letter-spacing:1px;transition:color 0.2s,border-color 0.2s;margin-left:4px}
+#nav-link a:hover{color:#4fc3f7;border-color:#4fc3f7}
+
+#loading{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:#000;z-index:100;
+  font-family:'Orbitron',monospace;font-size:20px;color:#4fc3f7;letter-spacing:4px}
+
+#mock-banner{position:fixed;top:52px;left:0;right:0;background:linear-gradient(180deg,#ff6f00,#e65100);
+  color:#000;font-family:'Orbitron',monospace;font-size:14px;font-weight:700;letter-spacing:3px;
+  padding:8px 20px;text-align:center;z-index:30;display:none;border-bottom:2px solid #000;
+  box-shadow:0 4px 12px rgba(255,111,0,0.4)}
+#mock-banner.show{display:block}
+
+#diag-panel{position:fixed;left:16px;bottom:80px;background:rgba(8,12,24,0.92);border:1px solid rgba(79,195,247,0.3);
+  border-radius:8px;padding:10px 14px;font-size:11px;color:#78909c;font-family:'Share Tech Mono',monospace;
+  z-index:20;max-width:420px;line-height:1.6;display:none}
+#diag-panel.show{display:block}
+#diag-panel .row{display:flex;justify-content:space-between;gap:12px;padding:1px 0}
+#diag-panel .row-label{color:#546e7a}
+#diag-panel .row-val{color:#4fc3f7;font-weight:700}
+#diag-panel .row-val.bad{color:#ef5350}
+#diag-panel .row-val.good{color:#66bb6a}
+#diag-panel h4{font-family:'Orbitron',monospace;font-size:11px;color:#4fc3f7;letter-spacing:2px;margin-bottom:4px}
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="labels"></div>
+
+<div id="topbar">
+  <h1>FEDERATION GALAXY MAP</h1>
+  <div class="gauge"><span style="color:#ef5350">TENSION</span><div class="gauge-bar"><div class="gauge-fill" id="g-tension" style="background:#ef5350;width:0%"></div></div></div>
+  <div class="gauge"><span style="color:#66bb6a">STABILITY</span><div class="gauge-bar"><div class="gauge-fill" id="g-stability" style="background:#66bb6a;width:0%"></div></div></div>
+  <div class="gauge"><span style="color:#ffd700">MORALE</span><div class="gauge-bar"><div class="gauge-fill" id="g-morale" style="background:#ffd700;width:0%"></div></div></div>
+  <div class="gauge"><span style="color:#ab47bc">ANOMALY</span><div class="gauge-bar"><div class="gauge-fill" id="g-anomaly" style="background:#ab47bc;width:0%"></div></div></div>
+  <div id="tick"><span id="tick-dot"></span><span id="tick-label">CONNECTING...</span></div>
+</div>
+
+<div id="modebar">
+  <button class="mode-btn active" data-mode="universe"><span class="key">1</span>UNIVERSE</button>
+  <button class="mode-btn" data-mode="territory"><span class="key">2</span>TERRITORY</button>
+  <button class="mode-btn" data-mode="npc"><span class="key">3</span>NPC</button>
+  <button class="mode-btn" data-mode="exploration"><span class="key">4</span>EXPLORATION</button>
+</div>
+
+<div id="zoombar">
+  <button class="zoom-btn active" data-zoom="galaxy">GALAXY</button>
+  <button class="zoom-btn" data-zoom="region">REGION</button>
+  <button class="zoom-btn" data-zoom="sector">SECTOR</button>
+</div>
+
+<div id="panel">
+  <button id="panel-close">&times;</button>
+  <div id="p-name"></div>
+  <div id="p-title"></div>
+  <div id="p-faction"></div>
+  <div id="p-body"></div>
+  <div id="p-control"></div>
+  <div id="p-thought"></div>
+</div>
+
+<div id="help-bar">
+  <kbd>DRAG</kbd> Orbit &nbsp;
+  <kbd>SCROLL</kbd> Zoom &nbsp;
+  <kbd>CLICK</kbd> Select &nbsp;
+  <kbd>DBLCLK</kbd> Focus Sector &nbsp;
+  <kbd>1-4</kbd> Mode &nbsp;
+  <kbd>G/R/S</kbd> Zoom Level &nbsp;
+  <kbd>F</kbd> Fit &nbsp;
+  <kbd>ESC</kbd> Close
+</div>
+
+<div id="nav-link">
+  <a href="/starmap.html">STAR MAP</a>
+  <a href="/bridge.html">BRIDGE</a>
+</div>
+
+<div id="loading">INITIALIZING GALAXY MAP...</div>
+
+<div id="mock-banner">⚠ MOCK DATA — NOT LIVE FEDERATION STATE — Galaxy Map Integration Fixture</div>
+
+<div id="diag-panel">
+  <h4>DATA INTEGRATION</h4>
+  <div class="row"><span class="row-label">URL</span><span class="row-val" id="d-url">/map/data</span></div>
+  <div class="row"><span class="row-label">HTTP</span><span class="row-val" id="d-status">—</span></div>
+  <div class="row"><span class="row-label">Bytes</span><span class="row-val" id="d-bytes">—</span></div>
+  <div class="row"><span class="row-label">Sectors</span><span class="row-val" id="d-sectors">—</span></div>
+  <div class="row"><span class="row-label">Factions</span><span class="row-val" id="d-factions">—</span></div>
+  <div class="row"><span class="row-label">Territories</span><span class="row-val" id="d-terr">—</span></div>
+  <div class="row"><span class="row-label">NPCs</span><span class="row-val" id="d-npcs">—</span></div>
+  <div class="row"><span class="row-label">NPC locations</span><span class="row-val" id="d-npclocs">—</span></div>
+  <div class="row"><span class="row-label">Discoveries</span><span class="row-val" id="d-disc">—</span></div>
+  <div class="row"><span class="row-label">Tick</span><span class="row-val" id="d-tick">—</span></div>
+</div>
+
+<script type="importmap">
+{"imports":{"three":"https://unpkg.com/three@0.163.0/build/three.module.js","three/addons/":"https://unpkg.com/three@0.163.0/examples/jsm/"}}
+</script>
+<script type="module" src="galaxy-map.js"></script>
+</body>
+</html>
