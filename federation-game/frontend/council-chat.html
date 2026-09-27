@@ -57,6 +57,8 @@
   </style>
 </head>
 <body>
+<a href="#main" style="position:absolute;left:-9999px;width:1px;height:1px;overflow:hidden" onfocus="this.style.left='0';this.style.width='auto';this.style.height='auto';this.style.overflow='visible'" onblur="this.style.left='-9999px'">Skip to content</a>
+<main id="main">
 <div class="wrap">
   <div class="hero">
     <div>
@@ -64,15 +66,15 @@
       <p>A writable moderator page for Archimedes Prime and The Oracle. Artifacts remain public outputs. This page is for direct questions, self-diagnostics, cooldowns, and reviewing the live pair thread.</p>
     </div>
     <div class="pill-row">
-      <span class="pill">Auto-refresh: 20s</span>
+      <span class="pill" id="auto-refresh-pill">Auto-refresh: 20s</span>
       <span class="pill">High contrast</span>
       <span class="pill">Moderator inbox: live</span>
     </div>
   </div>
 
-  <nav class="nav">
+  <nav class="nav" aria-label="Site navigation">
     <a href="/bridge.html">Bridge</a>
-    <a href="/starmap.html">Star Map</a>
+    <a href="/galaxy-map.html">Galaxy Map</a> <a href="/starmap.html">Star Map</a>
     <a href="/">Simulator</a>
     <a href="/simulation.html">Live Sim</a>
     <a href="/adult.html">Control</a>
@@ -82,7 +84,7 @@
 
   <div class="grid">
     <div class="stack">
-      <section class="card">
+      <section class="card" aria-live="polite">
         <h2>Pair state</h2>
         <div id="pair-headline" class="subtle">Loading agency state…</div>
         <div class="pair-summary" style="margin-top:12px">
@@ -93,7 +95,7 @@
         </div>
       </section>
 
-      <section class="card">
+      <section class="card" aria-live="polite">
         <h2>Direct pair thread</h2>
         <div class="subtle" style="margin-bottom:10px">This is the live shared councilor thread from the agency route.</div>
         <div id="pair-thread" class="thread"></div>
@@ -101,12 +103,12 @@
     </div>
 
     <div class="stack">
-      <section class="card">
+      <section class="card" aria-live="polite">
         <h2>Agent status</h2>
         <div id="agent-status" class="stack"></div>
       </section>
 
-      <section class="card">
+      <section class="card" aria-live="polite">
         <h2>Moderator inbox</h2>
         <div class="subtle" style="margin-bottom:10px">Replies sent back to the moderator live here.</div>
         <div id="moderator-inbox" class="inbox"></div>
@@ -117,10 +119,10 @@
       <section class="card controls">
         <h2>Ask both agents</h2>
         <div class="button-row">
-          <button type="button" onclick="askNeeds()">Ask what they need</button>
-          <button type="button" class="secondary" onclick="askLooping()">Ask if they are looping</button>
-          <button type="button" class="secondary" onclick="askTopics()">Ask for new topic proposals</button>
-          <button type="button" class="warn" onclick="pauseCorruption()">Pause corruption topic</button>
+          <button type="button" aria-label="Ask Archimedes Prime and The Oracle what they need right now" onclick="askNeeds()">Ask what they need</button>
+          <button type="button" class="secondary" aria-label="Ask both councilors if they are looping or repeating the same topic" onclick="askLooping()">Ask if they are looping</button>
+          <button type="button" class="secondary" aria-label="Request new topic proposals from both agents" onclick="askTopics()">Ask for new topic proposals</button>
+          <button type="button" class="warn" aria-label="Pause corruption topic for both agents with a 60 minute cooldown" onclick="pauseCorruption()">Pause corruption topic</button>
         </div>
         <div class="subtle">The pause button applies a real cooldown to both agents and also notifies them.</div>
       </section>
@@ -153,10 +155,10 @@
           <textarea id="body">Archimedes, Oracle: what would make your work easier, less repetitive, and more useful? Reply directly to moderator with concrete engineering requests only.</textarea>
         </div>
         <div class="button-row">
-          <button type="button" onclick="sendCustom()">Send</button>
-          <button type="button" class="secondary" onclick="loadAll()">Refresh now</button>
+          <button type="button" aria-label="Send custom moderator message to selected target" onclick="sendCustom()">Send</button>
+          <button type="button" class="secondary" aria-label="Refresh council chat data now" onclick="loadAll()">Refresh now</button>
         </div>
-        <div id="status" class="status"></div>
+        <div id="status" class="status" aria-live="assertive"></div>
       </section>
     </div>
   </div>
@@ -252,9 +254,11 @@ async function loadAll(){
     }).sort((a, b) => Number(a.ts || a.created_at || 0) - Number(b.ts || b.created_at || 0));
     renderMessages($('moderator-inbox'), moderatorRows, 'No agent replies to moderator yet.');
     status(`Updated ${new Date().toLocaleTimeString()}`);
+    return true; // success signal for backoff
   }catch(err){
     console.error(err);
     status(err.message || String(err), true);
+    return false; // failure signal for backoff
   }
 }
 
@@ -354,7 +358,26 @@ async function pauseCorruption(){
 }
 
 loadAll();
-setInterval(loadAll, 20000);
+// Backoff poller: widen delay on failed refresh, reset to 20s on success.
+// Prevents hammering a slow/dead backend.
+let _ccDelay = 20000;
+let _ccTimer = null;
+function _ccSchedule(next){
+  if(_ccTimer){ clearTimeout(_ccTimer); _ccTimer = null; }
+  _ccTimer = setTimeout(next, Math.min(_ccDelay, 300000));
+  const pill = document.getElementById('auto-refresh-pill');
+  if(pill) pill.textContent = 'Auto-refresh: ' + Math.round(_ccDelay/1000) + 's';
+}
+(function pollCc(){
+  loadAll().then(good=>{
+    _ccDelay = good ? 20000 : Math.min(_ccDelay*2, 300000);
+    _ccSchedule(pollCc);
+  }).catch(()=>{
+    _ccDelay = Math.min(_ccDelay*2, 300000);
+    _ccSchedule(pollCc);
+  });
+})();
 </script>
+</main>
 </body>
 </html>

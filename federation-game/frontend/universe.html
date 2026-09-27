@@ -1,0 +1,777 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Federation Universe</title>
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#000;color:#e0e0e0;font-family:'Share Tech Mono',monospace;overflow:hidden;height:100vh}
+#c{display:block;width:100%;height:100%}
+#labels{position:fixed;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:5}
+.lbl{position:absolute;font-family:'Orbitron',monospace;font-size:13px;font-weight:700;letter-spacing:2px;
+  text-transform:uppercase;white-space:nowrap;pointer-events:auto;cursor:pointer;padding:2px 6px;
+  text-shadow:0 0 8px currentColor,0 2px 4px rgba(0,0,0,0.9);transition:font-size 0.2s}
+.lbl:hover{font-size:16px!important}
+.lbl-sector{color:#4fc3f7}
+.lbl-npc{font-size:10px;font-family:'Share Tech Mono',monospace;letter-spacing:1px;font-weight:400}
+.lbl-core{font-size:15px;color:#ffd700}
+#topbar{position:fixed;top:0;left:0;right:0;height:52px;background:linear-gradient(180deg,rgba(8,12,24,0.95),rgba(8,12,24,0.7));
+  border-bottom:1px solid rgba(79,195,247,0.15);display:flex;align-items:center;padding:0 20px;gap:16px;z-index:20}
+#topbar h1{font-family:'Orbitron',monospace;font-size:16px;letter-spacing:3px;color:#4fc3f7;font-weight:700}
+.gauge{display:flex;align-items:center;gap:6px;font-size:12px;letter-spacing:1px}
+.gauge-bar{width:60px;height:6px;background:rgba(255,255,255,0.08);border-radius:3px;overflow:hidden}
+.gauge-fill{height:100%;border-radius:3px;transition:width 1s}
+#tick{margin-left:auto;font-size:12px;color:#78909c;letter-spacing:1px}
+#tick-dot{display:inline-block;width:8px;height:8px;border-radius:50%;background:#4caf50;margin-right:6px;box-shadow:0 0 6px #4caf50}
+#panel{position:fixed;right:16px;top:64px;width:360px;max-height:calc(100vh - 80px);background:rgba(8,12,24,0.95);
+  border:1px solid rgba(79,195,247,0.2);border-radius:10px;padding:16px;z-index:20;overflow-y:auto;display:none;
+  backdrop-filter:blur(10px);box-shadow:0 8px 32px rgba(0,0,0,0.7)}
+#panel.show{display:block}
+#panel-close{position:absolute;top:8px;right:12px;background:none;border:none;color:#78909c;font-size:20px;cursor:pointer}
+#panel-close:hover{color:#ef5350}
+#p-name{font-family:'Orbitron',monospace;font-size:18px;font-weight:700;color:#ffd700;margin-bottom:4px}
+#p-title{font-size:14px;color:#4fc3f7;margin-bottom:8px;letter-spacing:1px}
+#p-faction{font-size:13px;color:#78909c;margin-bottom:12px}
+#p-body{font-size:13px;line-height:1.6;color:#b0bec5}
+#p-body .row{display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid rgba(255,255,255,0.04)}
+#p-body .row-label{color:#78909c}
+#p-body .row-val{color:#e0e0e0;text-align:right}
+#p-thought{margin-top:10px;padding:8px 10px;background:rgba(171,71,188,0.08);border-left:3px solid #ab47bc;
+  border-radius:0 4px 4px 0;font-style:italic;color:#ce93d8;font-size:13px;line-height:1.5}
+#help-bar{position:fixed;bottom:16px;left:50%;transform:translateX(-50%);background:rgba(8,12,24,0.85);
+  border:1px solid rgba(79,195,247,0.15);border-radius:8px;padding:8px 20px;font-size:12px;color:#546e7a;
+  letter-spacing:1px;z-index:20;white-space:nowrap}
+#help-bar kbd{background:rgba(79,195,247,0.1);border:1px solid rgba(79,195,247,0.2);border-radius:3px;
+  padding:1px 6px;color:#4fc3f7;font-size:11px;margin:0 2px}
+#nav-link{position:fixed;bottom:16px;right:16px;z-index:20}
+#nav-link a{color:#78909c;font-size:12px;text-decoration:none;padding:6px 12px;border:1px solid rgba(79,195,247,0.15);
+  border-radius:6px;letter-spacing:1px;transition:color 0.2s,border-color 0.2s}
+#nav-link a:hover{color:#4fc3f7;border-color:#4fc3f7}
+#loading{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:#000;z-index:100;
+  font-family:'Orbitron',monospace;font-size:20px;color:#4fc3f7;letter-spacing:4px}
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="labels"></div>
+<div id="topbar">
+  <h1>FEDERATION UNIVERSE</h1>
+  <div class="gauge"><span style="color:#ef5350">TENSION</span><div class="gauge-bar"><div class="gauge-fill" id="g-tension" style="background:#ef5350;width:0%"></div></div></div>
+  <div class="gauge"><span style="color:#66bb6a">STABILITY</span><div class="gauge-bar"><div class="gauge-fill" id="g-stability" style="background:#66bb6a;width:0%"></div></div></div>
+  <div class="gauge"><span style="color:#ffd700">MORALE</span><div class="gauge-bar"><div class="gauge-fill" id="g-morale" style="background:#ffd700;width:0%"></div></div></div>
+  <div class="gauge"><span style="color:#ab47bc">ANOMALY</span><div class="gauge-bar"><div class="gauge-fill" id="g-anomaly" style="background:#ab47bc;width:0%"></div></div></div>
+  <div id="tick"><span id="tick-dot"></span><span id="tick-label">CONNECTING...</span></div>
+</div>
+<div id="panel">
+  <button id="panel-close" onclick="closePanel()">&times;</button>
+  <div id="p-name"></div><div id="p-title"></div><div id="p-faction"></div><div id="p-body"></div><div id="p-thought"></div>
+</div>
+<div id="help-bar">
+  <kbd>DRAG</kbd> Orbit &nbsp; <kbd>SCROLL</kbd> Zoom &nbsp; <kbd>CLICK</kbd> Select &nbsp; <kbd>R</kbd> Reset &nbsp; <kbd>F</kbd> Fit All &nbsp; <kbd>ESC</kbd> Close
+</div>
+<div id="nav-link"><a href="/galaxy-map.html">Galaxy Map</a> <a href="/starmap.html">STAR MAP</a> <a href="/bridge.html">BRIDGE</a></div>
+<div id="loading">INITIALIZING UNIVERSE...</div>
+
+<script type="importmap">
+{"imports":{"three":"https://unpkg.com/three@0.163.0/build/three.module.js","three/addons/":"https://unpkg.com/three@0.163.0/examples/jsm/"}}
+</script>
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
+import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
+import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
+
+// ═══ CONSTANTS ═══
+const SCALE = 0.08;
+const RING_Z = { core: 0, inner: -8, outer: -18, frontier: -30 };
+const REGION_COLORS = { core: '#ffd700', inner: '#4fc3f7', outer: '#ffa726', frontier: '#ef5350' };
+const FACTION_COLORS = {
+  research_division:'#4fc3f7', military_command:'#ef5350', diplomatic_corps:'#66bb6a',
+  consciousness_collective:'#ab47bc', cultural_ministry:'#ffa726', economic_council:'#ffd700',
+  exploration_initiative:'#26c6da', preservation_society:'#8d6e63'
+};
+const FACTION_NAMES = {
+  research_division:'Research Division', military_command:'Military Command', diplomatic_corps:'Diplomatic Corps',
+  consciousness_collective:'Consciousness Collective', cultural_ministry:'Cultural Ministry',
+  economic_council:'Economic Council', exploration_initiative:'Exploration Initiative',
+  preservation_society:'Preservation Society'
+};
+const SECTORS = [
+  {id:"sol-prime",name:"Sol Prime",x:0,y:0,region:"core",danger:1},
+  {id:"meridian",name:"Meridian",x:-60,y:35,region:"core",danger:2},
+  {id:"crucible",name:"Crucible",x:60,y:35,region:"core",danger:2},
+  {id:"helix",name:"Helix",x:-110,y:-65,region:"inner",danger:3},
+  {id:"forge",name:"Forge",x:-130,y:40,region:"inner",danger:3},
+  {id:"bastion",name:"Bastion",x:-50,y:100,region:"inner",danger:3},
+  {id:"archive",name:"Archive",x:50,y:100,region:"inner",danger:3},
+  {id:"prism",name:"Prism",x:130,y:40,region:"inner",danger:3},
+  {id:"harbor",name:"Harbor",x:110,y:-65,region:"inner",danger:3},
+  {id:"reach",name:"The Reach",x:-170,y:-100,region:"outer",danger:5},
+  {id:"shroud",name:"The Shroud",x:-200,y:60,region:"outer",danger:6},
+  {id:"drift",name:"The Drift",x:-100,y:180,region:"outer",danger:5},
+  {id:"pinnacle",name:"Pinnacle",x:100,y:180,region:"outer",danger:5},
+  {id:"veil",name:"The Veil",x:200,y:60,region:"outer",danger:5},
+  {id:"expanse",name:"The Expanse",x:170,y:-100,region:"outer",danger:5},
+  {id:"abyss",name:"The Abyss",x:-240,y:-160,region:"frontier",danger:8},
+  {id:"fracture",name:"Fracture",x:-270,y:100,region:"frontier",danger:8},
+  {id:"signal",name:"Signal",x:-160,y:280,region:"frontier",danger:7},
+  {id:"ghost",name:"Ghost",x:160,y:280,region:"frontier",danger:7},
+  {id:"threshold",name:"Threshold",x:270,y:100,region:"frontier",danger:7},
+  {id:"beyond",name:"Beyond",x:240,y:-160,region:"frontier",danger:9}
+];
+const FACTION_HOMES = {
+  research_division:"archive", military_command:"bastion", diplomatic_corps:"prism",
+  economic_council:"forge", exploration_initiative:"reach", cultural_ministry:"shroud",
+  preservation_society:"helix", consciousness_collective:"harbor"
+};
+const EDGES = [
+  ["meridian","sol-prime"],["sol-prime","crucible"],["sol-prime","helix"],["sol-prime","forge"],
+  ["sol-prime","bastion"],["sol-prime","archive"],["sol-prime","prism"],["sol-prime","harbor"],
+  ["meridian","helix"],["meridian","forge"],["meridian","bastion"],["crucible","archive"],
+  ["crucible","prism"],["crucible","harbor"],["helix","reach"],["helix","shroud"],
+  ["forge","shroud"],["forge","drift"],["bastion","drift"],["archive","pinnacle"],
+  ["prism","pinnacle"],["prism","veil"],["harbor","veil"],["harbor","expanse"],
+  ["reach","shroud"],["shroud","drift"],["drift","pinnacle"],["pinnacle","veil"],["veil","expanse"],
+  ["reach","abyss"],["shroud","fracture"],["drift","signal"],["pinnacle","ghost"],
+  ["veil","threshold"],["expanse","beyond"],["abyss","fracture"],["fracture","signal"],
+  ["signal","ghost"],["ghost","threshold"],["threshold","beyond"]
+];
+const NPCS = [
+  {id:"char_001",name:"Archimedes Prime",faction:"research_division",title:"Chief Mathematician"},
+  {id:"char_002",name:"Commander Valorix",faction:"military_command",title:"General of the First Fleet"},
+  {id:"char_003",name:"Philosopher Zenith",faction:"consciousness_collective",title:"Keeper of Wisdom"},
+  {id:"char_004",name:"Ambassador Silven",faction:"diplomatic_corps",title:"Master Diplomat"},
+  {id:"char_005",name:"Conquistador Drake",faction:"exploration_initiative",title:"Explorer"},
+  {id:"char_101",name:"Chancellor Harmony",faction:"diplomatic_corps",title:"Leader"},
+  {id:"char_102",name:"Marshal Ironbound",faction:"military_command",title:"Supreme Commander"},
+  {id:"char_103",name:"Maestro Celestia",faction:"cultural_ministry",title:"Minister of Culture"},
+  {id:"char_104",name:"Dr. Prometheus",faction:"research_division",title:"Chief Research Officer"},
+  {id:"char_105",name:"Oracle Vex",faction:"consciousness_collective",title:"Head of Collective"},
+  {id:"char_106",name:"Merchant-Prince Aurelius",faction:"economic_council",title:"Trade Leader"},
+  {id:"char_107",name:"Explorer Nova",faction:"exploration_initiative",title:"Lead Seeker"},
+  {id:"char_108",name:"Archivist Eternal",faction:"preservation_society",title:"Lore Keeper"},
+  {id:"char_201",name:"Lord Malaxis",faction:null,title:"Dark Tyrant"},
+  {id:"char_202",name:"The Void Oracle",faction:null,title:"Harbinger of Chaos"},
+  {id:"char_203",name:"Baroness Greed",faction:null,title:"Economic Overlord"},
+  {id:"char_204",name:"General Devastation",faction:null,title:"War Machine"},
+  {id:"char_301",name:"The Wanderer",faction:null,title:"Traveler Between Worlds"},
+  {id:"char_302",name:"The Jester",faction:null,title:"Cosmic Comedian"},
+  {id:"char_303",name:"The Hermit",faction:null,title:"Isolated Sage"},
+  {id:"char_304",name:"The Spectre",faction:null,title:"Ghost of the Past"},
+  {id:"char_305",name:"The Trickster",faction:null,title:"Fate's Gambler"},
+  {id:"char_306",name:"The Oracle",faction:"consciousness_collective",title:"Seer of Futures"},
+  {id:"char_401",name:"Keeper of the Null",faction:null,title:"Void Custodian"},
+  {id:"char_402",name:"The Cartographer",faction:"cultural_ministry",title:"Mapper of Possibility"},
+  {id:"char_403",name:"Zara Swiftwind",faction:"exploration_initiative",title:"Scout"},
+  {id:"char_404",name:"Tech-Priest Algorithm",faction:"research_division",title:"Digital Prophet"},
+  {id:"char_405",name:"Captain Riven",faction:"military_command",title:"Fleet Captain"},
+  {id:"char_406",name:"Echo-7",faction:"research_division",title:"Living Contradiction"}
+];
+
+// ═══ RENDERER ═══
+const canvas = document.getElementById('c');
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: false });
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.0;
+renderer.outputColorSpace = THREE.LinearSRGBColorSpace;
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x020510);
+scene.fog = new THREE.FogExp2(0x030818, 0.005);
+
+const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 500);
+camera.position.set(0, 25, 40);
+camera.lookAt(0, 0, -10);
+
+const controls = new OrbitControls(camera, canvas);
+controls.enableDamping = true; controls.dampingFactor = 0.05;
+controls.minDistance = 5; controls.maxDistance = 120;
+controls.target.set(0, 0, -10);
+
+// ═══ POST-PROCESSING ═══
+const composer = new EffectComposer(renderer);
+composer.addPass(new RenderPass(scene, camera));
+const bloomPass = new UnrealBloomPass(new THREE.Vector2(window.innerWidth, window.innerHeight), 0.8, 0.5, 0.85);
+composer.addPass(bloomPass);
+// Film grain pass
+const filmGrainShader = {
+  uniforms: { tDiffuse:{value:null}, uTime:{value:0}, uIntensity:{value:0.06} },
+  vertexShader: `varying vec2 vUv; void main(){vUv=uv;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0);}`,
+  fragmentShader: `uniform sampler2D tDiffuse;uniform float uTime;uniform float uIntensity;varying vec2 vUv;
+    float rand(vec2 co){return fract(sin(dot(co,vec2(12.9898,78.233)))*43758.5453);}
+    void main(){vec4 c=texture2D(tDiffuse,vUv);float g=(rand(vUv*1000.0+fract(uTime*7.13))-0.5)*uIntensity;c.rgb+=g;gl_FragColor=c;}`
+};
+const grainPass = new ShaderPass(filmGrainShader);
+composer.addPass(grainPass);
+composer.addPass(new OutputPass());
+
+// ═══ LIGHTING ═══
+scene.add(new THREE.AmbientLight(0x1a1a3a, 0.3));
+const solLight = new THREE.PointLight(0xffcc44, 3, 60);
+solLight.position.set(0, 0, 0); scene.add(solLight);
+const keyLight = new THREE.PointLight(0x4fc3f7, 1.5, 80);
+keyLight.position.set(0, 20, 5); scene.add(keyLight);
+const rimLight = new THREE.PointLight(0xffd700, 0.8, 60);
+rimLight.position.set(-15, 10, -20); scene.add(rimLight);
+
+// ═══ SHADERS ═══
+const redshiftVert = `varying vec3 vNormal;varying vec3 vViewDir;uniform float uPulse;
+void main(){vNormal=normalize(normalMatrix*normal);vec4 mv=modelViewMatrix*vec4(position,1.0);vViewDir=normalize(-mv.xyz);gl_Position=projectionMatrix*mv;}`;
+const redshiftFrag = `uniform vec3 uColor;uniform float uPulse;uniform float uDanger;
+varying vec3 vNormal;varying vec3 vViewDir;
+void main(){float fr=pow(1.0-max(dot(vNormal,vViewDir),0.0),2.5);float e=0.6+0.5*sin(uPulse);vec3 c=uColor*e+vec3(1.0)*fr*0.4;c+=uColor*uDanger*0.15;gl_FragColor=vec4(c,0.92);}`;
+
+const tubeVert = `varying vec2 vUv;varying float vDist;
+void main(){vUv=uv;vec4 mv=modelViewMatrix*vec4(position,1.0);vDist=length(mv.xyz);gl_Position=projectionMatrix*mv;}`;
+const tubeFrag = `uniform vec3 uColA;uniform vec3 uColB;uniform float uTime;
+varying vec2 vUv;varying float vDist;
+void main(){float flow=sin(vUv.x*18.0-uTime*3.0)*0.5+0.5;flow=smoothstep(0.15,0.85,flow);
+vec3 c=mix(uColA,uColB,vUv.x);float a=(0.2+0.25*flow)*smoothstep(80.0,15.0,vDist);gl_FragColor=vec4(c*1.8,a);}`;
+
+const starVert = `attribute float aSize;attribute float aAlpha;attribute float aZnorm;
+varying float vAlpha;varying float vZnorm;
+void main(){vAlpha=aAlpha;vZnorm=aZnorm;vec4 mv=modelViewMatrix*vec4(position,1.0);gl_PointSize=aSize*(180.0/(-mv.z));gl_PointSize=max(gl_PointSize,0.5);gl_Position=projectionMatrix*mv;}`;
+const starFrag = `varying float vAlpha;varying float vZnorm;
+vec3 zColor(float z){if(z<0.25)return mix(vec3(0.6,0.7,1.0),vec3(0.3,0.9,0.9),z*4.0);if(z<0.5)return mix(vec3(0.3,0.9,0.9),vec3(1.0,0.9,0.3),(z-0.25)*4.0);if(z<0.75)return mix(vec3(1.0,0.9,0.3),vec3(1.0,0.4,0.1),(z-0.5)*4.0);return mix(vec3(1.0,0.4,0.1),vec3(0.8,0.15,0.4),(z-0.75)*4.0);}
+void main(){float d=length(gl_PointCoord-vec2(0.5));if(d>0.5)discard;float g=smoothstep(0.5,0.0,d);vec3 c=zColor(vZnorm);gl_FragColor=vec4(c,vAlpha*g);}`;
+
+const flowVert = `attribute float aT;varying float vT;
+void main(){vT=aT;vec4 mv=modelViewMatrix*vec4(position,1.0);gl_Position=projectionMatrix*mv;}`;
+const flowFrag = `uniform float uTime;varying float vT;
+vec3 zColor(float z){if(z<0.25)return mix(vec3(0.6,0.7,1.0),vec3(0.3,0.9,0.9),z*4.0);if(z<0.5)return mix(vec3(0.3,0.9,0.9),vec3(1.0,0.9,0.3),(z-0.25)*4.0);if(z<0.75)return mix(vec3(1.0,0.9,0.3),vec3(1.0,0.4,0.1),(z-0.5)*4.0);return mix(vec3(1.0,0.4,0.1),vec3(0.8,0.15,0.4),(z-0.75)*4.0);}
+void main(){float head=fract(uTime*0.25+vT*3.0);float tail=smoothstep(0.0,0.25,head)*smoothstep(0.5,0.25,head);float zn=vT;vec3 c=zColor(zn);gl_FragColor=vec4(c*2.0,tail*0.55);}`;
+
+const nebVert = `varying vec2 vUv;void main(){vUv=uv;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0);}`;
+const nebFrag = `uniform float uTime;uniform float uSeed;varying vec2 vUv;
+float h(vec2 p){return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453);}
+float n(vec2 p){vec2 i=floor(p);vec2 f=fract(p);f=f*f*(3.0-2.0*f);return mix(mix(h(i),h(i+vec2(1,0)),f.x),mix(h(i+vec2(0,1)),h(i+vec2(1,1)),f.x),f.y);}
+float fbm(vec2 p){float v=0.0;float a=0.5;for(int i=0;i<5;i++){v+=a*n(p);p*=2.1;a*=0.5;}return v;}
+void main(){vec2 uv=vUv+vec2(uTime*0.008,uTime*0.005);float f=fbm(uv*2.5+uSeed);
+vec3 deep=vec3(0.06,0.01,0.12);vec3 hot=vec3(0.6,0.25,0.05);vec3 c=mix(deep,hot,f);
+float a=smoothstep(0.2,0.6,f)*0.12;gl_FragColor=vec4(c,a);}`;
+
+// ═══ REDSHIFT COLOR HELPER ═══
+function redshiftColor(z) {
+  const t = Math.min(1, Math.max(0, -z / 30));
+  if (t < 0.25) return new THREE.Color().setHSL(0.58, 0.3, 0.95 - t * 1.2);
+  if (t < 0.5) return new THREE.Color().setHSL(0.48 - (t - 0.25) * 1.6, 0.8, 0.65);
+  if (t < 0.75) return new THREE.Color().setHSL(0.12 - (t - 0.5) * 0.3, 0.9, 0.55);
+  return new THREE.Color().setHSL(0.95 + (t - 0.75) * 0.2, 0.85, 0.45);
+}
+
+// ═══ STARFIELD (20000 particles) ═══
+function createStarfield() {
+  const N = 20000, geo = new THREE.BufferGeometry();
+  const pos = new Float32Array(N * 3), sizes = new Float32Array(N), alphas = new Float32Array(N), znorms = new Float32Array(N);
+  for (let i = 0; i < N; i++) {
+    const r = 20 + Math.random() * 130;
+    const theta = Math.random() * Math.PI * 2;
+    const phi = Math.acos(2 * Math.random() - 1);
+    const ySpread = (Math.random() - 0.5) * 12;
+    pos[i*3] = Math.sin(phi) * Math.cos(theta) * r;
+    pos[i*3+1] = ySpread + Math.sin(phi) * Math.sin(theta) * r * 0.3;
+    pos[i*3+2] = Math.cos(phi) * r * 0.8 - 15;
+    sizes[i] = 0.5 + Math.random() * 2.5;
+    alphas[i] = 0.2 + Math.random() * 0.8;
+    znorms[i] = Math.min(1, Math.max(0, (-pos[i*3+2] + 30) / 60));
+  }
+  geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+  geo.setAttribute('aSize', new THREE.BufferAttribute(sizes, 1));
+  geo.setAttribute('aAlpha', new THREE.BufferAttribute(alphas, 1));
+  geo.setAttribute('aZnorm', new THREE.BufferAttribute(znorms, 1));
+  const mat = new THREE.ShaderMaterial({ vertexShader: starVert, fragmentShader: starFrag, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending });
+  scene.add(new THREE.Points(geo, mat));
+  return { geo, pos, N };
+}
+const starfield = createStarfield();
+
+// ═══ VOLUMETRIC NEBULA ═══
+for (let i = 0; i < 5; i++) {
+  const s = 40 + Math.random() * 40;
+  const geo = new THREE.PlaneGeometry(s, s);
+  const mat = new THREE.ShaderMaterial({ vertexShader: nebVert, fragmentShader: nebFrag,
+    uniforms: { uTime: { value: 0 }, uSeed: { value: i * 17.3 } },
+    transparent: true, depthWrite: false, side: THREE.DoubleSide, blending: THREE.AdditiveBlending });
+  const m = new THREE.Mesh(geo, mat);
+  m.position.set((Math.random() - 0.5) * 20, (Math.random() - 0.5) * 15, -5 - i * 8);
+  m.rotation.set(Math.random() * 0.5, Math.random() * 0.5, Math.random() * Math.PI);
+  m.userData._nebMat = mat;
+  scene.add(m);
+}
+
+// ═══ SECTORS ═══
+const sectorMap = {};
+const sectorMeshes = [];
+const sectorGroup = new THREE.Group();
+scene.add(sectorGroup);
+
+SECTORS.forEach(s => {
+  const sx = s.x * SCALE, sy = -s.y * SCALE, sz = RING_Z[s.region] || 0;
+  const pos = new THREE.Vector3(sx, sy, sz);
+  const dangerScale = 0.3 + (s.danger / 10) * 0.5;
+  const rcol = redshiftColor(sz);
+  // Main sector sphere with redshift shader
+  const mat = new THREE.ShaderMaterial({ vertexShader: redshiftVert, fragmentShader: redshiftFrag,
+    uniforms: { uColor: { value: rcol }, uPulse: { value: Math.random() * 6.28 }, uDanger: { value: s.danger / 10 } },
+    transparent: true });
+  const mesh = new THREE.Mesh(new THREE.SphereGeometry(dangerScale, 20, 20), mat);
+  mesh.position.copy(pos);
+  mesh.userData = { type: 'sector', data: s };
+  sectorGroup.add(mesh);
+  sectorMeshes.push(mesh);
+  // Inner bright star point
+  const starMat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.95 });
+  const star = new THREE.Mesh(new THREE.SphereGeometry(dangerScale * 0.25, 8, 8), starMat);
+  star.position.copy(pos);
+  sectorGroup.add(star);
+  // Glow halo
+  const glowMat = new THREE.MeshBasicMaterial({ color: rcol, transparent: true, opacity: 0.18, side: THREE.BackSide });
+  const glow = new THREE.Mesh(new THREE.SphereGeometry(dangerScale * 3, 16, 16), glowMat);
+  glow.position.copy(pos);
+  sectorGroup.add(glow);
+  // Rotating ring for core sectors
+  let ring = null;
+  if (s.region === 'core') {
+    const ringGeo = new THREE.TorusGeometry(dangerScale * 2.5, 0.03, 8, 48);
+    const ringMat = new THREE.MeshBasicMaterial({ color: rcol, transparent: true, opacity: 0.5 });
+    ring = new THREE.Mesh(ringGeo, ringMat);
+    ring.position.copy(pos);
+    ring.rotation.x = Math.PI * 0.4;
+    sectorGroup.add(ring);
+  }
+  sectorMap[s.id] = { pos, mesh, glow, star, ring, data: s, rcol };
+});
+
+// Faction home lights
+Object.entries(FACTION_HOMES).forEach(([fid, sectorId]) => {
+  const sec = sectorMap[sectorId];
+  if (!sec) return;
+  const col = new THREE.Color(FACTION_COLORS[fid]);
+  const light = new THREE.PointLight(col, 0.6, 12);
+  light.position.copy(sec.pos);
+  sectorGroup.add(light);
+  // Faction halo
+  const haloGeo = new THREE.SphereGeometry(2.5, 24, 24);
+  const haloMat = new THREE.MeshBasicMaterial({ color: col, transparent: true, opacity: 0.06, side: THREE.BackSide });
+  const halo = new THREE.Mesh(haloGeo, haloMat);
+  halo.position.copy(sec.pos);
+  sectorGroup.add(halo);
+});
+
+// ═══ COSMIC WEB FILAMENTS ═══
+function seededRand(seed) { let s = Math.sin(seed * 91.37) * 43758.5453; return s - Math.floor(s); }
+EDGES.forEach(([aId, bId], idx) => {
+  const sa = sectorMap[aId], sb = sectorMap[bId];
+  if (!sa || !sb) return;
+  const mid = new THREE.Vector3().addVectors(sa.pos, sb.pos).multiplyScalar(0.5);
+  const dir = new THREE.Vector3().subVectors(sb.pos, sa.pos);
+  const len = dir.length();
+  dir.normalize();
+  const perp1 = new THREE.Vector3(-dir.y, dir.x, 0).normalize();
+  const perp2 = new THREE.Vector3(0, dir.z, -dir.y).normalize();
+  const off1 = (seededRand(idx * 7 + 1) - 0.5) * len * 0.2;
+  const off2 = (seededRand(idx * 7 + 2) - 0.5) * len * 0.15;
+  const cp1 = mid.clone().add(perp1.clone().multiplyScalar(off1)).add(perp2.clone().multiplyScalar(off2));
+  const curve = new THREE.CatmullRomCurve3([sa.pos.clone(), cp1, sb.pos.clone()]);
+  const tubeGeo = new THREE.TubeGeometry(curve, 24, 0.03 + seededRand(idx * 3) * 0.03, 6, false);
+  const tubeMat = new THREE.ShaderMaterial({ vertexShader: tubeVert, fragmentShader: tubeFrag,
+    uniforms: { uColA: { value: sa.rcol }, uColB: { value: sb.rcol }, uTime: { value: 0 } },
+    transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide });
+  const tube = new THREE.Mesh(tubeGeo, tubeMat);
+  tube.userData._tubeMat = tubeMat;
+  sectorGroup.add(tube);
+});
+
+// ═══ GRAVITATIONAL FLOW LINES ═══
+const FLOW_COUNT = 300, FLOW_PTS = 16;
+const flowPositions = new Float32Array(FLOW_COUNT * FLOW_PTS * 3);
+const flowT = new Float32Array(FLOW_COUNT * FLOW_PTS);
+const flowSeeds = [];
+for (let i = 0; i < FLOW_COUNT; i++) {
+  const theta = Math.random() * Math.PI * 2;
+  const phi = Math.acos(2 * Math.random() - 1);
+  const r = 15 + Math.random() * 25;
+  const ox = Math.sin(phi) * Math.cos(theta) * r;
+  const oy = Math.sin(phi) * Math.sin(theta) * r * 0.4;
+  const oz = Math.cos(phi) * r * 0.6 - 10;
+  flowSeeds.push({ ox, oy, oz, r, phase: Math.random() });
+  for (let j = 0; j < FLOW_PTS; j++) {
+    const t = j / (FLOW_PTS - 1);
+    const idx = (i * FLOW_PTS + j);
+    flowT[idx] = t;
+  }
+}
+const flowGeo = new THREE.BufferGeometry();
+flowGeo.setAttribute('position', new THREE.BufferAttribute(flowPositions, 3));
+flowGeo.setAttribute('aT', new THREE.BufferAttribute(flowT, 1));
+const flowIndices = [];
+for (let i = 0; i < FLOW_COUNT; i++) {
+  for (let j = 0; j < FLOW_PTS - 1; j++) {
+    flowIndices.push(i * FLOW_PTS + j, i * FLOW_PTS + j + 1);
+  }
+}
+flowGeo.setIndex(flowIndices);
+const flowMat = new THREE.ShaderMaterial({ vertexShader: flowVert, fragmentShader: flowFrag,
+  uniforms: { uTime: { value: 0 } }, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending });
+const flowLines = new THREE.LineSegments(flowGeo, flowMat);
+scene.add(flowLines);
+
+// ═══ NPCs ═══
+const npcMeshes = [];
+const npcLabels = {};
+const npcGroup = new THREE.Group();
+scene.add(npcGroup);
+
+function npcHomePos(npc) {
+  if (!npc.faction) {
+    const frontiers = SECTORS.filter(s => s.region === 'frontier' || s.region === 'outer');
+    const pick = frontiers[Math.abs(hashStr(npc.id)) % frontiers.length];
+    const sec = sectorMap[pick.id];
+    if (!sec) return new THREE.Vector3(0, 0, -15);
+    return sec.pos.clone().add(npcOffset(npc.id, 3));
+  }
+  const homeId = FACTION_HOMES[npc.faction];
+  const sec = sectorMap[homeId];
+  if (!sec) return new THREE.Vector3(0, 0, 0);
+  return sec.pos.clone().add(npcOffset(npc.id, 2));
+}
+function npcOffset(id, radius) {
+  const h = hashStr(id), angle = (h % 360) * Math.PI / 180, r = radius * (0.5 + (h % 100) / 200);
+  return new THREE.Vector3(Math.cos(angle) * r, Math.sin(angle) * r, (h % 50 - 25) * 0.04);
+}
+function hashStr(s) { let h = 0; for (let i = 0; i < s.length; i++) h = ((h << 5) - h + s.charCodeAt(i)) | 0; return Math.abs(h); }
+
+NPCS.forEach(npc => {
+  const col = npc.faction ? new THREE.Color(FACTION_COLORS[npc.faction] || '#9e9e9e') : new THREE.Color(0x9e9e9e);
+  const isLeader = npc.id.startsWith('char_1');
+  const size = isLeader ? 0.22 : 0.15;
+  const geo = new THREE.SphereGeometry(size, 12, 12);
+  const mat = new THREE.MeshStandardMaterial({ color: col, emissive: col, emissiveIntensity: 0.8, roughness: 0.2, metalness: 0.6 });
+  const mesh = new THREE.Mesh(geo, mat);
+  const homePos = npcHomePos(npc);
+  mesh.position.copy(homePos);
+  mesh.userData = { type: 'npc', data: npc, homePos: homePos.clone(), angle: hashStr(npc.id) * 0.01, speed: 0.3 + Math.random() * 0.4 };
+  npcGroup.add(mesh);
+  npcMeshes.push(mesh);
+});
+
+// ═══ HTML LABELS ═══
+const labelsContainer = document.getElementById('labels');
+const labelElements = {};
+function createLabel(id, text, cssClass) {
+  const el = document.createElement('div');
+  el.className = 'lbl ' + cssClass;
+  el.textContent = text;
+  el.dataset.id = id;
+  el.onclick = () => { if (cssClass.includes('sector')) focusSector(id); else focusNPC(id); };
+  labelsContainer.appendChild(el);
+  labelElements[id] = el;
+  return el;
+}
+SECTORS.forEach(s => createLabel('sec:' + s.id, s.name, 'lbl-sector' + (s.region === 'core' ? ' lbl-core' : '')));
+NPCS.forEach(n => createLabel('npc:' + n.id, n.name, 'lbl-npc'));
+
+function updateLabels() {
+  const w = window.innerWidth, h = window.innerHeight, v = new THREE.Vector3();
+  SECTORS.forEach(s => {
+    const sec = sectorMap[s.id]; if (!sec) return;
+    v.copy(sec.pos).project(camera);
+    const el = labelElements['sec:' + s.id];
+    if (v.z > 1 || v.x < -1 || v.x > 1 || v.y < -1 || v.y > 1) { el.style.display = 'none'; return; }
+    el.style.display = '';
+    el.style.left = ((v.x + 1) / 2 * w) + 'px';
+    el.style.top = ((-v.y + 1) / 2 * h - 20) + 'px';
+    el.style.color = REGION_COLORS[s.region];
+    const dist = camera.position.distanceTo(sec.pos);
+    const scale = Math.max(0.6, Math.min(1.3, 30 / dist));
+    el.style.fontSize = (s.region === 'core' ? 15 : 13) * scale + 'px';
+  });
+  NPCS.forEach((n, i) => {
+    const mesh = npcMeshes[i]; if (!mesh) return;
+    v.copy(mesh.position).project(camera);
+    const el = labelElements['npc:' + n.id];
+    if (v.z > 1 || v.x < -1 || v.x > 1 || v.y < -1 || v.y > 1) { el.style.display = 'none'; return; }
+    const dist = camera.position.distanceTo(mesh.position);
+    if (dist > 35) { el.style.display = 'none'; return; }
+    el.style.display = '';
+    el.style.left = ((v.x + 1) / 2 * w) + 'px';
+    el.style.top = ((-v.y + 1) / 2 * h - 14) + 'px';
+    el.style.color = n.faction ? FACTION_COLORS[n.faction] : '#9e9e9e';
+    el.style.fontSize = Math.max(8, Math.min(12, 20 / dist * 10)) + 'px';
+  });
+}
+
+// ═══ RAYCASTING / INTERACTION ═══
+const raycaster = new THREE.Raycaster();
+const mouse = new THREE.Vector2();
+let selectedMesh = null;
+canvas.addEventListener('click', (e) => {
+  mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
+  mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
+  raycaster.setFromCamera(mouse, camera);
+  const hits = raycaster.intersectObjects([...sectorMeshes, ...npcMeshes]);
+  if (hits.length > 0) {
+    const obj = hits[0].object;
+    if (obj.userData.type === 'npc') focusNPC(obj.userData.data.id);
+    else if (obj.userData.type === 'sector') focusSector(obj.userData.data.id);
+  }
+});
+
+function focusNPC(npcId) {
+  const mesh = npcMeshes.find(m => m.userData.data.id === npcId); if (!mesh) return;
+  const npc = mesh.userData.data, live = liveNPCs[npcId] || {};
+  document.getElementById('p-name').textContent = npc.name;
+  document.getElementById('p-title').textContent = npc.title;
+  document.getElementById('p-faction').textContent = npc.faction ? (FACTION_NAMES[npc.faction] || npc.faction) : 'Independent';
+  document.getElementById('p-faction').style.color = npc.faction ? FACTION_COLORS[npc.faction] : '#9e9e9e';
+  const mood = live.mood || 'unknown', task = live.current_task || 'garrison', sector = live.sector_id || '—', goal = live.goal || '—';
+  document.getElementById('p-body').innerHTML = `<div class="row"><span class="row-label">Mood</span><span class="row-val">${mood}</span></div>
+    <div class="row"><span class="row-label">Task</span><span class="row-val">${task}</span></div>
+    <div class="row"><span class="row-label">Sector</span><span class="row-val">${sector}</span></div>
+    <div class="row"><span class="row-label">Goal</span><span class="row-val">${goal}</span></div>`;
+  document.getElementById('p-thought').textContent = live.thought || 'No recent thoughts recorded.';
+  document.getElementById('p-thought').style.display = live.thought ? '' : 'none';
+  document.getElementById('panel').classList.add('show');
+  animateCamera(mesh.position.clone().add(new THREE.Vector3(3, 2, 5)), mesh.position);
+  highlightMesh(mesh);
+}
+
+function focusSector(secId) {
+  const sec = sectorMap[secId]; if (!sec) return;
+  const d = sec.data;
+  document.getElementById('p-name').textContent = d.name;
+  document.getElementById('p-title').textContent = d.region.toUpperCase() + ' SECTOR';
+  document.getElementById('p-faction').textContent = '';
+  const homeOf = Object.entries(FACTION_HOMES).find(([, sid]) => sid === secId);
+  const factionLabel = homeOf ? `Home of ${FACTION_NAMES[homeOf[0]] || homeOf[0]}` : '';
+  document.getElementById('p-faction').textContent = factionLabel;
+  document.getElementById('p-faction').style.color = homeOf ? FACTION_COLORS[homeOf[0]] : '#78909c';
+  const npcsHere = NPCS.filter(n => { const loc = liveNPCs[n.id]; return loc && loc.sector_id === secId; });
+  const npcList = npcsHere.map(n => `<div class="row"><span class="row-val" style="color:${n.faction ? FACTION_COLORS[n.faction] : '#9e9e9e'}">${n.name}</span></div>`).join('');
+  document.getElementById('p-body').innerHTML = `<div class="row"><span class="row-label">Region</span><span class="row-val" style="color:${REGION_COLORS[d.region]}">${d.region}</span></div>
+    <div class="row"><span class="row-label">Danger Level</span><span class="row-val">${d.danger}/10</span></div>
+    <div class="row"><span class="row-label">NPCs Present</span><span class="row-val">${npcsHere.length}</span></div>${npcList}`;
+  document.getElementById('p-thought').style.display = 'none';
+  document.getElementById('panel').classList.add('show');
+  animateCamera(sec.pos.clone().add(new THREE.Vector3(4, 3, 6)), sec.pos);
+  highlightMesh(sec.mesh);
+}
+
+function closePanel() {
+  document.getElementById('panel').classList.remove('show');
+  if (selectedMesh) {
+    if (selectedMesh.material.uniforms) selectedMesh.material.uniforms.uPulse && (selectedMesh.material.uniforms.uPulse.value = selectedMesh.userData._origPulse || 0);
+    else selectedMesh.material.emissiveIntensity = selectedMesh.userData._origEmissive || 0.6;
+    selectedMesh = null;
+  }
+}
+window.closePanel = closePanel;
+
+function highlightMesh(mesh) {
+  if (selectedMesh && selectedMesh !== mesh) {
+    if (selectedMesh.material.uniforms && selectedMesh.material.uniforms.uPulse) selectedMesh.material.uniforms.uPulse.value = selectedMesh.userData._origPulse || 0;
+    else selectedMesh.material.emissiveIntensity = selectedMesh.userData._origEmissive || 0.6;
+  }
+  if (mesh.material.uniforms && mesh.material.uniforms.uPulse) {
+    mesh.userData._origPulse = mesh.material.uniforms.uPulse.value;
+  } else {
+    mesh.userData._origEmissive = mesh.userData._origEmissive || mesh.material.emissiveIntensity;
+    mesh.material.emissiveIntensity = 1.5;
+  }
+  selectedMesh = mesh;
+}
+
+let cameraTarget = null, cameraLookAt = null, cameraAnimT = 0;
+function animateCamera(toPos, lookAt) { cameraTarget = toPos; cameraLookAt = lookAt; cameraAnimT = 0; }
+
+// ═══ LIVE DATA POLLING ═══
+const liveNPCs = {};
+let tickCount = 0;
+let consecutiveFailures = 0;
+const tickDot = document.getElementById('tick-dot');
+const tickLabel = document.getElementById('tick-label');
+function setTickStatus(state) {
+  if (!tickDot || !tickLabel) return;
+  if (state === 'live') {
+    tickDot.style.background = '#4caf50';
+    tickDot.style.boxShadow = '0 0 6px #4caf50';
+  } else if (state === 'reconnecting') {
+    tickDot.style.background = '#ef5350';
+    tickDot.style.boxShadow = '0 0 6px #ef5350';
+  } else {
+    tickDot.style.background = '#ffa726';
+    tickDot.style.boxShadow = '0 0 6px #ffa726';
+  }
+}
+async function pollData() {
+  try {
+    const res = await fetch('/map/data');
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const data = await res.json();
+    consecutiveFailures = 0;
+    setTickStatus('live');
+    const ws = data.world_state || {};
+    const setGauge = (id, key) => { const v = Math.max(0, Math.min(100, ws[key] || 0)); document.getElementById(id).style.width = v + '%'; };
+    setGauge('g-tension', 'tension_level'); setGauge('g-stability', 'stability');
+    setGauge('g-morale', 'morale'); setGauge('g-anomaly', 'anomaly_activity');
+    tickCount = (data.worker && data.worker.tick_count) || tickCount;
+    tickLabel.textContent = 'TICK ' + tickCount;
+    (data.npc_locations || []).forEach(loc => { liveNPCs[loc.npc_id] = { ...liveNPCs[loc.npc_id], ...loc }; });
+    (data.npcs || []).forEach(n => { if (!liveNPCs[n.id]) liveNPCs[n.id] = {}; Object.assign(liveNPCs[n.id], { mood: n.mood, goal: n.goal, thought: n.thought, sector_id: n.sector_id }); });
+    NPCS.forEach((npc, i) => {
+      const loc = liveNPCs[npc.id]; if (!loc || !loc.sector_id) return;
+      const sec = sectorMap[loc.sector_id]; if (!sec) return;
+      const target = sec.pos.clone();
+      if (loc.destination_sector_id && loc.movement_progress > 0 && loc.movement_progress < 1) {
+        const destSec = sectorMap[loc.destination_sector_id];
+        if (destSec) target.lerp(destSec.pos, loc.movement_progress);
+      }
+      npcMeshes[i].userData.homePos = target;
+    });
+  } catch (e) {
+    consecutiveFailures++;
+    if (consecutiveFailures >= 3) {
+      setTickStatus('reconnecting');
+      tickLabel.textContent = 'RECONNECTING (' + consecutiveFailures + ')';
+    } else if (consecutiveFailures === 1) {
+      setTickStatus('connecting');
+      tickLabel.textContent = 'RETRYING...';
+    }
+  }
+}
+pollData(); setInterval(pollData, 3000);
+
+// ═══ KEYBOARD ═══
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') closePanel();
+  if (e.key === 'r' || e.key === 'R') { camera.position.set(0, 25, 40); controls.target.set(0, 0, -10); }
+  if (e.key === 'f' || e.key === 'F') fitAll();
+});
+function fitAll() {
+  const box = new THREE.Box3();
+  sectorMeshes.forEach(m => box.expandByObject(m));
+  const center = box.getCenter(new THREE.Vector3()), size = box.getSize(new THREE.Vector3()).length();
+  camera.position.copy(center).add(new THREE.Vector3(0, size * 0.3, size * 0.6));
+  controls.target.copy(center);
+}
+
+// ═══ ANIMATION LOOP ═══
+const clock = new THREE.Clock();
+function animate() {
+  requestAnimationFrame(animate);
+  const dt = clock.getDelta(), t = clock.getElapsedTime();
+
+  // NPC orbits
+  npcMeshes.forEach((mesh, i) => {
+    const ud = mesh.userData;
+    ud.angle += dt * ud.speed;
+    const orbitR = 0.8 + (i % 5) * 0.2;
+    const ox = Math.cos(ud.angle) * orbitR, oy = Math.sin(ud.angle) * orbitR;
+    const target = ud.homePos.clone().add(new THREE.Vector3(ox, oy, Math.sin(ud.angle * 0.5) * 0.3));
+    mesh.position.lerp(target, 0.05);
+    mesh.material.emissiveIntensity = 0.5 + 0.4 * Math.sin(t * 2 + i);
+  });
+
+  // Sector pulse
+  sectorMeshes.forEach((mesh, i) => {
+    const s = mesh.userData.data;
+    const pulse = t * (1.0 + s.danger * 0.3) + i * 0.7;
+    if (mesh.material.uniforms && mesh.material.uniforms.uPulse) mesh.material.uniforms.uPulse.value = pulse;
+  });
+
+  // Update tube shader times
+  sectorGroup.children.forEach(c => {
+    if (c.userData._tubeMat) c.userData._tubeMat.uniforms.uTime.value = t;
+  });
+
+  // Update nebula shader times
+  scene.children.forEach(c => {
+    if (c.userData._nebMat) c.userData._nebMat.uniforms.uTime.value = t;
+  });
+
+  // Core ring rotation
+  SECTORS.forEach(s => {
+    const sec = sectorMap[s.id];
+    if (sec.ring) sec.ring.rotation.z += dt * 0.3;
+  });
+
+  // Gravitational flow lines
+  const fPos = flowGeo.attributes.position.array;
+  for (let i = 0; i < FLOW_COUNT; i++) {
+    const seed = flowSeeds[i];
+    for (let j = 0; j < FLOW_PTS; j++) {
+      const bt = j / (FLOW_PTS - 1);
+      const progress = (bt + seed.phase + t * 0.06) % 1.0;
+      const accel = 1.0 + progress * 2.0;
+      const r = seed.r * (1.0 - progress * 0.85);
+      const spiral = progress * 2.5;
+      const theta = Math.atan2(seed.oy, seed.ox) + spiral;
+      const idx = (i * FLOW_PTS + j) * 3;
+      fPos[idx] = Math.cos(theta) * r;
+      fPos[idx+1] = seed.oy * (1.0 - progress * 0.7) + Math.sin(theta + seed.phase * 6.28) * r * 0.15;
+      fPos[idx+2] = seed.oz * (1.0 - progress * 0.8) + progress * (-10);
+    }
+  }
+  flowGeo.attributes.position.needsUpdate = true;
+  flowMat.uniforms.uTime.value = t;
+
+  // Starfield drift toward Sol Prime
+  const sPos = starfield.geo.attributes.position.array;
+  for (let i = 0; i < starfield.N; i++) {
+    const idx = i * 3;
+    const dx = -sPos[idx], dy = -sPos[idx+1], dz = -sPos[idx+2];
+    const dist = Math.sqrt(dx*dx + dy*dy + dz*dz);
+    if (dist < 3) {
+      const r = 80 + Math.random() * 60;
+      const theta = Math.random() * Math.PI * 2;
+      const phi = Math.acos(2 * Math.random() - 1);
+      sPos[idx] = Math.sin(phi) * Math.cos(theta) * r;
+      sPos[idx+1] = (Math.random() - 0.5) * 12 + Math.sin(phi) * Math.sin(theta) * r * 0.3;
+      sPos[idx+2] = Math.cos(phi) * r * 0.8 - 15;
+    } else {
+      const speed = 0.002 / Math.max(0.5, dist * 0.02);
+      sPos[idx] += dx * speed;
+      sPos[idx+1] += dy * speed;
+      sPos[idx+2] += dz * speed;
+    }
+  }
+  starfield.geo.attributes.position.needsUpdate = true;
+
+  // Film grain time
+  grainPass.uniforms.uTime.value = t;
+
+  // Camera animation
+  if (cameraTarget) {
+    cameraAnimT += dt * 1.5;
+    if (cameraAnimT >= 1) { cameraAnimT = 1; cameraTarget = null; }
+    const ease = 1 - Math.pow(1 - cameraAnimT, 3);
+    camera.position.lerp(cameraTarget, ease * 0.1);
+    if (cameraLookAt) controls.target.lerp(cameraLookAt, ease * 0.1);
+  }
+
+  controls.update();
+  updateLabels();
+  composer.render();
+}
+
+// ═══ RESIZE ═══
+window.addEventListener('resize', () => {
+  camera.aspect = window.innerWidth / window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight);
+  composer.setSize(window.innerWidth, window.innerHeight);
+});
+
+// ═══ START ═══
+document.getElementById('loading').style.display = 'none';
+animate();
+</script>
+</body>
+</html>

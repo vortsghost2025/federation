@@ -146,6 +146,8 @@ p{margin:0 0 8px 0}
 </style>
 </head>
 <body>
+<a href="#main" style="position:absolute;left:-9999px;width:1px;height:1px;overflow:hidden" onfocus="this.style.left='0';this.style.width='auto';this.style.height='auto';this.style.overflow='visible'" onblur="this.style.left='-9999px'">Skip to content</a>
+<main id="main">
 <div class="wrap">
 
 <div class="head">
@@ -154,16 +156,16 @@ p{margin:0 0 8px 0}
     <div class="who">Archimedes Prime &middot; The Oracle &middot; 2 of 38 NPCs</div>
   </div>
   <div class="tab-row">
-    <span id="live-pill"><span class="icon icon-green"></span><span id="live-text">live</span></span>
+    <span id="live-pill" role="status" aria-live="polite" aria-atomic="true"><span class="icon icon-green"></span><span id="live-text">live</span></span>
     <button class="btn" id="refresh-btn">⟳ Refresh</button>
     <button class="btn" id="copy-btn">📋 Copy Report</button>
     <span class="copy-msg" id="copy-msg">Copied</span>
   </div>
 </div>
 
-<nav style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px;padding:10px 14px;background:#0c1018;border:1px solid #1a2430;border-radius:8px">
+<nav aria-label="Site navigation" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px;padding:10px 14px;background:#0c1018;border:1px solid #1a2430;border-radius:8px">
 <a href="/bridge.html" style="color:#7a8aa0;text-decoration:none;padding:6px 14px;border-radius:4px;font-size:0.95rem">Bridge</a>
-<a href="/starmap.html" style="color:#7a8aa0;text-decoration:none;padding:6px 14px;border-radius:4px;font-size:0.95rem">Star Map</a>
+<a href="/galaxy-map.html" style="color:#7a8aa0;text-decoration:none;padding:6px 14px;border-radius:4px;font-size:0.95rem">Galaxy Map</a> <a href="/starmap.html" style="color:#7a8aa0;text-decoration:none;padding:6px 14px;border-radius:4px;font-size:0.95rem">Star Map</a>
 <a href="/" style="color:#7a8aa0;text-decoration:none;padding:6px 14px;border-radius:4px;font-size:0.95rem">Simulator</a>
 <a href="/simulation.html" style="color:#7a8aa0;text-decoration:none;padding:6px 14px;border-radius:4px;font-size:0.95rem">Live Sim</a>
 <a href="/adult.html" style="color:#7a8aa0;text-decoration:none;padding:6px 14px;border-radius:4px;font-size:0.95rem">Control</a>
@@ -174,12 +176,12 @@ p{margin:0 0 8px 0}
 <a href="/spectator.html" style="color:#e8edf5;text-decoration:none;padding:6px 14px;border-radius:4px;font-size:0.95rem;background:#27384f;font-weight:700">Spectator</a>
 </nav>
 
-<div id="warn" class="warn">⚠ API failures detected</div>
+    <div id="warn" class="warn" role="alert">⚠ API failures detected</div>
 
-<div id="system-line" class="system-line">
-  Loading behavior state…
-  <small>Simple mode shows behavior first. API calls and raw logs are under Debug.</small>
-</div>
+    <div id="system-line" class="system-line" role="status" aria-live="polite" aria-atomic="true">
+      Loading behavior state…
+      <small>Simple mode shows behavior first. API calls and raw logs are under Debug.</small>
+    </div>
 
 <details class="debug-drawer" id="debug-drawer">
   <summary id="debug-summary">Debug drawer — API health, models, raw calls</summary>
@@ -214,6 +216,33 @@ p{margin:0 0 8px 0}
 <script>
 const $ = id => document.getElementById(id);
 const REFRESH_MS = 30000;
+
+// Backoff-enabled poller: self-schedules with setTimeout, widening the delay
+// when a refresh fails (no data) and resetting to base on success. Prevents
+// hammering a slow/dead backend. Returns a {stop:fn} handle.
+let _backoffDelay = REFRESH_MS;
+let _backoffTimer = null;
+function scheduleNext(fn, baseMs){
+  if(_backoffTimer){ clearTimeout(_backoffTimer); _backoffTimer=null; }
+  _backoffTimer = setTimeout(()=>{ fn(); }, Math.min(_backoffDelay, 300000));
+}
+function pollWithBackoff(fn, baseMs){
+  function tick(){
+    const ok = (async ()=>{
+      await fn();
+      return !!lastData || viewMode==='institutions';
+    })();
+    ok.then(good=>{
+      _backoffDelay = good ? baseMs : Math.min(_backoffDelay*2, 300000);
+      scheduleNext(tick, baseMs);
+    }).catch(()=>{
+      _backoffDelay = Math.min(_backoffDelay*2, 300000);
+      scheduleNext(tick, baseMs);
+    });
+  }
+  tick();
+  return { stop(){ if(_backoffTimer){ clearTimeout(_backoffTimer); _backoffTimer=null; } } };
+}
 let timer = null;
 let lastData = null;
 let viewMode = 'both';
@@ -677,7 +706,7 @@ function renderBehaviorCard(npc){
           <div class="behavior-name">${esc(npc.name)}</div>
           <div class="behavior-meta">${esc(npc.char_id)} · mood: ${esc(npc.mood||'unknown')} · NPC acted ${acted}</div>
         </div>
-        <div><span class="icon ${s.fail>s.ok*0.3?'icon-red':'icon-green'}"></span><span class="muted">live</span></div>
+        <div><span class="icon ${s.fail>s.ok*0.3?'icon-red':'icon-green'}" role="img" aria-label="${s.fail>s.ok*0.3?'status degraded - failures detected':'status healthy'}"></span><span class="muted">live</span></div>
       </div>
 
       <div class="plain-state">${esc(behaviorStateSentence(npc))}</div>
@@ -1216,7 +1245,7 @@ function renderInstitutions(){
       ${activeCards || '<div class="empty-card">No active institutions.</div>'}
     </section>
     <section class="comm-panel" style="margin-top:14px">
-      <h2 class="collapse-header" style="cursor:pointer;user-select:none" onclick="const b=this.nextElementSibling;this.classList.toggle('open');b.classList.toggle('show')">
+      <h2 class="collapse-header" role="button" tabindex="0" style="cursor:pointer;user-select:none" onclick="const b=this.nextElementSibling;this.classList.toggle('open');b.classList.toggle('show')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click()}">
         Proposed Institutions <span style="color:#f1c40f;font-size:1.1rem">${proposedInsts.length}</span>
         <span style="font-size:0.85rem;color:#5a6a80;margin-left:8px">click to expand</span>
       </h2>
@@ -1300,16 +1329,16 @@ document.querySelectorAll('[data-mode]').forEach(btn=>{
       if(timer) clearInterval(timer);
       timer = null;
       load();
-      timer = setInterval(load, 15000);
+      timer = pollWithBackoff(load, 15000);
     } else     if(viewMode==='institutions'){
       instCompletedOffset = 0;
       loadInstitutions(0).then(()=>{ $('content').innerHTML = renderInstitutions(); });
-      timer = setInterval(()=>{ loadInstitutions(instCompletedOffset).then(()=>{ $('content').innerHTML = renderInstitutions(); }); }, 15000);
+      timer = pollWithBackoff(()=>{ loadInstitutions(instCompletedOffset).then(()=>{ $('content').innerHTML = renderInstitutions(); }); }, 15000);
     } else {
       if(timer) clearInterval(timer);
       timer = null;
       load();
-      timer = setInterval(load, REFRESH_MS);
+      timer = pollWithBackoff(load, REFRESH_MS);
     }
   };
 });
@@ -1347,11 +1376,12 @@ $('refresh-btn').onclick = ()=>{
 
 if(viewMode==='institutions'){
   loadInstitutions(0).then(()=>{ $('content').innerHTML = renderInstitutions(); });
-  timer = setInterval(()=>{ loadInstitutions(instCompletedOffset).then(()=>{ $('content').innerHTML = renderInstitutions(); }); }, 15000);
+  timer = pollWithBackoff(()=>{ loadInstitutions(instCompletedOffset).then(()=>{ $('content').innerHTML = renderInstitutions(); }); }, 15000);
 } else {
   load();
-  timer = setInterval(load, REFRESH_MS);
+  timer = pollWithBackoff(load, REFRESH_MS);
 }
 </script>
+</main>
 </body>
 </html>
