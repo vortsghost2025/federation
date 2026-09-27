@@ -60,6 +60,25 @@ def redis_set(key, value):
     _run("SET", key, str(value))
 
 
+# ── Counters & Expiry ──
+
+
+def redis_incr(key):
+    """INCR key — returns new integer value, 0 on error."""
+    out, rc = _run("INCR", key)
+    if rc == 0 and out:
+        try:
+            return int(out)
+        except ValueError:
+            pass
+    return 0
+
+
+def redis_expire(key, seconds):
+    """EXPIRE key seconds."""
+    _run("EXPIRE", key, int(seconds))
+
+
 # ── Hash ──
 
 
@@ -108,23 +127,17 @@ def redis_hget(key, field):
 
 
 def redis_scan_iter(pattern):
-    """SCAN for keys matching pattern — returns list of key names."""
-    cursor = "0"
-    keys = []
-    while True:
-        out, rc = _run("SCAN", cursor, "MATCH", pattern, "COUNT", "200")
-        if rc != 0 or not out:
-            break
-        lines = out.split("\n")
-        cursor = lines[0].strip() if lines else "0"
-        if len(lines) > 1:
-            for k in lines[1:]:
-                k = k.strip()
-                if k:
-                    keys.append(k)
-        if cursor == "0":
-            break
-    return keys
+    """SCAN for keys matching pattern — returns list of key names.
+
+    Single `redis-cli --scan` subprocess pass (one docker exec per pattern).
+    Previously one docker exec per SCAN page (COUNT 200), which meant ~240
+    execs per pattern at dbsize ~48k (~9 min scan storm before every
+    fallback nuclear restart). Same return contract, ~100x fewer execs.
+    """
+    out, rc = _run("--scan", "--pattern", pattern)
+    if rc != 0 or not out:
+        return []
+    return [k.strip() for k in out.split("\n") if k.strip()]
 
 
 # ── TTL ──

@@ -147,8 +147,24 @@ Six more worker restarts, same proven mechanism (fallback cron finds LLM health 
 | 10 | 12:52:57 | 12:45:03 | 7m54s | no |
 | 11 | 14:38:23 | 14:30:03 | 8m20s | yes (14:38:34) |
 | 12 | 15:08:28 | 15:00:03 | 8m25s | no |
+| 13 | 15:55:44 | 15:45:03 | 10m41s | no |
 
-Evidence: VPS syslog stop lines (16 total = 12 restarts + 4 force continuations); `monitor:last_nuclear_reset` chain 12:45:03 -> 14:30:03 -> 15:00:03 (exact cron starts; stop = start + scan); health oscillation captured live (0 at 14:27:58 -> 100 at 14:36:39, self-healed in ~9 min with no intervention); fallback log totals reconciled: **1092 CRITICAL = 1091 RESTARTED + 1 FAILED**. The FAILED is a `docker compose restart worker` 120-second timeout at a 0.0-minute cooldown boundary (compose restart can hang when the worker is deep mid-tick). One WARNING correctly blocked a fire at 14.9-min remaining cooldown. Note: 15:00 fired exactly 30 min after 14:30 (cooldown-boundary racing). dbsize grew 47679 -> 48007, so the storm is ~1% worse than F1 measured.
+Evidence: VPS syslog stop lines (16 total through #12 = 12 restarts + 4 force continuations); `monitor:last_nuclear_reset` chain 12:45:03 -> 14:30:03 -> 15:00:03 (exact cron starts; stop = start + scan); health oscillation captured live (0 at 14:27:58 -> 100 at 14:36:39, self-healed in ~9 min with no intervention); fallback log totals reconciled: **1092 CRITICAL = 1091 RESTARTED + 1 FAILED**. The FAILED is a `docker compose restart worker` 120-second timeout at a 0.0-minute cooldown boundary (compose restart can hang when the worker is deep mid-tick). One WARNING correctly blocked a fire at 14.9-min remaining cooldown. Note: 15:00 fired exactly 30 min after 14:30 (cooldown-boundary racing). dbsize grew 47679 -> 48007, so the storm is ~1% worse than F1 measured.
+
+Restart 13 (15:55:44 from the 15:45:03 cron, 10m41s storm, no force line) is the last nuclear of the old regime - the tame (F8) deployed ~16:20 UTC.
+
+### F8. Fallback tame deployed + verified 2026-09-27 (~16:20 UTC)
+
+Changes (`federation-game/monitoring/`, local canonical edited first, LF endings): `redis_helper.redis_scan_iter` now does a single `redis-cli --scan` subprocess pass per pattern (was one docker exec per SCAN page); added `redis_incr` / `redis_expire` helpers. `fallback_recovery.py` now requires TWO consecutive sub-threshold reads: healthy reads clear strikes, strike 1 logs WARNING watch-only, strike 2 enters the unchanged cooldown+nuclear path, strikes reset on nuclear entry (success or failure). Strike key `monitor:nuclear_strikes`, TTL 3600. Deployed via scp with `.bak.20260927_tame` host backups - host-only files, zero container restarts, zero tick contact.
+
+| # | Test | Result |
+|---|---|---|
+| T1 | `py_compile` local (3.13) + VPS host python3 | **PASS** both |
+| T2 | md5 local=host | **PASS** (`2f9fc860` fallback, `30ffd931` helper) |
+| T3 | Live OK-path run (health 100) | **PASS** - OK line, no strike key created |
+| T4 | Full 4-pattern clear-scan, timed live at dbsize 48143 | **PASS** - 13.4s, 7 keys (was ~9 min storm) |
+| T5 | 20/20 stubbed drill of the real `run_check()` (OK, strike 1, strike 2 nuclear, restart, reset, cooldown block, recovery clear, restart-failure path) | **PASS** - exit 0 (3 initial FAILs were test-expectation bugs, code correct throughout) |
+| T6 | LIVE debut: 16:30 cron read health 0 under new code | **PASS** - `WARNING: strike 1/2, watching (no action)`; strikes=1, last_nuclear untouched at 15:45:03, worker unrestarted (old code would have fired restart #14) |
 
 ### F7. Correction to F row 1 (key name)
 
