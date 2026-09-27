@@ -70,6 +70,12 @@ let panX = 0, panY = 0;
 let dragging = false, dragStartX, dragStartY, panStartX, panStartY;
 let hoveredNode = null;
 let selectedNode = null;
+// --- Follow mode + NPC movement trails ---
+let followNode = null;
+const npcTrailHistory = new Map(); // node id -> [{x, y, t}]
+const TRAIL_MAX_SAMPLES = 48;
+const TRAIL_TTL_MS = 10 * 60 * 1000;
+const pendingFactionLabels = []; // faction labels deferred to collision pass
 let hoveredFaction = null;
 let canvas, ctx;
 let W, H;
@@ -173,6 +179,11 @@ function init() {
   canvas.addEventListener('mouseup', onMouseUp);
   canvas.addEventListener('wheel', onWheel);
   canvas.addEventListener('click', onClick);
+  canvas.addEventListener('dblclick', function (e) {
+    const rect = canvas.getBoundingClientRect();
+    const node = getNodeAt(e.clientX - rect.left, e.clientY - rect.top);
+    if (node && !node.sectorData) setFollowNode(node);
+  });
         canvas.addEventListener('dblclick', onDblClick);
 // SPATIAL-03A: Escape key deselects faction
 document.addEventListener('keydown', (e) => {
@@ -351,10 +362,76 @@ let _renderDiagnosticCount = 0;
     lastUpdate = Date.now();
     _sectorOwnerCache = {}; // SPATIAL-03A: clear sector owner cache on data refresh
     buildNodes();
+    recordNpcTrails();
+    if (followNode) {
+      const fp = nodes.find(n => n.id === followNode.id);
+      if (fp) followNode = fp; // re-point after rebuild so camera stays locked
+    }
     updateUI();
     if (!_hasAutoFit && nodes.length) fitView();
     _runRenderDiagnostic();
   }
+
+// --- NPC trail history: records positions across 5s polls so movement is visible ---
+function recordNpcTrails() {
+  const now = Date.now();
+  for (const n of nodes) {
+    if (!n || n.id == null || n.sectorData) continue; // sectors are not NPCs
+    if (!isFinite(n.x) || !isFinite(n.y)) continue;
+    let arr = npcTrailHistory.get(n.id);
+    if (!arr) { arr = []; npcTrailHistory.set(n.id, arr); }
+    const last = arr[arr.length - 1];
+    if (!last || Math.hypot(last.x - n.x, last.y - n.y) > 2) {
+      arr.push({ x: n.x, y: n.y, t: now });
+      while (arr.length > TRAIL_MAX_SAMPLES) arr.shift();
+    } else if (now - last.t > 60000) {
+      last.t = now; // refresh fade clock for stationary NPCs without duplicating points
+    }
+  }
+}
+
+// --- Follow mode: locks the camera onto one NPC across rebuilds and polls ---
+function setFollowNode(node) {
+  if (!node || node.sectorData) return;
+  followNode = node;
+  updateFollowUI();
+}
+function clearFollow() {
+  followNode = null;
+  updateFollowUI();
+}
+function toggleFollowSelected() {
+  if (followNode && selectedNode && followNode.id === selectedNode.id) clearFollow();
+  else if (selectedNode) setFollowNode(selectedNode);
+}
+function updateFollowUI() {
+  let chip = document.getElementById('follow-hud');
+  if (!chip) {
+    chip = document.createElement('button');
+    chip.id = 'follow-hud';
+    chip.setAttribute('aria-live', 'polite');
+    chip.style.cssText = 'position:fixed;top:10px;left:50%;transform:translateX(-50%);z-index:60;' +
+      'background:rgba(13,17,23,0.95);border:1px solid #4fc3f7;color:#4fc3f7;' +
+      'font:600 14px "Courier New",monospace;letter-spacing:1px;padding:8px 16px;' +
+      'border-radius:6px;cursor:pointer;box-shadow:0 0 12px rgba(79,195,247,0.35)';
+    chip.onclick = clearFollow;
+    document.body.appendChild(chip);
+  }
+  if (followNode) {
+    chip.textContent = '\u25C9 FOLLOWING ' + (followNode.name || followNode.id) + ' \u2014 CLICK OR ESC TO RELEASE';
+    chip.style.display = 'block';
+  } else {
+    chip.style.display = 'none';
+  }
+  const btnLabel = (followNode && selectedNode && followNode.id === selectedNode.id) ? '\u25A0 UNFOLLOW' : '\u25B6 FOLLOW';
+  ['npc-follow-btn', 'follow-btn'].forEach(function (id) {
+    const b = document.getElementById(id);
+    if (b) b.textContent = btnLabel;
+  });
+}
+document.addEventListener('keydown', function (e) {
+  if (e.key === 'Escape' && followNode) clearFollow();
+});
 
 // --- Render Diagnostic (extension/privacy blocker detection) ---
 function _runRenderDiagnostic() {
@@ -513,6 +590,25 @@ function _showDOMFallback() {
       html += '<div style="color:#ccc;font-size:12px;margin:2px 0;padding-left:8px">' +
         '<span style="color:#e0e0e0">' + esc(npc.name || npc.id) + '</span> ' +
         '<span style="color:' + catColor + '">(' + (npc.category || 'unknown') + ')</span></div>';
+    });
+    html += '</div>';
+  }
+
+  // Pair-founded areas (SPATIAL-04/dom.): list sectors the persistent
+  // councilor pair has co-founded, so the founded-sectors data surfaced by
+  // /map/data (founded_areas) is visible even when canvas rendering is
+  // blocked — and, in text form, readable by screen readers on an otherwise
+  // all-canvas map.
+  var founded = mapData.founded_areas || [];
+  if (founded.length > 0) {
+    html += '<div style="margin-bottom:12px;border-left:3px solid #ffd700;padding-left:12px">';
+    html += '<div style="font-weight:bold;color:#ffd700;font-size:14px;margin-bottom:4px">Pair-Founded Areas (' + founded.length + ')</div>';
+    founded.forEach(function(area) {
+      var by = area.founded_by ? ' by ' + esc(area.founded_by) : '';
+      var typ = area.region_type ? ' <span style="color:#888">(' + esc(area.region_type) + ')</span>' : '';
+      html += '<div style="color:#ccc;font-size:12px;margin:2px 0;padding-left:8px">' +
+        '<span style="color:#ffe28a">&#9733; ' + esc(area.name || area.area_id || 'unknown') + '</span>' +
+        typ + '<span style="color:#666">' + by + '</span></div>';
     });
     html += '</div>';
   }
@@ -1069,6 +1165,15 @@ function buildNodesSpatial() {
     }
     npcs = Array.from(npcMap.values());
   }
+  // Build a fast lookup of npc_id -> spatial location record so we can read
+  // movement_progress / destination_sector_id in the per-NPC render loop below.
+  // Without this the canvas sub-position was a static per-id hash and NPCs only
+  // visibly moved on the rare tick their sector_id actually flipped — making
+  // the starmap look frozen even though the backend was advancing every tick.
+  const npcLocMap = {};
+  for (const loc of npcLocations) {
+    npcLocMap[loc.npc_id] = loc;
+  }
   const factions = mapData.factions || {};
   const territories = mapData.faction_territories || [];
   const sectors = mapData.sectors || [];
@@ -1287,21 +1392,48 @@ function buildNodesSpatial() {
       const ringR = baseRadius + ring * ringSpacing;
       const angleStep = (Math.PI * 2) / Math.max(1, slotsInRing);
       const subAngle = slotInRing * angleStep + rng() * angleStep * 0.4;
-      const x = center.cx + jitterX + Math.cos(subAngle) * (ringR + rng() * 6);
-      const y = center.cy + jitterY + Math.sin(subAngle) * (ringR + rng() * 6);
+      // Orbit-ring placement around the anchor (faction centroid or sector center)
+      let orbitX = center.cx + jitterX + Math.cos(subAngle) * (ringR + rng() * 6);
+      let orbitY = center.cy + jitterY + Math.sin(subAngle) * (ringR + rng() * 6);
+
+      // SPATIAL-05: In-transit NPCs drift visually toward their destination
+      // sector centroid each tick. Reads movement_progress from npc_locations
+      // (already merged into npcLocMap above). Falls back to npc field if the
+      // location record is stale or missing.
+      const loc = npcLocMap[npc.id] || npc;
+      const destId = loc.destination_sector_id || '';
+      const progress = Number(loc.movement_progress);
+      const currentTask = loc.current_task || '';
+      const hasProgress = Number.isFinite(progress) && progress > 0.001;
+      const destPos = destId && destId !== secId ? spatialSectors[destId] : null;
+      let x = orbitX, y = orbitY, inTransit = false;
+      if (destPos && hasProgress) {
+        inTransit = true;
+        // Clamp progress to [0.05, 1.0] so an NPC that just departed is visibly
+        // a few pixels off the anchor, not perfectly overlapping it.
+        const p = Math.min(1.0, Math.max(0.05, progress));
+        x = orbitX + (destPos.cx - orbitX) * p;
+        y = orbitY + (destPos.cy - orbitY) * p;
+      }
+
       const age = npc.last_active ? (now - npc.last_active) : 9999;
       const activity = Math.max(0.2, 1 - age / 3600);
       // SPATIAL-03C: Smaller NPC dots — was 3+activity*5, now 2+activity*3
       const radius = 2 + activity * 3;
       const fColor = aff && factions[aff] ? factions[aff].color : '#9e9e9e';
+      // SPATIAL-05: Brighten NPCs that are actively moving so the eye catches motion.
+      const motionBoost = inTransit ? 0.4 : 0;
+      const finalRadius = radius + motionBoost;
       nodes.push({
-        id: npc.id, name: npc.name || npc.id, x, y, radius,
+        id: npc.id, name: npc.name || npc.id, x, y, radius: finalRadius,
         color: npc.mood_color || '#9e9e9e',
         npc, category: npc.category || 'unknown',
         faction: aff || null,
         activity, age,
         factionColor: fColor,
-        sectorId: secId
+        sectorId: secId,
+        inTransit, movementProgress: hasProgress ? progress : 0,
+        currentTask
       });
     });
   }
@@ -2149,13 +2281,20 @@ return a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y;
 function draw() {
   const t = performance.now();
   const vp = getViewParams();
+  pendingFactionLabels.length = 0;
   ctx.clearRect(0, 0, W, H);
 
   ctx.fillStyle = '#0a0a1a';
   ctx.fillRect(0, 0, W, H);
 
   ctx.save();
-  ctx.translate(panX, panY);
+  let _viewX = panX, _viewY = panY;
+  if (followNode && isFinite(followNode.x) && isFinite(followNode.y)) {
+    const _lpw = 284, _rsw = sidebarW || 420; // visible center = same math as fitView()
+    _viewX = (_lpw + (W - _lpw - _rsw)) / 2 - followNode.x * zoom;
+    _viewY = H / 2 - followNode.y * zoom;
+  }
+  ctx.translate(_viewX, _viewY);
   ctx.scale(zoom, zoom);
 
   // Background stars
@@ -2166,6 +2305,35 @@ function draw() {
     ctx.arc(s.x, s.y, s.r, 0, Math.PI * 2);
     ctx.fillStyle = `rgba(200,220,255,${alpha})`;
     ctx.fill();
+  }
+
+  // --- NPC movement trails: breadcrumb history across polls (world coords) ---
+  if (npcTrailHistory.size > 0) {
+    const nowT = Date.now();
+    for (const [tid, arr] of npcTrailHistory) {
+      if (arr.length < 2) continue;
+      const hot = (followNode && followNode.id === tid) || (selectedNode && selectedNode.id === tid);
+      for (let i = 1; i < arr.length; i++) {
+        const p0 = arr[i - 1], p1 = arr[i];
+        const age = (nowT - p1.t) / TRAIL_TTL_MS;
+        if (age > 1) continue;
+        const a = (1 - age) * (hot ? 0.9 : 0.3);
+        if (a <= 0.02) continue;
+        ctx.beginPath();
+        ctx.moveTo(p0.x, p0.y);
+        ctx.lineTo(p1.x, p1.y);
+        ctx.strokeStyle = hot ? `rgba(255,215,0,${a})` : `rgba(79,195,247,${a})`;
+        ctx.lineWidth = (hot ? 2.5 : 1.5) / zoom;
+        ctx.stroke();
+      }
+      const head = arr[arr.length - 1];
+      if ((nowT - head.t) / TRAIL_TTL_MS <= 1) {
+        ctx.beginPath();
+        ctx.arc(head.x, head.y, 3.5 / zoom, 0, Math.PI * 2);
+        ctx.fillStyle = hot ? 'rgba(255,215,0,0.95)' : 'rgba(79,195,247,0.7)';
+        ctx.fill();
+      }
+    }
   }
 
         // SPATIAL-03A: Adjacency lines — view-dependent rendering
@@ -2397,47 +2565,33 @@ ctx.setLineDash([]);
         }
       }
 
-// --- FACTION LABEL — SPATIAL-03C: large, bold, bordered box for instant readability ---
+// --- FACTION LABEL — SPATIAL-03C box, but DEFERRED to the collision pass ---
 const displayName = (fdata ? fdata.display_name : z.fid).toUpperCase();
 const labelFontSize = vp.labelSize; // 22px in territory mode
+const _prevFont = ctx.font, _prevAlign = ctx.textAlign;
 ctx.font = `bold ${labelFontSize}px Courier New`;
 ctx.textAlign = 'center';
 const labelTextW = ctx.measureText(displayName).width;
 const lx = z.labelX;
 const ly = z.labelY - 6;
 
-// SPATIAL-03C: Bordered background box with faction color accent line at top
+// SPATIAL-03C: bordered background box with faction color accent line at top
 const boxPad = 8;
 const boxW = labelTextW + boxPad * 2;
 const boxH = labelFontSize + boxPad * 2 + 16; // extra room for sub-label
 const boxX = lx - boxW / 2;
 const boxY = ly - labelFontSize - boxPad;
-// Dark fill
-ctx.fillStyle = `rgba(8,8,22,${0.85 * factionFade})`;
-ctx.fillRect(boxX, boxY, boxW, boxH);
-// Faction color accent line at top of box
-ctx.fillStyle = hexToRgba(z.color, 0.9 * factionFade);
-ctx.fillRect(boxX, boxY, boxW, 3);
-// Thin border around box
-ctx.strokeStyle = hexToRgba(z.color, 0.5 * factionFade);
-ctx.lineWidth = 1;
-ctx.strokeRect(boxX, boxY, boxW, boxH);
 
-// Faction name — bright and clear
-ctx.fillStyle = hexToRgba(z.color, (isHovered ? 1.0 : vp.labelAlpha) * factionFade);
-ctx.fillText(displayName, lx, ly);
-
-// Sub-label: owned sector count
+// Sub-label: owned sector count (measure with its own font)
 const sectorCount = (z.ownedSectors || []).length;
 const subLabel = sectorCount > 0 ? `${sectorCount} SECTOR${sectorCount !== 1 ? 'S' : ''}` : 'TERRITORY';
 const subFontSize = Math.max(12, labelFontSize - 6);
 ctx.font = `bold ${subFontSize}px Courier New`;
 const subLabelW = ctx.measureText(subLabel).width;
-// Sub-label background within the same box (slightly different shade)
-ctx.fillStyle = `rgba(8,8,22,${0.6 * factionFade})`;
-ctx.fillRect(lx - subLabelW / 2 - 4, ly + 4, subLabelW + 8, subFontSize + 6);
-ctx.fillStyle = hexToRgba(z.color, (isHovered ? 0.8 : 0.6) * factionFade);
-ctx.fillText(subLabel, lx, ly + 6 + subFontSize);
+ctx.font = _prevFont; ctx.textAlign = _prevAlign;
+
+// Defer painting: the node-loop collision pass draws it (priority 5 = blocks NPC labels)
+pendingFactionLabels.push({ lx, ly, displayName, labelFontSize, subLabel, subFontSize, subLabelW, boxX, boxY, boxW, boxH, color: z.color, fade: factionFade, isHovered: isHovered });
     } else {
       // --- CIRCLE FALLBACK (shouldn't happen with Voronoi, but safety) ---
       ctx.beginPath();
@@ -2765,6 +2919,16 @@ node._labelBox = null;
             });
         }
     }
+    // Faction labels join the pass at priority 5 (placed first, blocks NPC labels)
+    for (const fl of pendingFactionLabels) {
+        allLabels.push({
+            box: { x: fl.boxX, y: fl.boxY, w: fl.boxW, h: fl.boxH, priority: 5 },
+            factionLabel: fl,
+            node: null,
+            fontSize: fl.labelFontSize,
+            y: fl.ly
+        });
+    }
     // Sort by priority descending (highest priority first — gets drawn, blocks overlapping lower)
     allLabels.sort((a, b) => b.box.priority - a.box.priority);
 
@@ -2785,6 +2949,26 @@ node._labelBox = null;
 
     // Draw visible labels
     for (const lbl of visibleLabels) {
+        if (lbl.factionLabel) {
+            const f = lbl.factionLabel;
+            ctx.fillStyle = `rgba(8,8,22,${0.85 * f.fade})`;
+            ctx.fillRect(f.boxX, f.boxY, f.boxW, f.boxH);
+            ctx.fillStyle = hexToRgba(f.color, 0.9 * f.fade);
+            ctx.fillRect(f.boxX, f.boxY, f.boxW, 3);
+            ctx.strokeStyle = hexToRgba(f.color, 0.5 * f.fade);
+            ctx.lineWidth = 1;
+            ctx.strokeRect(f.boxX, f.boxY, f.boxW, f.boxH);
+            ctx.font = `bold ${f.labelFontSize}px Courier New`;
+            ctx.textAlign = 'center';
+            ctx.fillStyle = hexToRgba(f.color, (f.isHovered ? 1.0 : vp.labelAlpha) * f.fade);
+            ctx.fillText(f.displayName, f.lx, f.ly);
+            ctx.font = `bold ${f.subFontSize}px Courier New`;
+            ctx.fillStyle = `rgba(8,8,22,${0.6 * f.fade})`;
+            ctx.fillRect(f.lx - f.subLabelW / 2 - 4, f.ly + 4, f.subLabelW + 8, f.subFontSize + 6);
+            ctx.fillStyle = hexToRgba(f.color, (f.isHovered ? 0.8 : 0.6) * f.fade);
+            ctx.fillText(f.subLabel, f.lx, f.ly + 6 + f.subFontSize);
+            continue;
+        }
         const node = lbl.node;
         const isHov = hoveredNode === node;
         const isSel = selectedNode === node;
@@ -3179,10 +3363,86 @@ function toggleStarmapReadableMode() {
   if (on) {
     setLabelPreset('normal');
     if (labelMode !== 'important') setLabelMode('important');
+    // Also summon the structured text readout so screen-reader / TTS users
+    // get the full map as text even when the canvas renders (previously only
+    // shown when canvas was blocked). Reuses the same data builder as the
+    // DOM fallback. Non-destructive: opening readout never hides the canvas.
+    _showTextReadout();
   }
   draw();
 
   try { localStorage.setItem('fed_smap_readable', on ? 'true' : 'false'); } catch(e) {}
+}
+
+// Build the full structured text readout of the starmap (factions with their
+// NPCs + sector locations, unaffiliated figures, and pair-founded areas) into
+// a dedicated region a screen reader can announce. Mirrors the DOM-fallback
+// content so TTS users can ingest the map without the canvas.
+function _showTextReadout() {
+  var panel = document.getElementById('starmap-text-readout');
+  if (!panel) {
+    panel = document.createElement('div');
+    panel.id = 'starmap-text-readout';
+    panel.setAttribute('role', 'region');
+    panel.setAttribute('aria-live', 'polite');
+    panel.setAttribute('aria-label', 'Star map text readout');
+    // Mount directly after the canvas so the readout flows with the map.
+    var canvas = document.getElementById('starmap');
+    if (canvas && canvas.parentNode) {
+      canvas.parentNode.insertBefore(panel, canvas.nextSibling);
+    } else {
+      document.body.appendChild(panel);
+    }
+  }
+  if (!mapData) { panel.textContent = 'Map data not loaded yet.'; return; }
+
+  var npcs = mapData.npcs || [];
+  var factions = mapData.factions || {};
+  var npcLocations = mapData.npc_locations || [];
+  var founded = mapData.founded_areas || [];
+  var locationMap = {};
+  npcLocations.forEach(function(loc) { locationMap[loc.npc_id] = loc; });
+
+  var factionOrder = [
+    'research_division','military_command','diplomatic_corps',
+    'consciousness_collective','cultural_ministry','economic_council',
+    'exploration_initiative','preservation_society'
+  ];
+  var factionNames = {
+    research_division:'Research Division', military_command:'Military Command',
+    diplomatic_corps:'Diplomatic Corps', consciousness_collective:'Consciousness Collective',
+    cultural_ministry:'Cultural Ministry', economic_council:'Economic Council',
+    exploration_initiative:'Exploration Initiative', preservation_society:'Preservation Society'
+  };
+
+  var parts = ['Federation Galaxy text readout.'];
+  factionOrder.forEach(function(fid) {
+    var fName = factionNames[fid] || fid;
+    var fNpcs = npcs.filter(function(n){ return n.affiliation === fid; });
+    if (!fNpcs.length) return;
+    parts.push(fName + ': ' + fNpcs.length + ' NPCs.');
+    fNpcs.forEach(function(n) {
+      var loc = locationMap[n.id] || {};
+      var where = loc.sector_id ? ' in sector ' + loc.sector_id : (loc.sector_name ? ' in ' + loc.sector_name : '');
+      parts.push('  ' + (n.name || n.id) + (n.category ? ' (' + n.category + ')' : '') + where + '.');
+    });
+  });
+
+  var unaff = npcs.filter(function(n){ return factionOrder.indexOf(n.affiliation) === -1; });
+  if (unaff.length) {
+    parts.push('Unaffiliated: ' + unaff.length + ' figures.');
+    unaff.forEach(function(n){ parts.push('  ' + (n.name || n.id) + ' (' + (n.category||'unknown') + ').'); });
+  }
+
+  if (founded.length) {
+    parts.push('Pair-founded areas: ' + founded.length + '.');
+    founded.forEach(function(a){
+      parts.push('  ' + (a.name||a.area_id||'unknown') + (a.region_type ? ' (' + a.region_type + ')' : '') +
+        (a.founded_by ? ', founded by ' + a.founded_by : '') + '.');
+    });
+  }
+
+  panel.textContent = parts.join('\n');
 }
 
 function setLabelPreset(preset) {
