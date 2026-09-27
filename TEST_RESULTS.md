@@ -49,3 +49,13 @@ LOCAL commit window: 2026-09-26 23:27 -0400 (UTC 2026-09-27 03:27)
 
 Prior-session evidence (backend restoration, model remap, watchdog fix, Redis loop cleanup):
 see `.horizon/DELTA_LOG.md` entries dated 2026-09-27 (each line records change + verification).
+
+### D. Main-branch reconciliation (merge validation, 23:35 LOCAL)
+
+| # | Test | Result |
+|---|------|--------|
+| D1 | `git merge-tree` trial: conflict surface vs origin/main (35 commits) | **PASS** — only `docker-compose.yml` conflicted; 3 key py files auto-merged |
+| D2 | Compose conflict resolution audit: all main-side features present in ours (operator routes, `/environment` x2, allowlists, proxy-headers, forwarded-allow-ips, `172.16.2.7`) | **PASS** — resolved as ours = running VPS config |
+| D3 | `python -m py_compile` on all 28 staged .py files from merge | **PASS** — 28/28 |
+| D4 | YAML parse of merged compose (VPS python3 yaml.safe_load) | **PASS** — `YAML-PARSE OK` |
+| D5 | Semantic merge checks: staged llm_router contains main's OLLAMA_MAX_ACTIVE=2 combined with session model remap | **PASS** |
