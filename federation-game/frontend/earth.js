@@ -214,7 +214,9 @@ async function fetchFactions() {
   if (!data || !data.factions) return;
   const panel = document.getElementById('faction-panel');
   let html = '';
-  for (const f of data.factions) {
+  // Backend ships factions as an object keyed by id; page code wants an array.
+  const factions = Array.isArray(data.factions) ? data.factions : Object.values(data.factions);
+  for (const f of factions) {
     const inf = Math.min(100, Math.max(0, f.influence || f.power || 50));
     const color = inf > 70 ? 'var(--amber)' : inf > 40 ? 'var(--cyan)' : 'var(--dim)';
     html += `<div class="faction-row">
@@ -407,7 +409,7 @@ async function loadState() {
   var restore = btnSpinner(btn, 'Loading…');
   playTone(400, 0.1, 0.05);
   try {
-    const data = await apiFetch('/state/load');
+    const data = await apiFetch('/state/load', { method: 'POST' });
     if (data) { addComms('State restored from snapshot'); fetchState(); fetchWorldState(); fetchHistoryArc(); fetchConsciousness(); }
     else { showToast('Load failed', 'warn'); }
   } finally { restore(); }
@@ -416,8 +418,9 @@ async function loadState() {
 // ── Main Init ──
 async function init() {
   initCanvas();
-  // Initial data fetch (parallel)
-  await Promise.all([
+  // Initial data fetch (parallel) — allSettled so one failing fetch
+  // can never abort the rest or prevent the polling loop from starting.
+  await Promise.allSettled([
     fetchState(),
     fetchWorldState(),
     fetchPolitical(),
@@ -432,7 +435,7 @@ async function init() {
 
   // Polling loop
   setInterval(async () => {
-    await Promise.all([
+    await Promise.allSettled([
       fetchState(),
       fetchWorldState(),
       fetchPolitical(),

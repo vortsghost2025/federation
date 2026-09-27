@@ -33,7 +33,14 @@ logging.basicConfig(
 log = logging.getLogger("worker")
 
 # ── Redis ──────────────────────────────────────────────────
-r = redis.from_url(REDIS_URL, decode_responses=True)
+# Socket timeouts keep the worker from hanging indefinitely when Redis is slow
+# or unreachable; it degrades gracefully instead of blocking on first call.
+r = redis.from_url(
+    REDIS_URL,
+    decode_responses=True,
+    socket_connect_timeout=5,
+    socket_timeout=5,
+)
 
 # Initialize world state (if missing) – runs once at worker startup
 def init_world_state():
@@ -981,6 +988,83 @@ def update_environment():
         log.warning(f"Failed to update environment: {e}")
 
 
+# ── World perturbation ──────────────────────────────────────
+
+_WORLD_PERTURBATION_MARKER = "world_perturbation:applied"
+
+
+def apply_world_perturbation():
+    """One-shot env-gated world perturbation.
+
+    Reads ``WORLD_PERTURBATION`` (JSON) from the environment.  When set,
+    applies the requested ``world_state`` deltas and pushes a system
+    notification to every known NPC via ``npc:system_notifications:{char}``.
+    A Redis marker guarantees the perturbation fires only once even if the
+    worker restarts.
+    """
+    raw = os.getenv("WORLD_PERTURBATION", "").strip()
+    if not raw:
+        return
+    if r.get(_WORLD_PERTURBATION_MARKER):
+        log.info("World perturbation already applied — skipping")
+        return
+
+    try:
+        payload = json.loads(raw)
+    except (json.JSONDecodeError, TypeError):
+        log.warning("WORLD_PERTURBATION is not valid JSON — skipping")
+        return
+
+    if not isinstance(payload, dict):
+        log.warning("WORLD_PERTURBATION is not a JSON object — skipping")
+        return
+
+    if r.set(_WORLD_PERTURBATION_MARKER, "1", nx=True):
+        log.info("World perturbation marker acquired")
+    else:
+        log.info("World perturbation marker already held — skipping")
+        return
+
+    try:
+        updates = payload.get("world_state")
+        message = payload.get("message", "A world perturbation has occurred.")
+        notif_type = payload.get("type", "world_perturbation")
+
+        if isinstance(updates, dict) and updates:
+            safe = {str(k): str(v) for k, v in updates.items()}
+            r.hset("world_state", mapping=safe)
+            log.info("World perturbation applied to world_state: %s", list(safe.keys()))
+
+        npc_ids = set()
+        for key in r.scan_iter("npc_state:*", count=500):
+            npc_ids.add(key.replace("npc_state:", ""))
+        if not npc_ids:
+            for key in r.scan_iter("npc_mood:*", count=500):
+                npc_ids.add(key.replace("npc_mood:", ""))
+
+        notification = {
+            "type": notif_type,
+            "message": message,
+            "ts": int(time.time()),
+            "source": "world_perturbation",
+        }
+        pushed = 0
+        for char_id in npc_ids:
+            try:
+                r.rpush(f"npc:system_notifications:{char_id}", json.dumps(notification))
+                pushed += 1
+            except Exception:
+                pass
+        log.info("World perturbation pushed to %d NPCs", pushed)
+    except Exception as e:
+        log.warning(f"World perturbation failed: {e}")
+    finally:
+        if os.getenv("WORLD_PERTURBATION", "").strip():
+            log.warning(
+                "WORLD_PERTURBATION env var is still set — unset it after verifying the perturbation"
+            )
+
+
 # ── Health check ───────────────────────────────────────────
 
 
@@ -990,7 +1074,7 @@ def check_corrupted_npcs():
     (fed:npc_health:corrupted) so monitors can alert without spamming
     every tick."""
     try:
-        keys = r.keys("npc_state:*")
+        keys = list(r.scan_iter("npc_state:*", count=500))
         corrupted = []
         for key in keys:
             status = r.hget(key, "status")
@@ -1023,6 +1107,7 @@ def check_corrupted_npcs():
                 ),
             },
         )
+        r.expire("fed:npc_health:corrupted", 86400 * 7)
         if designed_only and not emergent:
             log.info(
                 f" Corrupted NPCs are designed antagonists only: {corrupted} (no alert)"
@@ -1053,7 +1138,7 @@ def process_redemptions():
     Reads npc:redeemed:<char_id> markers set by advacne_turn, assigns a quest
     via the quest engine, and clears the marker (only once)."""
     try:
-        markers = [k for k in r.keys("npc:redeemed:*")]
+        markers = [k for k in r.scan_iter("npc:redeemed:*", count=500)]
         if not markers:
             return
         from npc_quest_engine import NPCQuestEngine
@@ -1221,6 +1306,8 @@ def main():
         log.warning(" Institutions module not available for backfill")
     except Exception as e:
         log.warning(f" Backfill failed: {e}")
+
+    apply_world_perturbation()
 
     while running:
         try:

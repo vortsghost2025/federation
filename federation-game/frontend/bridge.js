@@ -952,10 +952,12 @@ function setSysBar(name, val, max, color) {
 
 function updateConsciousness(cs) {
   if (!cs || !cs.system_available) return;
-  setCSBar('coherence', cs.coherence, 1);
-  setCSBar('cs-stability', cs.stability, 1);
-  setCSBar('complexity', cs.complexity, 1);
-  setCSBar('awakeness', cs.awakeness, 1);
+  // /consciousness ships: morale, identity, anxiety, confidence, expansion_hunger
+  // (0-1 floats). Map onto the deck gauges with legacy-name fallbacks.
+  setCSBar('coherence', cs.coherence != null ? cs.coherence : cs.morale, 1);
+  setCSBar('cs-stability', cs.stability != null ? cs.stability : cs.identity, 1);
+  setCSBar('complexity', cs.complexity != null ? cs.complexity : cs.expansion_hunger, 1);
+  setCSBar('awakeness', cs.awakeness != null ? cs.awakeness : cs.confidence, 1);
   setCSBar('anxiety', cs.anxiety, 1, cs.anxiety > 0.6 ? 'var(--red)' : 'var(--amber)');
 }
 

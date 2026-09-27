@@ -214,3 +214,26 @@ Guard behavior confirmed live: transient dip at 16:30 = "strike 1/2, watching (n
 ### F7. Correction to F row 1 (key name)
 
 The cited key `fed:monitor:last_auto_restart` does not exist - no code in the repo references the `fed:`-prefixed name, and `redis_helper.py` applies no key prefix. The real key is `monitor:last_auto_restart`, written by `monitoring/auto_restart.py:101`. Its live value re-verified as `1790479805.84` = exactly 03:30:05 UTC (TTL -1, no expiry). Timestamp, attribution, and conclusion stand; only the key name in F row 1 was mistranscribed.
+
+### H. Legacy decisions + website audit completion (2026-09-27 ~21:00 UTC)
+
+Three delegated owner decisions ("just decide") executed.
+
+**Decision 1 — monitor loop: KEEP.** Read-only (0 restart verbs, proven in F2), 5-min cadence, rotated 1MB logs (769KB + 6.5MB rotated), live kilo 7.3.16 on VPS producing real pair diagnostics (latest report flagged the pair's state-blob corruption lead). Its kmux tmux session `fed-monitor` continues unchanged.
+
+**Decision 2 — drift sync (VPS→git).** worker.py: VPS 90 lines ahead (Redis socket timeouts 5s + complete env-gated world-perturbation feature with idempotency marker). npc_reflection.py: VPS has float-safe `_in_world_range` (old `in range(30,70)` breaks on floats) + quest read via hgetall (same WRONGTYPE class fixed in G2). Both synced VPS→local, md5-verified 903c41e5/71b19cf1, py_compile clean. No deploys/restarts (VPS already runs them).
+
+**Decision 3 — website audit: GO, executed.**
+
+| # | Item | Root cause | Fix | Verify |
+|---|---|---|---|---|
+| H1 | universe.html 12KB drift | Local git held a newer 41,482-byte version (committed in da3ab46 backup); VPS served older 30,033 | Deployed local→VPS with .bak.20260927 rollback | Playwright: renders clean, 0 console errors, sector list + orbit/zoom live |
+| H2 | earth.html stalled widgets | `for (const f of data.factions)` on a dict -> "not iterable" -> rejection inside Promise.all killed the setInterval polling loop before it registered | Coerce to array + both Promise.all→allSettled so no single fetch can kill the loop + /state/load GET→POST | 0 console errors; faction panel populated (10 rows); era LEGACY ERA |
+| H3 | bridge.html consciousness dead | updateConsciousness read cs.coherence/stability/complexity/awakeness which the API never ships (morale/identity/confidence/expansion_hunger) | Remapped with legacy fallbacks | coherence 70, awakeness 90, anxiety 20 (was 0/--) |
+| H4 | constellation legend/NPC mislist | /map/data built NPC list from npc_location:* Redis keys — faction hubs carry those keys too, so 8 PHANTOM "NPCs" (id=faction_id, e.g. "Economic Council") leaked into every map consumer; plus tick-text showed UNKNOWN (worker.status field never existed) | Backend: filter faction-hub ids (hkeys faction_dynamics) in map_endpoints; Frontend: status derived from worker.enabled | 48→40 NPCs, 0 phantoms; "TICK 13 · ONLINE"; 8-faction legend intact |
+| H5 | starmap3d contrast | #78909c text at 9-10px | Text→#b0bec5, 9px→11px, worldbar/faction-count 10→12px, JS label fallbacks brightened | Computed style: rgb(176,190,197) 11px |
+| H6 | index.html contrast | — | No defect found: LCARS orange/blue on black, opacities are decorative animations only | VERIFIED-CLEAN, no change made |
+
+**H-REGRESSION (caught + fixed same session):** my first map_endpoints deploy used a stale local base (md5 c1c6f72c) over a newer VPS version (b5980c42) — regressed three scan_iter perf fixes + the entire founded_areas section. Caught via affiliation-count verification, recovered from .bak.hubfilter_20260927, re-applied the hub filter onto the true base. LESSON (now Delta-logged): verify local-vs-VPS md5 on EVERY backend file before editing, not just known-drift ones.
+
+**H-AFFIL (deeper bug found under H4):** /map/data + /simulation/npcs/activity served affiliations only within 5 min of each tick — npc_faction_context keys (TTL=300) were the only live source; npc_profiles blob has no writer; backend roster carries affiliation=None for rival/neutral/enigma chars + companions (worker mutates its OWN singleton, not the backend's). Fix: Source-0 fallback in map_endpoints._enrich_affiliation + activity route — read the backend roster, then ARCHETYPE_FACTION (same deterministic mapping the worker applies per-tick). Both endpoints now 40/40 affiliated at any point in the tick cycle. md5 local=host=container: map_endpoints 1a516446, routes/simulation 844ffa9e. Custodian live on both: preservation_society, stern, 3 decisions + 3 actions.

@@ -433,7 +433,8 @@ setBar('resource', ws.resource_abundance, 100);
 
 const worker = mapData.worker || {};
 const tickCount = worker.tick_count || 0;
-const status = worker.status || 'unknown';
+// /map/data's worker object has no `status` field; derive from `enabled`
+const status = worker.status || (worker.enabled && worker.enabled !== '0' ? 'online' : 'unknown');
 document.getElementById('tick-text').textContent = `Tick ${tickCount} · ${status}`;
 
 // Highlight active world-state bars

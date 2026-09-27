@@ -673,6 +673,45 @@ def _enrich_affiliation(r, entry, profile_map):
     cid = entry.get("id", "")
     affiliation = None
 
+    # Source 0: authoritative in-memory roster (game_state.npc_system).
+    # Always fresh, covers every NPC including external agents, companions,
+    # and the Custodian. The Redis sources below are ephemeral
+    # (npc_faction_context TTL=300s, written only during faction ticks) or
+    # dead (npc_profiles has no writer), so without this fallback the map
+    # loses affiliations for most NPCs within minutes of each tick.
+    try:
+        from state import game_state as _gs
+        _char = _gs.npc_system.characters.get(cid)
+        if _char is not None:
+            affiliation = getattr(_char, "affiliation", None)
+            if not affiliation:
+                # Same deterministic archetype->faction mapping the worker's
+                # _build_npc_list applies during ticks (rival/neutral/enigma
+                # characters and companions carry archetype but no faction).
+                try:
+                    from simulation_operator import ARCHETYPE_FACTION as _AF
+                except ImportError:
+                    _AF = {
+                        "scholar": "research_division", "warrior": "military_command",
+                        "rogue": "economic_council", "mystic": "consciousness_collective",
+                        "leader": "diplomatic_corps", "sage": "cultural_ministry",
+                        "wanderer": "exploration_initiative", "hero": "military_command",
+                        "deceiver": "economic_council", "guardian": "preservation_society",
+                    }
+                _pt = getattr(getattr(_char, "personality_type", None), "value", None)
+                if _pt and _pt in _AF:
+                    affiliation = _AF[_pt]
+            if not entry.get("name") or entry["name"] == cid:
+                entry["name"] = getattr(_char, "name", None) or entry.get("name", cid)
+            _title = getattr(_char, "title", None)
+            if _title:
+                entry["title"] = _title
+            _arch = getattr(getattr(_char, "personality_type", None), "value", None)
+            if _arch:
+                entry["archetype"] = _arch
+    except Exception:
+        pass
+
     # Source 1: npc_profiles bulk blob
     if cid in profile_map:
         prof = profile_map[cid]
@@ -1114,11 +1153,11 @@ async def get_map_data(spatial: bool = True):
 
     # --- NPCs (each built in its own function call) ---
     try:
-        mood_keys = r.keys("npc_mood:*")
+        mood_keys = r.scan_iter("npc_mood:*", count=500)
         npc_ids = set(k.replace("npc_mood:", "") for k in mood_keys)
 
         # Also include spatial NPCs that might not have traditional mood keys
-        spatial_keys = r.keys("npc_location:*")
+        spatial_keys = r.scan_iter("npc_location:*", count=500)
         for key in spatial_keys:
             parts = key.split(":")
             if len(parts) >= 3 and parts[0] == "npc_location" and parts[1] != "sector":
@@ -1126,6 +1165,15 @@ async def get_map_data(spatial: bool = True):
                 npc_ids.add(npc_id)
 
         npc_ids = [nid for nid in npc_ids if not nid.startswith("test_")]
+
+        # Faction hubs also carry npc_location:* keys, but they are not NPCs.
+        # Without this filter they leak into /map/data as 8 phantom entries
+        # (id = faction id, no affiliation) that frontends render as stars.
+        try:
+            _faction_hub_ids = set(r.hkeys("faction_dynamics"))
+        except Exception:
+            _faction_hub_ids = set()
+        npc_ids = [nid for nid in npc_ids if nid not in _faction_hub_ids]
 
         enriched = []
         for cid in npc_ids:
@@ -1287,6 +1335,42 @@ async def get_map_data(spatial: bool = True):
         result.setdefault("discoveries", [])
         result["spatial_rendering_enabled"] = False
 
+    # --- Pair-founded areas (SPATIAL-04/dom.): expose which sectors the
+    # persistent councilor pair (char_001/char_306) has co-founded, so the
+    # starmap can render a "founded by pair" overlay instead of ignoring the
+    # npc_pair:*:areas hash entirely. Pulled from the live Redis hash so the
+    # map always reflects the pair's actual universe-building.
+    try:
+        _pair_areas = []
+        _area_keys = [k for k in (r.scan_iter("npc_pair:*:areas", count=500) if r else [])]
+        for _akey in _area_keys:
+            try:
+                _slug = _akey.replace("npc_pair:", "").replace(":areas", "")
+                _raws = r.hgetall(_akey) or {}
+                for _raw in _raws.values():
+                    try:
+                        _a = json.loads(_raw)
+                    except Exception:
+                        continue
+                    _pair_areas.append({
+                        "pair_slug": _slug,
+                        "area_id": _a.get("area_id", ""),
+                        "name": _a.get("name", ""),
+                        "region_type": _a.get("region_type", ""),
+                        "founded_by": _a.get("founded_by", ""),
+                        "danger_level": _a.get("danger_level", 0),
+                        "created_at": _a.get("created_at", ""),
+                    })
+            except Exception:
+                continue
+        if _pair_areas:
+            result["founded_areas"] = _pair_areas
+        else:
+            result["founded_areas"] = []
+    except Exception as _areas_err:
+        logger.warning("Founded-areas section failed: %s", _areas_err)
+        result.setdefault("founded_areas", [])
+
     return result
 
 
@@ -1324,7 +1408,7 @@ def _build_sim_context(r) -> str:
 
     # NPC count and moods
     try:
-        mood_keys = r.keys("npc_mood:*")
+        mood_keys = r.scan_iter("npc_mood:*", count=500)
         npc_ids = [
             k.replace("npc_mood:", "")
             for k in mood_keys

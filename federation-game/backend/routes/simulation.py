@@ -696,6 +696,23 @@ async def simulation_npcs_activity():
     Uses Redis pipelines: 5 batched calls instead of N+1 sequential."""
     _r = _get_observer_redis()
 
+    def _archetype_faction(character):
+        """Deterministic archetype->faction fallback (mirrors the worker's
+        _build_npc_list): rival/neutral/enigma characters and companions
+        carry an archetype but no explicit faction on the backend singleton."""
+        try:
+            from simulation_operator import ARCHETYPE_FACTION as _AF
+        except ImportError:
+            _AF = {
+                "scholar": "research_division", "warrior": "military_command",
+                "rogue": "economic_council", "mystic": "consciousness_collective",
+                "leader": "diplomatic_corps", "sage": "cultural_ministry",
+                "wanderer": "exploration_initiative", "hero": "military_command",
+                "deceiver": "economic_council", "guardian": "preservation_society",
+            }
+        _pt = getattr(getattr(character, "personality_type", None), "value", None)
+        return _AF.get(_pt) if _pt else None
+
     # Build NPC list from in-memory game state
     npc_chars = list(game_state.npc_system.characters.items())
     char_ids = [char_id for char_id, _ in npc_chars]
@@ -751,7 +768,7 @@ async def simulation_npcs_activity():
         npc_data = {
             "char_id": char_id,
             "name": character.name,
-            "affiliation": character.affiliation,
+            "affiliation": character.affiliation or _archetype_faction(character),
             "archetype": character.personality_type.value
             if hasattr(character, "personality_type")
             and hasattr(character.personality_type, "value")

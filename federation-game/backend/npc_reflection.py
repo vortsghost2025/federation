@@ -143,8 +143,14 @@ def _reflect_on_missing_context(npc_id, recent_decisions, inst_ctx, world_ctx, f
                     "why_needed": "Low action rate suggests I need better triggers to initiate institutional processes.",
                     "suggested_capability": "institution_trigger_context",
                 }
+    def _in_world_range(v):
+        try:
+            return 30 <= float(v) <= 70
+        except (TypeError, ValueError):
+            return False
+
     world_stable = all(
-        world_ctx.get(k, 50) in range(30, 70)
+        _in_world_range(world_ctx[k])
         for k in ("stability", "morale", "resource_abundance")
         if k in world_ctx
     )
@@ -317,10 +323,9 @@ def evaluate_decision_options(char_id, char_name, archetype, affiliation, mood="
     try:
         from npc_autonomy import _get_redis
         _qr = _get_redis()
-        _quest_data = _qr.get(f"npc_quests:active:{char_id}")
+        _quest_data = _qr.hgetall(f"npc_quests:active:{char_id}")
         if _quest_data:
-            _quest_list = json.loads(_quest_data)
-            has_active_quests = len(_quest_list) > 0
+            has_active_quests = len(_quest_data) > 0
     except Exception:
         pass
 
@@ -338,8 +343,7 @@ def evaluate_decision_options(char_id, char_name, archetype, affiliation, mood="
                 _recent_decisions.append(json.loads(_rd))
             except (json.JSONDecodeError, TypeError):
                 pass
-        _world_raw = _nr.get("world_state")
-        _world_ctx = json.loads(_world_raw) if _world_raw else {}
+        _world_ctx = _nr.hgetall("world_state")
         need_reflection = _reflect_on_missing_context(
             char_id, _recent_decisions, inst_ctx, _world_ctx,
             fulfilled_need_types=fulfilled_need_types,

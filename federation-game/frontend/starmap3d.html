@@ -25,7 +25,7 @@
   #scale-ctrl button { background: rgba(10,15,30,0.85); border: 1px solid rgba(79,195,247,0.4); color: #4fc3f7; padding: 4px 14px; border-radius: 4px; cursor: pointer; font: bold 10px Orbitron,sans-serif; letter-spacing: 1px; }
   #scale-ctrl button.active { background: rgba(79,195,247,0.2); border-color: rgba(79,195,247,0.8); color: #fff; }
   #view-ctrl { position: fixed; top: 80px; left: 50%; transform: translateX(-50%); z-index: 20; pointer-events: auto; display: flex; gap: 4px; }
-  #view-ctrl button { background: rgba(10,15,30,0.85); border: 1px solid rgba(79,195,247,0.3); color: #78909c; padding: 3px 10px; border-radius: 4px; cursor: pointer; font: 10px 'Share Tech Mono',monospace; }
+  #view-ctrl button { background: rgba(10,15,30,0.85); border: 1px solid rgba(79,195,247,0.3); color: #b0bec5; padding: 3px 10px; border-radius: 4px; cursor: pointer; font: 10px 'Share Tech Mono',monospace; }
   #view-ctrl button.active { background: rgba(79,195,247,0.15); border-color: rgba(79,195,247,0.6); color: #4fc3f7; }
   #search-box { position: fixed; top: 60px; left: 12px; z-index: 20; pointer-events: auto; }
   #search-box input { background: rgba(10,15,30,0.9); border: 1px solid rgba(79,195,247,0.3); color: #e2dfd0; padding: 4px 8px; border-radius: 4px; font: 11px 'Share Tech Mono',monospace; width: 160px; }
@@ -35,22 +35,22 @@
   @keyframes spin { to { transform: rotate(360deg); } }
   .css2d-label { pointer-events: none; white-space: nowrap; }
   .sector-label-3d { color: rgba(226,223,208,0.8); font: 11px 'Share Tech Mono',monospace; text-shadow: 0 0 6px rgba(0,0,0,0.9), 0 0 12px rgba(0,0,0,0.7); }
-  .npc-label-3d { font: 10px 'Share Tech Mono',monospace; text-shadow: 0 0 4px rgba(0,0,0,0.9); padding: 1px 4px; border-radius: 2px; }
+  .npc-label-3d { font: 11px 'Share Tech Mono',monospace; text-shadow: 0 0 4px rgba(0,0,0,0.9); padding: 1px 4px; border-radius: 2px; }
   .faction-label-3d { font: bold 13px Orbitron,sans-serif; letter-spacing: 2px; text-shadow: 0 0 8px rgba(0,0,0,0.9); padding: 3px 8px; border-radius: 3px; background: rgba(8,8,22,0.85); border: 1px solid rgba(79,195,247,0.3); }
   #scale-labels { position: fixed; bottom: 80px; left: 50%; transform: translateX(-50%); z-index: 20; pointer-events: none; text-align: center; font: 10px 'Share Tech Mono',monospace; color: #4fc3f7; opacity: 0; transition: opacity 0.5s; }
   #scale-label-primary { font: bold 12px Orbitron,sans-serif; letter-spacing: 2px; margin-bottom: 2px; }
-  #scale-label-secondary { font-size: 9px; color: #78909c; }
+  #scale-label-secondary { font-size: 11px; color: #b0bec5; }
   #worldbar-content { display: flex; gap: 8px; padding: 8px 12px; background: rgba(10,15,30,0.85); border-bottom: 1px solid rgba(79,195,247,0.15); align-items: center; }
-  .worldbar-stat { font-size: 10px; color: #78909c; }
+  .worldbar-stat { font-size: 12px; color: #b0bec5; }
   .worldbar-stat strong { color: #4fc3f7; }
   #detail-name { color: #ffd700; font: bold 14px Orbitron,sans-serif; margin-bottom: 4px; }
   #detail-rows { font-size: 11px; line-height: 1.5; }
-  #sidebar h3 { color: #4fc3f7; font: 10px Orbitron,sans-serif; letter-spacing: 1px; margin: 8px 0 4px; }
+  #sidebar h3 { color: #4fc3f7; font: 11px Orbitron,sans-serif; letter-spacing: 1px; margin: 8px 0 4px; }
   .faction-row { display: flex; align-items: center; gap: 6px; margin: 2px 0; cursor: pointer; padding: 2px 4px; border-radius: 3px; }
   .faction-row:hover { background: rgba(79,195,247,0.1); }
   .faction-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
   .faction-name { font-size: 11px; }
-  .faction-count { font-size: 10px; color: #78909c; margin-left: auto; }
+  .faction-count { font-size: 12px; color: #b0bec5; margin-left: auto; }
 </style>
 </head>
 <body>
@@ -380,7 +380,7 @@ function renderTerritories(){
   });
   Object.entries(factionSectors).forEach(([fid,secs])=>{
     if(secs.length<2)return;
-    const color=FACTION_COLORS[fid]||'#78909c';
+    const color=FACTION_COLORS[fid]||'#b0bec5';
     const pts2d=secs.map(s=>new THREE.Vector2((s.x||0)*POS_SCALE,(s.y||0)*POS_SCALE));
     const hull=convexHull2D(pts2d);
     if(hull.length<3)return;
@@ -446,7 +446,7 @@ function renderNpcs(){
       const py=2+Math.sin(idx*2.3)*1.5;
       const pz=(sec.y||0)*POS_SCALE+Math.sin(angle)*spread;
       const moodCol=MOOD_COLORS[npc.mood||'neutral']||MOOD_COLORS.neutral;
-      const factionCol=FACTION_COLORS[npc.faction_id]||'#78909c';
+      const factionCol=FACTION_COLORS[npc.faction_id]||'#b0bec5';
       const g=new THREE.SphereGeometry(0.14,10,10);
       const m=new THREE.MeshPhongMaterial({color:new THREE.Color(moodCol),emissive:new THREE.Color(moodCol),emissiveIntensity:0.5,transparent:true,opacity:0.95});
       const mesh=new THREE.Mesh(g,m);
@@ -601,7 +601,7 @@ function updateSidebar(){
   let h='<h3>FACTIONS</h3>';
   if(data.factions){
     Object.entries(data.factions).forEach(([id,f])=>{
-      const c=FACTION_COLORS[id]||'#78909c';
+      const c=FACTION_COLORS[id]||'#b0bec5';
       const count=data.faction_territories?data.faction_territories.filter(t=>t.faction_id===id).length:0;
       h+=`<div class="faction-row" onclick="focusFaction('${id}')"><span class="faction-dot" style="background:${c};box-shadow:0 0 6px ${c}"></span><span class="faction-name" style="color:${c}">${f.name||id}</span><span class="faction-count">${count}</span></div>`;
     });
@@ -610,7 +610,7 @@ function updateSidebar(){
   if(data.npcs){
     data.npcs.forEach(npc=>{
       const mc=MOOD_COLORS[npc.mood||'neutral']||MOOD_COLORS.neutral;
-      const fc=FACTION_COLORS[npc.faction_id]||'#78909c';
+      const fc=FACTION_COLORS[npc.faction_id]||'#b0bec5';
       h+=`<div class="faction-row" onclick="focusNpc('${npc.id}')" style="font-size:10px"><span class="faction-dot" style="background:${mc};border:1.5px solid ${fc}"></span><span class="faction-name" style="color:${mc}">${npc.name||npc.id}</span></div>`;
     });
   }
@@ -649,7 +649,7 @@ function showDetail(npc,sec){
   el.style.display='block';
   document.getElementById('detail-name').textContent=npc.name||npc.id;
   const mc=MOOD_COLORS[npc.mood||'neutral']||MOOD_COLORS.neutral;
-  const fc=FACTION_COLORS[npc.faction_id]||'#78909c';
+  const fc=FACTION_COLORS[npc.faction_id]||'#b0bec5';
   let rows='';
   rows+=`<div style="color:${fc}">${(npc.faction_id||'unaffiliated').replace(/_/g,' ')}</div>`;
   rows+=`<div style="color:${mc}">Mood: ${npc.mood||'neutral'}</div>`;
