@@ -166,6 +166,26 @@ Changes (`federation-game/monitoring/`, local canonical edited first, LF endings
 | T5 | 20/20 stubbed drill of the real `run_check()` (OK, strike 1, strike 2 nuclear, restart, reset, cooldown block, recovery clear, restart-failure path) | **PASS** - exit 0 (3 initial FAILs were test-expectation bugs, code correct throughout) |
 | T6 | LIVE debut: 16:30 cron read health 0 under new code | **PASS** - `WARNING: strike 1/2, watching (no action)`; strikes=1, last_nuclear untouched at 15:45:03, worker unrestarted (old code would have fired restart #14) |
 
+### G. Simulation page 6-issue fix (2026-09-27)
+
+Report (Sean, live page): raw char IDs in logs, mid-word truncation, 39-vs-40 count, covert 1-vs-0, Custodian unknown, MAIN RISK showing a positive. All six root-caused against live data before editing; backend roster/endpoints proven complete (40/40 named, char_500 present) so five fixes are frontend-only.
+
+1. ID leak: LLM-written thoughts/actions/descriptions embed raw IDs (char_101 x3 etc. in live activity text); six render paths ignored the name fields the backend already sends. Fix: `npcDisplay()` (named fields -> char_id-to-roster map -> description-lead extraction with adverb-tolerant verbs incl. aligned/made) + `resolveIds()` free-text pass, applied at 28 render sites (logs, cards, feeds, briefing, sitroom, chains, broadcasts).
+2. Truncation: hard `slice(0,217/137)` cut mid-word ("differing v"). Fix: `truncateWords()` word-boundary helper.
+3. Count: static "39 autonomous NPCs" HTML predates char_500; every dynamic count reads 40. Fix: number bound to live `npcCount` via span.
+4. Covert 1-vs-0: Shadowborn (comp_010) correctly bucketed as Covert Op, but name extraction failed (no source_char_name, verb 'aligned' missing from list) -> rendered "0 Covert Ops". Quick Status counted it from a different event copy. Fix: resolver consults char_name + char_id map (same helper as #1).
+5. Custodian: NOT a bug - deliberately excluded from cognition via `EXTERNAL_AGENT_NPCS=char_001,char_306,char_500` (VPS `.env:46`, matching its read-only mandate). Mood key never written in 7 weeks (verified: no `npc_mood:char_500`, zero backend mentions) while decrees/quests/location all knew it. Per owner go-ahead ("follow your recommendation"): enrolled - env trimmed to char_001,char_306 (backup `.env.bak.custodian_20260927`), backend+worker recreated between ticks, new env verified in both containers. Proof within 2 ticks: mood rotating protective->alarmed->protective + first Custodian thought recorded.
+6. MAIN RISK: `worstScore` init -1 let clean metrics (score 0) "win", so the healthy default was unreachable. Fix: init 0 (only flagged metrics score 2+).
+
+| # | Test | Result |
+|---|---|---|
+| V1 | `node --check` (caught + fixed two `*/`-in-comment syntax breaks from the new helpers) | **PASS** |
+| V2 | 17/17 node harness loading the real file (resolver incl. comp IDs/unknown passthrough, truncation incl. Sean's examples, risk calm/stressed/morale-crisis) | **PASS** exit 0 |
+| V3 | Playwright live: overview "40", zero raw IDs page-wide, Main Risk default with morale at 100, Covert Ops named, zero console errors | **PASS** (one transient char_005 sighting, gone on re-run; uncovered briefing-summary/headline paths patched in second pass) |
+| V4 | Custodian tick proof: mood rotation + first thought | **PASS** (decisions/actions still 0, expected next ticks - thought implies a decision object existed) |
+
+Deploy: `simulation.js`/`simulation.html` scp'd to `public_html` (md5 local=host, nginx serves immediately, no restart). No backend code changed (env-only). Observed side note (not fixed, out of scope): Top Recent Events duplicates names ("Kyren Frostblade Kyren Frostblade ordered...") because descriptions already lead with the name.
+
 ### F7. Correction to F row 1 (key name)
 
 The cited key `fed:monitor:last_auto_restart` does not exist - no code in the repo references the `fed:`-prefixed name, and `redis_helper.py` applies no key prefix. The real key is `monitor:last_auto_restart`, written by `monitoring/auto_restart.py:101`. Its live value re-verified as `1790479805.84` = exactly 03:30:05 UTC (TTL -1, no expiry). Timestamp, attribution, and conclusion stand; only the key name in F row 1 was mistranscribed.

@@ -8,4 +8,5 @@ Key decisions that constrain future architecture and workflow. Check before chan
 | 2026-09-27 | **PENDING owner:** keep or stop `federation-game-monitor.sh` periodic kilo loop | Review TEST_RESULTS §F5(a); verify-mode 2026-09-27 confirmed script has 0 restart verbs (read-only) |
 | 2026-09-27 | **PENDING owner:** VPS-vs-local `worker.py` / `npc_reflection.py` drift direction — sync to git or leave | Review TEST_RESULTS §F5(b); md5s still diverged as of 2026-09-27 |
 | 2026-09-27 | **DONE:** tamed `fallback_recovery.py` (two-strike guard + single-pass `--scan`) — deployed host-only, zero container restarts | Sean go-ahead 2026-09-27; TEST_RESULTS §F8 for verification |
+| 2026-09-27 | **DONE:** Custodian enrolled in cognition (removed char_500 from `EXTERNAL_AGENT_NPCS`) — exclusion was deliberate per read-only mandate, owner chose enrollment | Sean "follow your recommendation" 2026-09-27; TEST_RESULTS §G item 5 |
 | 2026-09-27 | **PENDING owner:** website audit leftovers (earth/bridge/constellation/starmap3d/index/universe items) — go or hold | Website audit VERIFY list; galaxy-map + nav deploy already live |

@@ -127,7 +127,7 @@ function computeVerdict(status) {
     {k:'morale',dir:'low'},{k:'stability',dir:'low'},{k:'threat',dir:'high'},
     {k:'tension',dir:'high'},{k:'anomaly',dir:'high'},{k:'cascade',dir:'high'}
   ];
-  var worstRisk = null, worstScore = -1;
+  var worstRisk = null, worstScore = 0; // 0 = clean: only flagged metrics (score 2+) can win, so the healthy default below stays reachable
   for (var r = 0; r < riskOrder.length; r++) {
     var rk = riskOrder[r], si = severityInfo(rk.k, m[rk.k]);
     var sc = si.cls.indexOf('critical')!==-1 ? 4 : (si.cls.indexOf('severe')!==-1 ? 3 : (si.cls.indexOf('breach')!==-1 ? 3 : (si.cls.indexOf('overheating')!==-1 ? 3 : (si.cls.indexOf('high')!==-1 ? 2 : (si.cls.indexOf('unstable')!==-1 ? 2 : (si.cls.indexOf('hot')!==-1 ? 2 : 0))))));
@@ -281,7 +281,7 @@ function updateFedBrief() {
   }
 
   var headline = document.getElementById('brief-headline');
-  if (headline) headline.textContent = v.headline;
+  if (headline) headline.textContent = resolveIds(v.headline);
 
   var devEl = document.getElementById('brief-developments');
   if (devEl) {
@@ -296,7 +296,7 @@ function updateFedBrief() {
       var ev=allEvents[ei]; if(!ev) continue;
       var desc=ev.description||ev.text||ev.summary||'';
       if(!desc||seen[desc]) continue; seen[desc]=true;
-      devHtml += '<span class="brief-dev-item">'+esc(desc.substring(0,100))+'</span>'; shown++;
+      devHtml += '<span class="brief-dev-item">'+esc(resolveIds(desc.substring(0,100)))+'</span>'; shown++;
     }
     devEl.innerHTML = devHtml;
   }
@@ -324,7 +324,7 @@ var cascadePct = temp>1.5 ? temp : (temp*100);
 metrics.cascade = cascadePct;
 var v = computeVerdict(status);
 
-document.getElementById('sit-current-text').textContent = v.headline;
+document.getElementById('sit-current-text').textContent = resolveIds(v.headline);
 document.getElementById('sit-risk-text').innerHTML = v.mainRisk;
 
 var watchItems = [];
@@ -599,6 +599,52 @@ function npcNameMap() {
   return map;
 }
 
+/* Resolve raw character IDs (char_101) and companion IDs (comp_010) to
+   display names inside free text.
+   Backend ships both IDs and names, but LLM-written thoughts, actions and
+   descriptions often embed raw IDs. Unknown IDs pass through. */
+function resolveIds(text) {
+  if (text == null) return '';
+  var s = String(text);
+  if (s.indexOf('char_') === -1 && s.indexOf('comp_') === -1) return s;
+  var m = npcNameMap();
+  return s.replace(/\b((?:char|comp)_\d+)\b/g, function(id) { return m[id] || id; });
+}
+
+/* Best display name for an event/log object: named fields first, then
+   ID-to-roster-map lookup, then description-lead extraction. Never returns
+   a raw character or companion ID when the roster knows the name. */
+function npcDisplay(ev) {
+  if (!ev) return '';
+  if (typeof ev === 'string') return ev;
+  if (typeof ev !== 'object') return '';
+  var nm = ev.source_char_name || ev.character_name || ev.char_name || ev.source_name || ev.npc_name || '';
+  var looksId = function(s){ return typeof s === 'string' && /^(char|comp)_\d+$/i.test(s); };
+  var map = null;
+  function nameMap() { if (!map) map = npcNameMap(); return map; }
+  var id = ev.source_char_id || ev.char_id || ev.character_id || '';
+  if (!id && looksId(nm)) id = nm;
+  if (!id && looksId(ev.source)) id = ev.source;
+  if (id) { var hit = nameMap()[id]; if (hit) return hit; }
+  if (nm && !looksId(nm)) return nm;
+  if (typeof ev.source === 'string' && ev.source) return ev.source;
+  var desc = ev.description || '';
+  if (desc) {
+    var mt = desc.match(/^([A-Z][A-Za-z\s]+?)(?:\s+(?:\w+ly\s+)?(?:gathered|planted|acquired|set|stumbled|exchanged|published|conducted|led|enforced|blocked|increased|ordered|sensed|explored|returned|chart|discovered|sabotage|heist|vanish|smuggl|broke|repelled|rallied|issued|confront|challenged|intercept|infiltrat|aligned|align|made|built|created|completed|finished|found|drafted|authored))/);
+    if (mt && mt[1].trim().length > 2 && mt[1].trim().length < 40) return mt[1].trim();
+  }
+  return ev.name || '';
+}
+
+/* Truncate at a word boundary instead of mid-word. */
+function truncateWords(s, lim) {
+  s = String(s == null ? '' : s);
+  if (s.length <= lim) return s;
+  var cut = s.lastIndexOf(' ', lim);
+  if (cut < lim * 0.5) cut = lim;
+  return s.slice(0, cut) + '...';
+}
+
 function parseLogData(raw) {
   if (!raw) return {};
   if (typeof raw === 'object') return raw;
@@ -701,8 +747,8 @@ function summarizeNpcLog(log) {
     summary = firstLogText(data, ['description','message','text','action','value']) || logTextValue(log.raw) || 'recorded activity';
     why = firstLogText(data, ['reason','outcome','result']);
   }
-  if (summary.length > 220) summary = summary.slice(0,217) + '...';
-  if (why.length > 140) why = why.slice(0,137) + '...';
+  if (summary.length > 220) summary = truncateWords(summary, 220);
+  if (why.length > 140) why = truncateWords(why, 140);
   return {summary:summary,why:why,semantic:detectNpcSemanticType(log, summary)};
 }
 
@@ -731,8 +777,8 @@ function renderNpcRealityFeed() {
     var cls = ['decision','interaction','cognition','chat'].indexOf(log.type) !== -1 ? log.type : text.semantic;
     html += '<div class="nrf-item ' + esc(cls) + '">';
     html += '<div class="nrf-row"><span class="nrf-actor">' + esc(log.actor) + '</span><span class="nrf-type">' + esc(text.semantic || log.type) + '</span><span class="nrf-time">' + esc(formatLogTime(log.timestamp)) + '</span></div>';
-    html += '<div class="nrf-summary">' + esc(text.summary) + '</div>';
-    if (text.why) html += '<div class="nrf-why">' + esc(text.why) + '</div>';
+    html += '<div class="nrf-summary">' + esc(resolveIds(text.summary)) + '</div>';
+    if (text.why) html += '<div class="nrf-why">' + esc(resolveIds(text.why)) + '</div>';
     html += '</div>';
   }
   listEl.innerHTML = html;
@@ -747,15 +793,16 @@ function renderHumanBriefing() {
   var status = lastData.status || {};
   var v = computeVerdict(status);
   if (!lastData.status) headline.textContent = 'Federation is loading its living society.';
-  else headline.textContent = v.headline;
+  else headline.textContent = resolveIds(v.headline);
   var npcCount = normalizeNpcList(lastData.npcs).length || (lastData.npcDirectory ? lastData.npcDirectory.length : 47);
   what.textContent = npcCount + ' AI citizens, factions, and systems are thinking, reacting, and changing without direct player control.';
+  var onc = document.getElementById('overview-npc-count'); if (onc) onc.textContent = npcCount;
   var latestLog = lastData.npcRealityLogs && lastData.npcRealityLogs.length ? lastData.npcRealityLogs.slice().sort(function(a,b){return (b.score||0)-(a.score||0)})[0] : null;
   if (latestLog) {
     var s = summarizeNpcLog(latestLog);
     var actor = latestLog.actor;
     if (/^char_\d{3}$/.test(actor)) { var nm=npcNameMap(); actor = nm[actor] || actor; }
-    changed.textContent = actor + ': ' + s.summary;
+    changed.textContent = actor + ': ' + resolveIds(s.summary);
   } else {
     changed.textContent = 'Waiting for the next NPC decision, conversation, or cognition trace.';
   }
@@ -1008,7 +1055,7 @@ var card=document.createElement('div');card.className='faction-card';card.datase
       var stripStyle=document.createElement('style');stripStyle.className='cohesion-strip-style';
       stripStyle.textContent='[data-faction="'+uk+'"]::before{background:'+cohesionColor+'}';
       ucard.appendChild(stripStyle);
-      var act=ucard.querySelector('[data-field="action"]');if(act){var recentActions=uf.recent_actions||uf.recent_action||[];var actionText='';if(Array.isArray(recentActions)&&recentActions.length>0){var first=recentActions[0];actionText=typeof first==='string'?first:(first.action||first.description||'')}if(actionText){actionText=actionText.replace(/_/g,' ').replace(/\b\w/g,function(c){return c.toUpperCase()})}act.textContent=actionText}
+      var act=ucard.querySelector('[data-field="action"]');if(act){var recentActions=uf.recent_actions||uf.recent_action||[];var actionText='';if(Array.isArray(recentActions)&&recentActions.length>0){var first=recentActions[0];actionText=typeof first==='string'?first:(first.action||first.description||'')}if(actionText){actionText=actionText.replace(/_/g,' ').replace(/\b\w/g,function(c){return c.toUpperCase()})}act.textContent=resolveIds(actionText)}
       /* Highlight dangerous factions */
       ucard.classList.remove('faction-warning','faction-critical');
       if(cohesionPct<30){ucard.classList.add('faction-critical')}
@@ -1024,7 +1071,7 @@ var card=document.querySelector('[data-faction="'+fk+'"]');if(!card)return;
 var dsEl=card.querySelector('[data-field="detail-stances"]');
 if(dsEl){var html='<div style="font-size:0.8125rem;color:var(--dim);margin-bottom:4px;text-transform:uppercase;letter-spacing:1px">Stances</div>';for(var i=0;i<keys.length;i++){var otherK=keys[i];if(otherK===fk)continue;var rawStance=f.stances?f.stances[otherK]:null;var sc=stanceToClass(rawStance);var scColor=sc==='ally'?'#4CAF50':(sc==='enemy'?'#F44336':'#FFC107');var sl=stanceLabel(rawStance);var numVal=(typeof rawStance==='object'&&rawStance.value!=null)?' ('+(rawStance.value*100).toFixed(0)+'%)':'';html+='<div class="detail-stance-row"><span class="detail-stance-name">'+esc(FACTION_DISPLAY[otherK]||otherK)+'</span><span class="detail-stance-val" style="color:'+scColor+'">'+esc(sl)+numVal+'</span></div>'}dsEl.innerHTML=html}
 var dhEl=card.querySelector('[data-field="detail-history"]');
-if(dhEl){var history=f.recent_actions||f.action_history||[];var hhtml='<div style="font-size:0.8125rem;color:var(--dim);margin-bottom:4px;text-transform:uppercase;letter-spacing:1px">Recent Actions</div>';if(!history.length){hhtml+='<div style="font-size:0.8125rem;color:var(--dim)">No history available</div>'}else{for(var h=0;h<Math.min(history.length,8);h++){var a=history[h];var actionName=typeof a==='string'?a:(a.action||a.description||JSON.stringify(a));actionName=actionName.replace(/_/g,' ').replace(/\b\w/g,function(c){return c.toUpperCase()});var effectsStr='';if(typeof a==='object'&&a.effects){var effParts=[];for(var ek in a.effects){if(a.effects[ek]!==0)effParts.push(ek+':'+(a.effects[ek]>0?'+':'')+a.effects[ek])}if(effParts.length)effectsStr=' <span style="color:var(--cyan);font-size:0.75rem">['+esc(effParts.join(', '))+']</span>'}hhtml+='<div class="detail-action-item">'+esc(actionName)+effectsStr+'</div>'}}dhEl.innerHTML=hhtml}
+if(dhEl){var history=f.recent_actions||f.action_history||[];var hhtml='<div style="font-size:0.8125rem;color:var(--dim);margin-bottom:4px;text-transform:uppercase;letter-spacing:1px">Recent Actions</div>';if(!history.length){hhtml+='<div style="font-size:0.8125rem;color:var(--dim)">No history available</div>'}else{for(var h=0;h<Math.min(history.length,8);h++){var a=history[h];var actionName=typeof a==='string'?a:(a.action||a.description||JSON.stringify(a));actionName=actionName.replace(/_/g,' ').replace(/\b\w/g,function(c){return c.toUpperCase()});var effectsStr='';if(typeof a==='object'&&a.effects){var effParts=[];for(var ek in a.effects){if(a.effects[ek]!==0)effParts.push(ek+':'+(a.effects[ek]>0?'+':'')+a.effects[ek])}if(effParts.length)effectsStr=' <span style="color:var(--cyan);font-size:0.75rem">['+esc(effParts.join(', '))+']</span>'}hhtml+='<div class="detail-action-item">'+esc(resolveIds(actionName))+effectsStr+'</div>'}}dhEl.innerHTML=hhtml}
 }
 
 /* ═══ EVENT CHAIN COLLAPSING ═══ */
@@ -1047,7 +1094,7 @@ chainKey = 'game_' + subType;
 if (chainKey) {
 if (!chains[chainKey]) chains[chainKey] = { key: chainKey, events: [], origin: '', participants: {} };
 chains[chainKey].events.push(ev);
-var src = ev.source || ev.source_name || ev.character_name || ev.npc_name || ev.faction_id || '';
+var src = npcDisplay(ev) || ev.faction_id || '';
 if (src && typeof src === 'string') chains[chainKey].participants[src] = (chains[chainKey].participants[src] || 0) + 1;
 if (!chains[chainKey].origin) chains[chainKey].origin = ev.origin_event_type || ev.source_event_type || ev.cause || evType;
 } else {
@@ -1301,7 +1348,7 @@ if(evSource==='faction'){typeClass='faction-action';sourceLabel='FACTION';source
 else if(evSource==='cascade'){typeClass='cascade';sourceLabel='CASCADE';sourceClass='cascade'}
 else if(evSource==='broadcast'){typeClass='broadcast';sourceLabel='BROADCAST';sourceClass='broadcast'}
 var ts=ev.timestamp||ev.ts||ev.tick||ev.time||'';
-var desc=ev.description||ev.message||ev.text||ev.event||JSON.stringify(ev);
+var desc=resolveIds(ev.description||ev.message||ev.text||ev.event||JSON.stringify(ev));
 var cascadeDepth=ev.cascade_depth||ev.depth||ev.cascadeDepth;
 var cascadeHtml=cascadeDepth&&typeClass==='cascade'?'<span class="event-cascade-depth">D'+esc(String(cascadeDepth))+'</span>':'';
 var factionBorder=ev.faction_id&&FACTION_COLORS[ev.faction_id]?'border-left-color:'+FACTION_COLORS[ev.faction_id]:'';
@@ -1368,16 +1415,16 @@ var ml2=moodLabel(npc.mood),mc2=moodColorOf(npc.mood);
 var moodDot=ncard.querySelector('.npc-story-name .npc-mood');if(moodDot){moodDot.style.color=mc2;moodDot.textContent='\u25CF'}
 /* Status line */
 var statusEl=ncard.querySelector('.npc-story-status');
-if(statusEl){var acts=npc.recent_actions||npc.actions||[];if(acts.length){var aText=typeof acts[0]==='string'?acts[0]:(acts[0].description||acts[0].action_type||acts[0].action||'');statusEl.textContent=esc(aText)}else{statusEl.textContent='Status: '+ml2}}
+if(statusEl){var acts=npc.recent_actions||npc.actions||[];if(acts.length){var aText=typeof acts[0]==='string'?acts[0]:(acts[0].description||acts[0].action_type||acts[0].action||'');statusEl.textContent=esc(resolveIds(aText))}else{statusEl.textContent='Status: '+ml2}}
 /* Role line */
 var roleEl=ncard.querySelector('.npc-story-role');
 if(roleEl){var decs=npc.recent_decisions||npc.decisions||[];var roleText=decs.length?(decs[0].category||''):ml2;roleEl.textContent=roleText||ml2}
 /* Expanded detail */
 if(expandedNpc===nId){
 var thoughts=npc.recent_thoughts||npc.thoughts||[];var thoughtsEl=ncard.querySelector('[data-field="story-thoughts"]');
-if(thoughtsEl){if(Array.isArray(thoughts)&&thoughts.length){var thtml='';for(var t2=0;t2<Math.min(thoughts.length,3);t2++){var th=thoughts[t2];var thText=typeof th==='string'?th:(th.thought||th.text||JSON.stringify(th));thtml+='<div class="npc-story-thought">'+esc(thText)+'</div>'}thoughtsEl.innerHTML=thtml}else{thoughtsEl.innerHTML='<div style="font-size:0.8125rem;color:var(--dim);font-style:italic">No recent thoughts recorded</div>'}}
+if(thoughtsEl){if(Array.isArray(thoughts)&&thoughts.length){var thtml='';for(var t2=0;t2<Math.min(thoughts.length,3);t2++){var th=thoughts[t2];var thText=typeof th==='string'?th:(th.thought||th.text||JSON.stringify(th));thtml+='<div class="npc-story-thought">'+esc(resolveIds(thText))+'</div>'}thoughtsEl.innerHTML=thtml}else{thoughtsEl.innerHTML='<div style="font-size:0.8125rem;color:var(--dim);font-style:italic">No recent thoughts recorded</div>'}}
 var actions=npc.recent_actions||npc.actions||[];var actEl=ncard.querySelector('[data-field="story-actions"]');
-if(actEl){if(Array.isArray(actions)&&actions.length){var ahtml='';for(var ai2=0;ai2<Math.min(actions.length,3);ai2++){var ra=actions[ai2];var raText=typeof ra==='string'?ra:(ra.description||ra.action_type||ra.action||JSON.stringify(ra));ahtml+='<div class="npc-story-action">'+esc(raText)+'</div>'}actEl.innerHTML=ahtml}else{actEl.innerHTML='<div style="font-size:0.8125rem;color:var(--dim);font-style:italic">No recent actions</div>'}}
+if(actEl){if(Array.isArray(actions)&&actions.length){var ahtml='';for(var ai2=0;ai2<Math.min(actions.length,3);ai2++){var ra=actions[ai2];var raText=typeof ra==='string'?ra:(ra.description||ra.action_type||ra.action||JSON.stringify(ra));ahtml+='<div class="npc-story-action">'+esc(resolveIds(raText))+'</div>'}actEl.innerHTML=ahtml}else{actEl.innerHTML='<div style="font-size:0.8125rem;color:var(--dim);font-style:italic">No recent actions</div>'}}
 }
 /* Cascade badges and filter */
 updateNpcCascadeBadges();
@@ -1697,7 +1744,7 @@ function _sitGroupByNpc(events) {
     var name = e.source_char_name || '';
     // Fallback: extract name from description like "The Trickster gathered intel..."
     if (!name && e.description) {
-      var m = e.description.match(/^([A-Z][A-Za-z\s]+?)(?:\s+(?:gathered|planted|acquired|set out|stumbled|exchanged|published|conducted|led|enforced|blocked|increased|ordered|sensed|explored|returned|chart|discovered|sabotage|heist|vanish|smuggl|broke|repelled|rallied|issued|confront|challenged|intercept|infiltrat))/);
+      var m = e.description.match(/^([A-Z][A-Za-z\s]+?)(?:\s+(?:\w+ly\s+)?(?:gathered|planted|acquired|set out|stumbled|exchanged|published|conducted|led|enforced|blocked|increased|ordered|sensed|explored|returned|chart|discovered|sabotage|heist|vanish|smuggl|broke|repelled|rallied|issued|confront|challenged|intercept|infiltrat|aligned|align|made|built|created|completed|finished|found|drafted|authored))/);
       if (m && m[1].trim().length > 2 && m[1].trim().length < 40) name = m[1].trim();
     }
     if (!name && e.name) name = e.name;
@@ -1831,7 +1878,7 @@ function renderSituationRoom() {
     if (bigPic) {
       html += '<div class="sitroom-section">';
       html += '<div class="sitroom-section-title">The Big Picture</div>';
-      html += '<div class="sitroom-text">' + _sitHtml(bigPic) + '</div>';
+      html += '<div class="sitroom-text">' + _sitHtml(resolveIds(bigPic)) + '</div>';
       html += '</div>';
     }
 
@@ -1840,7 +1887,7 @@ function renderSituationRoom() {
       html += '<div class="sitroom-section">';
       html += '<div class="sitroom-section-title">Official Briefing</div>';
       for (var d = 0; d < Math.min(narr.developments.length, 3); d++) {
-        html += '<div class="sitroom-text" style="margin-bottom:4px">' + _sitHtml(narr.developments[d]) + '</div>';
+        html += '<div class="sitroom-text" style="margin-bottom:4px">' + _sitHtml(resolveIds(narr.developments[d])) + '</div>';
       }
       html += '</div>';
     }
@@ -1854,9 +1901,9 @@ function renderSituationRoom() {
         // Format: "Speaker — quote" or "Speaker: quote"
         var parts = voice.split(/\s*[—–:]\s*/);
         if (parts.length >= 2) {
-          html += '<div class="sitroom-voice"><span class="speaker">' + esc(parts[0]) + '</span> — ' + esc(parts.slice(1).join(' — ')) + '</div>';
+          html += '<div class="sitroom-voice"><span class="speaker">' + esc(resolveIds(parts[0])) + '</span> — ' + esc(resolveIds(parts.slice(1).join(' — '))) + '</div>';
         } else {
-          html += '<div class="sitroom-voice">' + esc(voice) + '</div>';
+          html += '<div class="sitroom-voice">' + esc(resolveIds(voice)) + '</div>';
         }
       }
       html += '</div>';
@@ -1884,13 +1931,8 @@ function renderSituationRoom() {
       var subInfo = _sitSubType(stDesc);
       var stKey = subInfo.label;
       if (!subTypes[stKey]) subTypes[stKey] = {icon: subInfo.icon, label: subInfo.label, npcs: []};
-      /* Extract NPC name */
-      var stName = stEv.source_char_name || '';
-      if (!stName && stDesc) {
-        var stMatch = stDesc.match(/^([A-Z][A-Za-z\s]+?)(?:\s+(?:gathered|planted|acquired|set|stumbled|exchanged|published|conducted|led|enforced|blocked|increased|ordered|sensed|explored|returned|chart|discovered|sabotage|heist|vanish|smuggl|broke|repelled|rallied|issued|confront|challenged|intercept|infiltrat))/);
-        if (stMatch && stMatch[1].trim().length > 2 && stMatch[1].trim().length < 40) stName = stMatch[1].trim();
-      }
-      if (!stName && stEv.name) stName = stEv.name;
+      /* Extract NPC name (roster-aware: handles raw IDs and missing name fields) */
+      var stName = npcDisplay(stEv);
       if (stName && subTypes[stKey].npcs.indexOf(stName) === -1) {
         subTypes[stKey].npcs.push(stName);
       }
@@ -1932,7 +1974,7 @@ function renderSituationRoom() {
       var bcSource = '';
       if (typeof bc === 'object' && bc !== null) {
         bcType = bc.type || 'other';
-        bcSource = bc.source || '';
+        bcSource = npcDisplay(bc) || bc.source || '';
       } else if (typeof bc === 'string') {
         bcSource = bc.replace(/^([^:]+):.*/, '$1').trim();
         var bcLow = bc.toLowerCase();
@@ -1956,7 +1998,7 @@ function renderSituationRoom() {
       if (gNpcs.length === 0) continue;
       html += '<div class="sitroom-text" style="margin-bottom:5px">';
       html += gMeta.icon + ' <strong>' + esc(gMeta.label) + ':</strong> ';
-      html += gNpcs.slice(0, 6).map(function(n){return '<span class="npc-name">' + esc(n) + '</span>';}).join(', ');
+      html += gNpcs.slice(0, 6).map(function(n){return '<span class="npc-name">' + esc(resolveIds(n)) + '</span>';}).join(', ');
       if (gNpcs.length > 6) html += ' +' + (gNpcs.length - 6) + ' more';
       html += '</div>';
     }
@@ -2123,11 +2165,7 @@ function renderQuickStatus() {
     for (var ei = 0; ei < flat.length; ei++) {
       var ev = flat[ei];
       var desc = (ev.description || ev.name || ev.message || '').toLowerCase();
-      var srcName = ev.source_char_name || ev.character_name || ev.source_name || ev.source || '';
-      if (!srcName && ev.description) {
-        var srcMatch = ev.description.match(/^([A-Z][A-Za-z\s]+?)(?:\s+(?:gathered|planted|acquired|set|stumbled|exchanged|published|conducted|led|enforced|blocked|increased|ordered|sensed|explored|returned|chart|discovered|sabotage|heist|vanish|smuggl|broke|repelled|rallied|issued|confront|challenged|intercept|infiltrat))/);
-        if (srcMatch && srcMatch[1].trim().length > 2) srcName = srcMatch[1].trim();
-      }
+      var srcName = npcDisplay(ev);
       if (desc.indexOf('black market') !== -1 || desc.indexOf('illicit') !== -1 || desc.indexOf('smuggl') !== -1) {
         if (srcName && blackMarketNpcs.indexOf(srcName) === -1) blackMarketNpcs.push(srcName);
       }
@@ -2218,7 +2256,7 @@ function renderQuickStatus() {
     if (narr.headline && (narr.headline.toLowerCase().indexOf('revolution') !== -1 || narr.headline.toLowerCase().indexOf('cultural') !== -1 || narr.headline.toLowerCase().indexOf('shift') !== -1)) {
       catalysts.push(
         '<div class="qs-catalyst"><span class="qs-cat-label">&#x1F4A1; Cultural Shift:</span> ' +
-        esc(narr.headline) + '</div>'
+        esc(resolveIds(narr.headline)) + '</div>'
       );
     }
     if (narr.developments && narr.developments.length > 0) {
@@ -2227,7 +2265,7 @@ function renderQuickStatus() {
         if (dev.toLowerCase().indexOf('revolution') !== -1 || dev.toLowerCase().indexOf('massive') !== -1 || dev.toLowerCase().indexOf('unknown') !== -1) {
           catalysts.push(
             '<div class="qs-catalyst"><span class="qs-cat-label">&#x26A1; Development:</span> ' +
-            esc(dev) + '</div>'
+            esc(resolveIds(dev)) + '</div>'
           );
         }
       }
@@ -2418,7 +2456,8 @@ function renderReadableSummary() {
   var involvedFactions = [];
   for (var i = 0; i < Math.min(events.length, 10); i++) {
     var ev = events[i];
-    if (ev && ev.char_name && involvedNpcs.indexOf(ev.char_name) === -1) { involvedNpcs.push(ev.char_name); }
+    var inm = ev ? npcDisplay(ev) : '';
+    if (inm && involvedNpcs.indexOf(inm) === -1) { involvedNpcs.push(inm); }
     if (ev && ev.faction_id && involvedFactions.indexOf(ev.faction_id) === -1) { involvedFactions.push(ev.faction_id); }
   }
   involvedNpcs = involvedNpcs.slice(0, 3);
@@ -2448,7 +2487,8 @@ function renderReadableSummary() {
       if (ev.event_type === 'cascade') badgeClass = 'cascade';
       else if (ev.event_type === 'faction') badgeClass = 'faction';
       else if (ev.event_type === 'crisis') badgeClass = 'crisis';
-      var npcName = ev.char_name ? '<span class="rm-ev-npc">' + ev.char_name + '</span>' : '';
+      var rnm = npcDisplay(ev);
+      var npcName = rnm ? '<span class="rm-ev-npc">' + esc(rnm) + '</span>' : '';
       var desc = ev.description || ev.action_type || 'Unknown event';
       html += '<div class="rm-summary-event-item"><span class="rm-ev-badge ' + badgeClass + '">' + badgeClass.toUpperCase() + '</span> ' + npcName + ' ' + desc + '</div>';
     }
