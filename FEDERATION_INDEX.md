@@ -46,8 +46,8 @@ docker logs federation-game-worker-1 --tail 50
 # Flush Redis (nuclear — resets all NPC/world state)
 docker exec federation-game-backend-1 python3 -c "import redis; r=redis.Redis(host='redis',port=6379); r.flushall(); print('FLUSHED')"
 
-# Check tick status
-curl -s http://localhost:5001/simulation/autonomous/status | python3 -m json.tool
+# Check tick status (port 5001 is NOT host-bound — use public URL)
+curl -s https://federation-game.deliberatefederation.cloud/simulation/autonomous/status | python3 -m json.tool
 
 # Check if NIM keys work
 curl -s -H "Authorization: Bearer nvapi-XXXXX" https://integrate.api.nvidia.com/v1/models | python3 -c "import sys,json; [print(m['id']) for m in json.load(sys.stdin)['data']]"
@@ -125,20 +125,25 @@ Agent/Code calls:
 
 ### Task Classes (in TASK_MODELS)
 
-| Task Class | Primary NIM Model | Fallback |
-|------------|-------------------|----------|
-| `npc_cognition` | nemotron-super-49b | openrouter fallback |
-| `npc_memory` | nemotron-super-49b | openrouter fallback |
-| `narrator` | (varies) | openrouter fallback |
-| `faction_ai` | (varies) | openrouter fallback |
-| `general` | (varies) | openrouter fallback |
+Models verified live 2026-09-27 (NVIDIA EOL'd the whole llama-3.x line 2026-08-26 — all old IDs return 410):
+
+| Task Class | Primary NIM | Fallback NIM |
+|------------|-------------|--------------|
+| `leader` | nemotron-3-ultra-550b-a55b | nemotron-3-super-120b-a12b |
+| `narrator` | nemotron-3-ultra-550b-a55b | nemotron-3-super-120b-a12b |
+| `specialist` | nemotron-3-super-120b-a12b | nemotron-3.5-lightning-30b-a3b |
+| `npc_memory` | nemotron-3-super-120b-a12b | nemotron-3-ultra-550b-a55b |
+| `worker` / `assistant` | nemotron-3.5-lightning-30b-a3b | nemotron-3-nano-omni-30b-a3b-reasoning |
+
+`nvidia_nim_client.py` MODEL_CHAIN (direct-call path): ultra-550b → super-120b → lightning. All probed HTTP 200.
 
 ### Key LLM Details
 
 - **NIM API base:** `https://integrate.api.nvidia.com/v1`
 - **NIM keys:** 6 keys in VPS `.env` (NIM_API_KEY through NIM_API_KEY_6 + NIM_API_KEY_1/2 individual)
-- **Ollama:** `http://localhost:11434` (strips `/v1`, hits `/api/tags` with 3s timeout, caches with TTL)
-- **gpt-oss-120b:** Reasoning model — `content` can be null, answer in `reasoning_content`
+- **Ollama:** not running on VPS (chain skips it) — NIM is the only live tier until OR gets credits
+- **OpenRouter:** NEW key deployed 2026-09-27 (Sean's personal account) — all 3 vars (`OPENROUTER_API_KEY`, `_1`, `_2`) carry the same working key; **$1/month spend limit** → free models 200 + paid fallback 200 (was 402). Old org keys backed up in `.env.bak.orkey_20260927_031751`. `OPENROUTER_MANAGEMENT_KEY` untouched (different var, not rotated)
+- **gpt-oss:** 120b EOL 2026-09-03; `openai/gpt-oss-20b` works but answers in `reasoning_content`
 - **Thinking models:** `is_thinking_model` flag; strips Extended Thinking tags
 - **Redis circuit breaker:** Key `llm_circuit_breaker:nim` + per-key variants — flush before restart if stuck
 
@@ -238,17 +243,17 @@ worker.py (every 60s)
 
 | Agent | Role | Model | Context | Can See Screenshots? |
 |-------|------|-------|---------|---------------------|
-| GLM-5.1 (OpenCode) | Build/Code | GLM-5.1 (NVIDIA NIM) | 128K | ❌ No |
+| OpenCode build agent | Build/Code | Configured supported model | Varies | ❌ No |
 | MiMo V2.5 (OpenCode) | Build | MiMo V2.5 Free | ~200K | ✅ Yes |
 | Nemotron 3 Ultra (OpenCode) | Build/Plan | Nemotron 3 Ultra 550B | 1M | ❌ No |
 | Codex (GPT-5.4) | Debug/Implement | GPT-5.4 | Varies | ❌ No |
-| Wave AI (Wave Terminal) | Monitor/Coordinate | GLM-5.1 | — | ✅ Yes (via tool) |
+| Wave AI (Wave Terminal) | Monitor/Coordinate | Configured supported model | — | ✅ Yes (via tool) |
 
 ### Agent Discipline
 
 - **No agent executes its own plan** — prevents race conditions
 - **After compaction:** read `.horizon/HORIZON_STATUS.md` BEFORE doing anything
-- **GLM must delegate tool calls** to sub-agents to save context
+- **Build agents must delegate tool calls** to sub-agents to save context
 - **File ownership:** see `.horizon/AGENT_OWNERSHIP.md` before modifying shared files
 - **Visual rule:** Sean is partially sighted. Never show raw errors. Diagnose + fix + restart.
 
@@ -258,13 +263,23 @@ worker.py (every 60s)
 
 | Issue | Fix | Status |
 |-------|-----|--------|
-| Race condition on faction choices | Event tokens (UUID) instead of asyncio locks | ✅ Deployed |
-| `/api/simulation/state` 404 | Missing endpoint — being fixed by GLM | 🔧 In progress |
-| NPC sub-endpoints 404 | Missing routes — investigating | 🔧 Open |
-| `_ASYNC_EXECUTOR` bug (line 1324) | Referenced but never initialized | ⚠️ Known |
-| Dead code: `_call_cloudflare/together/gemini/grok` | Should be stripped | ⚠️ Known |
-| `MODEL_CHAIN` / NIM fallback indentation bug | Fixed in commit `8ffbce4`; NIM model chain now iterates correctly and falls through to Ollama/OpenRouter as intended | ✅ Fixed |
+| NVIDIA EOL wiped all NIM models 2026-08-26 (every call 410) | Full remap to nemotron-3 family (verified live) — llm_router + MODEL_CHAIN + npc-agent compose pins | ✅ Fixed 2026-09-27 |
+| Watchdog lease deadlock after backend restart mid-tick | Symptom: every tick "another tick is active" forever. Recover: delete `fed:watchdog:*` keys, POST `/simulation/autonomous/tick` | ✅ Recoverable (auto-clears at ~30min TTL) |
+| tick_count stuck at 1 (game_state.turn = player choices, not ticks) | engine now INCRs `autonomous_tick_count` (Redis-durable); status route serves max(redis, turn) | ✅ Fixed 2026-09-27 |
+| Tick cadence | TICK_INTERVAL=600s (not 60s — index was stale). Ticks complete ~5-10s with live LLMs | ✅ Documented |
+| OpenRouter paid fallback | Was 402 (zero credits). New key 2026-09-27 has $1/month limit → paid + free both 200 | ✅ Fixed 2026-09-27 |
+| Dead free-pool entry: `meta-llama/llama-3.3-70b-instruct:free` returns 404 (delisted from free tier) | Not yet pruned from llm_router free pool (lines ~872/883); per-model circuit breaker absorbs it | ⚠️ Cosmetic waste |
+| Circuit breaker storms under backlog | After model resurrection, first hours show breaker trips as pent-up demand drains; settles on its own | 👀 Watch |
+| Councilor pair loop ("tick-185" recursive self-analysis) | db1 pair agenda/capability keys cleared 2026-09-27 (RDB snapshot backed up); workflow:title locks self-expire | ✅ Cleared, watching |
+| `_ASYNC_EXECUTOR` bug | No longer exists in codebase (resolved in Aug work) | ✅ Resolved |
 | `npc_memory.py` signature mismatch | Import fixed, call signature still needs adaptation | ⚠️ Partial |
+| galaxy-map.html 404 (built NPC-following 3D map never shipped) | Deployed 2026-09-27 — 4 modes, 3 zoom levels, live /map/data; nav link "GALAXY MAP" added to 10 pages | ✅ Fixed 2026-09-27 |
+| Starmap had no follow/trail, overlapping faction labels | starmap.js pass: NPC trails, follow mode (dblclick/FOLLOW btn/ESC), faction labels in collision pass | ✅ Fixed 2026-09-27 |
+| Web root .bak litter (23 files publicly served) | Moved to `/docker/federation-game/archive/public_html_bak/` | ✅ Fixed 2026-09-27 |
+| Website audit leftovers (VERIFY MODE, not yet fixed) | earth.html stalled widgets, bridge.html unwired stats, constellation legend/NPC mislist, starmap3d/index contrast, universe.html local↔VPS 12KB drift | ⚠️ Awaiting go |
+
+### Unexplained restarts (watch item)
+Worker container restarted with no operator twice: 23:09 + 01:00 on 2026-09-26/27 (RestartCount stays 0 → external actor). Suspects: Dockge UI, Dagu scheduler on same box. Not OOM.
 
 ---
 
