@@ -278,8 +278,17 @@ worker.py (every 60s)
 | Web root .bak litter (23 files publicly served) | Moved to `/docker/federation-game/archive/public_html_bak/` | ✅ Fixed 2026-09-27 |
 | Website audit leftovers (VERIFY MODE, not yet fixed) | earth.html stalled widgets, bridge.html unwired stats, constellation legend/NPC mislist, starmap3d/index contrast, universe.html local↔VPS 12KB drift | ⚠️ Awaiting go |
 
-### Unexplained restarts (watch item)
-Worker container restarted with no operator twice: 23:09 + 01:00 on 2026-09-26/27 (RestartCount stays 0 → external actor). Suspects: Dockge UI, Dagu scheduler on same box. Not OOM.
+### Worker restarts - RESOLVED 2026-09-27 (was: unexplained watch item)
+Prior suspects (Dockge UI, Dagu scheduler) retired. Sep 27 census: 7 syslog stop lines = **6 restarts**, all attributed - see `TEST_RESULTS.md` §F for full evidence table.
+
+| Time (UTC) | Cause |
+|---|---|
+| 03:30:10 | auto_restart Tier-3 (`fed:monitor:last_auto_restart`) |
+| 04:12:33 | My own deploy (`llm_router.py`) - one sequential `docker restart backend worker` |
+| 04:15:58 (+force 04:16:09) | My own deploy (`nvidia_nim_client.py`) - SIGTERM, worker missed 10s exit window, force-killed; the 04:16:09 line is the force continuation, NOT a 7th restart |
+| 05:08:41 / 06:07:36 / 06:53:58 | `fallback_recovery.py` nuclear restarts from the 05:00 / 06:00 / 06:45 cron (CRON sessions 1360527 / 1913553 / 2328727) |
+
+**Nuclear mechanism:** `fallback_recovery.py` (health<20, 30-min cooldown) -> clears 4 LLM key patterns -> `docker compose restart worker`. **Scan storm:** `monitoring/redis_helper.py` `_run` issues one `docker exec redis-cli` per SCAN page (COUNT 200) - 4 patterns x 238 pages x ~0.56s = **~8.9 min of load before each restart fires**, and redis timestamp fields carry the script-start `now`, so hash time differs from restart time by ~9 min. **Taming candidate (owner decision):** single `--scan` subprocess pass instead of per-page docker exec.
 
 ---
 

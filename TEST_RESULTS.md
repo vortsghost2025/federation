@@ -108,3 +108,29 @@ Deploy tool: `deploy_vps.sh` run under **Git Bash** (`C:/Program Files/Git/bin/b
 | E11 | `ERROR` lines during tick | **PASS** - 0 |
 
 Notes: host `:8000` is owned by `genesis-viewer` (not backend) - trigger ticks from inside the backend container, not host localhost. Pre-existing unrelated warning: one paid-NIM `503 Service temporarily overloaded` on npc_memory tier - chain fell through normally, not caused by this change.
+
+
+### F. Worker restart forensics - Sep 27 2026 (census closed 08:34:45 UTC)
+
+**Task:** attribute every worker restart on 2026-09-27. Source: VPS `/var/log/syslog` (`stopping restart-manager` lines for container `b51cdd58`), `/var/log/auth.log` (SSH/CRON sessions), `C:\Users\seand\.local\share\opencode\log\opencode.log` (UTC-tagged local spawns), deploy_vps.sh source.
+
+**Census correction:** 7 stop lines = **6 actual restarts**. `04:16:09` is NOT a restart - it is the force-kill continuation of the 04:15:58 SIGTERM: `04:15:58.863 stopping restart-manager` (SIGTERM) -> `04:16:09.143 "failed to exit within 10s of signal 15 - using the force"` + duplicate stop line 78us later -> up 04:16:14.
+
+| # | Time (UTC) | Cause | Evidence | Status |
+|---|---|---|---|---|
+| 1 | 03:30:10 | auto_restart Tier-3 | `fed:monitor:last_auto_restart` = 03:30:05 | PROVEN |
+| 2 | 04:12:33 | My deploy #1 (`llm_router.py`, backend+worker) | opencode.log spawn **04:12:19Z** (PREFLIGHT + `deploy_vps.sh backend+worker llm_router.py`); backend stop 04:12:24 -> worker 04:12:33 = one sequential `docker restart backend worker` (deploy_vps.sh L225); ssh session 946661 04:12:24->04:12:37 from 96.20.218.2 | PROVEN |
+| 3 | 04:15:58 (+force 04:16:09, up 04:16:14) | My deploy #2 (`nvidia_nim_client.py`, backend+worker) | opencode.log spawn **04:15:44.389Z** (full args: PREFLIGHT must-be-False + `deploy_vps.sh backend+worker backend/nvidia_nim_client.py nvidia_nim_client.py`); backend stop 04:15:49; ssh session 972102 04:15:49->04:16:18 spans the whole forced restart; md5 verify sessions 04:16:21/24/31/33 = script post-restart blocks | PROVEN |
+| 4 | 05:08:41 | fallback nuclear (05:00 cron) | CRON[1360527] 05:00:02 -> 05:08:46 (closes 3s after container up) | PROVEN |
+| 5 | 06:07:36 | fallback nuclear (06:00 cron) | CRON[1913553] 06:00:01 -> 06:07:49 (7m48s = uniquely long in the 17-session 06:00 batch; all others <= 5m31s; closes 13s after restart) | PROVEN |
+| 6 | 06:53:58 -> up 06:54:08 | fallback nuclear (06:45 cron) | CRON[2328727] 06:45:02 -> 06:54:11; hash `timestamp` 06:45:03; "WORKER RESTARTED", keys_cleared=4 | PROVEN |
+
+**F1. Nuclear timing model (why hash time != restart time).** `monitoring/fallback_recovery.py`: `now = time.time()` at `run_check()` start -> cooldown check (HEALTH_THRESHOLD=20, COOLDOWN_SECONDS=1800) -> **4 SCAN patterns via `redis_helper.py` `_run`, which spawns ONE `docker exec redis-cli` per SCAN page (COUNT 200, _TIMEOUT=15)**. At dbsize=47679 that is 238 pages x 4 patterns x ~0.56s/exec = **~8.9 min scan storm** before `docker compose restart worker` (~11s) -> redis writes with the start-time `now` -> session closes 2-13s after container up. Explains all three nuclear restarts (05:00+8m40s, 06:00+7m35s, 06:45+8m55s).
+
+**F2. Eliminated as causes (all PROVEN exclusions):** not OOM (exit=0, OOMKilled=false, RestartCount=0); not from inside containers (no docker.sock); not monitor tmux loop (`federation-game-monitor.sh` is read-only, INTERVAL=5); not `cognition_monitor.py` (`docker logs` only); not `heartbeat_loop.sh`/`heartbeat.sh` (no restart/docker stop matches, 50 lines); not systemd timers/at; not `federation-backup.sh` (restic-only); not `supervisor_loop.py` (not running); not Dockge/Dagu (prior suspects retired by sessions above).
+
+**F3. Cooldown consistency:** resets at 05:00 / 06:00 / 06:45 are all > 30 min apart; 04:15:58/04:16:09 could not be nuclear (30-min cooldown + belongs to deploy session). Fallback log total: 1085 "WORKER RESTARTED", 1 "RESTART FAILED".
+
+**F4. Live snapshot 08:34:45 UTC:** worker up since 06:54:08, RestartCount=0, no restart since 06:53:58; `monitor:llm_health` health_score=100/status OK; tick cadence normal.
+
+**F5. Open decisions for owner (not actioned):** (a) keep or stop `federation-game-monitor.sh` periodic kilo loop; (b) VPS-vs-local `worker.py`/`npc_reflection.py` drift direction; (c) tame `fallback_recovery.py` scan storm (page-walk could be one `--scan` subprocess pass) and/or nuclear cadence (3 fires today via llm_health=0 NIM circuit-trip cycles).
