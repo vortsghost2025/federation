@@ -92,3 +92,19 @@ Edits: `llm_router.py` pools LARGE/MID/SMALL (SMALL fully dead - refilled with l
 | E2 | Dead-ID sweep across all 4 files (9 patterns) | **PASS** - 0 occurrences remain |
 | E3 | Entry counts after prune: llm_router 10, nim_client 7, npc_llm_client 3, npc_agent_current 3 | **PASS** - no empty pools |
 | E4 | `npc_agent_current.py` VPS presence | **ABSENT on VPS** - local-only orphan, no importer, deliberately NOT deployed |
+
+### E1. Pruned-pool deploy to VPS (2026-09-27 00:27:37 -04:00)
+
+Deploy tool: `deploy_vps.sh` run under **Git Bash** (`C:/Program Files/Git/bin/bash.exe`). Root cause of earlier hangs: plain `bash` on this box is WSL bash - it has no VPS key and does not read `C:/Users/seand/.ssh/config`, so scp waited on a password prompt forever. Git Bash ssh authenticates via the `vps-nopass` config key (`GB-DEFAULT-OK` proven).
+
+| # | Test | Result |
+|---|---|---|
+| E5 | deploy `backend+worker llm_router.py` | **PASS** - host=backend=worker md5 `8b97461f1abcd9fec63518884c2aba59` = local |
+| E6 | deploy `backend+worker nvidia_nim_client.py` | **PASS** - host=backend=worker md5 `74a154e3f6eb73baee8d4601a377e8b0` = local |
+| E7 | deploy `npc-agent npc_llm_client.py` | **PASS** - host=001=306 md5 `42fe982c0935ebed678ca25d15d9292a` = local |
+| E8 | Mid-tick restart recovery | **PASS** - startup sweeper reset `running`; stale `fed:watchdog:*` lease (5 keys) DEL'd per AGENTS.md rule; fresh lease acquired on next tick |
+| E9 | Verification tick after deploy (tick `operator_1790482758627`, 04:19-04:26 UTC) | **PASS** - `status: completed`, watchdog keys self-released (KEYS empty), `running=False` |
+| E10 | Removed-model references during tick (8 dead IDs) | **PASS** - 0 occurrences in backend logs |
+| E11 | `ERROR` lines during tick | **PASS** - 0 |
+
+Notes: host `:8000` is owned by `genesis-viewer` (not backend) - trigger ticks from inside the backend container, not host localhost. Pre-existing unrelated warning: one paid-NIM `503 Service temporarily overloaded` on npc_memory tier - chain fell through normally, not caused by this change.
