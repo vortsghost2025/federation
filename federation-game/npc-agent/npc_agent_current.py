@@ -79,14 +79,13 @@ def _find_near_duplicate_role(r, role_title: str, institution_id: str):
             return rid
     return None
 OPENROUTER_API_KEY = os.environ.get("OPENROUTER_API_KEY", "")
+# 2026-09-27 live probe (TEST_RESULTS.md E): removed 404/delisted entries
+# (llama-3.3-70b:free, qwen3-next-80b:free, hermes-3-405b:free,
+# nemotron-3-nano-30b:free) - remaining 3 verified HTTP 200/429.
 OR_FREE_POOL = [
     "nvidia/nemotron-3-ultra-550b-a55b:free",
     "nvidia/nemotron-3-super-120b-a12b:free",
-    "meta-llama/llama-3.3-70b-instruct:free",
-    "qwen/qwen3-next-80b-a3b-instruct:free",
-    "nousresearch/hermes-3-llama-3.1-405b:free",
     "google/gemma-4-31b-it:free",
-    "nvidia/nemotron-3-nano-30b-a3b:free",
 ]
 _or_pool_idx = 0
 MODEL_EXTRA_BODY = os.environ.get("MODEL_EXTRA_BODY", "")

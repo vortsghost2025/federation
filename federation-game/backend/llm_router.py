@@ -868,34 +868,32 @@ def _check_grok_available() -> bool:
 # to avoid one bad model blocking the entire free tier.
 
 # Tier 1: High-context, high-quality (leader, narrator, npc_memory)
+# 2026-09-27 live probe (TEST_RESULTS.md E): removed llama-3.3-70b:free,
+# hermes-3-405b:free, qwen3-next-80b:free - all 404/delisted.
 OR_FREE_POOL_LARGE = [
-    "meta-llama/llama-3.3-70b-instruct:free",
     "nvidia/nemotron-3-super-120b-a12b:free",
     "nvidia/nemotron-3-ultra-550b-a55b:free",
-    "nousresearch/hermes-3-llama-3.1-405b:free",
-    "qwen/qwen3-next-80b-a3b-instruct:free",
     "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free",
     "google/gemma-4-31b-it:free",
 ]
 
 # Tier 2: Mid-context, balanced (specialist, assistant)
+# 2026-09-27 live probe: removed llama-3.3-70b, nemotron-3-nano-30b,
+# nemotron-nano-9b, gpt-oss-120b - all 404/delisted.
 OR_FREE_POOL_MID = [
-    "meta-llama/llama-3.3-70b-instruct:free",
     "nvidia/nemotron-3-super-120b-a12b:free",
     "google/gemma-4-26b-a4b-it:free",
-    "nvidia/nemotron-3-nano-30b-a3b:free",
-    "nvidia/nemotron-nano-9b-v2:free",
-    "openai/gpt-oss-120b:free",
     "cohere/north-mini-code:free",
 ]
 
 # Tier 3: Low-context, fast/cheap (worker)
+# 2026-09-27 live probe: the entire original tier (llama-3.2-3b, nano-9b,
+# lfm-2.5-1.2b, nemotron-3-nano-30b, dolphin-mistral) returns 404 - refilled
+# from live-verified small/fast models (worker primary fallback first).
 OR_FREE_POOL_SMALL = [
-    "meta-llama/llama-3.2-3b-instruct:free",
-    "nvidia/nemotron-nano-9b-v2:free",
-    "liquid/lfm-2.5-1.2b-instruct:free",
-    "nvidia/nemotron-3-nano-30b-a3b:free",
-    "cognitivecomputations/dolphin-mistral-24b-venice-edition:free",
+    "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free",
+    "cohere/north-mini-code:free",
+    "google/gemma-4-26b-a4b-it:free",
 ]
 
 _or_free_pool_index = 0

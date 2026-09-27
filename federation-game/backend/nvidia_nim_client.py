@@ -247,27 +247,22 @@ OPENROUTER_TIMEOUT = int(os.environ.get("OPENROUTER_TIMEOUT", "25"))
 _openrouter_key_index: int = 0
 
 # OpenRouter free model pools per priority class (lists, not single models)
+# 2026-09-27 live probe (TEST_RESULTS.md E): 404/delisted entries removed
+# (llama-3.3-70b:free, nemotron-nano-9b:free, nemotron-3-nano-30b:free,
+# hermes-3-405b:free, qwen3-next-80b:free). Pools kept non-empty: an empty
+# list would ZeroDivisionError in _get_or_free_model_nim.
 OPENROUTER_MODELS = {
     "local": [
-        "meta-llama/llama-3.3-70b-instruct:free",
         "nvidia/nemotron-3-super-120b-a12b:free",
-        "nvidia/nemotron-nano-9b-v2:free",
-        "nvidia/nemotron-3-nano-30b-a3b:free",
         "google/gemma-4-26b-a4b-it:free",
     ],
     "cloud": [
-        "meta-llama/llama-3.3-70b-instruct:free",
         "nvidia/nemotron-3-ultra-550b-a55b:free",
-        "nousresearch/hermes-3-llama-3.1-405b:free",
-        "qwen/qwen3-next-80b-a3b-instruct:free",
         "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free",
     ],
     "heavy": [
-        "meta-llama/llama-3.3-70b-instruct:free",
         "nvidia/nemotron-3-super-120b-a12b:free",
         "nvidia/nemotron-3-ultra-550b-a55b:free",
-        "nousresearch/hermes-3-llama-3.1-405b:free",
-        "qwen/qwen3-next-80b-a3b-instruct:free",
     ],
 }
 OPENROUTER_PAID_MODELS = {
@@ -287,7 +282,7 @@ def _get_or_free_model_nim(priority: str) -> str:
         model = pool[_or_nim_pool_idx % len(pool)]
         _or_nim_pool_idx += 1
         return model
-    return pool if isinstance(pool, str) else "meta-llama/llama-3.3-70b-instruct:free"
+    return pool if isinstance(pool, str) else "nvidia/nemotron-3-super-120b-a12b:free"
 
 
 # ---------------------------------------------------------------------------

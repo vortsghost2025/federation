@@ -59,3 +59,36 @@ see `.horizon/DELTA_LOG.md` entries dated 2026-09-27 (each line records change +
 | D3 | `python -m py_compile` on all 28 staged .py files from merge | **PASS** — 28/28 |
 | D4 | YAML parse of merged compose (VPS python3 yaml.safe_load) | **PASS** — `YAML-PARSE OK` |
 | D5 | Semantic merge checks: staged llm_router contains main's OLLAMA_MAX_ACTIVE=2 combined with session model remap | **PASS** |
+
+### E. Free-pool liveness probe + prune (2026-09-26 23:45:38 -04:00)
+
+Method: POST openrouter.ai/api/v1/chat/completions, max_tokens=5, all 15 unique `:free` IDs found in the repo, two passes 2s apart. Key fetched from VPS `.env` into memory only - never printed, never written to any file.
+
+| Model | Pass 1 | Pass 2 | Verdict |
+|---|---|---|---|
+| nvidia/nemotron-3-ultra-550b-a55b:free | 200 | - | ALIVE (kept everywhere) |
+| nvidia/nemotron-3-super-120b-a12b:free | 200 | - | ALIVE (kept everywhere) |
+| nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free | 200 | - | ALIVE (kept, promoted to pool SMALL head) |
+| cohere/north-mini-code:free | 200 | - | ALIVE (kept) |
+| google/gemma-4-26b-a4b-it:free | 429 | - | ALIVE rate-limited (kept) |
+| google/gemma-4-31b-it:free | 429 | - | ALIVE rate-limited (kept) |
+| meta-llama/llama-3.3-70b-instruct:free | 404 | 404 | DEAD - removed from 4 files |
+| meta-llama/llama-3.2-3b-instruct:free | 404 | 404 | DEAD - removed |
+| nousresearch/hermes-3-llama-3.1-405b:free | 404 | 404 | DEAD - removed |
+| qwen/qwen3-next-80b-a3b-instruct:free | 404 | 404 | DEAD - removed |
+| nvidia/nemotron-3-nano-30b-a3b:free | 404 | 404 | DEAD - removed |
+| nvidia/nemotron-nano-9b-v2:free | 404 | 404 | DEAD - removed |
+| openai/gpt-oss-120b:free | 404 | 404 | DEAD - removed |
+| liquid/lfm-2.5-1.2b-instruct:free | 404 | 404 | DEAD - removed |
+| cognitivecomputations/dolphin-mistral-24b-venice-edition:free | 404 | 404 | DEAD - removed |
+
+Note: paid `meta-llama/llama-3.3-70b-instruct` (no `:free`) stays 200 - tested in B3, untouched.
+
+Edits: `llm_router.py` pools LARGE/MID/SMALL (SMALL fully dead - refilled with live small models), `nvidia_nim_client.py` OPENROUTER_MODELS (kept non-empty: `_get_or_free_model_nim` does `idx % len(pool)` -> ZeroDivisionError on empty) + dead default at line 290, `npc_llm_client.py` + `npc_agent_current.py` OR_FREE_POOL.
+
+| # | Test | Result |
+|---|---|---|
+| E1 | python -m py_compile on 4 edited files | **PASS** - 4/4 |
+| E2 | Dead-ID sweep across all 4 files (9 patterns) | **PASS** - 0 occurrences remain |
+| E3 | Entry counts after prune: llm_router 10, nim_client 7, npc_llm_client 3, npc_agent_current 3 | **PASS** - no empty pools |
+| E4 | `npc_agent_current.py` VPS presence | **ABSENT on VPS** - local-only orphan, no importer, deliberately NOT deployed |
