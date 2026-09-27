@@ -134,3 +134,22 @@ Notes: host `:8000` is owned by `genesis-viewer` (not backend) - trigger ticks f
 **F4. Live snapshot 08:34:45 UTC:** worker up since 06:54:08, RestartCount=0, no restart since 06:53:58; `monitor:llm_health` health_score=100/status OK; tick cadence normal.
 
 **F5. Open decisions for owner (not actioned):** (a) keep or stop `federation-game-monitor.sh` periodic kilo loop; (b) VPS-vs-local `worker.py`/`npc_reflection.py` drift direction; (c) tame `fallback_recovery.py` scan storm (page-walk could be one `--scan` subprocess pass) and/or nuclear cadence (3 fires today via llm_health=0 NIM circuit-trip cycles).
+
+### F6. Post-census nuclear restarts - addendum 2026-09-27 (after 08:34:45 UTC census)
+
+Six more worker restarts, same proven mechanism (fallback cron finds LLM health 0 < 20, ~8-min scan storm, `docker compose restart worker`). Day total is now **12 restarts**.
+
+| # | Stop (UTC) | Cron start | Scan | +10s force line? |
+|---|---|---|---|---|
+| 7 | 08:53:21 | 08:45:03 | 8m18s | yes (08:53:31) |
+| 8 | 10:52:26 | 10:45:03 | 7m23s | yes (10:52:36) |
+| 9 | 11:53:05 | 11:45:03 | 8m02s | no |
+| 10 | 12:52:57 | 12:45:03 | 7m54s | no |
+| 11 | 14:38:23 | 14:30:03 | 8m20s | yes (14:38:34) |
+| 12 | 15:08:28 | 15:00:03 | 8m25s | no |
+
+Evidence: VPS syslog stop lines (16 total = 12 restarts + 4 force continuations); `monitor:last_nuclear_reset` chain 12:45:03 -> 14:30:03 -> 15:00:03 (exact cron starts; stop = start + scan); health oscillation captured live (0 at 14:27:58 -> 100 at 14:36:39, self-healed in ~9 min with no intervention); fallback log totals reconciled: **1092 CRITICAL = 1091 RESTARTED + 1 FAILED**. The FAILED is a `docker compose restart worker` 120-second timeout at a 0.0-minute cooldown boundary (compose restart can hang when the worker is deep mid-tick). One WARNING correctly blocked a fire at 14.9-min remaining cooldown. Note: 15:00 fired exactly 30 min after 14:30 (cooldown-boundary racing). dbsize grew 47679 -> 48007, so the storm is ~1% worse than F1 measured.
+
+### F7. Correction to F row 1 (key name)
+
+The cited key `fed:monitor:last_auto_restart` does not exist - no code in the repo references the `fed:`-prefixed name, and `redis_helper.py` applies no key prefix. The real key is `monitor:last_auto_restart`, written by `monitoring/auto_restart.py:101`. Its live value re-verified as `1790479805.84` = exactly 03:30:05 UTC (TTL -1, no expiry). Timestamp, attribution, and conclusion stand; only the key name in F row 1 was mistranscribed.
