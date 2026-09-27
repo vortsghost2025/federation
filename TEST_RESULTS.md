@@ -199,6 +199,18 @@ Fix: pipelines 3+4 switched to `zrevrange(..., 0, 2)`. Verified `faction_choice_
 
 Second frontend pass: transient raw-ID sightings (char_104, comp_003) traced to four unhardened sitroom sections that render full event text (Expeditions, Holding the Line, Strange Signals, Forewarning) - all four now route through `resolveIds`; re-deployed md5 `e7401d62becffad71b06ddd5b2075649` local=host, harness 17/17, live page clean.
 
+### F9. Post-tame restart census + new container ID (2026-09-27 evening)
+
+After the two-strike guard (F8) and the Custodian force-recreate, three more restarts - all attributed, guard verified working end to end:
+
+| Time (UTC) | Cause | Note |
+|---|---|---|
+| 16:45:20 | Nuclear A | Correctly required 2 strikes (16:30 + 16:45 crons both read health 0 - sustained NIM brownout) |
+| 17:49:13 | **My force-recreate** (Custodian enrollment, G item 5) | Final stop line of old container `b51cdd58`; recreate made a NEW worker container id `3de734855ce7` - all future census greps must target the new id (old-id grep silently hides new stops) |
+| 18:00:43 + 18:45:21 | Nuclears B, C | Same sustained-evening NIM brownout; health sat at 0 across consecutive checks. 18:45:21 stop invisible to old-id grep - found via new id |
+
+Guard behavior confirmed live: transient dip at 16:30 = "strike 1/2, watching (no action)"; one cron blocked at "cooldown active (0.0 min)" (17:15 boundary, 3 seconds short - held); nuclears only on sustained failure. Evening brownout context: NIM 503s/20s-timeouts in npc-agent logs all day; health oscillating 0<->100 with ~9-min self-heal cycles; 3 sustained windows hit the 2-strike threshold. Old-regime comparison: 13 restarts by 15:55 vs 3 guarded restarts since, each with a 15-min confirmation window.
+
 ### F7. Correction to F row 1 (key name)
 
 The cited key `fed:monitor:last_auto_restart` does not exist - no code in the repo references the `fed:`-prefixed name, and `redis_helper.py` applies no key prefix. The real key is `monitor:last_auto_restart`, written by `monitoring/auto_restart.py:101`. Its live value re-verified as `1790479805.84` = exactly 03:30:05 UTC (TTL -1, no expiry). Timestamp, attribution, and conclusion stand; only the key name in F row 1 was mistranscribed.
