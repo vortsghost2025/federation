@@ -1,0 +1,438 @@
+#!/usr/bin/env python3
+"""
+Supervisor Loop — the 24/7 driver for the autonomous build architecture.
+
+This is the "brain" that keeps the agent (Kilo) working even when the operator
+is away. It runs continuously, watches the live world, and maintains a
+task queue + status ledger that the agent consumes.
+
+What it does each cycle:
+  1. Runtime-truth check  — host vs container md5 drift (from runtime_truth_check)
+  2. Tick health          — is the simulation advancing? any new [ERROR]s?
+  3. Task queue           — append actionable findings to tasks/queue.json
+  4. Status ledger        — write a compact status snapshot for the agent
+
+It is deliberately READ-ONLY with respect to the game world: it never mutates
+world_state or deploys. It only records findings and tasks. The agent (or an
+operator-approved automation layer) performs the actual changes. This keeps the
+supervisor safe to run unattended.
+
+Usage:
+    python3 monitoring/supervisor_loop.py            # single cycle
+    python3 monitoring/supervisor_loop.py --loop     # run forever (Ctrl-C to stop)
+    python3 monitoring/supervisor_loop.py --interval 60 --loop
+"""
+
+import argparse
+import json
+import os
+import shlex
+import subprocess
+import time
+from datetime import datetime, timezone
+
+# ---------------------------------------------------------------------------
+# Paths
+# ---------------------------------------------------------------------------
+BASE = "/docker/federation-game"
+STATE_DIR = f"{BASE}/monitoring/supervisor_state"
+QUEUE_FILE = f"{STATE_DIR}/queue.json"
+STATUS_FILE = f"{STATE_DIR}/status.json"
+RUNTIME_TRUTH = f"{BASE}/monitoring/runtime_truth_check.py"
+
+CONTAINERS = [
+    "federation-game-backend-1",
+    "federation-game-worker-1",
+    "federation-game-npc-agent-001-1",
+    "federation-game-npc-agent-306-1",
+    "federation-game-npc-delegate-1",
+]
+
+
+def now_iso() -> str:
+    return datetime.now(timezone.utc).isoformat()
+
+
+def ensure_state():
+    os.makedirs(STATE_DIR, exist_ok=True)
+    if not os.path.exists(QUEUE_FILE):
+        _write_json(QUEUE_FILE, [])
+
+
+def _write_json(path, data):
+    tmp = path + ".tmp"
+    with open(tmp, "w") as fh:
+        json.dump(data, fh, indent=2)
+    os.replace(tmp, path)
+
+
+def _read_json(path, default):
+    try:
+        with open(path) as fh:
+            return json.load(fh)
+    except Exception:
+        return default
+
+
+def run(cmd_list, timeout=30) -> str:
+    try:
+        out = subprocess.run(cmd_list, capture_output=True, text=True, timeout=timeout)
+        return (out.stdout or out.stderr).strip()
+    except Exception as e:
+        return str(e)
+
+
+def runtime_truth_status(verbose=False) -> dict:
+    """Run the runtime-truth checker and return its exit code + summary line."""
+    cmd = [sys_python(), RUNTIME_TRUTH]
+    if verbose:
+        cmd.append("--verbose")
+    try:
+        out = subprocess.run(cmd, capture_output=True, text=True, timeout=60)
+        last = [l for l in out.stdout.strip().splitlines() if l.strip()][-1]
+        return {"exit": out.returncode, "summary": last}
+    except Exception as e:
+        return {"exit": -1, "summary": f"runtime-truth failed: {e}"}
+
+
+def sys_python() -> str:
+    return shlex.quote(os.environ.get("PYTHON", "python3"))
+
+
+def check_containers() -> list:
+    """Return list of up/healthy container names; flag any unexpected state."""
+    state = run(["docker", "ps", "--format", "{{.Names}}\\t{{.Status}}"])
+    issues = []
+    for line in state.splitlines():
+        name, _, status = line.partition("\t")
+        if name in CONTAINERS and "Up" not in status:
+            issues.append(f"{name}: {status}")
+    return issues
+
+
+def check_tick_health() -> dict:
+    """Check fed:auto_tick_status for tick liveness and errors.
+
+    Distinguishes three cases:
+      · ok              — last_result parsed and has no errors
+      · no_result       — last_result empty/absent (tick finished, result not
+                          stored yet, or auto-tick writes elsewhere) — benign
+      · error           — last_result present and carries errors
+    Also surfaces last_error if the last tick failed.
+    """
+    def hget(field):
+        return run(
+            ["docker", "exec", "federation-game-redis-1", "redis-cli",
+             "HGET", "fed:auto_tick_status", field]
+        ).strip()
+
+    running = hget("running")
+    last_error = hget("last_error")
+    raw = hget("last_result")
+
+    if last_error:
+        return {"ok": False, "detail": f"last_error: {last_error[:300]}"}
+
+    if not raw:
+        # No result stored — not necessarily a failure. If the tick is running
+        # it's expected; if idle and it finished long ago, treat as benign but
+        # note it so the operator/agent can confirm the ticker is alive.
+        return {"ok": True, "detail": "no last_result stored",
+                "running": running == "True"}
+
+    try:
+        data = json.loads("".join(raw.splitlines()))
+    except Exception:
+        return {"ok": True, "detail": "last_result present but unparseable",
+                "running": running == "True"}
+    errors = data.get("errors", [])
+    return {"ok": not errors, "errors": errors, "detail": "ok"}
+
+
+def _redis_scard(key) -> int:
+    """Return the cardinality of a Redis set via SCARD (non-blocking)."""
+    out = run(
+        ["docker", "exec", "federation-game-redis-1", "redis-cli",
+         "SCARD", key]
+    ).strip()
+    try:
+        return int(out)
+    except (ValueError, TypeError):
+        return 0
+
+
+def _redis_sscan_members(key, batch=200) -> list:
+    """Iterate a Redis set fully via SSCAN batches (non-blocking).
+
+    Returns all member strings. Never uses KEYS. SSCAN is cursor-based and
+    does not block Redis the way a full KEYS scan does.
+    """
+    members = []
+    cursor = "0"
+    while True:
+        out = run(
+            ["docker", "exec", "federation-game-redis-1", "redis-cli",
+             "SSCAN", key, cursor, "COUNT", str(batch)]
+        )
+        lines = [l for l in out.splitlines() if l]
+        if not lines:
+            break
+        cursor = lines[0].strip()
+        members.extend(lines[1:])
+        if cursor == "0":
+            break
+    return members
+
+
+# Role-title suffixes that indicate generated governance positions. Shared
+# content words across many such roles => combinatorial title bloat.
+_ROLE_SUFFIXES = (
+    "_analyst", "_coordinator", "_steward", "_officer", "_auditor",
+    "_arbiter", "_envoy", "_liaison", "_enforcer", "_overseer", "_manager",
+    "_advisor", "_administrator", "_director", "_curator", "_specialist",
+    "_counselor", "_planner", "_spokesperson", "_representative",
+)
+
+# Thresholds above which the world is considered "bloated" (historical
+# accumulation rather than healthy growth).
+_BLOAT_THRESHOLDS = {
+    "roles": 400,
+    "workflows": 5000,
+    "institutions": 20,
+}
+
+
+def check_subsystem_bloat() -> dict:
+    """Detect institution/role/workflow bloat and semantic role duplication.
+
+    Uses the curated Redis indexes (role:index, workflow:index,
+    institution:index) via SCARD for counts and SSCAN for role-name
+    duplication analysis. No recurring KEYS on DB0 (avoids blocking Redis).
+
+    Returns a dict with counts and a list of issues (empty = healthy).
+    """
+    issues = []
+
+    # Counts come from the curated indexes via SCARD (non-blocking).
+    counts = {
+        "roles": _redis_scard("role:index"),
+        "workflows": _redis_scard("workflow:index"),
+        "institutions": _redis_scard("institution:index"),
+    }
+
+    # Semantic duplication needs individual role names — iterate role:index
+    # with SSCAN (cursor-based, non-blocking) rather than KEYS.
+    role_members = _redis_sscan_members("role:index")
+    base_counts = {}
+    for rid in role_members:
+        name = rid.split(":", 1)[-1]
+        base = name
+        for suf in _ROLE_SUFFIXES:
+            if name.endswith(suf):
+                base = name[: -len(suf)]
+                break
+        base_counts[base] = base_counts.get(base, 0) + 1
+    dupes = {b: c for b, c in base_counts.items() if c >= 3}
+    duplicate_cluster_count = len(dupes)
+    if dupes:
+        top = sorted(dupes.items(), key=lambda x: -x[1])[:5]
+        issues.append(
+            f"{duplicate_cluster_count} role base-phrases with >=3 "
+            f"near-duplicate titles (e.g. {', '.join(b for b, _ in top[:3])})"
+        )
+
+    for label, threshold in _BLOAT_THRESHOLDS.items():
+        if counts[label] > threshold:
+            issues.append(
+                f"{counts[label]} {label} exceeds threshold {threshold}"
+            )
+
+    counts["duplicate_role_clusters"] = duplicate_cluster_count
+    return {"counts": counts, "issues": issues}
+
+
+def scan_backend_errors(window=200) -> list:
+    """Scan backend logs for recent [ERROR] lines."""
+    out = run(
+        ["docker", "logs", "--tail", str(window), "federation-game-backend-1"]
+    )
+    errors = [l for l in out.splitlines() if "ERROR" in l or "Traceback" in l]
+    return errors[-10:]
+
+
+def _redis_get(key) -> str:
+    """Read a redis string key via docker exec ("" on any failure)."""
+    return run(
+        ["docker", "exec", "federation-game-redis-1", "redis-cli", "GET", key]
+    ).strip()
+
+
+def check_semantic_health() -> dict:
+    """Read the semantic dedup + goal progress reports written by the
+    watchdog monitors and surface them in the supervisor status.
+
+    These reports are standalone facts (not blocking tasks) so the agent can
+    see semantic-bloat/no-novelty trends without the supervisor spamming the
+    queue. If a semantic duplicate CLUSTER is present, append a task.
+    """
+    info = {"semantic_duplicates": 0, "goal_count": 0, "goal_stall_hours": None}
+
+    raw_sem = _redis_get("fed:semantic:report")
+    if raw_sem:
+        try:
+            sem = json.loads(raw_sem)
+            info["semantic_duplicates"] = int(sem.get("semantic_duplicate_clusters", 0))
+        except Exception:
+            pass
+
+    raw_goal = _redis_get("fed:goal:report")
+    if raw_goal:
+        try:
+            goal = json.loads(raw_goal)
+            info["goal_count"] = int(goal.get("completed_goal_count", 0))
+            info["goal_stall_hours"] = goal.get("last_completion_age_hours")
+        except Exception:
+            pass
+
+    if info["semantic_duplicates"] > 0:
+        append_task(
+            "semantic_bloat",
+            f"{info['semantic_duplicates']} semantic duplicate cluster(s) "
+            "detected in recent pair artifacts",
+            "Pair may be re-publishing the same content under new titles; "
+            "review the semantic_monitor report.",
+            priority="high",
+        )
+    if info["goal_count"] == 0:
+        append_task(
+            "goal_progress",
+            "Councilor pair has not completed any shared goal yet",
+            "Monitor whether the pair converges on a resolvable objective "
+            "rather than orbiting open questions forever.",
+            priority="medium",
+        )
+
+    return info
+
+
+def append_task(category, title, detail, priority="normal"):
+    """Add a task to the queue if an identical pending one doesn't exist."""
+    queue = _read_json(QUEUE_FILE, [])
+    for t in queue:
+        if t.get("category") == category and t.get("title") == title and not t.get("done"):
+            return False
+    queue.append({
+        "id": f"{int(time.time())}-{len(queue)+1}",
+        "category": category,
+        "title": title,
+        "detail": detail,
+        "priority": priority,
+        "created_at": now_iso(),
+        "done": False,
+        "resolved_at": None,
+    })
+    _write_json(QUEUE_FILE, queue)
+    return True
+
+
+def cycle(verbose=False) -> dict:
+    ensure_state()
+
+    # 1. Runtime truth
+    truth = runtime_truth_status(verbose=verbose)
+    if truth["exit"] == 2:
+        append_task(
+            "runtime_drift",
+            "Host/container file drift detected",
+            truth["summary"],
+            priority="high",
+        )
+
+    # 2. Containers
+    container_issues = check_containers()
+    for issue in container_issues:
+        append_task("container", "Container not healthy", issue, priority="high")
+
+    # 3. Tick health
+    tick = check_tick_health()
+    if not tick.get("ok"):
+        append_task(
+            "tick", "Auto-tick reported errors",
+            tick.get("detail", "no parseable last_result"),
+            priority="high",
+        )
+    elif not tick.get("running") and "no last_result" in tick.get("detail", ""):
+        append_task(
+            "tick", "Ticker appears idle (no last_result, not running)",
+            "Confirm the simulation scheduler is alive; last tick may have "
+            "finished without storing a result.",
+            priority="medium",
+        )
+
+    # 4. Backend errors
+    backend_errors = scan_backend_errors()
+    if backend_errors:
+        append_task(
+            "backend_errors",
+            f"{len(backend_errors)} recent backend error lines",
+            "; ".join(backend_errors[-3:]),
+            priority="medium",
+        )
+
+    # 5. Subsystem bloat (roles/workflows/institutions + semantic duplication)
+    bloat = check_subsystem_bloat()
+    if bloat["issues"]:
+        append_task(
+            "world_bloat",
+            "Institution/role/workflow bloat or near-duplicate roles detected",
+            "; ".join(bloat["issues"]),
+            priority="high",
+        )
+
+    # 6. Semantic health (artifact near-duplicates + goal progress)
+    semantic = check_semantic_health()
+
+    snapshot = {
+        "ts": now_iso(),
+        "runtime_truth": truth,
+        "container_issues": container_issues,
+        "tick_ok": tick.get("ok"),
+        "backend_error_count": len(backend_errors),
+        "bloat": bloat,
+        "semantic": semantic,
+        "queue": _read_json(QUEUE_FILE, [])[-20:],
+    }
+    _write_json(STATUS_FILE, snapshot)
+    return snapshot
+
+
+def main():
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--loop", action="store_true", help="run forever")
+    ap.add_argument("--interval", type=int, default=300, help="seconds between cycles")
+    ap.add_argument("--verbose", action="store_true")
+    args = ap.parse_args()
+
+    if not args.loop:
+        snap = cycle(verbose=args.verbose)
+        print(json.dumps(snap, indent=2))
+        return
+
+    print(f"[supervisor] starting loop, interval={args.interval}s "
+          f"(stop with Ctrl-C)")
+    while True:
+        try:
+            snap = cycle(verbose=args.verbose)
+            print(f"[supervisor] {snap['ts']} truth_exit={snap['runtime_truth']['exit']} "
+                  f"tick_ok={snap['tick_ok']} backend_errors={snap['backend_error_count']} "
+                  f"queued={sum(1 for t in snap['queue'] if not t['done'])}")
+        except KeyboardInterrupt:
+            print("[supervisor] stopping")
+            break
+        except Exception as e:
+            print(f"[supervisor] cycle error: {e}")
+        time.sleep(args.interval)
+
+
+if __name__ == "__main__":
+    main()

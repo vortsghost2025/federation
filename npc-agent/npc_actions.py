@@ -22,7 +22,6 @@ from npc_decisions import _is_repetitive_artifact, _acknowledge_inbox
 from npc_redis_helpers import (
     get_redis,
     _partner_id,
-    _pair_state_key,
     _conversation_thread_id,
     _pair_thread_id,
     _store_thread_message,
@@ -47,21 +46,6 @@ from npc_redis_helpers import (
 # outcome-feedback ledger.
 import subprocess
 
-
-def _current_pair_topic(r) -> str:
-    """Return the pair's current shared_goal (or open_question) so generated
-    reroute descriptions reference the REAL topic instead of literal boilerplate
-    like 'the current shared goal'. Reads directly from the pair state hash."""
-    try:
-        key = _pair_state_key(char_id=CHAR_ID)
-        if not key:
-            return ""
-        state = r.hgetall(key)
-        return state.get("shared_goal") or state.get("open_question") or ""
-    except Exception:
-        return ""
-
-
 _SANDBOX_TIMEOUT = float(os.environ.get("SANDBOX_TIMEOUT", "6"))
 _SANDBOX_MAX_MEM_MB = int(os.environ.get("SANDBOX_MAX_MEM_MB", "64"))
 _SANDBOX_MAX_OUTPUT = int(os.environ.get("SANDBOX_MAX_OUTPUT", "2000"))
@@ -81,10 +65,6 @@ _SANDBOX_ALLOWED_NAMES = frozenset({
     "set", "tuple", "chr", "ord", "pow", "divmod", "isinstance", "repr",
     "format", "reversed", "any", "all", "map", "filter", "hex", "oct", "bin",
     "hash", "id", "iter", "next", "slice", "complex", "frozenset",
-    # __name__ is the harmless module-name guard (== "__main__" in the sandbox
-    # runner); it is a plain string and enables no escape, so models may use the
-    # common `if __name__ == "__main__":` idiom.
-    "__name__",
     # exceptions, so `except ValueError:` works
     "Exception", "ArithmeticError", "ValueError", "TypeError", "KeyError",
     "IndexError", "ZeroDivisionError", "OverflowError", "RuntimeError",
@@ -264,48 +244,9 @@ _safe = {"print": print, "len": len, "range": range, "int": int, "float": float,
          "ZeroDivisionError": ZeroDivisionError, "OverflowError": OverflowError,
          "RuntimeError": RuntimeError, "StopIteration": StopIteration,
          "NameError": NameError}
-_globals = {"__builtins__": dict(_safe), "__name__": "__main__"}
+_globals = {"__builtins__": dict(_safe)}
 exec(compile(sys.argv[1], "<sandbox>", "exec"), _globals)
 """
-
-
-def _clean_generated_code(raw: str) -> str:
-    """Strip markdown fences, prose, and surrounding noise from an LLM code
-    response so the remaining text is pure Python.
-
-    Models frequently wrap generated code in ```python ... ``` fences or
-    prepend/appended explanatory sentences, which makes ast.parse fail with
-    'invalid syntax'. This extracts the code block (or the longest run of
-    code-looking lines) and returns only that.
-    """
-    if not raw:
-        return ""
-    text = raw.strip()
-    # 1) If there is a fenced code block, take its inner content.
-    import re as _re
-    fence = _re.search(r"```(?:python|py)?\s*\n(.*?)```", text, _re.DOTALL | _re.IGNORECASE)
-    if fence:
-        return fence.group(1).strip()
-    # 2) Otherwise drop any leading prose up to the first line that looks like
-    #    Python (starts with a keyword, a def, an identifier followed by =, etc.).
-    code_lines = []
-    in_code = False
-    for line in text.splitlines():
-        stripped = line.strip()
-        if not stripped:
-            if in_code:
-                code_lines.append(line)
-            continue
-        if in_code:
-            code_lines.append(line)
-            continue
-        # Start collecting when a line looks like Python.
-        if (stripped.startswith(("def ", "import ", "from ", "print(", "for ", "if ", "while ",
-                                  "return ", "class ")) or _re.match(r"^[A-Za-z_][A-Za-z0-9_]*\s*=", stripped)
-                or _re.match(r"^[A-Za-z_][A-Za-z0-9_]*\s*\(", stripped)):
-            in_code = True
-            code_lines.append(line)
-    return "\n".join(code_lines).strip()
 
 
 def _execute_sandboxed_python(code: str, timeout: float = None, max_output: int = None):
@@ -556,8 +497,8 @@ def _record_sent_reply(r, target: str, body: str, ts: int) -> None:
         r.rpush(key, json.dumps({"body": body.strip(), "ts": ts}))
         r.ltrim(key, -16, -1)
         r.expire(key, _RECENT_REPLY_TTL * 3)
-    except Exception as e:
-        logger.warning("[%s] _record_sent_reply write failed for target %s: %s", CHAR_ID, target, e)
+    except Exception:
+        pass
 
 
 def _push_institution_cap_notification(r, founded):
@@ -784,25 +725,9 @@ def execute_decision(decision: dict, r, contacts: dict):
                 )
 
     elif cat == "write_code":
-        code_prompt = f"Generate Python code for: {desc}\n\nOutput ONLY valid Python code inside a single ```python code block. Print your computed result to stdout. Use only variables, arithmetic, strings, f-strings, if/else, for loops over range(), lists/dicts/sets, indexing/slicing, functions, and print(). Do NOT import anything, do not use while loops or classes, do not touch files, os, sys, or dunder attributes."
-        llm_result = call_llm("You are a Python developer. Output only code, wrapped in a ```python code block.", code_prompt, r=r, call_label="code")
-        gen_code = _clean_generated_code(llm_result.get("content", ""))
-        # Self-verify the code parses; if not, give the model one retry with the
-        # syntax error fed back so the builder can recover from fence/prose noise.
-        if gen_code:
-            try:
-                ast.parse(gen_code, mode="exec")
-            except SyntaxError as _se:
-                retry_prompt = (
-                    f"The previous code failed to parse:\n{gen_code}\n\n"
-                    f"SyntaxError: {_se.msg}\n\n"
-                    f"Rewrite it as clean, runnable Python inside a single ```python code block. "
-                    f"No prose, no explanation, no markdown outside the block."
-                )
-                retry_result = call_llm("You are a Python developer. Output only a ```python code block.", retry_prompt, r=r, call_label="code_retry")
-                retry_code = _clean_generated_code(retry_result.get("content", ""))
-                if retry_code:
-                    gen_code = retry_code
+        code_prompt = f"Generate Python code for: {desc}\n\nOutput ONLY valid Python code. The code runs in a restricted sandbox; print your computed result to stdout. Use only variables, arithmetic, strings, f-strings, if/else, for loops over range(), lists/dicts/sets, indexing/slicing, functions, and print(). Do NOT import anything, do not use while loops or classes, do not touch files, os, sys, or dunder attributes."
+        llm_result = call_llm("You are a Python developer. Output only code.", code_prompt, r=r, call_label="code")
+        gen_code = llm_result.get("content", "")
         if not gen_code:
             result["action_taken"] = "code_failed"
         else:
@@ -1018,47 +943,21 @@ def execute_decision(decision: dict, r, contacts: dict):
 
                 # 4. Reroute to productive work when a guard rejects, so the
                 #    councilor never stays locked on an impossible creation.
-                #    Cap-reached (world oversaturated with institutions) is a
-                #    good moment to BUILD something quantitative instead of yet
-                #    another prose artifact, so route it to the sandboxed
-                #    write_code builder. Similar-exists keeps the artifact path
-                #    because there is a concrete institution to analyze.
                 if _rejected:
-                    if result.get("action_taken") in {
-                        "institution_cap_reached",
-                        "institution_total_cap_reached",
-                    }:
-                        rerouted = {
-                            "category": "write_code",
-                            "reasoning": (
-                                f"create_institution rerouted: '{inst_name}' rejected "
-                                "(institution cap reached); the world already has enough "
-                                "institutions, so build a quantitative model/metric that "
-                                "advances the shared work instead"
-                            ),
-                            "description": (
-                                f"A quantitative model, metric, or projection that advances "
-                                f"the shared topic: {_compact_text(_current_pair_topic(r) or desc, 120)}."
-                                f" Compute a concrete number and print it."
-                            ),
-                            "title": f"Model: {_compact_text(_current_pair_topic(r) or desc, 48)}",
-                        }
-                        logger.info("[%s] create_institution rerouted to write_code (cap)", CHAR_ID)
-                    else:
-                        rerouted = {
-                            "category": "create_artifact",
-                            "reasoning": (
-                                f"create_institution rerouted: '{inst_name}' rejected "
-                                "(cap reached or similar exists); producing an artifact "
-                                "advancing the shared work instead"
-                            ),
-                            "description": (
-                                f"Institution '{inst_name}' could not be founded right now, "
-                                f"so write a concise artifact that advances the shared topic: "
-                                f"{_compact_text(desc, 120) or 'the current shared goal'}"
-                            ),
-                        }
-                        logger.info("[%s] create_institution rerouted to create_artifact", CHAR_ID)
+                    rerouted = {
+                        "category": "create_artifact",
+                        "reasoning": (
+                            f"create_institution rerouted: '{inst_name}' rejected "
+                            "(cap reached or similar exists); producing an artifact "
+                            "advancing the shared work instead"
+                        ),
+                        "description": (
+                            f"Institution '{inst_name}' could not be founded right now, "
+                            f"so write a concise artifact that advances the shared topic: "
+                            f"{_compact_text(desc, 120) or 'the current shared goal'}"
+                        ),
+                    }
+                    logger.info("[%s] create_institution rerouted to create_artifact", CHAR_ID)
                     return execute_decision(rerouted, r, contacts)
 
                 # ── Create institution (passes all guards) ──
@@ -1202,41 +1101,6 @@ def execute_decision(decision: dict, r, contacts: dict):
                             "title": role_title,
                             "body": f"proposed role '{role_title}' (authority: {authority}) in {inst_rec.get('name', target_inst_id)} — scope: {scope[:120]}",
                         })
-                # ── Anti-loop: repeated role rejections should pivot to building
-                #    something quantitative instead of hammering governance again.
-                #    The streak is a best-effort guard; a minimal Redis client
-                #    (e.g. some test fakes) may lack setex/delete, so tolerate that.
-                try:
-                    _streak_key = f"npc_role_reject_streak:{CHAR_ID}"
-                    if result.get("action_taken", "").startswith("role_rejected"):
-                        streak = int(r.get(_streak_key) or 0) + 1
-                        if hasattr(r, "setex"):
-                            r.setex(_streak_key, 3600, streak)
-                        if streak >= 2:
-                            if hasattr(r, "delete"):
-                                r.delete(_streak_key)
-                            rerouted = {
-                                "category": "write_code",
-                                "reasoning": (
-                                    f"propose_role rejected {streak} consecutive times "
-                                    f"('{role_title}'); the governance space is saturated, so "
-                                    "build a quantitative model/metric that advances the shared "
-                                    "work instead of proposing more roles"
-                                ),
-                                "description": (
-                                    f"A quantitative model, metric, or projection that advances "
-                                    f"the shared topic: {_compact_text(_current_pair_topic(r) or desc, 120)}."
-                                    f" Compute a concrete number and print it."
-                                ),
-                                "title": f"Model: {_compact_text(_current_pair_topic(r) or desc, 48)}",
-                            }
-                            logger.info("[%s] propose_role rejection loop -> write_code", CHAR_ID)
-                            return execute_decision(rerouted, r, contacts)
-                    else:
-                        if hasattr(r, "delete"):
-                            r.delete(_streak_key)
-                except Exception as _streak_exc:
-                    logger.info("[%s] role streak guard skipped: %s", CHAR_ID, _streak_exc)
         except Exception as e:
             result["action_taken"] = f"role_error: {e}"
             logger.error("[%s] Role proposal failed: %s", CHAR_ID, e)

@@ -19,9 +19,9 @@ NPC_NAME = os.environ.get("NPC_NAME", CHAR_ID)
 
 
 # ── Topic fatigue env vars ─────────────────────────────────────
-TOPIC_FATIGUE_WINDOW_MINUTES = int(os.environ.get("TOPIC_FATIGUE_WINDOW_MINUTES", "60"))
-TOPIC_FATIGUE_THRESHOLD = int(os.environ.get("TOPIC_FATIGUE_THRESHOLD", "3"))
-TOPIC_COOLDOWN_MINUTES = int(os.environ.get("TOPIC_COOLDOWN_MINUTES", "60"))
+TOPIC_FATIGUE_WINDOW_MINUTES = int(os.environ.get("TOPIC_FATIGUE_WINDOW_MINUTES", "30"))
+TOPIC_FATIGUE_THRESHOLD = int(os.environ.get("TOPIC_FATIGUE_THRESHOLD", "4"))
+TOPIC_COOLDOWN_MINUTES = int(os.environ.get("TOPIC_COOLDOWN_MINUTES", "30"))
 PAIR_THREAD_PREVIEW = int(os.environ.get("PAIR_THREAD_PREVIEW", "4"))
 
 
@@ -118,8 +118,13 @@ def _rh():
         _pair_recent_journal,
         _recent_thread_messages,
         _session_transcript,
+        _load_outcome_feedback,
+        _refresh_reflections,
+        _load_reflections,
     )
-    return _partner_id, _recent_decisions, _compact_text, _pair_state, _pair_recent_journal, _recent_thread_messages, _session_transcript
+    return (_partner_id, _recent_decisions, _compact_text, _pair_state,
+            _pair_recent_journal, _recent_thread_messages, _session_transcript,
+            _load_outcome_feedback, _refresh_reflections, _load_reflections)
 
 
 # ══════════════════════════════════════════════════════════════════
@@ -136,12 +141,12 @@ def neighborhood_snapshot(r, max_chars: int = 400, char_id: str = "") -> str:
     cid = char_id or CHAR_ID
     _partner_id, *_ = _rh()
     partner_id = _partner_id(char_id=cid)
-    logger.info("[%s] neighborhood: starting snapshot...", cid)
+    logger.debug("[%s] neighborhood: starting snapshot...", cid)
     entries: list[tuple[int, str, str, str]] = []
 
     try:
         all_state_keys = list(r.scan_iter(match="npc_state:*"))
-        logger.info("[%s] neighborhood: found %d npc_state keys", cid, len(all_state_keys))
+        logger.debug("[%s] neighborhood: found %d npc_state keys", cid, len(all_state_keys))
 
         pipe = r.pipeline(transaction=False)
         for k in all_state_keys:
@@ -190,7 +195,7 @@ def neighborhood_snapshot(r, max_chars: int = 400, char_id: str = "") -> str:
         return ""
 
     if entries:
-        logger.info("[%s] neighborhood: %d notable NPCs: %s", cid, len(entries),
+        logger.debug("[%s] neighborhood: %d notable NPCs: %s", cid, len(entries),
                     "; ".join(e[3] for e in entries[:5]))
 
     if not entries:
@@ -207,7 +212,7 @@ def neighborhood_snapshot(r, max_chars: int = 400, char_id: str = "") -> str:
         budget -= len(line) + 2
 
     result = "\n".join(lines) if len(lines) > 1 else ""
-    logger.info("[%s] neighborhood: returning %d chars", cid, len(result))
+    logger.debug("[%s] neighborhood: returning %d chars", cid, len(result))
     return result
 
 
@@ -633,7 +638,15 @@ def think_about_world(r, contacts: dict | None = None, char_id: str = "") -> str
     """
     cid = char_id or CHAR_ID
     _contacts = contacts or {}
-    _partner_id_fn, _recent_decisions, _compact_text, _pair_state, _pair_recent_journal, _recent_thread_messages_fn, _session_transcript = _rh()
+    (_partner_id_fn, _recent_decisions, _compact_text, _pair_state,
+     _pair_recent_journal, _recent_thread_messages_fn, _session_transcript,
+     _load_outcome_feedback, _refresh_reflections, _load_reflections) = _rh()
+
+    # Reflect: distill recent pair activity into durable insights (once per tick).
+    try:
+        _refresh_reflections(r, cid)
+    except Exception:
+        pass
 
     logger.info("[%s] think_about_world: building context...", cid)
     parts = [f"--- {NPC_NAME} ({cid}) — Tick@{time.strftime('%H:%M:%S')} ---"]
@@ -853,6 +866,22 @@ def think_about_world(r, contacts: dict | None = None, char_id: str = "") -> str
                 f"{effect_rec.get('outcome', '?')} "
                 f"({effect_rec.get('artifact_kind', '?')}) — "
                 f"{effect_rec.get('effects', '')}")
+    except Exception:
+        pass
+
+    # ── Outcome feedback: what your past work actually produced ──
+    try:
+        outcome_feedback = _load_outcome_feedback(r, cid)
+        if outcome_feedback:
+            parts.append(outcome_feedback)
+    except Exception:
+        pass
+
+    # ── Reflections: distilled insights from recent work (aliveness) ──
+    try:
+        reflections = _load_reflections(r, cid)
+        if reflections:
+            parts.append(reflections)
     except Exception:
         pass
 

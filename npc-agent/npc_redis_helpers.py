@@ -242,8 +242,8 @@ def _pair_hset(r, partner_id: str, mapping: dict, char_id: str = "") -> None:
             pipe.hdel(key, *deletes)
         pipe.expire(key, PAIR_STATE_TTL)
         pipe.execute()
-    except Exception as e:
-        logger.warning("[%s] _pair_hset write failed for %s: %s", CHAR_ID, key, e)
+    except Exception:
+        pass
 
 
 def _pair_append_journal(r, partner_id: str, entry: dict, char_id: str = "") -> None:
@@ -632,25 +632,6 @@ def _sync_pair_workspace(r, decision: dict, result: dict, npc_name: str = "", ch
                 # pivot as the new shared objective so the pair still detaches
                 # from the resolved theme instead of re-anchoring to it.
                 mapping["shared_goal"] = mapping["open_question"]
-            # The pair has now advanced to a NEW shared goal off the resolved
-            # theme. The convergence reducer still sees the stale resolved=True
-            # (and its resolved_shared_goal) from the OLD topic, which blocks it
-            # from ever re-resolving or recording the new goal. Reset the
-            # convergence_state so the new topic can build a fresh resolution
-            # and get persisted to the completed_goals ledger.
-            mapping["convergence_state"] = json.dumps({
-                "resolved": False,
-                "resolved_answer": "",
-                "resolved_question": "",
-                "resolved_at": 0,
-                "resolved_shared_goal": "",
-                "resolved_open_question": "",
-                "blocked_topic_terms": [],
-                "plateau_count": 0,
-                "current_best_answer": "",
-                "next_question": "",
-                "version": int(json.loads(state["convergence_state"]).get("version", 0)) if isinstance(state.get("convergence_state"), str) else 0,
-            }, default=str)
         elif state.get("shared_goal"):
             derived = _derive_question_from_goal(state["shared_goal"])
             if derived:

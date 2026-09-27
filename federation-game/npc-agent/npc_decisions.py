@@ -784,7 +784,7 @@ def decide_action(context: str, r=None) -> dict:
 You have these action categories. Pick ONE per turn:
 - send_message: Send a message to a live contact. Use when there is something genuinely new to say.
 - create_artifact: Create a text artifact (story, poem, manifesto, report, analysis of the federation).
-- write_code: Write executable Python code.
+- write_code: Write and RUN executable Python code in a safe sandbox. This is the BUILDER capability: use it to produce concrete, verifiable deliverables — a computed metric, a quantitative model, a projection, a simulation, a scoring index, or a ranking — that print a real result to stdout. Prefer it over create_artifact whenever the shared work is (or can be) numeric, measurable, or modelable, or when you want to prove a claim with numbers rather than prose.
 - read_artifacts: Read recent artifacts from other NPCs.
 - investigate: Research the simulation partner or the world.
 - rest: Take a moment to reflect.
@@ -793,7 +793,7 @@ You have these action categories. Pick ONE per turn:
 - propose_role: Define a new role within an existing institution. Must specify institution, title, scope, and authority level.
 - submit_to_institution: Submit a recent artifact you created for institutional review. Provide the artifact title and which institution should review it.
 - request_capability: Report a missing capability or context that is limiting your effectiveness. You may ONLY request structured needs — never shell access, admin powers, or system changes. Allowed need types: information_access, memory_access, coordination_help, institution_support, workflow_visibility, decision_feedback, world_state_gap. Use this when you find yourself repeatedly resting or unable to act because you lack information.
-- create_area: Found a NEW AREA / SECTOR in your shared world and add it to the map. Use when you and your partner have agreed (or you decide) to expand the universe with a named, described place. Provide area_id (short slug), name, description, x, y, region_type (e.g. frontier/core/void), resource_profile, danger_level (0-10), and adjacent_sector_ids (list of existing sector ids). This is how you BUILD the world — use it to grow the map persistently.
+- create_area: Found a NEW AREA / SECTOR in your shared world and add it to the map. Use when you and your partner have agreed (or you decide) to expand the universe with a named, described place. Provide area_id (short slug), name, description, x, y, region_type (e.g. frontier/core/void), resource_profile, danger_level (0-10), and adjacent_sector_ids (list of existing sector ids). This is how you BUILD the world — use it to grow the map persistently. IMPORTANT on the area_id: it MUST be a lowercase slug of letters/digits/underscores/hyphens only (e.g. `crystal_nexus`, `aurora_ridge`), 3-48 chars, NO spaces, NO uppercase, NO dots/punctuation. IMPORTANT: do NOT re-found an area whose name, region_type, or theme is essentially the same as one already on the map (e.g. do not found "Void Resonance Haven Alpha" then "Void Resonance Haven Beta"). Only create a place that is genuinely distinct in kind or theme from everything already founded.
 
 Behavioural rules:
 - The shared pair workspace persists across ticks. Treat it as your main living awareness with the other councilor.
@@ -805,6 +805,8 @@ Behavioural rules:
   already replied, do not send another greeting — produce work instead.
 - Short reactive messages are fine for the first 1–2 ticks. After that,
   prefer create_artifact, read_artifacts, investigate, write_code, rest.
+  When the shared topic is quantitative or modelable, make write_code your
+  default evidence-producing action instead of create_artifact.
 - New artifacts and code are the primary evidence of your work. Use them.
 - Respect the councilor role boundary: Archimedes asks for visions and analyzes
   them; The Oracle provides visions and future-pattern readings. Do not take the
@@ -824,7 +826,7 @@ Behavioural rules:
 Respond in this exact JSON format (no markdown, no explanation):
 {"category": "send_message", "reasoning": "...", "target": "contact_id", "body": "message text", "description": "..."}
 {"category": "create_artifact", "reasoning": "...", "description": "what to create", "title": "Artifact Title"}
-{"category": "write_code", "reasoning": "...", "description": "what the code should do"}
+{"category": "write_code", "reasoning": "...", "description": "what the code should compute", "title": "Short Title"}
 {"category": "investigate", "reasoning": "...", "description": "what you are investigating"}
 {"category": "self_improve", "reasoning": "...", "description": "what capability you are improving"}
 {"category": "rest", "reasoning": "...", "description": "reflecting on..."}
@@ -875,11 +877,11 @@ Respond in this exact JSON format (no markdown, no explanation):
             )
         dedup_count = recent_artifact_dedup_count(r)
         dedup_topic = dedup_blocked_topic(r)
-        if dedup_count >= 2 and dedup_topic:
+        if dedup_count >= 3 and dedup_topic:
             _topic_blocked_for_dedup = dedup_topic
             top_npcs = top_neighborhood_npcs(r, 3)
             npc_hint = f" Your neighborhood scan shows these NPCs in notable states: {top_npcs}." if top_npcs else ""
-            if dedup_count >= 3:
+            if dedup_count >= 4:
                 force_constraint += (
                     "\n\nESCALATING DEDUP (streak=" + str(dedup_count) + "): "
                     f"You have been blocked from \"{dedup_topic}\" {dedup_count} times in a row. "

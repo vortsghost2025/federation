@@ -20,6 +20,9 @@ import uuid
 import httpx
 import redis
 
+from npc_redis_helpers import _recent_artifact_dedup_count as _dedup_count_impl
+from npc_redis_helpers import _dedup_blocked_topic as _dedup_topic_impl
+
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [%(levelname)s] %(message)s",
@@ -36,6 +39,45 @@ TICK_INTERVAL = int(os.environ.get("TICK_INTERVAL", "30"))
 PRIMARY_MODEL = os.environ.get("PRIMARY_MODEL", "meta/llama-3.3-70b-instruct")
 FALLBACK_MODEL_1 = os.environ.get("FALLBACK_MODEL_1", "") or None
 FALLBACK_MODEL_2 = os.environ.get("FALLBACK_MODEL_2", "") or None
+
+# ── Role anti-bloat guards (mirrored from npc_actions.py) ──
+ROLE_CAP_PER_INSTITUTION = int(os.environ.get("ROLE_CAP_PER_INSTITUTION", "20"))
+_role_suffixes = (
+    "_analyst", "_coordinator", "_steward", "_officer", "_auditor",
+    "_arbiter", "_envoy", "_liaison", "_enforcer", "_overseer", "_manager",
+    "_advisor", "_administrator", "_director", "_curator", "_specialist",
+    "_counselor", "_planner", "_spokesperson", "_representative",
+)
+
+
+def _normalize_role_name(title: str) -> str:
+    n = re.sub(r"[^a-z0-9]+", "_", title.lower()).strip("_")
+    for sfx in _role_suffixes:
+        if n.endswith(sfx):
+            n = n[: -len(sfx)].strip("_")
+            break
+    return n
+
+
+def _institution_role_count(r, institution_id: str) -> int:
+    try:
+        return len(r.smembers(f"{institution_id}:roles"))
+    except Exception:
+        return 0
+
+
+def _find_near_duplicate_role(r, role_title: str, institution_id: str):
+    base = _normalize_role_name(role_title)
+    if not base:
+        return None
+    candidates = set(r.smembers(f"{institution_id}:roles")) if institution_id else set()
+    if not candidates:
+        candidates = set(r.smembers("role:index"))
+    for rid in candidates:
+        existing_title = r.hget(rid, "title")
+        if existing_title and _normalize_role_name(existing_title) == base:
+            return rid
+    return None
 OPENROUTER_API_KEY = os.environ.get("OPENROUTER_API_KEY", "")
 OR_FREE_POOL = [
     "nvidia/nemotron-3-ultra-550b-a55b:free",
@@ -276,15 +318,15 @@ def _neighborhood_snapshot(r, max_chars: int = 400) -> str:
     max_chars of formatted text — enough to notice Shadowborn's disinformation
     or Baroness Greed's heist without drowning the prompt.
     """
-    logger.info("[%s] neighborhood: starting snapshot...", CHAR_ID)
+    logger.debug("[%s] neighborhood: starting snapshot...", CHAR_ID)
     partner_id = _partner_id()
-    logger.info("[%s] neighborhood: partner_id=%s", CHAR_ID, partner_id)
+    logger.debug("[%s] neighborhood: partner_id=%s", CHAR_ID, partner_id)
     entries: list[tuple[int, str, str, str]] = []  # (score, id, name, line)
 
     try:
         # First, get all npc_state keys (materialize list to close connection)
         all_state_keys = list(r.keys("npc_state:*"))
-        logger.info("[%s] neighborhood: found %d npc_state keys", CHAR_ID, len(all_state_keys))
+        logger.debug("[%s] neighborhood: found %d npc_state keys", CHAR_ID, len(all_state_keys))
 
         # Batch-read all npc_state hashes
         pipe = r.pipeline(transaction=False)
@@ -338,7 +380,7 @@ def _neighborhood_snapshot(r, max_chars: int = 400) -> str:
         return ""
 
     if entries:
-        logger.info("[%s] neighborhood: %d notable NPCs: %s", CHAR_ID, len(entries),
+        logger.debug("[%s] neighborhood: %d notable NPCs: %s", CHAR_ID, len(entries),
                     "; ".join(e[3] for e in entries[:5]))
 
     if not entries:
@@ -357,7 +399,7 @@ def _neighborhood_snapshot(r, max_chars: int = 400) -> str:
         budget -= len(line) + 2
 
     result = "\n".join(lines) if len(lines) > 1 else ""
-    logger.info("[%s] neighborhood: returning %d chars", CHAR_ID, len(result))
+    logger.debug("[%s] neighborhood: returning %d chars", CHAR_ID, len(result))
     return result
 
 
@@ -1783,29 +1825,16 @@ def _session_append(r, entry: dict) -> None:
 
 
 def _recent_artifact_dedup_count(r) -> int:
-    """Return consecutive artifact dedup block count (10 min TTL)."""
-    try:
-        val = r.get(f"npc_dedup_streak:{CHAR_ID}")
-        return int(val) if val is not None else 0
-    except Exception:
-        return 0
+    """Consecutive artifact dedup block count (10 min TTL). Delegates to the
+    canonical implementation in npc_redis_helpers to avoid drift (single source
+    of truth)."""
+    return _dedup_count_impl(r, CHAR_ID)
 
 
 def _dedup_blocked_topic(r) -> str:
-    """Return the normalized topic of the most recent dedup-deferred artifact.
-
-    Returns empty string if no recent dedup topic. Safe on bytes/string Redis values.
-    """
-    try:
-        key = f"npc_dedup_topic:{CHAR_ID}"
-        if not r.exists(key):
-            return ""
-        raw = r.get(key)
-        if isinstance(raw, bytes):
-            raw = raw.decode("utf-8", errors="replace")
-        return (raw or "").strip()
-    except Exception:
-        return ""
+    """Normalized topic of the most recent dedup-deferred artifact. Delegates to
+    the canonical implementation in npc_redis_helpers to avoid drift."""
+    return _dedup_topic_impl(r, CHAR_ID)
 
 
 def _recent_decision_shapes(r, n: int = 5) -> list[str]:
@@ -2660,32 +2689,63 @@ def execute_decision(decision: dict, r):
                         "body": f"proposed role '{role_title}' but it already exists",
                     })
                 else:
-                    r.sadd("role:index", role_id)
-                    r.hset(role_id, mapping={
-                        "institution_id": target_inst_id,
-                        "title": role_title,
-                        "scope": scope,
-                        "authority": authority,
-                        "holder_char_id": "",
-                        "proposed_by": CHAR_ID,
-                        "status": "proposed",
-                        "created_at": now_iso,
-                    })
-                    r.sadd(f"{target_inst_id}:roles", role_id)
-                    r.hincrby(f"npc_stats:{CHAR_ID}", "roles_proposed", 1)
-                    inst_rec = r.hgetall(target_inst_id)
-                    result["action_taken"] = "role_proposed"
-                    result["role_id"] = role_id
-                    result["institution_id"] = target_inst_id
-                    result["role_title"] = role_title
-                    result["summary"] = f"Proposed role '{role_title}' in {inst_rec.get('name', target_inst_id)}"
-                    logger.info("[%s] Proposed role: %s in %s", CHAR_ID, role_title, target_inst_id)
-                    _session_append(r, {
-                        "kind": "role_proposed",
-                        "actor": NPC_NAME,
-                        "title": role_title,
-                        "body": f"proposed role '{role_title}' (authority: {authority}) in {inst_rec.get('name', target_inst_id)} — scope: {scope[:120]}",
-                    })
+                    dup = _find_near_duplicate_role(r, role_title, target_inst_id)
+                    if dup:
+                        result["action_taken"] = "role_rejected_near_duplicate"
+                        result["summary"] = (
+                            f"Role '{role_title}' rejected: too similar to existing "
+                            f"role '{dup}'"
+                        )
+                        _session_append(r, {
+                            "kind": "role_proposal_failed",
+                            "actor": NPC_NAME,
+                            "body": (
+                                f"proposed role '{role_title}' but it is a near-duplicate "
+                                f"of existing role '{dup}'"
+                            ),
+                        })
+                    elif _institution_role_count(r, target_inst_id) >= ROLE_CAP_PER_INSTITUTION:
+                        result["action_taken"] = "role_rejected_institution_cap"
+                        result["summary"] = (
+                            f"Role '{role_title}' rejected: institution "
+                            f"'{target_inst_id}' at role cap "
+                            f"({ROLE_CAP_PER_INSTITUTION})"
+                        )
+                        _session_append(r, {
+                            "kind": "role_proposal_failed",
+                            "actor": NPC_NAME,
+                            "body": (
+                                f"proposed role '{role_title}' but institution "
+                                f"'{target_inst_id}' is at its role cap"
+                            ),
+                        })
+                    else:
+                        r.sadd("role:index", role_id)
+                        r.hset(role_id, mapping={
+                            "institution_id": target_inst_id,
+                            "title": role_title,
+                            "scope": scope,
+                            "authority": authority,
+                            "holder_char_id": "",
+                            "proposed_by": CHAR_ID,
+                            "status": "proposed",
+                            "created_at": now_iso,
+                        })
+                        r.sadd(f"{target_inst_id}:roles", role_id)
+                        r.hincrby(f"npc_stats:{CHAR_ID}", "roles_proposed", 1)
+                        inst_rec = r.hgetall(target_inst_id)
+                        result["action_taken"] = "role_proposed"
+                        result["role_id"] = role_id
+                        result["institution_id"] = target_inst_id
+                        result["role_title"] = role_title
+                        result["summary"] = f"Proposed role '{role_title}' in {inst_rec.get('name', target_inst_id)}"
+                        logger.info("[%s] Proposed role: %s in %s", CHAR_ID, role_title, target_inst_id)
+                        _session_append(r, {
+                            "kind": "role_proposed",
+                            "actor": NPC_NAME,
+                            "title": role_title,
+                            "body": f"proposed role '{role_title}' (authority: {authority}) in {inst_rec.get('name', target_inst_id)} — scope: {scope[:120]}",
+                        })
         except Exception as e:
             result["action_taken"] = f"role_error: {e}"
             logger.error("[%s] Role proposal failed: %s", CHAR_ID, e)

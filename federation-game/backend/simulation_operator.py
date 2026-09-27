@@ -144,10 +144,30 @@ def _set_status(payload: Dict[str, Any]) -> None:
         r.expire(SIM_OPERATOR_STATUS_KEY, _RECENT_LOG_TTL)
 
 
+ARCHETYPE_FACTION = {
+    "scholar": "research_division",
+    "warrior": "military_command",
+    "rogue": "economic_council",
+    "mystic": "consciousness_collective",
+    "leader": "diplomatic_corps",
+    "sage": "cultural_ministry",
+    "wanderer": "exploration_initiative",
+    "hero": "military_command",
+    "deceiver": "economic_council",
+    "guardian": "preservation_society",
+}
+
+
 def _build_npc_list(game_state: Any, faction_ideology: Optional[Dict[str, str]]) -> List[Dict[str, Any]]:
     npc_list: List[Dict[str, Any]] = []
     for char_id, character in game_state.npc_system.characters.items():
         affiliation = character.affiliation
+        if not affiliation:
+            affiliation = ARCHETYPE_FACTION.get(
+                character.personality_type.value, "independent"
+            )
+            if affiliation != "independent":
+                character.affiliation = affiliation
         npc_list.append(
             {
                 "id": char_id,
