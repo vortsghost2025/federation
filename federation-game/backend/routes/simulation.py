@@ -718,20 +718,20 @@ async def simulation_npcs_activity():
     except Exception:
         thoughts = [[]] * len(char_ids)
 
-    # Pipeline 3: decisions (LRANGE x N)
+    # Pipeline 3: decisions (ZREVRANGE x N - keys are ZSETs, score=timestamp)
     try:
         pipe_decisions = _r.pipeline(transaction=False)
         for cid in char_ids:
-            pipe_decisions.lrange(f"npc_decisions:{cid}", 0, 2)
+            pipe_decisions.zrevrange(f"npc_decisions:{cid}", 0, 2)
         decisions = pipe_decisions.execute()
     except Exception:
         decisions = [[]] * len(char_ids)
 
-    # Pipeline 4: actions (LRANGE x N)
+    # Pipeline 4: actions (ZREVRANGE x N - keys are ZSETs, score=timestamp)
     try:
         pipe_actions = _r.pipeline(transaction=False)
         for cid in char_ids:
-            pipe_actions.lrange(f"npc_actions:{cid}", 0, 2)
+            pipe_actions.zrevrange(f"npc_actions:{cid}", 0, 2)
         actions = pipe_actions.execute()
     except Exception:
         actions = [[]] * len(char_ids)

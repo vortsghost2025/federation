@@ -186,6 +186,19 @@ Report (Sean, live page): raw char IDs in logs, mid-word truncation, 39-vs-40 co
 
 Deploy: `simulation.js`/`simulation.html` scp'd to `public_html` (md5 local=host, nginx serves immediately, no restart). No backend code changed (env-only). Observed side note (not fixed, out of scope): Top Recent Events duplicates names ("Kyren Frostblade Kyren Frostblade ordered...") because descriptions already lead with the name.
 
+### G2. Follow-on: ZSET type bug suppressed ALL decisions/actions (2026-09-27)
+
+Custodian verification exposed a second, larger bug: `/simulation/npcs/activity` reported `recent_decisions: []` and `recent_actions: []` for **every one of the 40 NPCs**, not just char_500. Root cause: `routes/simulation.py` pipelines 3+4 read `npc_decisions:{cid}` / `npc_actions:{cid}` with `LRANGE`, but those keys are ZSETs (score=timestamp, per `npc_autonomy.py` header). Each pipeline call raised WRONGTYPE, the except-block substituted empty lists, and the whole roster rendered decision/action-blind (thoughts worked because pipeline 2 already used ZREVRANGE). This is also why the Custodian "never acted" — its actions existed all along (decisions list had 200 entries); the endpoint just couldn't read them.
+
+Fix: pipelines 3+4 switched to `zrevrange(..., 0, 2)`. Verified `faction_choice_history:*` (the file's only other lrange) is a genuine list — untouched. Deployed between ticks (10-min wait for running=False): host swap with `.bak.zsetfix_20260927`, pycache cleared, backend restarted (healthy 9s), md5 local=host=container `f502e45399adbf72fee85d19d43242b0`.
+
+| # | Test | Result |
+|---|---|---|
+| V5 | Post-fix activity feed after one full tick | **PASS** - 40/40 NPCs with decisions+actions (was 0/40); Custodian: mood alarmed, 2 thoughts, 3 decisions, 3 actions |
+| V6 | Playwright live re-verify | **PASS** - 40 count, zero raw IDs page-wide, Main Risk default at morale 100, covert ops named (incl. The Custodian), 0 console errors |
+
+Second frontend pass: transient raw-ID sightings (char_104, comp_003) traced to four unhardened sitroom sections that render full event text (Expeditions, Holding the Line, Strange Signals, Forewarning) - all four now route through `resolveIds`; re-deployed md5 `e7401d62becffad71b06ddd5b2075649` local=host, harness 17/17, live page clean.
+
 ### F7. Correction to F row 1 (key name)
 
 The cited key `fed:monitor:last_auto_restart` does not exist - no code in the repo references the `fed:`-prefixed name, and `redis_helper.py` applies no key prefix. The real key is `monitor:last_auto_restart`, written by `monitoring/auto_restart.py:101`. Its live value re-verified as `1790479805.84` = exactly 03:30:05 UTC (TTL -1, no expiry). Timestamp, attribution, and conclusion stand; only the key name in F row 1 was mistranscribed.

@@ -2017,7 +2017,7 @@ function renderSituationRoom() {
         var eEvts = exploreByNpc[eNpc];
         var eDescs = [];
         for (var ed = 0; ed < Math.min(eEvts.length, 2); ed++) {
-          var eDesc = eEvts[ed].description || eEvts[ed].name || '';
+          var eDesc = resolveIds(eEvts[ed].description || eEvts[ed].name || '');
           eDesc = eDesc.replace(new RegExp('^' + eNpc.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\s*', 'i'), '');
           if (eDesc) eDescs.push(eDesc);
         }
@@ -2042,7 +2042,7 @@ function renderSituationRoom() {
         var dEvts = defByNpc[dNpc];
         var dDescs = [];
         for (var dd = 0; dd < Math.min(dEvts.length, 2); dd++) {
-          var dDesc = dEvts[dd].description || dEvts[dd].name || '';
+          var dDesc = resolveIds(dEvts[dd].description || dEvts[dd].name || '');
           dDesc = dDesc.replace(new RegExp('^' + dNpc.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\s*', 'i'), '');
           if (dDesc) dDescs.push(dDesc);
         }
@@ -2060,7 +2060,7 @@ function renderSituationRoom() {
       html += '<div class="sitroom-section">';
       html += '<div class="sitroom-section-title">Strange Signals</div>';
       for (var s = 0; s < Math.min(strange.length, 4); s++) {
-        var sDesc = strange[s].description || strange[s].name || '';
+        var sDesc = resolveIds(strange[s].description || strange[s].name || '');
         html += '<div class="sitroom-text" style="margin-bottom:3px">' + _sitHtml(esc(sDesc)) + '</div>';
       }
       html += '</div>';
@@ -2068,8 +2068,8 @@ function renderSituationRoom() {
 
     // ── 11. FOREWARNING ──
     var forewarning = '';
-    if (narr && narr.forewarning) forewarning = narr.forewarning;
-    else if (crisis.why_it_matters) forewarning = crisis.why_it_matters;
+    if (narr && narr.forewarning) forewarning = resolveIds(narr.forewarning);
+    else if (crisis.why_it_matters) forewarning = resolveIds(crisis.why_it_matters);
     if (forewarning) {
       html += '<div class="sitroom-forewarning">' + _sitHtml(esc(forewarning)) + '</div>';
     }
