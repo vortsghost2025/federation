@@ -237,3 +237,18 @@ Three delegated owner decisions ("just decide") executed.
 **H-REGRESSION (caught + fixed same session):** my first map_endpoints deploy used a stale local base (md5 c1c6f72c) over a newer VPS version (b5980c42) — regressed three scan_iter perf fixes + the entire founded_areas section. Caught via affiliation-count verification, recovered from .bak.hubfilter_20260927, re-applied the hub filter onto the true base. LESSON (now Delta-logged): verify local-vs-VPS md5 on EVERY backend file before editing, not just known-drift ones.
 
 **H-AFFIL (deeper bug found under H4):** /map/data + /simulation/npcs/activity served affiliations only within 5 min of each tick — npc_faction_context keys (TTL=300) were the only live source; npc_profiles blob has no writer; backend roster carries affiliation=None for rival/neutral/enigma chars + companions (worker mutates its OWN singleton, not the backend's). Fix: Source-0 fallback in map_endpoints._enrich_affiliation + activity route — read the backend roster, then ARCHETYPE_FACTION (same deterministic mapping the worker applies per-tick). Both endpoints now 40/40 affiliated at any point in the tick cycle. md5 local=host=container: map_endpoints 1a516446, routes/simulation 844ffa9e. Custodian live on both: preservation_society, stern, 3 decisions + 3 actions.
+
+
+### I. 2026-11-07 health check + public-site outage recovery (~19:30-20:00 UTC)
+
+**Finding 1 — site was DOWN ~2 weeks.** Public URL returned 000 (connection refused) from outside and from the VPS itself. Root cause: around Oct 24-27 the host-nginx federation-game site was removed (sites-available now holds only default+genesis, dir mtime Oct 27 06:49; nginx inactive, access.log.1 last entry Oct 24 16:46) in favor of traefik, but the reverse-proxy container recreated ~Oct 24 came up with NO port bindings and NO fed-net attachment (NetworkSettings.Ports={}, no networks, hence traefik errors "unable to find the IP address for the container"). Compose file (mtime Sep 27) still declares 80:80/443:443 — the running container mismatched it.
+
+**Fix:** `docker compose up -d --no-deps --force-recreate reverse-proxy` (traefik is stateless; acme.json volume intact). After: docker-proxy listening 0.0.0.0/[::] :80/:443, traefik on fed-net 172.16.2.19, Ports 80/443 bound. No backend/worker restart, no tick interaction.
+
+**Verification:** from local machine, HTTPS 200 on /, index, simulation, bridge, earth, constellation, starmap3d, universe, /healthz, /state, /map/data, /simulation/autonomous/status, /simulation/npcs/activity, /factions. Playwright public sweep: 7 pages, 0 console errors, simulation.html 0 raw IDs, bridge LINK OK + coherence 70, earth 8 faction rows, constellation "TICK 102 - ONLINE". Public /map/data: 40 NPCs, 0 missing affiliations, 0 phantom faction entries, tick 102.
+
+**Finding 2 — sim healthy.** Tick 3912 completed in 26s, 40/40 NPCs with thoughts+actions+decisions+moods (Custodian active: alarmed, react_to_events score 6.51), faction dynamics 55-70, diplomacy/quests/tech steps error-free. LLM health 100, sole NIM key (NIM_API_KEY_1) probed 200 on chat/completions. Worker up since Nov 7 02:30.
+
+**Finding 3 — overnight fallback nuclears attributed.** Worker stops Nov 7 00:15/01:00/01:45/02:30 (45-min spacing = */15 cron, 2-strike guard, 1800s cooldown) during a health-0 window; monitor:last_nuclear_reset=1794018603 ~ 02:26 UTC; fallback log CRITICAL lines match. Two-strike tame held: no restarts since 02:30 (17h+). Health 100 now, only brief strike-1 watch entries.
+
+**Finding 4 — uncommitted Oct-12 DELTA_LOG entries** (stale-tick wedge clear, NIM key swap to single vault key) were still uncommitted locally; committed now with this entry.
