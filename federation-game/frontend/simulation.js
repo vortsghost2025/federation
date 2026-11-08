@@ -2488,8 +2488,11 @@ function renderReadableSummary() {
       else if (ev.event_type === 'faction') badgeClass = 'faction';
       else if (ev.event_type === 'crisis') badgeClass = 'crisis';
       var rnm = npcDisplay(ev);
-      var npcName = rnm ? '<span class="rm-ev-npc">' + esc(rnm) + '</span>' : '';
       var desc = ev.description || ev.action_type || 'Unknown event';
+      /* 2026-11-08: npcDisplay() can extract the name from the description
+         lead itself - skip the separate name span then, or it renders twice. */
+      var nameInDesc = rnm && desc.toLowerCase().indexOf(rnm.toLowerCase()) === 0;
+      var npcName = (rnm && !nameInDesc) ? '<span class="rm-ev-npc">' + esc(rnm) + '</span>' : '';
       html += '<div class="rm-summary-event-item"><span class="rm-ev-badge ' + badgeClass + '">' + badgeClass.toUpperCase() + '</span> ' + npcName + ' ' + desc + '</div>';
     }
   }

@@ -290,3 +290,14 @@ Three delegated owner decisions ("just decide") executed.
 **Result:** `shutdown -r now` 02:36:49Z; host back after ~120s. Redis state survived (DBSIZE 79101 post-boot, ticks resumed immediately). All 7 federation-game containers auto-started. Post-reboot tick completed in 179s with 30 thoughts and zero errors; 0 provider failures / 0 function-404s since boot; `monitor:llm_health` 100; nim keys 5/5; site HTTPS 200; md5 host=container unchanged (llm_router 518f3a91); `/var/run/reboot-required` cleared. **PROVEN: sim survives a full host reboot with no state loss.**
 
 **Also:** added `Host vps` alias (187.77.3.56, root, id_ed25519) to local `~/.ssh/config` - `ssh vps` now works. Headless mirror synced to 12f0f49 (ff-only, clean tree) via tailscale ssh after `ssh headless` came back.
+
+
+### M. 2026-11-08 frontend fix + pair housekeeping + operator check-in (~03:00-03:10 UTC)
+
+**1. "Top Recent Events" duplicate-name fix (frontend-only).** Root cause: `npcDisplay(ev)` in `simulation.js` can extract the NPC name from the *description lead* (regex fallback), and the readable-summary renderer then prepended that name as a separate span before the description - so events whose description starts with the name rendered "Name Name verb...". Fix in `renderReadableSummary()`: skip the name span when `desc` already starts with the resolved name (`nameInDesc` check). Deployed to VPS `frontend/simulation.js` AND `public_html/simulation.js` (the two had drifted: frontend 94c4886a vs live e7401d62b - now both 87c2a1eb, container md5 matches, served over HTTPS verified via curl grep). `node --check` exit 0. No backend restart needed (static file).
+
+**2. Stale pair agenda removed.** `npc_pair:char_001__char_306:agenda` ZSET had exactly one member, `agenda_ad35b16e8d361030` (2026-08-06, agenda_key `test_work_001`, status proposed, "capability-request producer bridge"). Removed via ZREM + DEL of the `...:agenda:agenda_ad35b16e8d361030` hash. ZCARD now 0, subkey gone, pair state otherwise untouched.
+
+**3. Operator check-in sent to both councilors.** rpush'd a `moderator`-from message ("Moderator check-in: anything you need from us?" - asking for concrete needs: resources/capabilities/approvals/engineering changes/decisions, reply to moderator inbox) to `npc_messages:char_001:inbox` (msg_8209e1c5e588) and `npc_messages:char_306:inbox` (msg_848aa0b34e28), mirrored to `npc_messages:moderator:sent` (now 18). Schema matches existing moderator:sent entries (thread_conv__{cid}__moderator). Inbox lens verified = 1 each. **Not yet acked/replied at time of commit** - agents poll their own loop; watch `operator_ack:char_001/306` and `npc_messages:moderator:inbox`.
+
+Sim health after all changes: 100, site 200, tick clean.

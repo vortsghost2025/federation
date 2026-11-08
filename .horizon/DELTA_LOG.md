@@ -51,3 +51,7 @@ Verified completed changes only. One line per change.
 2026-11-08 | VPS reboot + resilience proof | BGSAVE before shutdown; host reboot 02:36Z, back ~120s; redis state survived (79088 -> 79101 keys); all containers auto-up; post-reboot tick 179s/30 thoughts/0 errors; health 100; site 200; reboot-required cleared | TEST_RESULTS L
 2026-11-08 | local ssh config | added Host vps alias (187.77.3.56 root id_ed25519) to ~/.ssh/config; verified 'ssh vps' connects | not committed (local machine config)
 2026-11-08 | headless mirror sync | ssh headless reachable again via tailscale; git ff-only to 12f0f49 on /home/we4free/mnt/s-drive/federation; clean tree | PROVEN
+
+2026-11-08 | frontend/simulation.js renderReadableSummary | skip duplicate NPC name span when description already leads with the name (nameInDesc); deployed to VPS frontend/ + public_html/ (drift fixed: both 87c2a1eb = container, HTTPS-verified); node --check 0 | TEST_RESULTS M1
+2026-11-08 | Redis pair agenda | ZREM agenda_ad35b16e8d361030 (test_work_001, 2026-08-06 proposed) + DEL sub-hash; zcard 0 | TEST_RESULTS M2
+2026-11-08 | moderator check-in | messages msg_8209e1c5e588 -> char_001, msg_848aa0b34e28 -> char_306 rpush'd to inboxes + moderator:sent; ack/reply PENDING at commit time | TEST_RESULTS M3
