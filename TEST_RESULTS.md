@@ -301,3 +301,16 @@ Three delegated owner decisions ("just decide") executed.
 **3. Operator check-in sent to both councilors.** rpush'd a `moderator`-from message ("Moderator check-in: anything you need from us?" - asking for concrete needs: resources/capabilities/approvals/engineering changes/decisions, reply to moderator inbox) to `npc_messages:char_001:inbox` (msg_8209e1c5e588) and `npc_messages:char_306:inbox` (msg_848aa0b34e28), mirrored to `npc_messages:moderator:sent` (now 18). Schema matches existing moderator:sent entries (thread_conv__{cid}__moderator). Inbox lens verified = 1 each. **Not yet acked/replied at time of commit** - agents poll their own loop; watch `operator_ack:char_001/306` and `npc_messages:moderator:inbox`.
 
 Sim health after all changes: 100, site 200, tick clean.
+
+
+### N. 2026-11-08 sandbox `nonlocal` unblock + councilor replies (~15:00-15:10 UTC)
+
+**1. Sandbox change (code):** removed `ast.Nonlocal` from `_SANDBOX_DENIED_NODES` in `npc-agent/npc_actions.py` (sole sandbox validator; backend's same-named module is unrelated). Safety reasoning: `nonlocal` can only rebind names in an enclosing function scope, never the runner's module globals (`ast.Global` stays denied); runner keeps `-I`, RLIMIT_AS/CPU/NPROC, restricted builtins, clean env. No tests asserted the old denial. Local `py_compile` OK.
+
+**Deploy:** scp to VPS /tmp -> `py_compile` on VPS temp -> host backup `npc_actions.py.bak-20261108` (md5 94a3bcb0) -> host file replaced -> gated on `fed:auto_tick_status running=False` (waited 5 min) -> `compose up -d --no-deps --force-recreate npc-agent-001 npc-agent-306`. md5 local = host = container-001 = container-306 = **ad92da70**. Backend/worker untouched (they never import the agent's sandbox module).
+
+**Live proof (run inside both agent containers):** `_execute_sandboxed_python` with a 3x `nonlocal` counter -> ok=True, output "3"; mutation closure -> "10" on 001, "2" on 306. Negative controls still enforced: `global x` -> denied, `import os` -> denied.
+
+**2. Councilor replies (Redis messages):** answered both check-in replies. To char_001 (msg_f417aa1383df): nonlocal live + quest calibration answer (research objective gains per WORK PASS, not per artifact: +1 base, +1 if a skill keyword-matches the quest faction affiliation, +1 with prob ambition*0.4 when ambition>0.7; so ~1-3/pass toward 18; artifacts are narrative evidence only - mechanics confirmed in npc_quest_engine.py L902-917). To char_306 (msg_e22857774b15): nonlocal live + **echo crystal grant of 25** to origin-myth preservation modules (also recorded as Redis hash `moderator_grant:char_306:echo_crystals` + `moderator_grant_history`) + **artifact creation approved** (merge design requirements with 47-outpost temporal-incursion alert specs). Both rpush'd to `npc_messages:{cid}:inbox` and mirrored to `moderator:sent` (len 20); inbox lens verified = 1 each.
+
+Sim health during change: health 100, site 200 throughout.

@@ -101,9 +101,13 @@ _SANDBOX_BLOCKED_ATTRS = frozenset({
 })
 
 # Node types with no place in a pure-computation sandbox.
+# 2026-11-08: ast.Nonlocal removed from the deny list at the councilors'
+# request. `nonlocal` can only rebind names in an enclosing FUNCTION scope -
+# it cannot reach the runner's module globals (ast.Global stays denied), so
+# it is safe alongside the -I / rlimit / restricted-builtins runner.
 _SANDBOX_DENIED_NODES = (
     ast.Import, ast.ImportFrom, ast.While, ast.With, ast.AsyncWith,
-    ast.ClassDef, ast.Global, ast.Nonlocal, ast.AsyncFunctionDef,
+    ast.ClassDef, ast.Global, ast.AsyncFunctionDef,
     ast.AsyncFor, ast.Delete, ast.Yield, ast.YieldFrom, ast.Await,
     ast.Starred, ast.Match,
 )
