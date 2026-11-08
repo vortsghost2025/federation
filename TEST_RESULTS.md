@@ -272,3 +272,12 @@ Three delegated owner decisions ("just decide") executed.
 **Overnight-nuclears reinterpretation:** the 00:15-02:30 worker restarts at 45-min spacing were the two-strike guard firing during genuine health-0 reads, which included this dead-model fallout window; breaker cooldown explains the oscillation. No restarts since 02:30.
 
 **Opencode side finding (Sean's session error `Function 'f238fb4a-...' Not found for account`):** same NVIDIA account, but NOT the sim - it is OpenCode's `SessionRunner.drain` (session save/replay at server start) failing on a model in OpenCode's own config. Live probe of that config's model list found: `moonshotai/kimi-k2.6` 404 (function not found), `meta/llama-3.2-11b-vision-instruct` 410 Gone (EOL), `nvidia/nemotron-3-super-120b-a12b` 404 (already labeled in config). The exact f238fb4a function ID was not conclusively matched (candidates timed out rather than fast-404). Recommendation: prune the two unlabeled dead models from `C:\Users\seand\.config\opencode\opencode.json`.
+
+
+### K. 2026-11-08 LLM key redundancy (second NIM key live, ~01:55-02:10 UTC)
+
+**Change:** added a fresh NVIDIA API key as `NIM_API_KEY_7` in the VPS-only `/docker/federation-game/.env` (value withheld from all docs/commits; piped via stdin, never written to any local file; `.env` chmod 600; local `.env` files are gitignored - confirmed `git check-ignore` + clean `git status` before commit). Key live-probed BEFORE use: `/v1/models` 200 (84 models) and chat 200 on ultra-550b / super-vl-120b / lightning-30b / nano-omni; also confirmed super-120b 404 on this account too. No code change needed - `nvidia_nim_client` already scans `NIM_API_KEY_1..8`.
+
+**Deploy:** gated on `fed:auto_tick_status running=False`, then `docker compose up -d --no-deps --force-recreate backend worker npc-agent-001 npc-agent-306` (env_file reload). All 4 containers healthy.
+
+**Verification:** container env shows 7 `NIM_API_KEY_*` slots populated; `/simulation/nim-stats` went from `keys_available:1, keys_total:1` to **`keys_available:5, keys_total:5`** (client prunes empty/invalid slots); next full tick completed (23 thoughts, 214s, errors None); **0 "All LLM providers failed" and 0 function-404s since recreate**; `monitor:llm_health` 100; site HTTPS 200. Redundancy goal achieved: single-key SPOF removed.
