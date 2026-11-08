@@ -13,17 +13,21 @@ NPC_NAME = os.environ.get("NPC_NAME", CHAR_ID)
 NVIDIA_API_KEY = os.environ.get("NVIDIA_API_KEY", "")
 FALLBACK_KEY_1 = os.environ.get("FALLBACK_KEY_1", "") or None
 FALLBACK_KEY_2 = os.environ.get("FALLBACK_KEY_2", "") or None
-PRIMARY_MODEL = os.environ.get("PRIMARY_MODEL", "meta/llama-3.3-70b-instruct")
+# 2026-11-07: defaults updated off dead IDs (meta/llama-3.3 NIM EOL,
+# nemotron-3-nano-30b unavailable); compose env still overrides at runtime.
+PRIMARY_MODEL = os.environ.get("PRIMARY_MODEL", "nvidia/nemotron-3-ultra-550b-a55b")
 FALLBACK_MODEL_1 = os.environ.get("FALLBACK_MODEL_1", "") or None
 FALLBACK_MODEL_2 = os.environ.get("FALLBACK_MODEL_2", "") or None
-DECISION_MODEL = os.environ.get("DECISION_MODEL", "nvidia/nemotron-3-nano-30b-a3b")
+DECISION_MODEL = os.environ.get("DECISION_MODEL", "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning")
 OPENROUTER_API_KEY = os.environ.get("OPENROUTER_API_KEY", "")
 # 2026-09-27 live probe (TEST_RESULTS.md E): removed 404/delisted entries
 # (llama-3.3-70b:free, qwen3-next-80b:free, hermes-3-405b:free,
 # nemotron-3-nano-30b:free) - remaining 3 verified HTTP 200/429.
+# 2026-11-07 probe: super-120b:free delisted on OR (404 "unavailable for
+# free") - replaced with nano-omni:free.
 OR_FREE_POOL = [
     "nvidia/nemotron-3-ultra-550b-a55b:free",
-    "nvidia/nemotron-3-super-120b-a12b:free",
+    "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free",
     "google/gemma-4-31b-it:free",
 ]
 _or_pool_idx = 0

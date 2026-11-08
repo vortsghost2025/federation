@@ -252,3 +252,23 @@ Three delegated owner decisions ("just decide") executed.
 **Finding 3 — overnight fallback nuclears attributed.** Worker stops Nov 7 00:15/01:00/01:45/02:30 (45-min spacing = */15 cron, 2-strike guard, 1800s cooldown) during a health-0 window; monitor:last_nuclear_reset=1794018603 ~ 02:26 UTC; fallback log CRITICAL lines match. Two-strike tame held: no restarts since 02:30 (17h+). Health 100 now, only brief strike-1 watch entries.
 
 **Finding 4 — uncommitted Oct-12 DELTA_LOG entries** (stale-tick wedge clear, NIM key swap to single vault key) were still uncommitted locally; committed now with this entry.
+
+
+### J. 2026-11-07 NIM silent model retirement + remap (~22:46-23:30 UTC)
+
+**Event:** the councilor agents and backend logged `HTTP 404 {"status":404,"title":"Not Found","detail":"Function 'ac74040f-...': Not found for account '8yXT_...'"}` for `nvidia/nemotron-3-super-120b-a12b` while the model REMAINED LISTED in the account's `/v1/models` catalog (84 models). Live chat probes: super-120b 404; ultra-550b/lightning-30b/nano-omni/super-vl-120b/bolt-e4b all 200. Same failure class as the Sep-27 EOL but stealthier - catalog listing is no longer trustworthy; only live chat probes are.
+
+**Blast radius before fix:** super-120b was primary for `specialist` + `npc_memory` task classes, fallback for `leader` + `narrator`, second entry of `nvidia_nim_client` MODEL_CHAIN, and `FALLBACK_MODEL_2` for both npc-agent containers (councilor drivers). Backend logged 774 function-404 lines total container lifetime; npc_memory calls fell through to OR free (daily cap 429) + OR paid (monthly $1 cap 403) => "All LLM providers failed" storms; agent logs showed 2k+ errors/48h.
+
+**Remap (deployed 22:46-22:47 UTC, backend+worker between ticks, agents recreated):**
+- llm_router TASK_MODELS: leader/narrator fallback_nim, specialist.primary, npc_memory.primary -> `nvidia/nemotron-3.5-super-vl-120b-a12b`
+- nvidia_nim_client MODEL_CHAIN[1] -> super-vl (timeout 18)
+- npc-agent npc_llm_client OR_FREE_POOL + defaults; compose FALLBACK_MODEL_2 x2 -> super-vl
+- OR free pools (llm_router + nim_client): `nvidia/nemotron-3-super-120b-a12b:free` is DELISTED on OpenRouter too (404 "unavailable for free, paid slug only") -> replaced with nano-omni:free / dropped from LARGE
+- Also noted: OR free tier daily cap exhausted + OR paid key monthly $1 cap exceeded (403) - OR tiers dark until resets; NIM is the live tier
+
+**Verification (all post-deploy):** md5 local=host=container 518f3a91(llm_router)/5d27200c(nim_client)/ac036810(npc_llm_client)/385ce0aa(compose); npc_memory `route_call` functional test `{'success': True, ...}`; 0 function-404s since restart; failures since restart = one ~60s in-flight burst at 22:47 while the provider-level `llm_circuit_breaker:nim` key (Redis) cooled, then 0; next full tick completed (24 thoughts, live text); health 100 (single transient 0 readings absorbed by the two-strike guard, no nuclears); worker log clean.
+
+**Overnight-nuclears reinterpretation:** the 00:15-02:30 worker restarts at 45-min spacing were the two-strike guard firing during genuine health-0 reads, which included this dead-model fallout window; breaker cooldown explains the oscillation. No restarts since 02:30.
+
+**Opencode side finding (Sean's session error `Function 'f238fb4a-...' Not found for account`):** same NVIDIA account, but NOT the sim - it is OpenCode's `SessionRunner.drain` (session save/replay at server start) failing on a model in OpenCode's own config. Live probe of that config's model list found: `moonshotai/kimi-k2.6` 404 (function not found), `meta/llama-3.2-11b-vision-instruct` 410 Gone (EOL), `nvidia/nemotron-3-super-120b-a12b` 404 (already labeled in config). The exact f238fb4a function ID was not conclusively matched (candidates timed out rather than fast-404). Recommendation: prune the two unlabeled dead models from `C:\Users\seand\.config\opencode\opencode.json`.

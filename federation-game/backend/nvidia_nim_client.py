@@ -110,12 +110,16 @@ MODEL_CHAIN = [
         "timeout": 12,
     },
     {
-        "id": "nvidia/nemotron-3-super-120b-a12b",
+        # 2026-11-07: nemotron-3-super-120b-a12b retired server-side for this
+        # account (HTTP 404 "Function ... not found for account" while still
+        # listed in /v1/models). Replaced with its live 120b sibling; verified
+        # 200 with clean long-form content output.
+        "id": "nvidia/nemotron-3.5-super-vl-120b-a12b",
         "max_tokens_default": 4096,
         "temperature_default": 0.7,
         "top_p_default": 0.8,
         "is_thinking_model": False,
-        "timeout": 15,
+        "timeout": 18,
     },
     {
         "id": "nvidia/nemotron-3.5-lightning-30b-a3b",
@@ -251,18 +255,20 @@ _openrouter_key_index: int = 0
 # (llama-3.3-70b:free, nemotron-nano-9b:free, nemotron-3-nano-30b:free,
 # hermes-3-405b:free, qwen3-next-80b:free). Pools kept non-empty: an empty
 # list would ZeroDivisionError in _get_or_free_model_nim.
+# 2026-11-07 probe: super-120b:free delisted on OpenRouter (404 "unavailable
+# for free"); replaced with live-verified slugs.
 OPENROUTER_MODELS = {
     "local": [
-        "nvidia/nemotron-3-super-120b-a12b:free",
         "google/gemma-4-26b-a4b-it:free",
+        "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free",
     ],
     "cloud": [
         "nvidia/nemotron-3-ultra-550b-a55b:free",
         "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free",
     ],
     "heavy": [
-        "nvidia/nemotron-3-super-120b-a12b:free",
         "nvidia/nemotron-3-ultra-550b-a55b:free",
+        "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free",
     ],
 }
 OPENROUTER_PAID_MODELS = {
@@ -282,7 +288,7 @@ def _get_or_free_model_nim(priority: str) -> str:
         model = pool[_or_nim_pool_idx % len(pool)]
         _or_nim_pool_idx += 1
         return model
-    return pool if isinstance(pool, str) else "nvidia/nemotron-3-super-120b-a12b:free"
+    return pool if isinstance(pool, str) else "nvidia/nemotron-3-ultra-550b-a55b:free"
 
 
 # ---------------------------------------------------------------------------

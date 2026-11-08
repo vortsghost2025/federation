@@ -125,17 +125,17 @@ Agent/Code calls:
 
 ### Task Classes (in TASK_MODELS)
 
-Models verified live 2026-09-27 (NVIDIA EOL'd the whole llama-3.x line 2026-08-26 — all old IDs return 410):
+Models verified live 2026-11-07. NOTE: NVIDIA now retires models SILENTLY — `nemotron-3-super-120b-a12b` still appears in `/v1/models` but chat returns HTTP 404 "Function ... not found for account" (retired ~Oct 28). Always verify with a live chat-completion probe, never the catalog listing alone.
 
 | Task Class | Primary NIM | Fallback NIM |
 |------------|-------------|--------------|
-| `leader` | nemotron-3-ultra-550b-a55b | nemotron-3-super-120b-a12b |
-| `narrator` | nemotron-3-ultra-550b-a55b | nemotron-3-super-120b-a12b |
-| `specialist` | nemotron-3-super-120b-a12b | nemotron-3.5-lightning-30b-a3b |
-| `npc_memory` | nemotron-3-super-120b-a12b | nemotron-3-ultra-550b-a55b |
+| `leader` | nemotron-3-ultra-550b-a55b | nemotron-3.5-super-vl-120b-a12b |
+| `narrator` | nemotron-3-ultra-550b-a55b | nemotron-3.5-super-vl-120b-a12b |
+| `specialist` | nemotron-3.5-super-vl-120b-a12b | nemotron-3.5-lightning-30b-a3b |
+| `npc_memory` | nemotron-3.5-super-vl-120b-a12b | nemotron-3-ultra-550b-a55b |
 | `worker` / `assistant` | nemotron-3.5-lightning-30b-a3b | nemotron-3-nano-omni-30b-a3b-reasoning |
 
-`nvidia_nim_client.py` MODEL_CHAIN (direct-call path): ultra-550b → super-120b → lightning. All probed HTTP 200.
+`nvidia_nim_client.py` MODEL_CHAIN (direct-call path): ultra-550b → super-vl-120b → lightning. All probed HTTP 200 (2026-11-07). OpenRouter `nvidia/nemotron-3-super-120b-a12b:free` is delisted (paid slug only); OR free daily cap + paid $1/month cap were exhausted 2026-11-07 — NIM is the live tier.
 
 ### Key LLM Details
 

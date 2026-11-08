@@ -870,8 +870,10 @@ def _check_grok_available() -> bool:
 # Tier 1: High-context, high-quality (leader, narrator, npc_memory)
 # 2026-09-27 live probe (TEST_RESULTS.md E): removed llama-3.3-70b:free,
 # hermes-3-405b:free, qwen3-next-80b:free - all 404/delisted.
+# 2026-11-07 probe (TEST_RESULTS.md J): super-120b:free now 404 on OpenRouter
+# ("unavailable for free", paid slug only) - dropped. NIM-side model also dead
+# (function not found) - remapped to nemotron-3.5-super-vl-120b-a12b.
 OR_FREE_POOL_LARGE = [
-    "nvidia/nemotron-3-super-120b-a12b:free",
     "nvidia/nemotron-3-ultra-550b-a55b:free",
     "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free",
     "google/gemma-4-31b-it:free",
@@ -880,8 +882,9 @@ OR_FREE_POOL_LARGE = [
 # Tier 2: Mid-context, balanced (specialist, assistant)
 # 2026-09-27 live probe: removed llama-3.3-70b, nemotron-3-nano-30b,
 # nemotron-nano-9b, gpt-oss-120b - all 404/delisted.
+# 2026-11-07 probe: super-120b:free replaced with nano-omni:free.
 OR_FREE_POOL_MID = [
-    "nvidia/nemotron-3-super-120b-a12b:free",
+    "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free",
     "google/gemma-4-26b-a4b-it:free",
     "cohere/north-mini-code:free",
 ]
@@ -929,7 +932,7 @@ TASK_MODELS = {
         },
         "fallback_nim": {
             "provider": "nim",
-            "model": "nvidia/nemotron-3-super-120b-a12b",
+            "model": "nvidia/nemotron-3.5-super-vl-120b-a12b",
             "max_tokens": 300,
             "temperature": 0.85,
             "timeout": 40,
@@ -952,7 +955,7 @@ TASK_MODELS = {
     "specialist": {
         "primary": {
             "provider": "nim",
-            "model": "nvidia/nemotron-3-super-120b-a12b",
+            "model": "nvidia/nemotron-3.5-super-vl-120b-a12b",
             "max_tokens": 200,
             "temperature": 0.8,
             "timeout": 40,
@@ -1019,7 +1022,7 @@ TASK_MODELS = {
         },
         "fallback_nim": {
             "provider": "nim",
-            "model": "nvidia/nemotron-3-super-120b-a12b",
+            "model": "nvidia/nemotron-3.5-super-vl-120b-a12b",
             "max_tokens": 500,
             "temperature": 0.9,
             "timeout": 45,
@@ -1072,7 +1075,7 @@ TASK_MODELS = {
     "npc_memory": {
         "primary": {
             "provider": "nim",
-            "model": "nvidia/nemotron-3-super-120b-a12b",
+            "model": "nvidia/nemotron-3.5-super-vl-120b-a12b",
             "max_tokens": 400,
             "temperature": 0.8,
             "timeout": 35,

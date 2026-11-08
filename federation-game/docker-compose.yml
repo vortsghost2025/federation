@@ -379,7 +379,7 @@
       - PRIMARY_MODEL=nvidia/nemotron-3-ultra-550b-a55b
       - DECISION_MODEL=nvidia/nemotron-3-nano-omni-30b-a3b-reasoning
       - FALLBACK_MODEL_1=nvidia/nemotron-3-nano-omni-30b-a3b-reasoning
-      - FALLBACK_MODEL_2=nvidia/nemotron-3-super-120b-a12b
+      - FALLBACK_MODEL_2=nvidia/nemotron-3.5-super-vl-120b-a12b
       - OPENROUTER_API_KEY=${OPENROUTER_API_KEY_1}
       - REQUEST_TIMEOUT=20
       - MAX_OUTPUT_TOKENS=1024
@@ -417,7 +417,7 @@
       - PRIMARY_MODEL=nvidia/nemotron-3-ultra-550b-a55b
       - DECISION_MODEL=nvidia/nemotron-3-nano-omni-30b-a3b-reasoning
       - FALLBACK_MODEL_1=nvidia/nemotron-3-nano-omni-30b-a3b-reasoning
-      - FALLBACK_MODEL_2=nvidia/nemotron-3-super-120b-a12b
+      - FALLBACK_MODEL_2=nvidia/nemotron-3.5-super-vl-120b-a12b
       - OPENROUTER_API_KEY=${OPENROUTER_API_KEY_1}
       - REQUEST_TIMEOUT=20
       - MAX_OUTPUT_TOKENS=1024
