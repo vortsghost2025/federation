@@ -281,3 +281,12 @@ Three delegated owner decisions ("just decide") executed.
 **Deploy:** gated on `fed:auto_tick_status running=False`, then `docker compose up -d --no-deps --force-recreate backend worker npc-agent-001 npc-agent-306` (env_file reload). All 4 containers healthy.
 
 **Verification:** container env shows 7 `NIM_API_KEY_*` slots populated; `/simulation/nim-stats` went from `keys_available:1, keys_total:1` to **`keys_available:5, keys_total:5`** (client prunes empty/invalid slots); next full tick completed (23 thoughts, 214s, errors None); **0 "All LLM providers failed" and 0 function-404s since recreate**; `monitor:llm_health` 100; site HTTPS 200. Redundancy goal achieved: single-key SPOF removed.
+
+
+### L. 2026-11-08 VPS maintenance reboot + ssh alias (~02:36-02:45 UTC)
+
+**Context:** VPS flagged "System restart required" (34 updates, 12 security). Sean approved reboot. Pre-flight: all game containers `restart: unless-stopped`, docker enabled at boot, Redis RDB save policy active with persistent volume - ran `BGSAVE` (status ok, dump.rdb 318MB, DBSIZE 79088) before reboot.
+
+**Result:** `shutdown -r now` 02:36:49Z; host back after ~120s. Redis state survived (DBSIZE 79101 post-boot, ticks resumed immediately). All 7 federation-game containers auto-started. Post-reboot tick completed in 179s with 30 thoughts and zero errors; 0 provider failures / 0 function-404s since boot; `monitor:llm_health` 100; nim keys 5/5; site HTTPS 200; md5 host=container unchanged (llm_router 518f3a91); `/var/run/reboot-required` cleared. **PROVEN: sim survives a full host reboot with no state loss.**
+
+**Also:** added `Host vps` alias (187.77.3.56, root, id_ed25519) to local `~/.ssh/config` - `ssh vps` now works. Headless mirror synced to 12f0f49 (ff-only, clean tree) via tailscale ssh after `ssh headless` came back.

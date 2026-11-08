@@ -47,3 +47,7 @@ Verified completed changes only. One line per change.
 2026-11-07 | docs | FEDERATION_INDEX model table updated (2026-11-07 live probes); TEST_RESULTS section J (remap, verification, overnight-nuclear reinterpretation, opencode config dead-model finding); DECISIONS: probe rule
 
 2026-11-08 | LLM key redundancy | new NIM key added as NIM_API_KEY_7 in VPS .env only (chmod 600, stdin-piped, never in git/local files); .env slots 2-6 were empty placeholders; force-recreated backend+worker+npc-agent-001/306 between ticks; nim-stats keys_available 1 -> 5, 0 failures post-recreate, tick clean, health 100, site 200 | TEST_RESULTS K; key value withheld everywhere
+
+2026-11-08 | VPS reboot + resilience proof | BGSAVE before shutdown; host reboot 02:36Z, back ~120s; redis state survived (79088 -> 79101 keys); all containers auto-up; post-reboot tick 179s/30 thoughts/0 errors; health 100; site 200; reboot-required cleared | TEST_RESULTS L
+2026-11-08 | local ssh config | added Host vps alias (187.77.3.56 root id_ed25519) to ~/.ssh/config; verified 'ssh vps' connects | not committed (local machine config)
+2026-11-08 | headless mirror sync | ssh headless reachable again via tailscale; git ff-only to 12f0f49 on /home/we4free/mnt/s-drive/federation; clean tree | PROVEN

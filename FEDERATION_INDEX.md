@@ -16,7 +16,7 @@ Federation is a **consciousness simulation** running on a VPS. Backend = Python/
 |-----|-------|
 | Hostname | `srv1345984.hstgr.cloud` |
 | Public IP | `187.77.3.56` |
-| SSH from Windows | `ssh -i $env:USERPROFILE\.ssh\id_ed25519 root@187.77.3.56` |
+| SSH from Windows | `ssh vps` (alias added 2026-11-08 in `~/.ssh/config`: HostName 187.77.3.56, User root, IdentityFile id_ed25519) — or `ssh -i $env:USERPROFILE\.ssh\id_ed25519 root@187.77.3.56`. Mirror box: `ssh headless` (tailscale) |
 | SSH alias | `ssh hostinger` or `ssh federation-vps` |
 | Production URL | `https://federation-game.deliberatefederation.cloud/` |
 | Docker compose | `/docker/federation-game/docker-compose.yml` |
