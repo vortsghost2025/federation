@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Federation &mdash; Spoken Digest</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  body{background:#080a10;color:#e8eef6;font-family:'Atkinson Hyperlegible',sans-serif;margin:0;padding:24px;font-size:22px;line-height:1.55}
+  .wrap{max-width:72ch;margin:0 auto}
+  h1{font-size:2.2rem;margin:0 0 6px 0;color:#f2f6ff}
+  h2{font-size:1.55rem;margin:28px 0 8px 0;color:#bcd2ee;border-bottom:2px solid #263a54;padding-bottom:4px}
+  p{margin:8px 0}
+  ul{margin:8px 0;padding-left:26px}
+  li{margin:6px 0}
+  .meta{color:#93a6bd;font-size:1.05rem}
+  nav{margin:14px 0 4px 0;display:flex;flex-wrap:wrap;gap:8px}
+  nav a{color:#9fc2ff;background:#141d2b;border:1px solid #2a3a4a;border-radius:8px;padding:8px 16px;text-decoration:none;font-size:1.05rem}
+  nav a:hover,nav a:focus-visible{outline:2px solid #7aa7ff}
+  .skip{position:absolute;left:-9999px;top:0;background:#27384f;color:#fff;padding:10px 16px;z-index:100}
+  .skip:focus{left:8px;top:8px}
+  #content .state{font-weight:700;color:#ffffff}
+  .err{color:#ff9a7a}
+  a.back{color:#9fc2ff}
+</style>
+</head>
+<body>
+<a class="skip" href="#main">Skip to digest</a>
+<main id="main" class="wrap">
+  <h1>Federation &mdash; Spoken Digest</h1>
+  <p class="meta" id="meta">Loading the latest digest&hellip;</p>
+  <nav aria-label="Site navigation">
+    <a href="/simulation.html">Live Sim</a>
+    <a href="/spectator.html">Councilor Watch</a>
+    <a href="/">Simulator</a>
+    <a href="/simulation/digest?format=text">Raw plain text</a>
+  </nav>
+  <div id="content" aria-live="off">
+    <p>Waiting for the simulation API&hellip;</p>
+  </div>
+  <p class="meta"><a class="back" href="/simulation.html">&larr; Back to the live dashboard</a> &middot; auto-refreshes every 60 seconds</p>
+</main>
+<script src="fed-fetch.js"></script>
+<script src="a11y.js" defer></script>
+<script src="digest.js" defer></script>
+</body>
+</html>

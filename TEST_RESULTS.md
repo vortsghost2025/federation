@@ -314,3 +314,16 @@ Sim health after all changes: 100, site 200, tick clean.
 **2. Councilor replies (Redis messages):** answered both check-in replies. To char_001 (msg_f417aa1383df): nonlocal live + quest calibration answer (research objective gains per WORK PASS, not per artifact: +1 base, +1 if a skill keyword-matches the quest faction affiliation, +1 with prob ambition*0.4 when ambition>0.7; so ~1-3/pass toward 18; artifacts are narrative evidence only - mechanics confirmed in npc_quest_engine.py L902-917). To char_306 (msg_e22857774b15): nonlocal live + **echo crystal grant of 25** to origin-myth preservation modules (also recorded as Redis hash `moderator_grant:char_306:echo_crystals` + `moderator_grant_history`) + **artifact creation approved** (merge design requirements with 47-outpost temporal-incursion alert specs). Both rpush'd to `npc_messages:{cid}:inbox` and mirrored to `moderator:sent` (len 20); inbox lens verified = 1 each.
 
 Sim health during change: health 100, site 200 throughout.
+
+
+### O. 2026-11-08 web accessibility upgrades: size stepper + spoken digest page + copy-as-text (~20:40-21:10 UTC)
+
+Operator-approved items 1-3 from the page-improvement list. Frontend-only plus one read-only endpoint; no game-logic changes.
+
+**New files:** `frontend/a11y.js` (injected toolbar on any page: A-/A+ text-size stepper 14-32px persisted in localStorage `fed_font_px`, plus "Copy text" button copying `document.body.innerText` with clipboard-API + execCommand fallback; ARIA-labelled, 44px tap targets), `frontend/digest.html` + `frontend/digest.js` (spoken digest page: Atkinson Hyperlegible, 22px, skip link, linear prose sections rendered with textContent only - no HTML injection; fetches `/simulation/digest?format=json` every 60s; links to raw text mode).
+
+**Edited:** `frontend/simulation.html` (nav link "Digest" + a11y.js), `frontend/spectator.html` (nav link + a11y.js; it already had skip link + copy-report), `backend/routes/simulation.py` (NEW read-only `GET /simulation/digest?format=json|text` composing tick status, LLM health, world state, cascade temperature, 8 recent events, councilor pair state, moderator inbox count; `format=text` returns PlainTextResponse prose).
+
+**Deploy:** node --check + py_compile locally; scp to VPS /tmp; py_compile on VPS; backup `routes/simulation.py.bak-20261108`; static files placed in BOTH `frontend/` and `public_html/`; gated on between-ticks; recreated ONLY backend (worker.py does not import routes - verified). md5: static files identical local=host-frontend=host-public_html=frontend-container (a11y 365319c3, digest.html b228c03b, digest.js e92bca7e, simulation.html 116aaefa, spectator.html 3864f464); routes/simulation.py host=container f86feb30.
+
+**Verification (over HTTPS):** /digest.html 200, /a11y.js 200, served simulation.html references a11y.js + digest.html; `/simulation/digest?format=json` returns live data (health 100, world state, 8 events, councilor shared goal/topic/focus, inbox 14); `?format=text` returns clean prose. Post-deploy tick completed 214.5s, 24 thoughts, errors None; 0 provider failures since backend recreate; health 100; site 200.

@@ -1066,3 +1066,141 @@ async def get_environment():
     if not data:
         raise HTTPException(status_code=404, detail="World state not initialized")
     return data
+
+
+# ---------------------------------------------------------------------------
+# GET /simulation/digest — spoken-friendly linear summary (added 2026-11-08)
+# Read-only. format=text returns plain text for TTS / screen readers.
+# ---------------------------------------------------------------------------
+
+
+@router.get("/simulation/digest")
+async def simulation_digest(format: str = Query("json", pattern="^(json|text)$")):
+    from npc_autonomy import get_world_state, get_world_events
+    from state import get_cascade_summary, EVENT_CASCADE_AVAILABLE
+
+    _r = _get_observer_redis()
+
+    ws = {}
+    try:
+        ws = get_world_state()
+    except Exception:
+        pass
+    events = []
+    try:
+        events = get_world_events(limit=10)
+    except Exception:
+        pass
+    cascade = {}
+    try:
+        if EVENT_CASCADE_AVAILABLE:
+            cascade = get_cascade_summary()
+    except Exception:
+        pass
+    tick_status = {}
+    try:
+        tick_status = _r.hgetall("fed:auto_tick_status") or {}
+    except Exception:
+        pass
+    health = None
+    try:
+        health = _r.hget("monitor:llm_health", "health_score")
+    except Exception:
+        pass
+    pair = {}
+    try:
+        pair = _r.hgetall("npc_pair:char_001__char_306:state") or {}
+    except Exception:
+        pass
+    inbox_count = 0
+    try:
+        inbox_count = int(_r.llen("npc_messages:moderator:inbox") or 0)
+    except Exception:
+        pass
+
+    def _ev_text(e):
+        if not isinstance(e, dict):
+            return str(e)
+        return (
+            e.get("description") or e.get("title") or e.get("name")
+            or e.get("message") or e.get("text") or ""
+        )
+
+    digest = {
+        "generated_at": time.time(),
+        "tick_id": tick_status.get("tick_id"),
+        "tick_running": tick_status.get("running"),
+        "last_tick_end": tick_status.get("last_end"),
+        "llm_health": health,
+        "world_state": {
+            k: ws.get(k)
+            for k in (
+                "morale", "stability", "threat_level", "tension_level",
+                "resource_abundance", "anomaly_activity",
+            )
+            if k in ws
+        },
+        "cascade_temperature": (cascade or {}).get("cascade_temperature"),
+        "recent_events": [t for t in (_ev_text(e) for e in events) if t][:8],
+        "councilors": {
+            "shared_goal": pair.get("shared_goal"),
+            "current_topic": pair.get("current_topic"),
+            "open_question": pair.get("open_question"),
+            "focus_char_001": pair.get("focus_char_001"),
+            "focus_char_306": pair.get("focus_char_306"),
+            "last_action": pair.get("resolved_action"),
+            "last_actor": pair.get("last_actor_name"),
+            "last_message_preview": pair.get("last_message_preview"),
+        },
+        "moderator_inbox_messages": inbox_count,
+    }
+
+    if format == "text":
+        from fastapi.responses import PlainTextResponse
+
+        lines = ["FEDERATION SPOKEN DIGEST"]
+        lines.append(
+            "Generated "
+            + time.strftime("%Y-%m-%d %H:%M UTC", time.gmtime(digest["generated_at"]))
+        )
+        lines.append(
+            f"Tick {digest['tick_id'] or '?'} - "
+            + ("a tick is running now" if str(digest["tick_running"]) == "True"
+               else "idle between ticks")
+            + "."
+        )
+        lines.append(f"LLM health score: {digest['llm_health'] or 'unknown'}.")
+        w = digest["world_state"]
+        if w:
+            lines.append(
+                "World state: "
+                + ", ".join(f"{k.replace('_', ' ')} {v}" for k, v in w.items())
+                + "."
+            )
+        if digest.get("cascade_temperature") is not None:
+            lines.append(f"Event cascade temperature: {digest['cascade_temperature']}.")
+        if digest["recent_events"]:
+            lines.append("Recent events:")
+            for t in digest["recent_events"]:
+                lines.append(f"- {t}")
+        c = digest["councilors"]
+        lines.append("The councilors, Archimedes Prime and The Oracle:")
+        for label, key in (
+            ("shared goal", "shared_goal"),
+            ("current topic", "current_topic"),
+            ("open question", "open_question"),
+            ("Archimedes is focused on", "focus_char_001"),
+            ("The Oracle is focused on", "focus_char_306"),
+            ("last action", "last_action"),
+            ("last actor", "last_actor"),
+            ("last message", "last_message_preview"),
+        ):
+            if c.get(key):
+                lines.append(f"{label}: {c[key]}.")
+        lines.append(
+            f"Messages waiting in the moderator inbox: "
+            f"{digest['moderator_inbox_messages']}."
+        )
+        return PlainTextResponse("\n".join(lines))
+
+    return digest

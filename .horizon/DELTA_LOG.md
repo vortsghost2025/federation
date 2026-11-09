@@ -58,3 +58,7 @@ Verified completed changes only. One line per change.
 
 2026-11-08 | npc-agent/npc_actions.py _SANDBOX_DENIED_NODES | removed ast.Nonlocal (councilor request; safe: cannot reach runner globals, ast.Global still denied); deployed between ticks, md5 ad92da70 local=host=container-001=container-306; live test nonlocal counter -> 3, mutation -> 10; global/import still denied | TEST_RESULTS N; backup npc_actions.py.bak-20261108 (94a3bcb0) on VPS
 2026-11-08 | moderator replies to char_001/char_306 | sent msg_f417aa1383df (sandbox live + quest progress = per pass 1-3 pts, not per artifact) and msg_e22857774b15 (sandbox live + 25 echo crystals granted [moderator_grant:char_306:echo_crystals] + artifact creation approved); inbox lens verified | TEST_RESULTS N; acks pending at commit time
+
+2026-11-08 | frontend/a11y.js (new) | text-size stepper (14-32px, localStorage fed_font_px) + copy-page-as-text button; included in simulation.html + spectator.html + digest.html; md5 365319c3 all copies | TEST_RESULTS O
+2026-11-08 | frontend/digest.html + digest.js (new) | spoken digest page fetching GET /simulation/digest every 60s, prose via textContent; md5 b228c03b / e92bca7e all copies | TEST_RESULTS O
+2026-11-08 | backend/routes/simulation.py | new read-only GET /simulation/digest?format=json|text; backend recreated between ticks (worker untouched - no routes import); md5 f86feb30 host=container; HTTPS-verified json+text; post-deploy tick clean | TEST_RESULTS O; backup routes/simulation.py.bak-20261108 on VPS
