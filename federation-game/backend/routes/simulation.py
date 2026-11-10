@@ -1107,11 +1107,14 @@ async def simulation_digest(format: str = Query("json", pattern="^(json|text)$")
         health = _r.hget("monitor:llm_health", "health_score")
     except Exception:
         pass
-    pair = {}
+    pairs = {}
     try:
-        pair = _r.hgetall("npc_pair:char_001__char_306:state") or {}
+        for pk in _r.scan_iter("npc_pair:*:state"):
+            slug = pk[len("npc_pair:"):-len(":state")]
+            pairs[slug] = _r.hgetall(pk) or {}
     except Exception:
         pass
+    pair = pairs.get("char_001__char_306", {})
     inbox_count = 0
     try:
         inbox_count = int(_r.llen("npc_messages:moderator:inbox") or 0)
@@ -1152,6 +1155,7 @@ async def simulation_digest(format: str = Query("json", pattern="^(json|text)$")
             "last_actor": pair.get("last_actor_name"),
             "last_message_preview": pair.get("last_message_preview"),
         },
+        "pairs": pairs,
         "moderator_inbox_messages": inbox_count,
     }
 
@@ -1197,6 +1201,23 @@ async def simulation_digest(format: str = Query("json", pattern="^(json|text)$")
         ):
             if c.get(key):
                 lines.append(f"{label}: {c[key]}.")
+        for slug, p in (digest.get("pairs") or {}).items():
+            if slug == "char_001__char_306":
+                continue
+            lines.append(f"Agent pair {slug.replace('__', ' and ')}:")
+            for label, key in (
+                ("shared goal", "shared_goal"),
+                ("current topic", "current_topic"),
+                ("open question", "open_question"),
+                ("last action", "resolved_action"),
+                ("last actor", "last_actor_name"),
+                ("last message", "last_message_preview"),
+            ):
+                if p.get(key):
+                    lines.append(f"{label}: {p[key]}.")
+            for k, v in p.items():
+                if k.startswith("focus_") and v:
+                    lines.append(f"{k[len('focus_') :]} is focused on: {v}.")
         lines.append(
             f"Messages waiting in the moderator inbox: "
             f"{digest['moderator_inbox_messages']}."

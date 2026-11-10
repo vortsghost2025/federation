@@ -492,7 +492,7 @@ NPC_NAME = os.environ.get("NPC_NAME", CHAR_ID)
 OPERATOR_ID = "moderator"
 SESSION_CAP = int(os.environ.get("SESSION_CAP", "24"))
 
-PAIR_IDS = {"char_001", "char_306"}
+PAIR_IDS = {x for x in os.environ.get("PAIR_IDS", "char_001,char_306").split(",") if x}
 
 
 _PLACEHOLDER_RE = re.compile(

@@ -43,6 +43,8 @@ def load_contacts(r):
     CONTACTS = {
         "char_001": "Archimedes Prime (Research Division)",
         "char_306": "The Oracle (Seer of Futures)",
+        "comp_001": "Lyra Swiftwind (independent)",
+        "comp_010": "Shadowborn (independent)",
         OPERATOR_ID: OPERATOR_NAME,
     }
     try:

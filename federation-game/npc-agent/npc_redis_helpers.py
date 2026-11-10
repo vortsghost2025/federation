@@ -11,7 +11,7 @@ import redis
 logger = logging.getLogger("npc_redis_helpers")
 
 CHAR_ID = os.environ.get("CHAR_ID", "")
-PAIR_IDS = {"char_001", "char_306"}
+PAIR_IDS = {x for x in os.environ.get("PAIR_IDS", "char_001,char_306").split(",") if x}
 PAIR_STATE_TTL = int(os.environ.get("PAIR_STATE_TTL", str(86400 * 30)))
 PAIR_JOURNAL_CAP = int(os.environ.get("PAIR_JOURNAL_CAP", "48"))
 PAIR_MESSAGE_COOLDOWN = int(os.environ.get("PAIR_MESSAGE_COOLDOWN", "180"))

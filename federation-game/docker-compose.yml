@@ -60,6 +60,7 @@
     environment:
       - PYTHONPATH=/opt/federation_shared
       - OLLAMA_BASE_URL=
+      - EXTERNAL_AGENT_NPCS=char_001,char_306,comp_001,comp_010
     volumes:
       - /docker/federation-game/backend:/app:ro
       - /docker/federation-game/shared:/opt/federation_shared:ro
@@ -152,6 +153,7 @@
     environment:
       - TICK_INTERVAL=600
       - ASYNC_POLL_TIMEOUT=1850
+      - EXTERNAL_AGENT_NPCS=char_001,char_306,comp_001,comp_010
     depends_on:
       - redis
       - postgres
@@ -439,6 +441,88 @@
       - OPERATOR_DECISION_MODEL=${ORACLE_OPERATOR_DECISION_MODEL:-openrouter/free}
       - OPERATOR_REQUEST_TIMEOUT=${ORACLE_OPERATOR_REQUEST_TIMEOUT:-90}
       - OPERATOR_MAX_OUTPUT_TOKENS=${ORACLE_OPERATOR_MAX_OUTPUT_TOKENS:-4096}
+    volumes:
+      - /docker/federation-game/npc-agent:/app:ro
+      - /docker/federation-game/shared:/opt/federation_shared:ro
+    depends_on:
+      - redis
+    networks:
+      - fed-net
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 512M
+
+  # -- Second persistent pair: Lyra Swiftwind (comp_001) + Shadowborn (comp_010)
+  # Covert-intel duo. PAIR_IDS env scopes the pair to just these two.
+  # super-vl-120b primary (specialist tier) to keep NIM budget headroom;
+  # TICK_INTERVAL=180 staggers against the councilor pair's 120.
+  npc-agent-comp001:
+    build: /docker/federation-game/npc-agent
+    restart: unless-stopped
+    environment:
+      - CHAR_ID=comp_001
+      - NPC_NAME=Lyra Swiftwind
+      - PAIR_IDS=comp_001,comp_010
+      - NVIDIA_API_KEY=${NIM_API_KEY_7}
+      - REDIS_URL=redis://redis:6379/0
+      - PYTHONPATH=/opt/federation_shared
+      - PRIMARY_MODEL=nvidia/nemotron-3.5-super-vl-120b-a12b
+      - DECISION_MODEL=nvidia/nemotron-3-nano-omni-30b-a3b-reasoning
+      - FALLBACK_MODEL_1=nvidia/nemotron-3-nano-omni-30b-a3b-reasoning
+      - FALLBACK_MODEL_2=nvidia/nemotron-3.5-super-vl-120b-a12b
+      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY_1}
+      - REQUEST_TIMEOUT=20
+      - MAX_OUTPUT_TOKENS=1024
+      - MAX_TOTAL_BUDGET_MS=120000
+      - TICK_INTERVAL=180
+      - OLLAMA_BASE_URL=
+      - OLLAMA_API_KEY=${OLLAMA_API_KEY}
+      - OLLAMA_MODEL=${OLLAMA_MODEL}
+      - OLLAMA_TIMEOUT=${OLLAMA_TIMEOUT}
+      - OLLAMA_MAX_ACTIVE=${OLLAMA_MAX_ACTIVE:-1}
+      - OLLAMA_MAX_QUEUE=${OLLAMA_MAX_QUEUE:-3}
+      - OLLAMA_COOLDOWN_SECONDS=${OLLAMA_COOLDOWN_SECONDS:-60}
+    volumes:
+      - /docker/federation-game/npc-agent:/app:ro
+      - /docker/federation-game/shared:/opt/federation_shared:ro
+    depends_on:
+      - redis
+    networks:
+      - fed-net
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 512M
+
+  npc-agent-comp010:
+    build: /docker/federation-game/npc-agent
+    restart: unless-stopped
+    environment:
+      - CHAR_ID=comp_010
+      - NPC_NAME=Shadowborn
+      - PAIR_IDS=comp_001,comp_010
+      - NVIDIA_API_KEY=${NIM_API_KEY_4}
+      - REDIS_URL=redis://redis:6379/0
+      - PYTHONPATH=/opt/federation_shared
+      - PRIMARY_MODEL=nvidia/nemotron-3.5-super-vl-120b-a12b
+      - DECISION_MODEL=nvidia/nemotron-3-nano-omni-30b-a3b-reasoning
+      - FALLBACK_MODEL_1=nvidia/nemotron-3-nano-omni-30b-a3b-reasoning
+      - FALLBACK_MODEL_2=nvidia/nemotron-3.5-super-vl-120b-a12b
+      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY_1}
+      - REQUEST_TIMEOUT=20
+      - MAX_OUTPUT_TOKENS=1024
+      - MAX_TOTAL_BUDGET_MS=120000
+      - TICK_INTERVAL=180
+      - OLLAMA_BASE_URL=
+      - OLLAMA_API_KEY=${OLLAMA_API_KEY}
+      - OLLAMA_MODEL=${OLLAMA_MODEL}
+      - OLLAMA_TIMEOUT=${OLLAMA_TIMEOUT}
+      - OLLAMA_MAX_ACTIVE=${OLLAMA_MAX_ACTIVE:-1}
+      - OLLAMA_MAX_QUEUE=${OLLAMA_MAX_QUEUE:-3}
+      - OLLAMA_COOLDOWN_SECONDS=${OLLAMA_COOLDOWN_SECONDS:-60}
     volumes:
       - /docker/federation-game/npc-agent:/app:ro
       - /docker/federation-game/shared:/opt/federation_shared:ro

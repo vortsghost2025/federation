@@ -32,7 +32,7 @@ for _sp in _SHARED_PATHS:
 
 _WORK_LOOP_OK = False
 _execute_work_loop_action = None
-PAIR_IDS = {"char_001", "char_306"}
+PAIR_IDS = {x for x in os.environ.get("PAIR_IDS", "char_001,char_306").split(",") if x}
 
 try:
     from federation_work_loop.core import (

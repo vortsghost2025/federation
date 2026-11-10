@@ -56,7 +56,7 @@ _NPC_ROSTER: dict[str, tuple[str, str]] = {
     "char_404": ("Tech-Priest Algorithm", "Research Division"),
     "char_405": ("Captain Riven", "Military Command"),
     "char_406": ("Echo-7", "Research Division"),
-    "comp_001": ("Shadowborn", "independent"),
+    "comp_001": ("Lyra Swiftwind", "independent"),
     "comp_002": ("Brother Mercy", "independent"),
     "comp_003": ("Dr. Sylas Cunningham", "independent"),
     "comp_004": ("Cipher", "independent"),
@@ -65,7 +65,7 @@ _NPC_ROSTER: dict[str, tuple[str, str]] = {
     "comp_007": ("Solace Heartmend", "independent"),
     "comp_008": ("Scout Aria", "independent"),
     "comp_009": ("Kyren Frostblade", "independent"),
-    "comp_010": ("Captain Valor", "independent"),
+    "comp_010": ("Shadowborn", "independent"),
 }
 
 _STATUS_WEIGHT = {

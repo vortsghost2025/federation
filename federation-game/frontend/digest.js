@@ -66,6 +66,30 @@
     });
     content.appendChild(s3);
 
+    var pairs = d.pairs || {};
+    Object.keys(pairs).forEach(function (slug) {
+      if (slug === 'char_001__char_306') return;
+      var p = pairs[slug] || {};
+      var s = el('section');
+      s.appendChild(el('h2', null, 'Agent pair — ' + slug.replace(/__/g, ' and ')));
+      var prows = [
+        ['Shared goal', p.shared_goal],
+        ['Current topic', p.current_topic],
+        ['Open question', p.open_question],
+        ['Last action', p.resolved_action ? (p.resolved_action + (p.last_actor_name ? ' by ' + p.last_actor_name : '')) : null],
+        ['Last message', p.last_message_preview]
+      ];
+      prows.forEach(function (r) {
+        if (r[1]) s.appendChild(el('p', null, r[0] + ': ' + r[1]));
+      });
+      Object.keys(p).forEach(function (k) {
+        if (k.indexOf('focus_') === 0 && p[k]) {
+          s.appendChild(el('p', null, k.slice(6) + ' is focused on: ' + p[k]));
+        }
+      });
+      content.appendChild(s);
+    });
+
     var s4 = el('section');
     s4.appendChild(el('h2', null, 'For you'));
     s4.appendChild(el('p', null, 'Messages waiting in your moderator inbox: ' + (d.moderator_inbox_messages || 0) + '.'));

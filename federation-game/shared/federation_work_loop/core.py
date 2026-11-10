@@ -841,7 +841,7 @@ def _validate_action_category(category: str) -> bool:
 # ── Redis Constants ─────────────────────────────────────────────────
 
 REDIS_URL = os.environ.get("REDIS_URL", "redis://redis:6379/0")
-PAIR_IDS = {"char_001", "char_306"}
+PAIR_IDS = {x for x in os.environ.get("PAIR_IDS", "char_001,char_306").split(",") if x}
 
 AGENDA_ITEM_STATUSES = frozenset({
     "proposed", "investigating", "delegated", "blocked", "requested", "completed", "rejected"
