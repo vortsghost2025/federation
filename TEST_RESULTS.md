@@ -348,3 +348,16 @@ Operator-approved items 1-3 from the page-improvement list. Frontend-only plus o
 
 **Watch items:** NIM cycle budget over next 24h with 4 agents; councilor reply acks still pending (pre-existing); comp pair journal growth.
 
+### Q. 2026-11-11 ~00:44 UTC — "give the agents what they asked for" pass (data-only, no restarts, no code changes)
+
+**Trigger:** Sean: "yes lets make it happen and then maybe we ask the counsilors what they need from us also", after the NPC-wishlist discussion (continuity, persistent hub, resources, being heard).
+
+**Actions (all Redis writes via backend container, tick idle `running=False` confirmed first):**
+1. **Persistent shared hub founded as a REAL map sector** via the production code path (`spatial_models.Sector` + `spatial_state.save_sector` inside `federation-game-backend-1`): `lumen_confluence` / "Lumen Confluence" at (0,40), inner/mixed/danger 1, adjacent to sol-prime, crucible, meridian (3 nearest), adjacency made mutual in the neighbor sectors' records. `sector:all` 21 -> 22. Also registered in both pairs' `npc_pair:*:areas` hashes (field `lumen_confluence`, `founded_by: moderator`, `shared_hub: true`) so the pair state surfaces it. Verified over HTTPS: `GET /sectors` returns 22 sectors incl. the hub; `/map/data` 200; site 200.
+2. **Echo crystal grants recorded** (`moderator_grant:{cid}:echo_crystals` hashes): char_001 25 (top-up; char_306 already had 25 from 11-08), comp_001 15, comp_010 15 (covert-ops + archive costs). Verified all 4 grant keys + `moderator_grant_history` present.
+3. **Asked the councilors what they need from the moderator** — production inbox schema (legacy list + `msg:inbox:{cid}` ZSET + `msg:{id}` hash + mirror to `npc_messages:moderator:sent`): msg_821aeb1b2f45 -> char_001, msg_5ef584cac01a -> char_306, subject "What do you need from us? Top 3, please", body lists what was just granted (hub, crystals, prior fixes) and asks for top-3 concrete needs. Verified zcard=3 each. As of 01:01 UTC their decisions still reference the older quest-formula reply; the new message is the newest in the ZSET the decision layer reads ("last moderator message wins"), so it surfaces on their next inbox-consulting decision — watch item, not a failure.
+
+**Deferred (need code/compose changes, not done this pass):** memory/thought cap bumps (backend cognition code), slower pair cadence (compose TICK_INTERVAL, container recreates). Decrees (world-metric influence) were already enabled for all 4 external agents via `EXTERNAL_AGENT_NPCS` (see DECISIONS 2026-11-10).
+
+**Post-change health:** tick `auto_tick_1794358430749` finished `running=False last_error=''`; agents still cognizing (char_001 write_code 00:58, char_306 investigate 00:58); site 200; map 200. No restarts performed, so no md5 drift possible — zero code touched.
+
