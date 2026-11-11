@@ -76,6 +76,7 @@ const npcTrailHistory = new Map(); // node id -> [{x, y, t}]
 const TRAIL_MAX_SAMPLES = 48;
 const TRAIL_TTL_MS = 10 * 60 * 1000;
 const pendingFactionLabels = []; // faction labels deferred to collision pass
+let sectorLabelBoxes = []; // sector label AABBs placed this frame (collision pass, reset in draw())
 let hoveredFaction = null;
 let canvas, ctx;
 let W, H;
@@ -1755,7 +1756,19 @@ function updateUI() {
   if (!mapData) return;
   const worker = mapData.worker || {};
   const tickCount = worker.tick_count || 0;
-  const status = worker.status || 'unknown';
+  // 2026-11-11: /map/data worker payload has no `status` field — derive it from
+  // async_outcomes ("/simulation/autonomous/tick": "completed" => idle between ticks)
+  let status = worker.status;
+  if (!status || status === 'unknown') {
+    try {
+      const ao = JSON.parse(worker.async_outcomes || '{}');
+      const v = ao['/simulation/autonomous/tick'];
+      if (v === 'completed') status = 'idle';
+      else if (v === 'running' || v === 'started') status = 'running';
+      else if (v) status = String(v);
+    } catch (e) { /* keep unknown */ }
+  }
+  if (!status) status = 'unknown';
   const tickDot = document.getElementById('tick-dot');
   const tickLabel = document.getElementById('tick-label');
 
@@ -2277,11 +2290,23 @@ function labelsOverlap(a, b) {
 return a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y;
 }
 
+// Label placement priority for sector names: hovered > faction home > core/inner > rest.
+// Used to draw important sectors first so their labels win the collision pass.
+function sectorLabelPriority(sn) {
+  let p = 0;
+  if (sn === hoveredNode) p += 8;
+  const sid = (sn.sectorData && sn.sectorData.id) || String(sn.id || '').replace('sector:', '');
+  if (sn.regionType === 'core' || sn.regionType === 'inner') p += 2;
+  if (typeof factions !== 'undefined' && factions && FACTION_ORDER.some(fid => factions[fid] && factions[fid].home_sector_id === sid)) p += 4;
+  return p;
+}
+
 // --- Drawing ---
 function draw() {
   const t = performance.now();
   const vp = getViewParams();
   pendingFactionLabels.length = 0;
+  sectorLabelBoxes.length = 0;
   ctx.clearRect(0, 0, W, H);
 
   ctx.fillStyle = '#0a0a1a';
@@ -2382,7 +2407,7 @@ function draw() {
 // Draw sector markers
 // SPATIAL-03C: In territory mode at default zoom, hide frontier/outer sector labels to reduce clutter.
 // Only show core, inner, and home sectors as labeled. Others show as dots only.
-for (const sn of spatialSectorNodes) {
+for (const sn of [...spatialSectorNodes].sort((a, b) => sectorLabelPriority(b) - sectorLabelPriority(a))) {
 const isHov = hoveredNode === sn;
 const regionColor = REGION_COLORS[sn.regionType] || '#78909c';
 // SPATIAL-03A: Fade sectors not in selected faction
@@ -2419,6 +2444,11 @@ const secLabelW = ctx.measureText(secLabelText).width + 10;
 const secLabelH = secFontSize + 6;
 const secLabelX = sn.x - secLabelW / 2;
 const secLabelY = sn.y - sn.radius - 10 - secLabelH + 2;
+// 2026-11-11: collision pass — skip the full label if its box overlaps an
+// already-placed (higher-priority) sector label; fall back to a 3-letter tag.
+const secBox = { x: secLabelX, y: secLabelY, w: secLabelW, h: secLabelH };
+const secCollides = sectorLabelBoxes.some(b => labelsOverlap(secBox, b));
+if (!secCollides) {
 // SPATIAL-03C: Darker box with border for more contrast
 ctx.fillStyle = `rgba(8,8,22,${0.8 * secFade})`;
 ctx.fillRect(secLabelX, secLabelY, secLabelW, secLabelH);
@@ -2434,6 +2464,18 @@ ctx.strokeRect(secLabelX, secLabelY, secLabelW, secLabelH);
 // Text — SPATIAL-03C: high contrast (white or light, not region-muted)
 ctx.fillStyle = `rgba(220,225,240,${(isHov ? 1.0 : (vp.sectorLabelAlpha || 0.7)) * secFade})`;
 ctx.fillText(secLabelText, sn.x, sn.y - sn.radius - 10);
+sectorLabelBoxes.push(secBox);
+} else {
+// Collided: try a small 3-letter tag instead, if it fits without overlap
+ctx.fillStyle = hexToRgba(regionColor, 0.45 * secFade);
+ctx.font = '9px Courier New';
+ctx.textAlign = 'center';
+const miniBox = { x: sn.x - 14, y: sn.y - sn.radius - 15, w: 28, h: 10 };
+if (!sectorLabelBoxes.some(b => labelsOverlap(miniBox, b))) {
+  ctx.fillText(sn.name.toUpperCase().substring(0, 3), sn.x, sn.y - sn.radius - 6);
+  sectorLabelBoxes.push(miniBox);
+}
+}
 } else {
 // Minor sector: tiny dot label or nothing
 ctx.fillStyle = hexToRgba(regionColor, 0.25 * secFade);

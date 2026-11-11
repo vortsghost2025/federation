@@ -361,3 +361,15 @@ Operator-approved items 1-3 from the page-improvement list. Frontend-only plus o
 
 **Post-change health:** tick `auto_tick_1794358430749` finished `running=False last_error=''`; agents still cognizing (char_001 write_code 00:58, char_306 investigate 00:58); site 200; map 200. No restarts performed, so no md5 drift possible — zero code touched.
 
+### R. 2026-11-11 ~03:10 UTC — starmap.html cosmetic polish (tick label + sector-label collisions)
+
+**Why:** Sean asked how the space map page was after months-ago work; browser audit (Playwright, 1400x900) showed the spatial map fully working (22 sectors incl. lumen_confluence, 15 Voronoi territories, 48 NPC locations, 0 console errors) but two blemishes: header read "TICK 149 · UNKNOWN" and center-cluster sector labels overlapped.
+
+**Changes (frontend/starmap.js only, `node --check` OK):**
+1. Tick label: `/map/data`'s `worker` payload has no `status` field, so `updateUI()` now derives it from `worker.async_outcomes` JSON (`"/simulation/autonomous/tick": "completed"` -> "idle", running/started -> "running").
+2. Sector labels: added `sectorLabelBoxes` AABB list (reset each `draw()`), a `sectorLabelPriority()` helper (hovered > faction home > core/inner), the sector node loop now draws in priority order, and each full label box is checked with the existing `labelsOverlap()` — on collision the sector falls back to a 3-letter tag if that fits, otherwise no label. Important sectors therefore always keep their full names.
+
+**Deploy:** static file only — scp to VPS /tmp, `.bak-20261111` backups, copied to `frontend/starmap.js` + `public_html/starmap.js`; md5 `b8a053aeff8f34d5d71dd4f5ca3777af` verified equal on local, VPS frontend, VPS public_html, and inside `federation-game-frontend-1` (`/usr/share/nginx/html/starmap.js`). No service restart needed (nginx serves the bind-mounted file directly).
+
+**Live proof (Playwright against production):** header now reads "TICK 150 · IDLE" with the stopped-dot class; console errors 0, page errors 0; screenshot shows center cluster resolved (full labels for prioritized sectors, 3-letter tags for colliding minor ones) and lumen_confluence present in the sector set. Site 200.
+
