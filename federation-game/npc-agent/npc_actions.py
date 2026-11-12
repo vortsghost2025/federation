@@ -872,7 +872,14 @@ def execute_decision(decision: dict, r, contacts: dict):
                     try:
                         obj = json.loads(a)
                         titles.append(obj.get("title", "?"))
-                        summaries.append(f"{obj.get('title', '?')} ({obj.get('artifact_type', 'text')})")
+                        summ = f"{obj.get('title', '?')} ({obj.get('artifact_type', 'text')})"
+                        # 2026-11-12: include a content excerpt so agents can actually
+                        # READ artifact bodies (previously titles only), per moderator
+                        # directive - capped at 600 chars to keep the summary bounded.
+                        content = (obj.get("content") or "")[:600]
+                        if content:
+                            summ += f" :: {content}"
+                        summaries.append(summ)
                     except Exception:
                         pass
                 result["action_taken"] = f"read {len(summaries)} recent artifacts from {partner_id}"
