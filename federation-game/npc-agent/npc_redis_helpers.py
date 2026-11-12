@@ -10,6 +10,62 @@ import redis
 
 logger = logging.getLogger("npc_redis_helpers")
 
+
+# ── Moderator negative-facts pin ─────────────────────────────────
+# world_facts:nonexistent is a SET of JSON facts authored by the moderator.
+# Fact shape: {"id", "text", "patterns": [regex, ...], "alternative", "source", "ts"}
+NONEXISTENT_FACTS_KEY = "world_facts:nonexistent"
+
+
+def get_nonexistent_facts(r) -> list:
+    """Return moderator-authored 'does not exist' facts, oldest first."""
+    facts = []
+    try:
+        for raw in r.smembers(NONEXISTENT_FACTS_KEY):
+            try:
+                f = json.loads(raw)
+            except Exception:
+                continue
+            if isinstance(f, dict) and f.get("id") and f.get("text"):
+                facts.append(f)
+    except Exception:
+        return []
+    facts.sort(key=lambda f: float(f.get("ts") or 0))
+    return facts
+
+
+def match_nonexistent_fact(r, text: str):
+    """Return the first nonexistent-fact whose pattern matches text, else None."""
+    if not text:
+        return None
+    for f in get_nonexistent_facts(r):
+        for pat in f.get("patterns") or []:
+            try:
+                if re.search(pat, text, re.I):
+                    return f
+            except re.error:
+                continue
+    return None
+
+
+def nonexistent_facts_prompt_block(r) -> str:
+    """System-prompt section listing moderator-confirmed nonexistent things."""
+    facts = get_nonexistent_facts(r)
+    if not facts:
+        return ""
+    lines = [
+        "",
+        "MODERATOR-CONFIRMED NONEXISTENT (binding) — the following do NOT exist "
+        "anywhere in this world: no API, no endpoint, no dataset, no file, no memory key.",
+        "Do NOT pick request_capability for them, do NOT investigate or search for them, "
+        "and do NOT assume they exist. If your current task depends on one, pivot to the "
+        "alternative given:",
+    ]
+    for f in facts:
+        alt = f.get("alternative") or ""
+        lines.append("- " + str(f["text"]) + (f"  INSTEAD: {alt}" if alt else ""))
+    return "\n".join(lines) + "\n"
+
 CHAR_ID = os.environ.get("CHAR_ID", "")
 PAIR_IDS = {x for x in os.environ.get("PAIR_IDS", "char_001,char_306").split(",") if x}
 PAIR_STATE_TTL = int(os.environ.get("PAIR_STATE_TTL", str(86400 * 30)))

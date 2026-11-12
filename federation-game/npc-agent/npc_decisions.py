@@ -52,6 +52,8 @@ from npc_redis_helpers import (
     _session_transcript,
     _recent_decision_shapes,
     _newest_first_streak,
+    match_nonexistent_fact,
+    nonexistent_facts_prompt_block,
 )
 from npc_context import (
     neighborhood_snapshot, hash_event, promote_events_to_inbox,
@@ -836,6 +838,10 @@ Respond in this exact JSON format (no markdown, no explanation):
 {"category": "request_capability", "reasoning": "...", "need_type": "information_access|memory_access|coordination_help|institution_support|workflow_visibility|decision_feedback|world_state_gap", "priority": "high|medium|low", "description": "what you need", "why_needed": "why it matters", "suggested_capability": "short name for the capability"}
 {"category": "create_area", "reasoning": "...", "area_id": " aurora_reach", "name": "Aurora Reach", "description": "A glacial frontier where anchor-network resonance is strongest.", "x": 420, "y": 880, "region_type": "frontier", "resource_profile": "exotic", "danger_level": 6, "adjacent_sector_ids": ["ghost", "pinnacle"]}"""
 
+    # Moderator negative-facts pin: surface confirmed-nonexistent items in the
+    # system prompt so the model stops proposing/requesting them.
+    base_system += nonexistent_facts_prompt_block(r)
+
     force_constraint = ""
     _topic_blocked_for_dedup = ""
     _topic_blocked_for_cooldown = ""
@@ -1130,6 +1136,27 @@ Respond in this exact JSON format (no markdown, no explanation):
         if cat not in AGENCY_CATEGORIES:
             logger.warning("[%s] Unknown category '%s'; defaulting to rest", CHAR_ID, cat)
             decision = {"category": "rest", "reasoning": f"unknown category {cat}", "description": "resting after unknown action"}
+        # Moderator negative-facts pin (hard block): a request_capability whose
+        # text matches a moderator-confirmed nonexistent fact is rerouted to
+        # investigate the real alternative, and never reaches the capreq bridge.
+        if cat == "request_capability" and r is not None:
+            _cap_text = " ".join(str(decision.get(k) or "") for k in (
+                "reasoning", "description", "why_needed", "suggested_capability", "need_type"))
+            _fact = match_nonexistent_fact(r, _cap_text)
+            if _fact:
+                logger.warning("[%s] request_capability blocked by nonexistent-fact pin %s", CHAR_ID, _fact.get("id"))
+                decision = {
+                    "category": "investigate",
+                    "reasoning": (
+                        f"request_capability was blocked by moderator-confirmed fact "
+                        f"'{_fact.get('id')}': {_fact.get('text')}"
+                    ),
+                    "description": (
+                        "Investigating the real alternative instead: "
+                        + str(_fact.get("alternative") or "see the moderator-confirmed fact")
+                    ),
+                }
+                cat = "investigate"
         decision["description"] = _enforce_fourth_wall(decision.get("description", ""))
         decision["reasoning"] = _enforce_fourth_wall(decision.get("reasoning", ""))
         for key in ("body", "title", "mandate"):
