@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="icon" href="data:," />
+<title>Moderator Dashboard — Federation</title>
+<style>
+  :root {
+    --bg: #0b0e14; --panel: #141a26; --panel2: #1a2233; --line: #2a3550;
+    --text: #e8ecf4; --dim: #9aa7c0; --accent: #6ea8ff; --good: #4ade80;
+    --warn: #fbbf24; --bad: #f87171;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    font-size: 18px; line-height: 1.5; padding: 16px;
+  }
+  h1 { font-size: 26px; margin: 0 0 4px; }
+  h2 { font-size: 21px; margin: 28px 0 10px; border-bottom: 2px solid var(--line); padding-bottom: 6px; }
+  .sub { color: var(--dim); margin: 0 0 12px; }
+  .pill {
+    display: inline-block; padding: 2px 12px; border-radius: 999px;
+    font-size: 15px; font-weight: 600; margin-left: 8px; vertical-align: middle;
+  }
+  .pill.ok { background: #14532d; color: var(--good); }
+  .pill.run { background: #1e3a8a; color: var(--accent); }
+  .pill.bad { background: #7f1d1d; color: var(--bad); }
+  .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; margin: 10px 0; }
+  .ask { background: var(--panel2); border-left: 4px solid var(--accent); border-radius: 8px; padding: 10px 14px; margin: 8px 0; }
+  .ask .who { font-weight: 700; color: var(--accent); }
+  .ask .subj { font-weight: 600; margin: 2px 0; }
+  .ask .body { color: var(--dim); white-space: pre-wrap; }
+  .ask .when { color: var(--dim); font-size: 14px; }
+  .ask.unread { border-left-color: var(--warn); }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 12px; }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; }
+  .card h3 { margin: 0 0 6px; font-size: 19px; color: var(--accent); }
+  .meta { color: var(--dim); font-size: 15px; margin: 2px 0; }
+  .chip {
+    display: inline-block; background: var(--panel2); border: 1px solid var(--line);
+    border-radius: 6px; padding: 1px 8px; margin: 2px 4px 2px 0; font-size: 14px;
+  }
+  .dec { border-top: 1px solid var(--line); padding: 6px 0; font-size: 15px; }
+  .dec .cat { color: var(--warn); font-weight: 600; }
+  .dec .when { color: var(--dim); font-size: 13px; }
+  a { color: var(--accent); }
+  #err { color: var(--bad); font-weight: 600; }
+  .refresh { color: var(--dim); font-size: 14px; margin-top: 24px; }
+</style>
+</head>
+<body>
+<h1>🛠 Moderator Dashboard <span id="tickPill" class="pill">…</span></h1>
+<p class="sub" id="headSub">Agent asks, grants, and status for the wishlist ritual. Auto-refreshes every 30s. <a href="/">← back to ship</a></p>
+<div id="err"></div>
+
+<h2>Agent asks — moderator inbox <span id="inboxCount" class="pill ok">0</span></h2>
+<div id="inbox"><p class="meta">Loading…</p></div>
+
+<h2>The four agents</h2>
+<div class="grid" id="agents"><p class="meta">Loading…</p></div>
+
+<h2>System</h2>
+<div class="panel" id="system"><p class="meta">Loading…</p></div>
+
+<p class="refresh" id="refreshNote">Last updated: —</p>
+
+<script>
+const $ = (id) => document.getElementById(id);
+function ago(ts) {
+  if (!ts) return "";
+  const s = Math.max(0, (Date.now() / 1000) - Number(ts));
+  if (s < 60) return Math.floor(s) + "s ago";
+  if (s < 3600) return Math.floor(s / 60) + "m ago";
+  if (s < 86400) return Math.floor(s / 3600) + "h ago";
+  return Math.floor(s / 86400) + "d ago";
+}
+function esc(s) {
+  return String(s == null ? "" : s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+}
+async function load() {
+  try {
+    const res = await fetch("/spectator/moderator-dashboard", { cache: "no-store" });
+    if (!res.ok) throw new Error("HTTP " + res.status);
+    const d = await res.json();
+    $("err").textContent = "";
+
+    const t = d.tick || {};
+    const pill = $("tickPill");
+    pill.textContent = "TICK " + (t.tick_id || "?").replace("auto_tick_", "") + (t.running === "True" || t.running === true ? " · RUNNING" : " · IDLE");
+    pill.className = "pill " + (t.last_error ? "bad" : (t.running === "True" || t.running === true ? "run" : "ok"));
+    const h = d.llm_health || {};
+    $("headSub").textContent = "LLM health " + (h.score ?? "?") + (h.status ? " (" + h.status + ")" : "") + (h.alerts ? " — " + h.alerts : "") + ". Auto-refreshes every 30s. ";
+
+    // inbox
+    $("inboxCount").textContent = (d.moderator_inbox_total ?? 0) + " total, " + (d.moderator_inbox || []).length + " shown · sent to agents: " + (d.moderator_sent_total ?? 0);
+    const ib = $("inbox");
+    if (!d.moderator_inbox || !d.moderator_inbox.length) {
+      ib.innerHTML = '<p class="meta">No agent messages yet. Run scripts/ask_agents_wishlist.py to ask the top-3 question.</p>';
+    } else {
+      ib.innerHTML = d.moderator_inbox.map(m => `
+        <div class="ask ${m.read ? "" : "unread"}">
+          <span class="who">${esc(m.from_name)}</span> <span class="when">${ago(m.ts)}</span>
+          <div class="subj">${esc(m.subject)}</div>
+          <div class="body">${esc(m.body)}</div>
+        </div>`).join("");
+    }
+
+    // agents
+    const ag = $("agents");
+    ag.innerHTML = (d.agents || []).map(a => {
+      const grants = Object.entries(a.grants || {}).map(([k, v]) =>
+        `<span class="chip">${esc(k)}: ${esc(v.amount ?? v.count ?? JSON.stringify(v).slice(0, 40))}</span>`).join("") || '<span class="meta">no grants</span>';
+      const decs = (a.recent_decisions || []).map(x => `
+        <div class="dec"><span class="cat">${esc(x.category)}</span> <span class="when">${ago(x.ts)}</span><br>${esc(x.reasoning)}</div>`).join("");
+      const cats = Object.entries(a.decisions_last_hour || {}).map(([k, v]) => `<span class="chip">${esc(k)} ×${v}</span>`).join("");
+      return `
+      <div class="card">
+        <h3>${esc(a.name)} <span class="meta">(${esc(a.id)})</span></h3>
+        <p class="meta">Unread inbox: <strong>${a.unread_inbox}</strong> · Artifacts: ${a.artifacts}${a.last_artifact ? " · last: " + esc(a.last_artifact) : ""}</p>
+        ${a.newest_moderator_msg ? `<p class="meta">Newest msg from you: ${esc(a.newest_moderator_msg.subject)} (${ago(a.newest_moderator_msg.ts)})</p>` : ""}
+        ${a.current_topic ? `<p class="meta">Current topic: ${esc(a.current_topic)}</p>` : ""}
+        <p class="meta">Grants: ${grants}</p>
+        <p class="meta">Last hour: ${cats || "—"}</p>
+        <div>${decs || '<p class="meta">no recent decisions</p>'}</div>
+      </div>`;
+    }).join("");
+
+    // system
+    const cr = Object.entries(d.capability_requests || {}).map(([k, v]) => `<span class="chip">${esc(k)} ×${v}</span>`).join("");
+    $("system").innerHTML = `
+      <p class="meta">Tick: ${esc(t.tick_id)} · running: ${esc(t.running)} · last_error: ${esc(t.last_error || "(none)")} · last_end: ${esc(t.last_end || "?")}</p>
+      <p class="meta">Capability requests: ${cr || "—"}</p>`;
+
+    $("refreshNote").textContent = "Last updated: " + new Date().toLocaleTimeString();
+  } catch (e) {
+    $("err").textContent = "Failed to load dashboard: " + e.message;
+  }
+}
+load();
+setInterval(load, 30000);
+</script>
+</body>
+</html>

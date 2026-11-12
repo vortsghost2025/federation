@@ -1223,3 +1223,173 @@ def spectator_agency():
         "updated_at": datetime.utcnow().isoformat() + "Z",
     }
 
+
+@router.get("/spectator/moderator-dashboard")
+def spectator_moderator_dashboard():
+    """Read-only moderator dashboard for the wishlist ritual (scripts/ask_agents_wishlist.py).
+
+    Returns: tick/health status, the moderator inbox (agent asks), moderator sent count,
+    capability-request status counts, and per-agent status (unread inbox, grants,
+    recent decisions, last artifact, current pair topic). Redis reads only.
+    Added 2026-11-12.
+    """
+    import os as _os
+    import time as _time
+    import redis as _redis_mod
+    from collections import Counter as _Counter
+
+    r = _redis_mod.from_url(
+        _os.environ.get("REDIS_URL", "redis://redis:6379/0"),
+        decode_responses=True, socket_connect_timeout=3, socket_timeout=3,
+    )
+    now = _time.time()
+
+    tick = r.hgetall("fed:auto_tick_status") or {}
+    health = r.hgetall("monitor:llm_health") or {}
+
+    # moderator inbox: agent -> moderator asks, newest first
+    inbox = []
+    try:
+        for raw in reversed(r.lrange("npc_messages:moderator:inbox", -15, -1)):
+            try:
+                m = json.loads(raw)
+            except Exception:
+                continue
+            inbox.append({
+                "id": m.get("id") or m.get("msg_id"),
+                "from_char_id": m.get("from_char_id") or m.get("from"),
+                "from_name": m.get("from_name") or "?",
+                "subject": (m.get("subject") or "")[:120],
+                "body": (m.get("body") or "")[:400],
+                "read": bool(m.get("read")),
+                "ts": m.get("ts") or m.get("created_at"),
+            })
+    except Exception:
+        pass
+
+    capreq_counts = _Counter()
+    try:
+        for rid in r.zrange("npc_capability_requests:index", 0, -1):
+            st = r.hget("npc_capability_request:" + rid, "status")
+            if st:
+                capreq_counts[st] += 1
+    except Exception:
+        pass
+
+    agent_ids = [a.strip() for a in _os.environ.get(
+        "EXTERNAL_AGENT_NPCS", "char_001,char_306,comp_001,comp_010").split(",") if a.strip()]
+
+    agents = []
+    # resolve names the same way /spectator/scenes does (game_state), with a
+    # static fallback for the four external-agent NPCs
+    _known_names = {
+        "char_001": "Archimedes Prime", "char_306": "The Oracle",
+        "comp_001": "Lyra Swiftwind", "comp_010": "Shadowborn",
+    }
+    npc_names = {}
+    try:
+        from state import game_state as _gs
+        chars = getattr(getattr(_gs, "npc_system", None), "characters", {}) or {}
+        for cid, c in chars.items():
+            npc_names[cid] = getattr(c, "name", "") or cid
+        comps = getattr(getattr(_gs, "npc_system", None), "companions", {}) or {}
+        for cid, c in comps.items():
+            npc_names[cid] = getattr(c, "name", "") or cid
+    except Exception:
+        pass
+    for cid in agent_ids:
+        name = npc_names.get(cid) or r.get(f"npc:{cid}:name") or _known_names.get(cid) or cid
+        unread = 0
+        try:
+            unread = r.zcard(f"msg:inbox:{cid}")
+        except Exception:
+            pass
+        newest_mod_msg = None
+        try:
+            for raw in reversed(r.lrange(f"npc_messages:{cid}:inbox", -5, -1)):
+                try:
+                    m = json.loads(raw)
+                except Exception:
+                    continue
+                if (m.get("from") == "moderator") or (m.get("from_char_id") == "moderator"):
+                    newest_mod_msg = {"subject": (m.get("subject") or "")[:120], "ts": m.get("ts")}
+                    break
+        except Exception:
+            pass
+        decisions = []
+        cats_hour = _Counter()
+        try:
+            for d, s in r.zrevrange(f"npc_decisions:{cid}", 0, 4, withscores=True):
+                try:
+                    j = json.loads(d)
+                except Exception:
+                    continue
+                decisions.append({
+                    "ts": s,
+                    "category": j.get("category", "?"),
+                    "reasoning": (j.get("reasoning") or j.get("description") or "")[:140],
+                })
+            for d, s in r.zrangebyscore(f"npc_decisions:{cid}", now - 3600, "+inf", withscores=True):
+                try:
+                    cats_hour[json.loads(d).get("category", "?")] += 1
+                except Exception:
+                    pass
+        except Exception:
+            pass
+        grants = {}
+        try:
+            for gk in r.scan_iter(f"moderator_grant:{cid}:*"):
+                grants[gk.split(":", 2)[2]] = r.hgetall(gk) or {}
+        except Exception:
+            pass
+        art_llen = 0
+        last_art = None
+        try:
+            art_llen = r.llen(f"npc_artifacts:{cid}")
+            tail = r.lrange(f"npc_artifacts:{cid}", -1, -1)
+            if tail:
+                last_art = (json.loads(tail[0]).get("title") or "")[:100]
+        except Exception:
+            pass
+        topic = None
+        try:
+            for pk in r.scan_iter("npc_pair:*:state"):
+                if cid in pk:
+                    topic = (r.hget(pk, "current_topic") or "")[:160]
+                    break
+        except Exception:
+            pass
+        agents.append({
+            "id": cid,
+            "name": name,
+            "unread_inbox": unread,
+            "newest_moderator_msg": newest_mod_msg,
+            "grants": grants,
+            "artifacts": art_llen,
+            "last_artifact": last_art,
+            "recent_decisions": decisions,
+            "decisions_last_hour": dict(cats_hour),
+            "current_topic": topic,
+        })
+
+    return {
+        "status": "ok",
+        "generated_at": now,
+        "tick": {
+            "tick_id": tick.get("tick_id"),
+            "running": tick.get("running"),
+            "last_error": (tick.get("last_error") or "")[:200],
+            "last_end": tick.get("last_end"),
+        },
+        "llm_health": {
+            "status": health.get("status"),
+            "score": health.get("health_score"),
+            "alerts": (health.get("alerts") or "")[:200],
+        },
+        "moderator_inbox": inbox,
+        "moderator_inbox_total": r.llen("npc_messages:moderator:inbox"),
+        "moderator_sent_total": r.llen("npc_messages:moderator:sent"),
+        "capability_requests": dict(capreq_counts),
+        "agents": agents,
+    }
+

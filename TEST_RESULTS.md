@@ -424,3 +424,13 @@ Operator-approved items 1-3 from the page-improvement list. Frontend-only plus o
 
 **Health at pass end:** tick running clean (last_error=''), site 200, llm_health OK 100.
 
+### W. 2026-11-12 ~00:30–00:48 UTC — Moderator dashboard page (backend endpoint + static page, deployed between ticks)
+
+**What was built:** a public, read-only dashboard at `/moderator.html` (nav tab "🛠 Moderator" added to index.html) backed by new endpoint `GET /spectator/moderator-dashboard` in `backend/routes/npc_logs.py`. Shows: tick pill (IDLE/RUNNING + last_error), LLM health, the moderator inbox (agent asks, newest 15, unread highlighted), sent-to-agents count, capability-request status counts, and one card per external-agent NPC (name resolved via game_state with static fallback, unread inbox, newest moderator msg, grants incl. echo crystals + severity dataset, artifact count + last artifact, current pair topic, last-hour decision category counts, last 5 decisions). Auto-refreshes every 30s. `/admin/*` was deliberately NOT used — operator_auth fails closed for outside IPs, so the page uses the public `/spectator/` prefix; nginx already proxies it, no conf change.
+
+**Deploy (per AGENTS.md, between ticks):** waited for `fed:auto_tick_status` running=False; backed up VPS file (`npc_logs.py.bak-20261112`, `.bak-20261112b`), scp'd local -> host, `docker restart federation-game-backend-1`, md5 verified local = host = container (`1b8e9328...` final). Frontend: `moderator.html` + `index.html` copied to host `frontend/` AND `public_html/`; md5 verified local = public_html = frontend container (`f8fb8fd8...` moderator.html, `3cae9031...` index.html). No nginx reload needed (static only).
+
+**Live proof:** endpoint returns status ok with all 4 agents named (Archimedes Prime, The Oracle, Lyra Swiftwind, Shadowborn), grants (echo_crystals 35/35/25/25, severity_dataset), capreqs {rejected: 784}, inbox total, tick clean. `/moderator.html` 200, `/` 200 (Moderator tab present in served HTML). Playwright against production: H1 + tick pill "IDLE", inbox "20 total, 15 shown · sent 38", 4 agent cards rendered, **0 console errors, 0 page errors**, screenshot saved.
+
+**Ritual already paying off:** inbox grew 18 -> 20 within minutes — The Oracle replied twice to the routine check-in (acknowledging Lumen Confluence + check-in, reporting quest progress). Old comp-pair hub-API asks still sit unread in the inbox (pre-clarification).
+
