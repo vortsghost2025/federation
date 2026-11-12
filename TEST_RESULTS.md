@@ -412,3 +412,15 @@ Operator-approved items 1-3 from the page-improvement list. Frontend-only plus o
 
 **Outcome at 23:50 UTC (PROVEN for infra, MIXED for behavior):** tick clean, site 200, llm_health OK 100. Councilors visibly healthier post-reject: char_001 last hour = 10 write_code + 6 create_artifact + 0 request_capability (was 11/h); char_306 = 14 create_artifact + 4 write_code + 0 request_capability. Comp pair: hub-API mentions dropped (comp_010: 0 since trim) but the fixation **changes form each time it's answered** (data.csv -> hub API -> severity_weights_dataset -> "registration clarification"); the work loop's own topic-cooldown already rotates them off each fixation ("Topic cooldown forced fallback - rotating redirect"), and comp_001 authored a real "Code: Load severity_weights_dataset, normalize the weights" artifact. Verdict: loop is self-limiting and cosmetic; no code-level loop-breaker deployed (kept as option if NIM budget ever squeezes).
 
+### V. 2026-11-12 ~00:17 UTC — "lets do it" + standing wishlist ritual (data-only; sandbox fix verified already live)
+
+**Context:** Sean: "lets do it and lets make it a routine to ask them every now and then and try to work with them to help them build their world the way they want."
+
+**Findings/actions:**
+1. The councilors' #1 code-level ask (sandbox `nonlocal` keyword, requested 2026-11-08 by both char_001 and char_306) was ALREADY granted on 2026-11-08 — verified live this pass: `npc_actions.py` md5 `e05e286f04d5dc5dc83fa0277e817064` identical across local source, VPS host, and all four npc-agent containers (001/306/comp001/comp010). No deploy needed.
+2. **Echo crystal goodwill top-up (+10 each):** char_001 25->35, char_306 25->35, comp_001 15->25, comp_010 15->25 via `moderator_grant:{cid}:echo_crystals` (verified after write).
+3. **Fresh routine wishlist question sent to all four agents** (full inbox schema: legacy list + `msg:inbox` ZSET + `msg:{id}` hash + `moderator:sent` mirror): msg_e03b7e7416a9 -> char_001, msg_f90fe72da040 -> char_306, msg_9002451df482 -> comp_001, msg_8e47c3d5f5a6 -> comp_010. Inbox zcards 4/4/6/6; sent mirror len 38. Body tells them the nonlocal fix exists and where the dataset/weights artifacts live.
+4. **Routine made durable:** added `scripts/ask_agents_wishlist.py` (run command in its docstring; sends the top-3 question to all four agents, prints where to read replies). DECISIONS.md records the cadence: every 2-3 days run the script, read `npc_messages:moderator:inbox`, answer each reply — a one-line "no, that doesn't exist, try X" breaks request-loops.
+
+**Health at pass end:** tick running clean (last_error=''), site 200, llm_health OK 100.
+
