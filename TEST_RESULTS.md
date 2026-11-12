@@ -462,3 +462,15 @@ Operator-approved items 1-3 from the page-improvement list. Frontend-only plus o
 
 **Next standing items:** wishlist ritual next run ~2026-11-14 (`scripts/ask_agents_wishlist.py`); watch NIM 429s (only act if llm_health drops below OK); nightly Redis BGSAVE cron on VPS still recommended (sim state is Redis-only); headless-mirror git sync still blocked on Tailscale.
 
+### Z. 2026-11-12 ~22:30 UTC - evening pass (Sean back from work)
+
+**Health (PROVEN):** 22:30 UTC - all federation-game containers healthy (worker 29h, backend 22h, 4 npc-agents 20h), `/`, `/moderator.html`, `/spectator/moderator-dashboard`, `/map/data` all 200, tick clean (`last_error=''`). Capreqs 784/784 rejected, 0 new. Redis 666MB / 85k keys. Logs: only known noise - comp containers' recurring `Bridge exception: No module named 'npc_autonomy'` (npc_actions.py:1377), OR-free failures (monthly cap), worker Apprise, and one transient backend `npc_memory` all-providers-failed during the 429 storm.
+
+**LLM:** `llm_health` WARNING 0 all evening (nim + free breakers tripped). NIM errors since 18:50: 100 (capped list) - 429 bursts on super-vl-120b at 20:06-20:16 etc., plus 2x 503 "content safety screening unavailable". Fallbacks serving: `llm_audit` since 18:50 = 457/500 (91%). Self-clearing pattern; no action. If this persists for days or ok-rate drops below ~85%, the documented lever is `cycle_budget` up or `TICK_INTERVAL=240` via compose edit between ticks (not done).
+
+**Behavior:** char pair healthy - 0 phantom hits since 18:50, working echo-crystal allocation + preservation risk metrics (write_code/create_artifact/send_message). Comp pair: loop persists at lower intensity - comp_001 5x + comp_010 4x `request_capability` since 18:50, phantom hits 18/15, but pair topic rotated to a Jester poem (cooldown self-limiting the risk thread); phantom artifact counts down after the trim (comp_001 167 arts/15 phantom vs 195/46 before; comp_010 178/10).
+
+**Actions (data-only, no code/restarts/deploys):** answered the 4 new inbox asks - `msg_9fff1aecf4a1`->char_001 (nothing needed, keep building) and `msg_24df15e7db6c`->comp_010 (binding repeat: metrics do not exist, recompute from `1bf49173` `severity_weight/4`, label old scores as estimates, no registration API, Lumen Confluence live); marked 4 unread read -> inbox 0 unread of 39, sent 47.
+
+**Recommendation awaiting Sean:** the comp loop is now a measurable chunk of the NIM 429 load (request_capability every tick). The **negative-facts pin** (world_facts:nonexistent surfaced in `npc_context.py` + hard-block matching `request_capability` in `npc_decisions.py`) plus the bridge-import fix at `npc_actions.py:1377` would kill both the loop and part of the rate-limit pressure. Needs between-ticks deploy to 4 agent containers + backend, md5-verified. NOT done.
+
