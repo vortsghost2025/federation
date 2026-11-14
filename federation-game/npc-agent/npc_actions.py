@@ -34,6 +34,7 @@ from npc_redis_helpers import (
     _semantic_artifact_dedup_blocked,
     _record_outcome_feedback,
     _record_outcome_consequence,
+    match_nonexistent_fact,
 )
 
 # ── Sandboxed builder (write_code) ──
@@ -1385,7 +1386,31 @@ def execute_decision(decision: dict, r, contacts: dict):
                     related_inst = r.get(f"councilor:{CHAR_ID}:institution") or ""
                     stable_id = "capreq_" + _hl.sha256(f"{CHAR_ID}:{need_type}:{need_desc[:80]}".encode()).hexdigest()[:16]
                     existing_rid = r.get(f"npc_capability_requests:stable:{stable_id}")
-                    if existing_rid:
+                    # Moderator negative-facts pin (hard block): a capreq whose text
+                    # matches a moderator-confirmed nonexistent fact is NEVER written
+                    # to Redis — no record, no index entry, no stable-id mapping.
+                    _pin_text = " ".join(str(x or "") for x in (
+                        need_type, need_desc, why_needed, suggested, decision.get("reasoning")))
+                    _pin_fact = match_nonexistent_fact(r, _pin_text) if r is not None else None
+                    if _pin_fact:
+                        result["action_taken"] = "capability_request_blocked_nonexistent_fact"
+                        result["blocked_fact_id"] = _pin_fact.get("id")
+                        result["summary"] = (
+                            f"Blocked by moderator-confirmed fact '{_pin_fact.get('id')}': "
+                            f"{_pin_fact.get('text')} INSTEAD: "
+                            f"{_pin_fact.get('alternative') or 'pivot to a real alternative'}"
+                        )
+                        logger.warning(
+                            "[%s] capreq NOT filed - blocked by nonexistent-fact pin %s",
+                            CHAR_ID, _pin_fact.get("id"),
+                        )
+                        _session_append(r, {
+                            "kind": "capability_request_blocked",
+                            "actor": NPC_NAME,
+                            "body": (f"capreq blocked by pinned fact {_pin_fact.get('id')}: "
+                                     f"{str(_pin_fact.get('text'))[:120]}"),
+                        })
+                    elif existing_rid:
                         result["action_taken"] = "capability_request_duplicate"
                         result["need_id"] = existing_rid
                         result["summary"] = f"Duplicate capability request (existing {existing_rid})"
