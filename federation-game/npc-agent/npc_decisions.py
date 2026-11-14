@@ -53,6 +53,7 @@ from npc_redis_helpers import (
     _recent_decision_shapes,
     _newest_first_streak,
     match_nonexistent_fact,
+    match_pinned_artifact_read,
     nonexistent_facts_prompt_block,
 )
 from npc_context import (
@@ -1151,6 +1152,29 @@ Respond in this exact JSON format (no markdown, no explanation):
                     "category": "investigate",
                     "reasoning": (
                         f"request_capability was blocked by moderator-confirmed fact "
+                        f"'{_fact.get('id')}': {_fact.get('text')}"
+                    ),
+                    "description": (
+                        "Investigating the real alternative instead: "
+                        + str(_fact.get("alternative") or "see the moderator-confirmed fact")
+                    ),
+                }
+                cat = "investigate"
+        # Moderator negative-facts pin (hard block) for read_artifacts: a read
+        # whose text matches a nonexistent fact, or that tries to extract more
+        # from a pinned artifact (e.g. 'complete CSV content of 1bf49173'), is
+        # rerouted to investigate the real alternative. Generic reads with no
+        # fact match pass through, so the anti-loop forced read_artifacts
+        # fallbacks below (which return their own decision dicts) still work.
+        if cat == "read_artifacts" and r is not None:
+            _read_text = " ".join(str(decision.get(k) or "") for k in ("reasoning", "description"))
+            _fact = match_nonexistent_fact(r, _read_text) or match_pinned_artifact_read(r, _read_text)
+            if _fact:
+                logger.warning("[%s] read_artifacts blocked by nonexistent-fact pin %s", CHAR_ID, _fact.get("id"))
+                decision = {
+                    "category": "investigate",
+                    "reasoning": (
+                        f"read_artifacts was blocked by moderator-confirmed fact "
                         f"'{_fact.get('id')}': {_fact.get('text')}"
                     ),
                     "description": (

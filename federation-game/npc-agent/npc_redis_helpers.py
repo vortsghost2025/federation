@@ -48,6 +48,48 @@ def match_nonexistent_fact(r, text: str):
     return None
 
 
+ARTIFACT_UUID_RE = re.compile(r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}")
+# Read-intent phrasing that signals an agent is trying to extract MORE from an
+# artifact than the stored excerpt (e.g. "complete CSV content", "raw rows").
+EXTRACT_INTENT_RE = re.compile(
+    r"csv|content|rows?|parse|extract|full|complete|column|values?|dump", re.I
+)
+
+
+def pinned_artifact_ids(r) -> set:
+    """Lowercase UUIDs of artifacts named in moderator-confirmed nonexistent facts."""
+    ids = set()
+    for f in get_nonexistent_facts(r):
+        blob = " ".join(str(f.get(k) or "") for k in ("text", "alternative"))
+        for m in ARTIFACT_UUID_RE.findall(blob):
+            ids.add(m.lower())
+    return ids
+
+
+def match_pinned_artifact_read(r, text: str):
+    """Return the nonexistent fact if `text` names a pinned artifact AND carries
+    extract-intent phrasing (e.g. 'read the complete CSV content of artifact
+    1bf49173...'), else None.
+
+    Plain reads that mention the artifact without extract intent (e.g.
+    'review the tier distribution table') are NOT blocked, and neither are
+    generic partner-artifact reads that name no pinned artifact.
+    """
+    if not text:
+        return None
+    tl = text.lower()
+    ids = pinned_artifact_ids(r)
+    if not ids or not any(a in tl for a in ids):
+        return None
+    if not EXTRACT_INTENT_RE.search(text):
+        return None
+    for f in get_nonexistent_facts(r):
+        blob = " ".join(str(f.get(k) or "") for k in ("text", "alternative")).lower()
+        if any(a in blob for a in ids):
+            return f
+    return None
+
+
 def nonexistent_facts_prompt_block(r) -> str:
     """System-prompt section listing moderator-confirmed nonexistent things."""
     facts = get_nonexistent_facts(r)

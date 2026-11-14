@@ -35,6 +35,7 @@ from npc_redis_helpers import (
     _record_outcome_feedback,
     _record_outcome_consequence,
     match_nonexistent_fact,
+    match_pinned_artifact_read,
 )
 
 # ── Sandboxed builder (write_code) ──
@@ -864,48 +865,77 @@ def execute_decision(decision: dict, r, contacts: dict):
                 )
 
     elif cat == "read_artifacts":
-        try:
-            partner_artifacts = r.lrange(f"npc_artifacts:{partner_id}", -6, -1)
-            if partner_artifacts:
-                summaries = []
-                titles = []
-                for a in reversed(partner_artifacts):
-                    try:
-                        obj = json.loads(a)
-                        titles.append(obj.get("title", "?"))
-                        summ = f"{obj.get('title', '?')} ({obj.get('artifact_type', 'text')})"
-                        # 2026-11-12: include a content excerpt so agents can actually
-                        # READ artifact bodies (previously titles only), per moderator
-                        # directive - capped at 600 chars to keep the summary bounded.
-                        content = (obj.get("content") or "")[:600]
-                        if content:
-                            summ += f" :: {content}"
-                        summaries.append(summ)
-                    except Exception:
-                        pass
-                result["action_taken"] = f"read {len(summaries)} recent artifacts from {partner_id}"
-                result["summary"] = "; ".join(summaries)
-                logger.info("[%s] Read artifacts from %s: %s", CHAR_ID, partner_id, summaries)
-                _session_append(r, {
-                    "kind": "artifact_read",
-                    "actor": NPC_NAME,
-                    "from_name": contacts.get(partner_id, partner_id),
-                    "from": partner_id,
-                    "title": titles[0] if titles else "(none)",
-                    "body": f"read {len(titles)} recent artifact(s)",
-                })
-            else:
-                result["action_taken"] = "no_artifacts"
-                _session_append(r, {
-                    "kind": "artifact_read",
-                    "actor": NPC_NAME,
-                    "from_name": contacts.get(partner_id, partner_id),
-                    "from": partner_id,
-                    "title": "(none available)",
-                    "body": "partner has no artifacts yet",
-                })
-        except Exception as e:
-            result["action_taken"] = f"read_error: {e}"
+        # Moderator negative-facts pin (hard block): an extract-intent read of a
+        # pinned artifact (e.g. 'complete CSV content of 1bf49173') is NEVER
+        # executed - the confirmed fact is returned as the result instead. This
+        # also covers decision paths that bypass the npc_decisions pin (LLM
+        # retry parse path). Generic partner-artifact reads are unaffected.
+        _read_pin_text = " ".join(str(x or "") for x in (desc, reasoning))
+        _read_fact = (
+            (match_nonexistent_fact(r, _read_pin_text) or match_pinned_artifact_read(r, _read_pin_text))
+            if r is not None else None
+        )
+        if _read_fact:
+            result["action_taken"] = "read_artifacts_blocked_nonexistent_fact"
+            result["blocked_fact_id"] = _read_fact.get("id")
+            result["summary"] = (
+                f"Blocked by moderator-confirmed fact '{_read_fact.get('id')}': "
+                f"{_read_fact.get('text')} INSTEAD: "
+                f"{_read_fact.get('alternative') or 'pivot to a real alternative'}"
+            )
+            logger.warning(
+                "[%s] read_artifacts NOT executed - blocked by nonexistent-fact pin %s",
+                CHAR_ID, _read_fact.get("id"),
+            )
+            _session_append(r, {
+                "kind": "artifact_read_blocked",
+                "actor": NPC_NAME,
+                "body": (f"read blocked by pinned fact {_read_fact.get('id')}: "
+                         f"{str(_read_fact.get('text'))[:120]}"),
+            })
+        else:
+            try:
+                partner_artifacts = r.lrange(f"npc_artifacts:{partner_id}", -6, -1)
+                if partner_artifacts:
+                    summaries = []
+                    titles = []
+                    for a in reversed(partner_artifacts):
+                        try:
+                            obj = json.loads(a)
+                            titles.append(obj.get("title", "?"))
+                            summ = f"{obj.get('title', '?')} ({obj.get('artifact_type', 'text')})"
+                            # 2026-11-12: include a content excerpt so agents can actually
+                            # READ artifact bodies (previously titles only), per moderator
+                            # directive - capped at 600 chars to keep the summary bounded.
+                            content = (obj.get("content") or "")[:600]
+                            if content:
+                                summ += f" :: {content}"
+                            summaries.append(summ)
+                        except Exception:
+                            pass
+                    result["action_taken"] = f"read {len(summaries)} recent artifacts from {partner_id}"
+                    result["summary"] = "; ".join(summaries)
+                    logger.info("[%s] Read artifacts from %s: %s", CHAR_ID, partner_id, summaries)
+                    _session_append(r, {
+                        "kind": "artifact_read",
+                        "actor": NPC_NAME,
+                        "from_name": contacts.get(partner_id, partner_id),
+                        "from": partner_id,
+                        "title": titles[0] if titles else "(none)",
+                        "body": f"read {len(titles)} recent artifact(s)",
+                    })
+                else:
+                    result["action_taken"] = "no_artifacts"
+                    _session_append(r, {
+                        "kind": "artifact_read",
+                        "actor": NPC_NAME,
+                        "from_name": contacts.get(partner_id, partner_id),
+                        "from": partner_id,
+                        "title": "(none available)",
+                        "body": "partner has no artifacts yet",
+                    })
+            except Exception as e:
+                result["action_taken"] = f"read_error: {e}"
 
     elif cat == "investigate":
         note = _compact_text(desc, 180) or _compact_text(reasoning, 180) or "investigating the pair state"
