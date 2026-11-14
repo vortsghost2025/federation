@@ -230,7 +230,11 @@ def _call_openrouter_free(system_prompt: str, user_prompt: str, r=None, call_lab
                 )
                 resp.raise_for_status()
                 data = resp.json()
-                content = data["choices"][0]["message"]["content"].strip()
+                _msg = (data.get("choices") or [{}])[0].get("message") or {}
+                _raw = _msg.get("content")
+                if not isinstance(_raw, str) or not _raw.strip():
+                    raise ValueError("empty content in model response")
+                content = _raw.strip()
                 elapsed_ms = int((time.monotonic() - start) * 1000)
                 logger.info("[%s] OR free OK — model: %s (%dms)", CHAR_ID, model, elapsed_ms)
                 if r:
@@ -472,7 +476,11 @@ def _call_ollama(system_prompt: str, user_prompt: str, r=None, call_label: str =
             )
             resp.raise_for_status()
             data = resp.json()
-            content = data["choices"][0]["message"]["content"].strip()
+            _msg = (data.get("choices") or [{}])[0].get("message") or {}
+            _raw = _msg.get("content")
+            if not isinstance(_raw, str) or not _raw.strip():
+                raise ValueError("empty content in model response")
+            content = _raw.strip()
             elapsed_ms = int((time.monotonic() - start) * 1000)
             logger.info("[%s] Ollama OK — model: %s (%dms)", CHAR_ID, OLLAMA_MODEL, elapsed_ms)
             if r:
@@ -566,7 +574,11 @@ def call_llm(system_prompt: str, user_prompt: str, model: str = "", r=None, call
                 )
                 resp.raise_for_status()
                 data = resp.json()
-                content = data["choices"][0]["message"]["content"].strip()
+                _msg = (data.get("choices") or [{}])[0].get("message") or {}
+                _raw = _msg.get("content")
+                if not isinstance(_raw, str) or not _raw.strip():
+                    raise ValueError("empty content in model response")
+                content = _raw.strip()
                 elapsed_ms = int((time.monotonic() - start) * 1000)
                 _cb_record_success(attempt_model)
                 logger.info("[%s] LLM OK — model: %s (%dms)", CHAR_ID, attempt_model, elapsed_ms)

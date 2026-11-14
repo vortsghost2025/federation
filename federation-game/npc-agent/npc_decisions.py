@@ -943,9 +943,11 @@ Respond in this exact JSON format (no markdown, no explanation):
                     evidence_reason = ""
                     if partner_id_tf:
                         evidence_reason = new_evidence_for_topic(r, common, CHAR_ID, partner_id_tf)
-                    # Block partner_artifact fatigue reset for resolved or known
-                    # loop topics once the recent topic window is already high.
-                    if evidence_reason and "partner_artifact" in evidence_reason:
+                    # Block fatigue reset for resolved/known loop topics once the
+                    # recent topic window is already high — regardless of evidence
+                    # type (partner artifact, inbox message, or world event), so a
+                    # partner echo cannot clear the cooldown.
+                    if evidence_reason:
                         _cps = _pair_state(r, partner_id, CHAR_ID) if r else {}
                         _conv_raw = _cps.get("convergence_state", "") if _cps else ""
                         try:

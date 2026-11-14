@@ -92,6 +92,12 @@ KNOWN_BLOCKED_TERMS = [
     "network upgrade weighting",
     "weighted influence",
     "governance model",
+    # Severity-dataset family: the pairs historically fixate on re-normalizing
+    # the static 115-row severity artifact (1bf49173) instead of doing new work.
+    "severity",
+    "normalization",
+    "min-max",
+    "z-score",
 ]
 
 
