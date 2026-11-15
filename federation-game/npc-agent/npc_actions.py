@@ -6,6 +6,7 @@ Each function takes explicit parameters (char_id, contacts) instead of
 relying on module-level globals, avoiding circular imports.
 """
 import ast
+import hashlib
 import json
 import logging
 import os
@@ -36,6 +37,13 @@ from npc_redis_helpers import (
     _record_outcome_consequence,
     match_nonexistent_fact,
     match_pinned_artifact_read,
+    match_dangerous_code,
+    has_capability_grant,
+    consume_sandbox_exec_quota,
+    log_sandbox_exec,
+    SANDBOX_EXEC_GRANT,
+    SANDBOX_EXEC_QUOTA_LIMIT,
+    SANDBOX_EXEC_QUOTA_WINDOW,
 )
 
 # ── Sandboxed builder (write_code) ──
@@ -350,6 +358,45 @@ def _execute_sandboxed_python(code: str, timeout: float = None, max_output: int 
     if proc.returncode != 0:
         return False, f"code_error (exit {proc.returncode}): {combined.strip()[:max_output]}"
     return True, (combined.strip()[:max_output] or "ran successfully (no output)")
+
+
+# Remote sandbox executor: POSTs code to the npc-sandbox service, which runs on
+# the internal-only sandbox-net (zero egress, verified — see
+# docs/sandbox-exec-capability-spec.md). Agents holding the sandbox_exec grant
+# use this path; everyone else keeps the local AST sandbox above.
+_SANDBOX_URL = os.environ.get("SANDBOX_URL", "http://npc-sandbox:9002")
+_SANDBOX_REMOTE_MAX_CHARS = 8000
+
+
+def _execute_remote_sandbox(code: str, timeout: float = None):
+    """Run code in the network-isolated npc-sandbox container via HTTP.
+
+    Returns (ok, output). On transport failure returns ok=False with output
+    starting 'remote_sandbox_unavailable' so the caller can fall back to the
+    local AST sandbox. The remote sandbox never has network egress, so code
+    executed there cannot reach the internet, redis, postgres, or the backend.
+    """
+    import urllib.request
+    timeout = min(float(timeout or _SANDBOX_TIMEOUT), 10.0)
+    if len(code) > _SANDBOX_REMOTE_MAX_CHARS:
+        return False, "code_denied: exceeds 8000-char remote sandbox limit"
+    try:
+        payload = json.dumps({
+            "char_id": CHAR_ID,
+            "code": code,
+            "timeout_seconds": int(timeout),
+        }).encode()
+        req = urllib.request.Request(
+            _SANDBOX_URL + "/execute", data=payload,
+            headers={"Content-Type": "application/json"}, method="POST",
+        )
+        with urllib.request.urlopen(req, timeout=timeout + 5) as resp:
+            data = json.loads(resp.read().decode() or "{}")
+    except Exception as e:
+        return False, f"remote_sandbox_unavailable: {type(e).__name__}"
+    out = ((data.get("output") or "") + ("\n" + data["error"] if data.get("error") else "")).strip()
+    out = out[:_SANDBOX_MAX_OUTPUT] or ("ran successfully (no output)" if data.get("success") else (data.get("error") or "no output"))
+    return bool(data.get("success")), out
 
 # ── Artifact title cleaning ──
 # When a create_institution is rejected, the reroute injects system text into
@@ -812,10 +859,43 @@ def execute_decision(decision: dict, r, contacts: dict):
         if not gen_code:
             result["action_taken"] = "code_failed"
         else:
-            # Run the code in the sandbox and capture a concrete, verifiable
-            # output — this is what makes the builder "real" (a computed model,
-            # a metric, a simulation result) instead of an unexecuted script.
-            ok, output = _execute_sandboxed_python(gen_code)
+            # Sandbox-exec gate (execution-level backstop, covers decision paths
+            # that bypass the npc_decisions pin): dangerous-code pin, per-window
+            # quota, then grant-aware routing — agents holding the sandbox_exec
+            # grant run via the zero-egress npc-sandbox service; others use the
+            # local AST sandbox as before. Every attempt is audit-logged.
+            exec_path = "local"
+            blocked_reason = ""
+            _dpat = match_dangerous_code(r, gen_code) if r is not None else None
+            if _dpat:
+                blocked_reason = f"dangerous-code pin matched '{_dpat}'"
+                ok, output = False, "code_denied: " + blocked_reason
+            elif not consume_sandbox_exec_quota(r):
+                blocked_reason = f"quota exceeded ({SANDBOX_EXEC_QUOTA_LIMIT} execs / {SANDBOX_EXEC_QUOTA_WINDOW}s)"
+                ok, output = False, "code_denied: " + blocked_reason
+            elif r is not None and has_capability_grant(r, SANDBOX_EXEC_GRANT):
+                exec_path = "remote"
+                ok, output = _execute_remote_sandbox(gen_code)
+                if not ok and output.startswith("remote_sandbox_unavailable"):
+                    exec_path = "local"
+                    ok, output = _execute_sandboxed_python(gen_code)
+            else:
+                ok, output = _execute_sandboxed_python(gen_code)
+            log_sandbox_exec(r, {
+                "ts": ts,
+                "path": exec_path,
+                "blocked": blocked_reason,
+                "ok": bool(ok),
+                "code_sha256_16": hashlib.sha256(gen_code.encode()).hexdigest()[:16],
+                "lines": len(gen_code.splitlines()),
+                "output_preview": (output or "")[:200],
+            })
+            if blocked_reason and "dangerous" in blocked_reason:
+                result["action_taken"] = "sandbox_exec_blocked_dangerous_pattern"
+                logger.warning("[%s] write_code NOT executed - dangerous-code pin %s", CHAR_ID, _dpat)
+            elif blocked_reason:
+                result["action_taken"] = "sandbox_exec_quota_exceeded"
+                logger.warning("[%s] write_code NOT executed - %s", CHAR_ID, blocked_reason)
             artifact = {
                 "artifact_id": str(uuid.uuid4()),
                 "char_id": CHAR_ID,
@@ -829,7 +909,11 @@ def execute_decision(decision: dict, r, contacts: dict):
             r.rpush(f"npc_artifacts:{CHAR_ID}", json.dumps(artifact))
             r.rpush("npc_artifacts:global", json.dumps(artifact))
             r.hincrby(f"npc_stats:{CHAR_ID}", "code_written", 1)
-            if ok:
+            if blocked_reason:
+                # Keep the blocked action_taken set above (never overwritten).
+                result["artifact_title"] = artifact["title"]
+                result["code_error"] = output
+            elif ok:
                 result["action_taken"] = "code_executed"
                 result["artifact_title"] = artifact["title"]
                 result["output"] = output
