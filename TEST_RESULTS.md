@@ -591,3 +591,13 @@ Operator-approved items 1-3 from the page-improvement list. Frontend-only plus o
 
 **Watch (open):** confirm a natural write_code from the comp pair routes remote + audit-logs within the 24h pilot window; any dangerous-pattern exec reaching execution auto-revokes per spec.
 
+### AJ. 2026-11-15 ~08:30 UTC - overnight pilot watch (read-only + inbox ritual)
+
+**Verdict: pilot behaving exactly as designed overnight — PROVEN.**
+
+- **Remote path exercised naturally:** `npc_sandbox_exec_log:comp_001` 15 entries, `:comp_010` 26 entries, ALL `path=remote`, 0 blocked - the comp pair chose `write_code` repeatedly and their code ran in the zero-egress sandbox (outputs include computed risk scores: 58.92, 2.5, 3.75). Sandbox access log shows POSTs only from 172.30.0.6/172.30.0.7 (comp010/comp001). Quota counter live (comp_001 quota window active).
+- **No grant leak:** `char_001`/`char_306` have empty grant sets and their 42/24 exec-log entries are ALL `path=local` (old AST sandbox) - the grant gate works. The execution-level dangerous-code backstop fired on them anyway: 8 blocked attempts total (`\brequests\b` x7, `__[a-zA-Z]+__` x1), 0 executed.
+- **Pins holding:** 0 extract-intent read_artifacts executed since deploy (comp pair now self-reports "full CSV read remains blocked at event level"); capreq zcard still 835; CSV mentions in comp decisions are text only, not reads.
+- **Health:** all containers up 13h; 0 Tracebacks in all 4 agent containers / 12h; 0 backend ERROR lines / 12h; tick `last_error=''`; llm_health OK 100 (4 breakers tripped: gemini/nim/free/openrouter_paid - known self-clearing 429/cap pattern); site 200.
+- **Inbox ritual (PROVEN):** 11 unread of 73 answered - binding replies `msg_a92cec20b939` (comp_001: scores are model estimates, label them, never claim full-CSV execution, pivot confirmed, grants active) and `msg_c33b95c1e204` (comp_010: no correction was ever sent, full CSV of 1bf49173 permanently declined, label estimates, suggested focus areas from live world_state + 4 antagonists at corruption 1); all marked read -> **0 unread of 73, sent 68**; backups `backup:*:20261115_prereply2`.
+
