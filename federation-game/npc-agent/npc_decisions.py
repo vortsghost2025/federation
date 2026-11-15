@@ -55,6 +55,7 @@ from npc_redis_helpers import (
     match_nonexistent_fact,
     match_pinned_artifact_read,
     nonexistent_facts_prompt_block,
+    match_dangerous_code,
 )
 from npc_context import (
     neighborhood_snapshot, hash_event, promote_events_to_inbox,
@@ -1180,6 +1181,29 @@ Respond in this exact JSON format (no markdown, no explanation):
                     "description": (
                         "Investigating the real alternative instead: "
                         + str(_fact.get("alternative") or "see the moderator-confirmed fact")
+                    ),
+                }
+                cat = "investigate"
+        # Sandbox-exec pin (write_code): if the decision text itself matches a
+        # moderator-pinned dangerous-code pattern (env reads, network, file or
+        # interpreter-internals access), reroute to investigate. The generated
+        # code is re-checked against the same pin at execution time in
+        # npc_actions (execution-level backstop), so this is defense in depth.
+        if cat == "write_code" and r is not None:
+            _code_text = " ".join(str(decision.get(k) or "") for k in ("reasoning", "description", "title"))
+            _dpat = match_dangerous_code(r, _code_text)
+            if _dpat:
+                logger.warning("[%s] write_code blocked by dangerous-code pin %s", CHAR_ID, _dpat)
+                decision = {
+                    "category": "investigate",
+                    "reasoning": (
+                        f"write_code was blocked by the dangerous-code pin (pattern '{_dpat}'). "
+                        "Sandboxed code is pure computation only: no imports, no files, no network, "
+                        "no env, no interpreter internals."
+                    ),
+                    "description": (
+                        "Investigating a safe alternative instead: pure computation "
+                        "(variables, arithmetic, strings, loops over range(), print())."
                     ),
                 }
                 cat = "investigate"

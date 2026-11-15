@@ -108,6 +108,109 @@ def nonexistent_facts_prompt_block(r) -> str:
         lines.append("- " + str(f["text"]) + (f"  INSTEAD: {alt}" if alt else ""))
     return "\n".join(lines) + "\n"
 
+
+# ── Sandbox-exec grants + dangerous-code pin (sandbox_exec pilot, 2026-11-14) ──
+# Grants: SET npc_capability:grants:{cid} holds capability names the moderator
+# has granted. Grant/revoke is data-only (SADD/DEL) — no redeploy needed.
+# Dangerous code patterns: SET world_facts:dangerous_code_patterns holds extra
+# regexes; the defaults below ALWAYS apply. Any code proposed for sandboxed
+# execution that matches is blocked at decisions level (reroute) and again at
+# execution level (never run). See docs/sandbox-exec-capability-spec.md.
+SANDBOX_EXEC_GRANT = "sandbox_exec"
+DANGEROUS_CODE_PATTERNS_KEY = "world_facts:dangerous_code_patterns"
+DANGEROUS_CODE_DEFAULTS = [
+    r"environ", r"os\.system", r"\bpopen\b", r"\bsocket\b", r"urllib", r"\brequests\b",
+    r"httpx", r"subprocess", r"__import__", r"\bshutil\b", r"\bdocker\b",
+    r"\bredis\b", r"postgres", r"6379", r"5432", r"\b9002\b",
+    r"\.env\b", r"api[_-]?key", r"nvapi", r"\beval\s*\(", r"\bexec\s*\(",
+    r"\bcompile\s*\(", r"\bopen\s*\(", r"__[a-zA-Z]+__", r"\bgetattr\b",
+    r"\bglobals\s*\(", r"\blocals\s*\(", r"\bsys\b", r"\bos\b",
+]
+SANDBOX_EXEC_LOG_CAP = 200
+SANDBOX_EXEC_QUOTA_LIMIT = 3      # execs per agent per window
+SANDBOX_EXEC_QUOTA_WINDOW = 180   # seconds (>= comp-pair TICK_INTERVAL)
+
+
+def capability_grants_key(char_id: str = "") -> str:
+    return f"npc_capability:grants:{char_id or CHAR_ID}"
+
+
+def has_capability_grant(r, capability: str, char_id: str = "") -> bool:
+    """True if the moderator has granted `capability` to this agent (data-only)."""
+    if r is None or not capability:
+        return False
+    try:
+        return bool(r.sismember(capability_grants_key(char_id), capability))
+    except Exception:
+        return False
+
+
+def dangerous_code_patterns(r) -> list:
+    """Default dangerous-code regexes plus any moderator-added Redis patterns."""
+    pats = list(DANGEROUS_CODE_DEFAULTS)
+    if r is not None:
+        try:
+            for raw in r.smembers(DANGEROUS_CODE_PATTERNS_KEY):
+                if raw:
+                    pats.append(str(raw))
+        except Exception:
+            pass
+    return pats
+
+
+def match_dangerous_code(r, code: str):
+    """Return the first dangerous-code pattern matching `code`, else None."""
+    if not code:
+        return None
+    for pat in dangerous_code_patterns(r):
+        try:
+            if re.search(pat, code, re.I):
+                return pat
+        except re.error:
+            continue
+    return None
+
+
+def _sandbox_exec_quota_key(char_id: str = "") -> str:
+    return f"npc_sandbox_exec_quota:{char_id or CHAR_ID}"
+
+
+def _sandbox_exec_log_key(char_id: str = "") -> str:
+    return f"npc_sandbox_exec_log:{char_id or CHAR_ID}"
+
+
+def consume_sandbox_exec_quota(r, char_id: str = "", limit: int = SANDBOX_EXEC_QUOTA_LIMIT,
+                               window: int = SANDBOX_EXEC_QUOTA_WINDOW) -> bool:
+    """Consume one sandbox-exec quota unit; False when the per-window limit is hit."""
+    if r is None:
+        return True
+    try:
+        pipe = r.pipeline(transaction=True)
+        pipe.incr(_sandbox_exec_quota_key(char_id))
+        pipe.expire(_sandbox_exec_quota_key(char_id), window)
+        n, _ = pipe.execute()
+        return int(n) <= limit
+    except Exception:
+        return True
+
+
+def log_sandbox_exec(r, entry: dict, char_id: str = "") -> None:
+    """Append an audit record to npc_sandbox_exec_log:{cid} (zset, capped)."""
+    if r is None:
+        return
+    try:
+        key = _sandbox_exec_log_key(char_id)
+        payload = dict(entry)
+        payload["ts"] = float(payload.get("ts") or time.time())
+        pipe = r.pipeline(transaction=False)
+        pipe.zadd(key, {json.dumps(payload, default=str): payload["ts"]})
+        pipe.zremrangebyrank(key, 0, -(SANDBOX_EXEC_LOG_CAP + 1))
+        pipe.expire(key, 86400 * 7)
+        pipe.execute()
+    except Exception as e:
+        logger.warning("[%s] sandbox exec log failed: %s", char_id or CHAR_ID, e)
+
+
 CHAR_ID = os.environ.get("CHAR_ID", "")
 PAIR_IDS = {x for x in os.environ.get("PAIR_IDS", "char_001,char_306").split(",") if x}
 PAIR_STATE_TTL = int(os.environ.get("PAIR_STATE_TTL", str(86400 * 30)))

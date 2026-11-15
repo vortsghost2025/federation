@@ -15,6 +15,7 @@ Security model:
 import json
 import logging
 import os
+import re
 import resource
 import signal
 import subprocess
@@ -37,33 +38,88 @@ MAX_EXECUTION_SECONDS = int(os.environ.get("MAX_EXECUTION_SECONDS", "30"))
 MAX_OUTPUT_BYTES = int(os.environ.get("MAX_OUTPUT_BYTES", str(10 * 1024 * 1024)))  # 10MB
 MAX_MEMORY_MB = int(os.environ.get("MAX_MEMORY_MB", "256"))
 
-SAFE_BUILTINS = {
-    "abs", "all", "any", "ascii", "bin", "bool", "bytearray", "bytes",
-    "chr", "complex", "dict", "dir", "divmod", "enumerate", "filter",
-    "float", "format", "frozenset", "getattr", "hasattr", "hash",
-    "hex", "id", "int", "isinstance", "issubclass", "iter", "len",
-    "list", "map", "max", "min", "next", "object", "oct", "ord",
-    "pow", "print", "range", "repr", "reversed", "round", "set",
-    "slice", "sorted", "str", "sum", "super", "tuple", "type",
-    "vars", "zip",
-    # Math
-    "math", "random", "statistics",
-    # Time
-    "datetime", "time",
-    # Collections
-    "collections", "itertools", "functools",
-    # JSON
-    "json",
-    # String
-    "re", "string", "textwrap",
-}
+# Trusted runner: runs with FULL builtins itself, then exec()s the NPC code
+# with a restricted builtins dict. 2026-11-14 hardening: the old preamble did
+# `import json, os, sys` at module level, which left `os` in the user code's
+# namespace (os.system/os.popen escape), and _make_safe_environment was never
+# actually wired in. Now os/sys/open/exec/eval/compile are NOT in the user
+# namespace at all; save_result is injected by the trusted runner; rlimits
+# are set inside the runner; env is minimal; -I isolated mode; hard timeout.
+_RUNNER = r"""
+import json, os, resource
+mem = int(os.environ.get("SB_MEM_MB", "256")) * 1024 * 1024
+cpu = int(os.environ.get("SB_CPU_S", "10"))
+try:
+    resource.setrlimit(resource.RLIMIT_AS, (mem, mem))
+    resource.setrlimit(resource.RLIMIT_CPU, (cpu, cpu))
+    resource.setrlimit(resource.RLIMIT_NPROC, (200, 200))
+except Exception:
+    pass
+ARTIFACTS_DIR = os.environ.get("ARTIFACTS_DIR", "/artifacts")
+CHAR_ID = os.environ.get("CHAR_ID", "unknown")
 
-ALLOWED_IMPORTS = {
-    "math", "random", "statistics", "datetime", "time",
-    "collections", "itertools", "functools",
-    "json", "re", "string", "textwrap",
-    "typing",
+def save_result(data, filename="result.json"):
+    path = os.path.join(ARTIFACTS_DIR, CHAR_ID, filename)
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    if isinstance(data, str):
+        with open(path, "w") as f:
+            f.write(data)
+    else:
+        with open(path, "w") as f:
+            json.dump(data, f, default=str)
+    return path
+
+_ALLOWED_IMPORTS = {"math", "random", "statistics", "datetime", "time",
+                    "collections", "itertools", "functools", "json", "re",
+                    "string", "textwrap", "typing"}
+_real_import = __import__
+def _safe_import(name, *a, **k):
+    if name.split(".")[0] in _ALLOWED_IMPORTS:
+        return _real_import(name, *a, **k)
+    raise ImportError("Import '%s' is not allowed in NPC sandbox" % name)
+
+_SAFE = {
+    "abs": abs, "all": all, "any": any, "ascii": ascii, "bin": bin, "bool": bool,
+    "bytearray": bytearray, "bytes": bytes, "chr": chr, "complex": complex,
+    "dict": dict, "divmod": divmod, "enumerate": enumerate, "filter": filter,
+    "float": float, "format": format, "frozenset": frozenset, "hash": hash,
+    "hex": hex, "id": id, "int": int, "isinstance": isinstance, "iter": iter,
+    "len": len, "list": list, "map": map, "max": max, "min": min, "next": next,
+    "object": object, "oct": oct, "ord": ord, "pow": pow, "print": print,
+    "range": range, "repr": repr, "reversed": reversed, "round": round,
+    "set": set, "slice": slice, "sorted": sorted, "str": str, "sum": sum,
+    "tuple": tuple, "type": type, "zip": zip,
+    "Exception": Exception, "ArithmeticError": ArithmeticError, "ValueError": ValueError,
+    "TypeError": TypeError, "KeyError": KeyError, "IndexError": IndexError,
+    "ZeroDivisionError": ZeroDivisionError, "OverflowError": OverflowError,
+    "RuntimeError": RuntimeError, "StopIteration": StopIteration, "NameError": NameError,
+    "__import__": _safe_import,
+    "__name__": "__main__",
 }
+g = {"__builtins__": _SAFE, "save_result": save_result,
+     "char_id": CHAR_ID, "artifacts_dir": ARTIFACTS_DIR}
+with open(os.environ["SB_CODE_FILE"], encoding="utf-8") as f:
+    src = f.read()
+# AST gate: reject dunder attribute/name access (closes the
+# __class__.__base__.__subclasses__() escape) and non-allowlisted imports
+# before exec, so the restricted builtins are not the only line of defense.
+import ast as _ast
+_tree = _ast.parse(src)
+for _node in _ast.walk(_tree):
+    if isinstance(_node, _ast.Attribute) and _node.attr.startswith("__"):
+        raise PermissionError("dunder attribute access is not allowed in NPC sandbox")
+    if isinstance(_node, _ast.Name) and _node.id.startswith("__"):
+        raise PermissionError("dunder name access is not allowed in NPC sandbox")
+    if isinstance(_node, _ast.Import):
+        for _a in _node.names:
+            if _a.name.split(".")[0] not in _ALLOWED_IMPORTS:
+                raise ImportError("Import '%s' is not allowed in NPC sandbox" % _a.name)
+    if isinstance(_node, _ast.ImportFrom):
+        _m = (_node.module or "").split(".")[0]
+        if _m not in _ALLOWED_IMPORTS:
+            raise ImportError("Import '%s' is not allowed in NPC sandbox" % _m)
+exec(compile(src, "<npc>", "exec"), g)
+"""
 
 
 class ExecuteRequest(BaseModel):
@@ -83,49 +139,12 @@ class ExecuteResponse(BaseModel):
     artifact_path: Optional[str] = None
 
 
-def _make_safe_environment(char_id: str, artifacts_dir: str) -> Dict[str, Any]:
-    """Build a safe global environment for exec()."""
-    safe_env = {
-        "__builtins__": {k: __builtins__[k] for k in SAFE_BUILTINS if k in __builtins__},
-        "char_id": char_id,
-        "artifacts_dir": artifacts_dir,
-        "os": None,
-        "subprocess": None,
-        "sys": None,
-        "shutil": None,
-    }
-    # Provide safe modules via __import__ restriction
-    builtins = safe_env["__builtins__"]
-    original_import = builtins.get("__import__", __import__)
-
-    def safe_import(name, *args, **kwargs):
-        if name in ALLOWED_IMPORTS:
-            return original_import(name, *args, **kwargs)
-        raise ImportError(f"Import '{name}' is not allowed in NPC sandbox")
-
-    builtins["__import__"] = safe_import
-
-    # Prevent open/exec/eval
-    for dangerous in ("open", "exec", "eval", "compile", "__import__"):
-        builtins.pop(dangerous, None)
-
-    return safe_env
-
-
-def _limit_resources():
-    """Set resource limits for the subprocess (Linux only, best-effort)."""
-    try:
-        resource.setrlimit(resource.RLIMIT_AS, (MAX_MEMORY_MB * 1024 * 1024, -1))
-        resource.setrlimit(resource.RLIMIT_CPU, (MAX_EXECUTION_SECONDS, -1))
-    except (ImportError, AttributeError, resource.error):
-        pass
-
-
 def _execute_code(char_id: str, code: str, timeout: int) -> Dict[str, Any]:
     """Execute NPC code in a sandboxed subprocess.
 
-    Writes code to a temp file, runs it in a subprocess with resource
-    limits, captures stdout/stderr, and returns the result.
+    Writes code to a temp file, runs it via the trusted _RUNNER under -I with
+    rlimits, a restricted builtins dict, a minimal env and a hard timeout,
+    then captures stdout/stderr and returns the result.
     """
     start = time.time()
 
@@ -133,41 +152,24 @@ def _execute_code(char_id: str, code: str, timeout: int) -> Dict[str, Any]:
     tmp_dir = tempfile.mkdtemp(prefix=f"npc_{char_id}_")
     code_path = os.path.join(tmp_dir, "script.py")
 
-    # Prepend artifact writing helper
-    preamble = f"""import json, os, sys
-ARTIFACTS_DIR = {json.dumps(ARTIFACTS_DIR)}
-CHAR_ID = {json.dumps(char_id)}
-OUTPUT_FILE = os.path.join(ARTIFACTS_DIR, CHAR_ID, "sandbox_output.json")
-
-def save_result(data, filename="result.json"):
-    \"\"\"Save a result file to the NPC's artifact directory.\"\"\"
-    path = os.path.join(ARTIFACTS_DIR, CHAR_ID, filename)
-    os.makedirs(os.path.dirname(path), exist_ok=True)
-    if isinstance(data, str):
-        with open(path, "w") as f:
-            f.write(data)
-    else:
-        with open(path, "w") as f:
-            json.dump(data, f, default=str)
-    return path
-
-"""
-    full_code = preamble + code
-
     try:
         with open(code_path, "w", encoding="utf-8") as f:
-            f.write(full_code)
+            f.write(code)
 
         result = subprocess.run(
-            [sys.executable, "-I", code_path],
+            [sys.executable, "-I", "-c", _RUNNER],
             capture_output=True,
             text=True,
             timeout=timeout,
             cwd=tmp_dir,
             env={
+                "PATH": "/usr/bin:/bin",
                 "PYTHONIOENCODING": "utf-8",
                 "ARTIFACTS_DIR": ARTIFACTS_DIR,
                 "CHAR_ID": char_id,
+                "SB_CODE_FILE": code_path,
+                "SB_MEM_MB": str(MAX_MEMORY_MB),
+                "SB_CPU_S": str(timeout),
             },
         )
 
@@ -223,11 +225,15 @@ def execute_code(req: ExecuteRequest):
     timeout = req.timeout_seconds or MAX_EXECUTION_SECONDS
     timeout = min(timeout, 60)  # hard cap at 60s
 
+    # char_id is used in filesystem paths under ARTIFACTS_DIR — strict format only.
+    if not req.char_id or not re.fullmatch(r"[A-Za-z0-9_-]{1,64}", req.char_id):
+        raise HTTPException(status_code=400, detail="invalid char_id")
+
     if not req.code or len(req.code.strip()) < 5:
         raise HTTPException(status_code=400, detail="Code is too short")
 
-    if len(req.code) > 100000:
-        raise HTTPException(status_code=400, detail="Code exceeds 100KB limit")
+    if len(req.code) > 20000:
+        raise HTTPException(status_code=400, detail="Code exceeds 20KB limit")
 
     logger.info(
         "Executing code for %s (%d lines, %ds timeout)",
