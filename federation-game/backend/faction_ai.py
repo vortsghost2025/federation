@@ -562,14 +562,11 @@ class FactionBrain:
                 results.append(result)
                 self._record_action(aname, effects, detail)
             self._set_power(power)
-            try:
-                dynamics = compute_faction_dynamics(
-                    self._npc_list, self._tick_decisions, self._broadcast_events
-                )
-                stances = compute_faction_stances(dynamics, self._broadcast_events)
-                store_faction_dynamics(dynamics, stances)
-            except Exception as e:
-                logger.error("Failed to store_faction_dynamics after action: %s", e)
+            # NOTE: Do NOT call compute_faction_dynamics / store_faction_dynamics here.
+            # self._npc_list only contains this single faction's members and empty
+            # decisions/events, so storing here wipes the other 7 factions to member_count=0
+            # and resets all faction stances to neutral 0.5. Full cross-faction dynamics
+            # are computed and persisted in npc_autonomy.py with the complete NPC roster.
             return {
                 "faction": self.faction_id,
                 "results": results,
@@ -577,12 +574,6 @@ class FactionBrain:
             }
         except Exception as e:
             logger.error("execute_action failed for %s: %s", self.faction_id, e)
-            return {
-                "faction": self.faction_id,
-                "results": [],
-                "power_remaining": 0.0,
-                "error": str(e),
-            }
             return {
                 "faction": self.faction_id,
                 "results": [],
@@ -1166,12 +1157,6 @@ def update_faction_relationships() -> Dict:
                     continue
         except Exception:
             pass
-            try:
-                dynamics = compute_faction_dynamics([], [], [])
-                stances = compute_faction_stances(dynamics, [])
-                store_faction_dynamics(dynamics, stances)
-            except Exception as e:
-                logger.error("update_faction_relationships store failed: %s", e)
     except Exception as e:
         logger.error("update_faction_relationships failed: %s", e)
     return {"changes": changes, "total_changes": len(changes), "timestamp": _now()}

@@ -26,15 +26,15 @@ import subprocess
 from datetime import datetime, timezone
 
 # --- Config ---
-# Backend is NOT exposed on localhost. It runs inside Docker network.
-# Try Docker network IP first, fall back to public URL.
-BACKEND_URL = os.environ.get("FED_BACKEND_URL", "http://172.26.0.11:8000")
+# Backend is reachable from the VPS host via the published docker-proxy port
+# (127.0.0.1:8000). Container IPs (172.26.0.11) went stale; do not hardcode them.
+BACKEND_URL = os.environ.get("FED_BACKEND_URL", "http://127.0.0.1:8000")
 PUBLIC_URL = "https://federation-game.deliberatefederation.cloud"
 HEALTHZ_PATH = "/healthz"
 ASYNC_STATUS_PATH = "/simulation/autonomous/status"
 HEALTHZ_TIMEOUT = 5
 ASYNC_STALL_SECONDS = 90
-SIM_TICK_STALL_SECONDS = 60
+SIM_TICK_STALL_SECONDS = 1200  # worker TICK_INTERVAL=600 + tick time + grace
 LLM_ERROR_THRESHOLD = 5  # errors per hour per provider
 
 # --- Alert Formatter ---
@@ -223,10 +223,12 @@ def check_tick():
     stall_count_key = "monitor:stall_count"
     last_seen = redis_get(last_seen_key)
 
-    # Ticks take ~60s. With 1-min cron, seeing the same tick once is normal
-    # (we caught it mid-cycle). Only alert after 2+ consecutive same-tick checks
-    # meaning the tick hasn't advanced in 2+ minutes.
-    STALL_THRESHOLD = 2
+    # Worker TICK_INTERVAL=600 and each tick takes ~25-150s, so a full cycle is
+    # ~11 minutes. With 1-min cron, the same tick count showing for up to ~12
+    # consecutive checks is NORMAL. Only alert after 15+ same-tick checks
+    # (~15 minutes without advancement), and auto-restart at 20 (see
+    # auto_restart.py) so a legitimate long cycle never triggers a restart.
+    STALL_THRESHOLD = 15
 
     if last_seen is not None and last_seen == str(current_tick):
         # Same tick as last check — increment stall counter

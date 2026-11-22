@@ -291,6 +291,7 @@ class FactionDiplomacyEngine:
                         "type": chosen["type"],
                         "factions": [fid_a, fid_b],
                         "effects": chosen["effects"],
+                        "description": treaty_data["description"],
                         "source": "faction_diplomacy_engine",
                         "tick": current_tick,
                     }

@@ -283,6 +283,30 @@ def _reset_tick_llm_budget() -> None:
         _tick_llm_calls = 0
 
 
+def _action_from_decision(decision, char_id, char_name, mood):
+    """Build the single action entry that belongs to this decision.
+
+    Several categories already persist an action inside make_decision() and
+    return action_taken/action_desc. Generating a SECOND unrelated action in
+    _process_single_npc() made decision history and action history disagree.
+    Returns None when the decision carries no action of its own.
+    """
+    if not decision:
+        return None
+    taken = decision.get("action_taken")
+    desc = decision.get("action_desc") or decision.get("description")
+    if not taken and not desc:
+        return None
+    return {
+        "char_id": char_id,
+        "char_name": char_name,
+        "action_type": taken or decision.get("category", "action"),
+        "description": desc or "",
+        "mood": mood,
+        "ts": int(time.time()),
+    }
+
+
 def _process_single_npc(npc: Dict) -> Dict[str, Any]:
     """Process a single NPC through the full autonomy pipeline.
 
@@ -331,6 +355,12 @@ def _process_single_npc(npc: Dict) -> Dict[str, Any]:
             # Significance gate: prioritize LLM calls for meaningful moments
             category = decision.get("category", "")
             sig = SIGNIFICANCE_PRIORITY.get(category, "medium")
+        else:
+            # make_decision() returned None: category/sig were previously
+            # referenced unbound below (UnboundLocalError). Skip all
+            # thought/action generation for this NPC.
+            category = ""
+            sig = "low"
         if category in (
             "advance_goal",
             "investigate",
@@ -351,9 +381,11 @@ def _process_single_npc(npc: Dict) -> Dict[str, Any]:
             )
             if thought:
                 npc_result["thoughts"].append(thought)
-            action = generate_action(
-                char_id, char_name, archetype, affiliation, mood=new_mood
-            )
+            action = _action_from_decision(decision, char_id, char_name, new_mood)
+            if action is None:
+                action = generate_action(
+                    char_id, char_name, archetype, affiliation, mood=new_mood
+                )
             if action:
                 npc_result["actions"].append(action)
         elif category in ("socialize", "help_ally", "confront_rival"):
@@ -385,12 +417,14 @@ def _process_single_npc(npc: Dict) -> Dict[str, Any]:
             if thought:
                 npc_result["thoughts"].append(thought)
         elif category == "react_to_events":
-            action = generate_action(
-                char_id, char_name, archetype, affiliation, mood=new_mood
-            )
+            action = _action_from_decision(decision, char_id, char_name, new_mood)
+            if action is None:
+                action = generate_action(
+                    char_id, char_name, archetype, affiliation, mood=new_mood
+                )
             if action:
                 npc_result["actions"].append(action)
-        else:
+        elif decision:
             if random.random() < 0.5:
                 thought = generate_thought(
                     char_id,
@@ -406,7 +440,11 @@ def _process_single_npc(npc: Dict) -> Dict[str, Any]:
                 if thought:
                     npc_result["thoughts"].append(thought)
         r = _get_redis()
-        opinion_keys = list(r.scan_iter(f"npc_opinion:{char_id}:*"))
+        if _OPINION_KEYS_BY_CHAR is None:
+            # Index build failed this tick: fall back to the old per-NPC scan.
+            opinion_keys = list(r.scan_iter(f"npc_opinion:{char_id}:*"))
+        else:
+            opinion_keys = _OPINION_KEYS_BY_CHAR.get(char_id, [])
         for okey in opinion_keys[:2]:
             if random.random() < 0.3:
                 player_id = okey.split(":")[-1]
@@ -424,6 +462,11 @@ def _process_single_npc(npc: Dict) -> Dict[str, Any]:
     return npc_result
 
 
+# Tick-level opinion-key index: built ONCE per simulation_tick instead of one
+# full Redis SCAN per NPC per tick (dozens of full keyspace scans eliminated).
+_OPINION_KEYS_BY_CHAR = {}
+
+
 def simulation_tick(npc_list: List[Dict]) -> Dict[str, Any]:
     results = {
         "thoughts": [],
@@ -437,6 +480,17 @@ def simulation_tick(npc_list: List[Dict]) -> Dict[str, Any]:
 
     # --- Reset per-tick LLM budget ---
     _reset_tick_llm_budget()
+
+    global _OPINION_KEYS_BY_CHAR
+    _OPINION_KEYS_BY_CHAR = {}
+    try:
+        rr = _get_redis()
+        for okey in rr.scan_iter("npc_opinion:*"):
+            parts = okey.split(":")
+            if len(parts) >= 3:
+                _OPINION_KEYS_BY_CHAR.setdefault(parts[1], []).append(okey)
+    except Exception:
+        _OPINION_KEYS_BY_CHAR = None  # signal per-NPC scan fallback
 
     # --- Parallel NPC processing (P25b-4) ---
     # Process all NPCs concurrently using ThreadPoolExecutor.

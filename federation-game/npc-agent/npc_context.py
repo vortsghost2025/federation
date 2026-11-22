@@ -622,6 +622,100 @@ def load_councilor_memories(r, char_id: str = "") -> str:
 
 # ══════════════════════════════════════════════════════════════════
 #  Main context assembler
+def live_galaxy_briefing(r, max_chars: int = 720) -> str:
+    """Compact live snapshot of the Federation galaxy for autonomous NPC awareness.
+
+    Surfaces real-time world vitals, cascade heat, top factions by influence,
+    active contested sectors / new colonies, and recent treaties directly from Redis.
+    """
+    lines = ["Live Galaxy Briefing:"]
+    try:
+        ws = r.hgetall("world_state") or {}
+        if ws:
+            temp = r.get("cascade_temperature") or "0.0"
+            lines.append(
+                f"  World: stab={ws.get('stability','?')} morale={ws.get('morale','?')} "
+                f"tension={ws.get('tension_level','?')} threat={ws.get('threat_level','?')} "
+                f"anomaly={ws.get('anomaly_activity','?')} cascade_heat={temp}"
+            )
+    except Exception:
+        pass
+
+    try:
+        fd_raw = r.hgetall("faction_dynamics") or {}
+        ranked = []
+        for fid, blob in fd_raw.items():
+            try:
+                d = json.loads(blob)
+                if isinstance(d, dict) and d.get("member_count", 0) > 0:
+                    ranked.append((int(d.get("influence", 0)), int(d.get("cohesion", 50)), d.get("display_name", fid)))
+            except Exception:
+                continue
+        if ranked:
+            ranked.sort(reverse=True)
+            top = ", ".join(f"{name}(infl {infl}/coh {coh})" for infl, coh, name in ranked[:4])
+            lines.append(f"  Leading factions: {top}")
+    except Exception:
+        pass
+
+    try:
+        contested = []
+        colonies = []
+        sec_map: dict[str, list[tuple[str, float, str]]] = {}
+        for tk in r.scan_iter(match="territory:*:*", count=200):
+            parts = tk.split(":")
+            if len(parts) != 3 or parts[1] in ("sector", "faction"):
+                continue
+            raw_t = r.get(tk)
+            if not raw_t:
+                continue
+            try:
+                tdata = json.loads(raw_t)
+            except Exception:
+                continue
+            if not isinstance(tdata, dict):
+                continue
+            fid = tdata.get("faction_id", parts[1])
+            sid = tdata.get("sector_id", parts[2])
+            ctrl = float(tdata.get("control_level", 0) or 0)
+            ctype = tdata.get("claim_type", "")
+            sec_map.setdefault(sid, []).append((fid, ctrl, ctype))
+        for sid, claims in sorted(sec_map.items()):
+            claims.sort(key=lambda x: x[1], reverse=True)
+            if len(claims) > 1:
+                summary = " vs ".join(f"{f.split('_')[0]}:{int(round(c))}" for f, c, _ in claims[:2])
+                contested.append(f"{sid}({summary})")
+            elif claims[0][2] == "colony":
+                colonies.append(f"{sid}({claims[0][0].split('_')[0]}:{int(round(claims[0][1]))})")
+        if contested:
+            lines.append("  Contested sectors: " + ", ".join(contested[:4]))
+        if colonies:
+            lines.append("  New colonies: " + ", ".join(colonies[:3]))
+    except Exception:
+        pass
+
+    try:
+        treaties = r.hgetall("faction_treaties_active") or {}
+        t_descs = []
+        for tval in list(treaties.values())[:2]:
+            try:
+                td = json.loads(tval)
+                desc = td.get("description") or td.get("type", "")
+                if desc:
+                    t_descs.append(desc[:70])
+            except Exception:
+                continue
+        if t_descs:
+            lines.append("  Active treaties: " + "; ".join(t_descs))
+    except Exception:
+        pass
+
+    if len(lines) <= 1:
+        return ""
+    text = "\n".join(lines)
+    return text[:max_chars]
+
+
 # ══════════════════════════════════════════════════════════════════
 
 def think_about_world(r, contacts: dict | None = None, char_id: str = "") -> str:
@@ -809,6 +903,10 @@ def think_about_world(r, contacts: dict | None = None, char_id: str = "") -> str
     horizon = cosmic_horizon(cid)
     if horizon:
         parts.append(horizon)
+
+    galaxy_brief = live_galaxy_briefing(r)
+    if galaxy_brief:
+        parts.append(galaxy_brief)
 
     neighborhood = neighborhood_snapshot(r, char_id=cid)
     if neighborhood:

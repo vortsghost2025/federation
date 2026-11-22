@@ -150,6 +150,27 @@ def get_inbox(char_id: str, limit: int = 20) -> List[Dict[str, Any]]:
         return []
 
 
+def peek_inbox(char_id: str, limit: int = 20) -> List[Dict[str, Any]]:
+    """Read-only inbox view for observers (spectator/moderator routes).
+
+    Identical to get_inbox() but does NOT mark messages as read and does not
+    prune dangling members — observing must never mutate agent-visible state.
+    """
+    r = _get_redis()
+    try:
+        msg_ids = r.zrevrange(f"msg:inbox:{char_id}", 0, limit - 1)
+        messages = []
+        for mid in msg_ids:
+            msg = r.hgetall(f"msg:{mid}")
+            if not msg:
+                continue
+            messages.append(dict(msg))
+        return messages
+    except Exception as e:
+        logger.warning("Failed to peek inbox for %s: %s", char_id, e)
+        return []
+
+
 def get_thread(thread_id: str, limit: int = 50) -> List[Dict[str, Any]]:
     """Get all messages in a thread, oldest first."""
     r = _get_redis()

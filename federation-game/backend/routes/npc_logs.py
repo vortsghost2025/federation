@@ -965,7 +965,7 @@ def spectator_agency():
         list_artifacts_by_npc = None
 
     try:
-        from npc_messaging import get_inbox, get_active_threads, get_unread_count
+        from npc_messaging import peek_inbox as get_inbox, get_active_threads, get_unread_count
     except ImportError:
         get_inbox = get_active_threads = get_unread_count = None
 
@@ -1269,8 +1269,13 @@ def spectator_moderator_dashboard():
 
     capreq_counts = _Counter()
     try:
-        for rid in r.zrange("npc_capability_requests:index", 0, -1):
-            st = r.hget("npc_capability_request:" + rid, "status")
+        # Cap the scan: the index is an ever-growing graveyard of old rejected
+        # requests (800+); only the most recent 200 matter for the status view.
+        pipe = r.pipeline(transaction=False)
+        recent_rids = r.zrange("npc_capability_requests:index", -200, -1)
+        for rid in recent_rids:
+            pipe.hget("npc_capability_request:" + rid, "status")
+        for st in pipe.execute():
             if st:
                 capreq_counts[st] += 1
     except Exception:
@@ -1372,9 +1377,45 @@ def spectator_moderator_dashboard():
             "current_topic": topic,
         })
 
+    # Sandbox execution audit: grants + exec outcome counts per agent.
+    # Metadata only — never raw code or output previews.
+    sandbox_audit = {}
+    for cid in agent_ids:
+        try:
+            entry = {"grants": sorted(r.smembers(f"npc_capability:grants:{cid}") or [])}
+            rows = r.zrange(f"npc_sandbox_exec_log:{cid}", 0, -1, withscores=True)
+            stats = {"total": len(rows), "blocked": 0, "ok": 0, "failed": 0,
+                     "remote": 0, "local": 0, "last_ts": None, "last_code_sha256_16": None}
+            for raw, score in rows:
+                try:
+                    j = json.loads(raw)
+                except Exception:
+                    continue
+                if j.get("blocked"):
+                    stats["blocked"] += 1
+                if j.get("ok") is True or j.get("ok") == "True":
+                    stats["ok"] += 1
+                else:
+                    stats["failed"] += 1
+                if j.get("path") == "remote":
+                    stats["remote"] += 1
+                else:
+                    stats["local"] += 1
+            if rows:
+                stats["last_ts"] = rows[-1][1]
+                try:
+                    stats["last_code_sha256_16"] = json.loads(rows[-1][0]).get("code_sha256_16")
+                except Exception:
+                    pass
+            entry["exec"] = stats
+            sandbox_audit[cid] = entry
+        except Exception:
+            pass
+
     return {
         "status": "ok",
         "generated_at": now,
+        "sandbox_audit": sandbox_audit,
         "tick": {
             "tick_id": tick.get("tick_id"),
             "running": tick.get("running"),

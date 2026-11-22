@@ -61,6 +61,9 @@
 <h2>The four agents</h2>
 <div class="grid" id="agents"><p class="meta">Loading…</p></div>
 
+<h2>Sandbox containment</h2>
+<div class="grid" id="sandbox"><p class="meta">Loading…</p></div>
+
 <h2>System</h2>
 <div class="panel" id="system"><p class="meta">Loading…</p></div>
 
@@ -127,13 +130,27 @@ async function load() {
       </div>`;
     }).join("");
 
+    // sandbox containment audit (metadata only)
+    const sa = d.sandbox_audit || {};
+    $("sandbox").innerHTML = Object.entries(sa).map(([cid, e]) => {
+      const x = e.exec || {};
+      const grants = (e.grants || []).map(g => `<span class="chip">${esc(g)}</span>`).join("") || '<span class="meta">no grants</span>';
+      return `
+      <div class="card">
+        <h3>${esc(cid)}</h3>
+        <p class="meta">Grants: ${grants}</p>
+        <p class="meta">Execs: ${x.total ?? 0} total · remote ${x.remote ?? 0} / local ${x.local ?? 0} · ok ${x.ok ?? 0} / failed ${x.failed ?? 0}</p>
+        <p class="meta">Dangerous blocks: <strong>${x.blocked ?? 0}</strong>${x.last_ts ? " · last exec " + ago(x.last_ts) : ""}${x.last_code_sha256_16 ? " · hash " + esc(x.last_code_sha256_16) : ""}</p>
+      </div>`;
+    }).join("") || '<p class="meta">no audit data</p>';
+
     // system
     const cr = Object.entries(d.capability_requests || {}).map(([k, v]) => `<span class="chip">${esc(k)} ×${v}</span>`).join("");
     $("system").innerHTML = `
       <p class="meta">Tick: ${esc(t.tick_id)} · running: ${esc(t.running)} · last_error: ${esc(t.last_error || "(none)")} · last_end: ${esc(t.last_end || "?")}</p>
       <p class="meta">Capability requests: ${cr || "—"}</p>`;
 
-    $("refreshNote").textContent = "Last updated: " + new Date().toLocaleTimeString();
+    $("refreshNote").textContent = "Last updated: " + (d.generated_at ? new Date(d.generated_at * 1000).toLocaleTimeString() + " (server data)" : new Date().toLocaleTimeString());
   } catch (e) {
     $("err").textContent = "Failed to load dashboard: " + e.message;
   }

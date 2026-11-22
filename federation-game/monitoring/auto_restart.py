@@ -24,7 +24,9 @@ from redis_helper import (
 )
 
 COOLDOWN_SECONDS = 900  # 15 minutes
-RESTART_THRESHOLD = 4
+# Worker TICK_INTERVAL=600 + tick time means ~11-minute cycles are normal;
+# only restart after ~20 minutes of no tick advancement (see monitor.py).
+RESTART_THRESHOLD = 20
 
 
 def check():
@@ -83,7 +85,7 @@ def run_check():
     result["alerts"].append(f"Auto-restarting worker due to stall_count={stall_count}")
 
     try:
-        subprocess.run(
+        proc = subprocess.run(
             [
                 "docker",
                 "compose",
@@ -96,10 +98,14 @@ def run_check():
             text=True,
             timeout=120,
         )
-        # Reset stall count after restart
-        redis_set("monitor:stall_count", "0")
-        redis_set("monitor:last_auto_restart", str(now))
-        result["summary"] += " - RESTARTED OK"
+        if proc.returncode == 0:
+            # Only clear stall state after Docker actually succeeded.
+            redis_set("monitor:stall_count", "0")
+            redis_set("monitor:last_auto_restart", str(now))
+            result["summary"] += " - RESTARTED OK"
+        else:
+            result["summary"] += f" - RESTART FAILED: {proc.stderr or proc.stdout}"
+            result["alerts"].append(f"Worker restart failed: {proc.stderr or proc.stdout}")
     except Exception as e:
         result["summary"] += f" - RESTART FAILED: {e}"
         result["alerts"].append(f"Worker restart failed: {e}")

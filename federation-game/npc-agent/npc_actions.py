@@ -746,7 +746,15 @@ def execute_decision(decision: dict, r, contacts: dict):
         # under a slightly different title (the historical "Void Oracle
         # Anomalies" loop). We generate content first so the semantic gate can
         # compare it, but a title gate hit still short-circuits cheaply.
-        title_blocked = r is not None and _is_repetitive_artifact(r, title)
+        # Durable exact-title dedup: normalized titles are kept in a permanent
+        # per-NPC set, so an exact duplicate can never return after falling out
+        # of the recent-title/fuzzy windows. Fuzzy recent gates stay as-is.
+        norm_title = " ".join((title or "").lower().split())
+        title_seen_key = f"npc_artifact_titles:{CHAR_ID}"
+        title_blocked = r is not None and (
+            _is_repetitive_artifact(r, title)
+            or (norm_title and r.sismember(title_seen_key, norm_title))
+        )
         if title_blocked:
             logger.info("[%s] Dedup gate blocked artifact '%s' (title too similar to recent)", CHAR_ID, title)
             result["action_taken"] = "artifact_deferred_dedup"
@@ -795,6 +803,8 @@ def execute_decision(decision: dict, r, contacts: dict):
                 r.rpush(f"npc_artifacts:{CHAR_ID}", json.dumps(artifact))
                 r.rpush("npc_artifacts:global", json.dumps(artifact))
                 r.hincrby(f"npc_stats:{CHAR_ID}", "artifacts_created", 1)
+                if norm_title:
+                    r.sadd(title_seen_key, norm_title)
                 streak_key = f"npc_dedup_streak:{CHAR_ID}"
                 if r.exists(streak_key):
                     r.delete(streak_key)
@@ -1023,14 +1033,62 @@ def execute_decision(decision: dict, r, contacts: dict):
 
     elif cat == "investigate":
         note = _compact_text(desc, 180) or _compact_text(reasoning, 180) or "investigating the pair state"
+        # Evidence-producing investigation: gather fresh world evidence instead
+        # of just logging intent. Repeating the SAME evidence twice in a row is
+        # marked no_new_evidence and feeds the dedup-streak prompt warnings.
+        evidence_bits = []
+        try:
+            for a in r.lrange("npc_artifacts:global", -3, -1):
+                try:
+                    obj = json.loads(a)
+                    evidence_bits.append("artifact: " + (obj.get("title") or "?")[:90])
+                except Exception:
+                    continue
+            partner_id_inv = _partner_id()
+            if partner_id_inv:
+                for e, _score in r.zrange(f"npc_decisions:{partner_id_inv}", -2, -1, withscores=True):
+                    try:
+                        dobj = json.loads(e)
+                        evidence_bits.append(
+                            "partner: " + (dobj.get("category") or "?") + " "
+                            + (dobj.get("description") or dobj.get("reasoning") or "")[:70]
+                        )
+                    except Exception:
+                        continue
+        except Exception:
+            pass
+        evidence_text = " | ".join(evidence_bits)[:400] or "no new world evidence found"
+        import hashlib as _hl
+        ev_hash = _hl.sha256(evidence_text.encode("utf-8")).hexdigest()[:16]
+        ev_key = f"npc_investigation_evidence:{CHAR_ID}"
+        last_hash = r.get(ev_key)
         r.hincrby(f"npc_stats:{CHAR_ID}", "investigations", 1)
-        result["action_taken"] = "investigation_logged"
-        result["summary"] = note
-        _session_append(r, {
-            "kind": "investigation",
-            "actor": NPC_NAME,
-            "body": note,
-        })
+        if last_hash == ev_hash:
+            result["action_taken"] = "investigation_no_new_evidence"
+            result["summary"] = note + " (no new evidence)"
+            try:
+                streak_key = f"npc_dedup_streak:{CHAR_ID}"
+                r.incr(streak_key)
+                r.expire(streak_key, 600)
+                topic = most_common_topic_word([note])
+                if topic:
+                    r.set(f"npc_dedup_topic:{CHAR_ID}", topic, ex=600)
+            except Exception:
+                pass
+            _session_append(r, {
+                "kind": "investigation",
+                "actor": NPC_NAME,
+                "body": note + " — no new evidence since last investigation",
+            })
+        else:
+            r.set(ev_key, ev_hash)
+            result["action_taken"] = "investigation_logged"
+            result["summary"] = note + " | evidence: " + evidence_text[:200]
+            _session_append(r, {
+                "kind": "investigation",
+                "actor": NPC_NAME,
+                "body": note + " | evidence: " + evidence_text,
+            })
 
     elif cat == "self_improve":
         note = _compact_text(desc, 180) or _compact_text(reasoning, 180) or "improving councilor capabilities"
@@ -1368,6 +1426,19 @@ def execute_decision(decision: dict, r, contacts: dict):
             logger.error("[%s] Role proposal failed: %s", CHAR_ID, e)
 
     elif cat == "submit_to_institution":
+        def _submit_penalty(title):
+            # Mirror the artifact-dedup negative feedback for failed/duplicate
+            # submissions: repeated submits of the same artifact feed the
+            # existing dedup-streak prompt warnings instead of looping quietly.
+            try:
+                streak_key = f"npc_dedup_streak:{CHAR_ID}"
+                r.incr(streak_key)
+                r.expire(streak_key, 600)
+                topic = most_common_topic_word([title or ""])
+                if topic:
+                    r.set(f"npc_dedup_topic:{CHAR_ID}", topic, ex=600)
+            except Exception:
+                pass
         from datetime import datetime, timezone
         import sys, os
         sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "backend"))
@@ -1389,6 +1460,7 @@ def execute_decision(decision: dict, r, contacts: dict):
             if not target_inst_id:
                 result["action_taken"] = "submit_no_institution"
                 result["summary"] = f"No institution '{target_inst_name}' found for submission"
+                _submit_penalty(artifact_title)
                 _session_append(r, {
                     "kind": "institution_submit_failed",
                     "actor": NPC_NAME,
@@ -1397,25 +1469,23 @@ def execute_decision(decision: dict, r, contacts: dict):
             else:
                 matching_artifact = None
                 raw_artifacts = r.lrange(f"npc_artifacts:{CHAR_ID}", -10, -1)
-                for a in reversed(raw_artifacts):
-                    try:
-                        obj = json.loads(a)
-                        if obj.get("title", "").lower() == artifact_title.lower():
+                # Exact normalized title match ONLY. Substring/empty-title
+                # matching and the silent latest-artifact fallback let
+                # hallucinated titles submit the wrong artifact in a loop.
+                wanted_title = (artifact_title or "").strip().lower()
+                if wanted_title:
+                    for a in reversed(raw_artifacts):
+                        try:
+                            obj = json.loads(a)
+                        except Exception:
+                            continue
+                        if (obj.get("title", "") or "").strip().lower() == wanted_title:
                             matching_artifact = obj
                             break
-                        if artifact_title.lower() in obj.get("title", "").lower():
-                            matching_artifact = obj
-                            break
-                    except Exception:
-                        continue
-                if not matching_artifact and raw_artifacts:
-                    try:
-                        matching_artifact = json.loads(raw_artifacts[-1])
-                    except Exception:
-                        pass
                 if not matching_artifact:
                     result["action_taken"] = "submit_no_artifact"
                     result["summary"] = f"No matching artifact found for '{artifact_title}'"
+                    _submit_penalty(artifact_title)
                     _session_append(r, {
                         "kind": "institution_submit_failed",
                         "actor": NPC_NAME,
@@ -1436,6 +1506,7 @@ def execute_decision(decision: dict, r, contacts: dict):
                     if existing_wf:
                         result["action_taken"] = "submit_already_in_review"
                         result["workflow_id"] = existing_wf
+                        _submit_penalty(matching_artifact.get("title", ""))
                         result["summary"] = f"Artifact '{matching_artifact.get('title', '?')}' already in review"
                         _session_append(r, {
                             "kind": "institution_submit_duplicate",

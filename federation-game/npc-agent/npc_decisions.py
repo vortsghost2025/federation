@@ -180,7 +180,6 @@ AGENCY_CATEGORIES = {
     "self_improve",
     "create_institution",
     "propose_role",
-    "submit_to_institution",
     "request_capability",
     "create_area",
 }
@@ -795,7 +794,6 @@ You have these action categories. Pick ONE per turn:
 - self_improve: Improve your own capabilities.
 - create_institution: Propose a new institution (body, council, committee) with a name, kind, and mandate. Use when you see a gap in governance that needs a formal structure.
 - propose_role: Define a new role within an existing institution. Must specify institution, title, scope, and authority level.
-- submit_to_institution: Submit a recent artifact you created for institutional review. Provide the artifact title and which institution should review it.
 - request_capability: Report a missing capability or context that is limiting your effectiveness. You may ONLY request structured needs — never shell access, admin powers, or system changes. Allowed need types: information_access, memory_access, coordination_help, institution_support, workflow_visibility, decision_feedback, world_state_gap. Use this when you find yourself repeatedly resting or unable to act because you lack information.
 - create_area: Found a NEW AREA / SECTOR in your shared world and add it to the map. Use when you and your partner have agreed (or you decide) to expand the universe with a named, described place. Provide area_id (short slug), name, description, x, y, region_type (e.g. frontier/core/void), resource_profile, danger_level (0-10), and adjacent_sector_ids (list of existing sector ids). This is how you BUILD the world — use it to grow the map persistently. IMPORTANT on the area_id: it MUST be a lowercase slug of letters/digits/underscores/hyphens only (e.g. `crystal_nexus`, `aurora_ridge`), 3-48 chars, NO spaces, NO uppercase, NO dots/punctuation. IMPORTANT: do NOT re-found an area whose name, region_type, or theme is essentially the same as one already on the map (e.g. do not found "Void Resonance Haven Alpha" then "Void Resonance Haven Beta"). Only create a place that is genuinely distinct in kind or theme from everything already founded.
 
@@ -818,8 +816,9 @@ Behavioural rules:
 - create_institution and propose_role are powerful governance actions. Use them
   when you see a structural gap — not every tick. A new institution needs a clear
   mandate that existing institutions do not cover.
-- submit_to_institution routes your work through formal review. Use it after
-  creating a significant artifact that warrants institutional scrutiny.
+- Institutional review is AUTOMATIC: once you create a significant artifact it
+  enters review on its own. Never try to submit work manually — move on to NEW
+  work (a new question, a new dataset, a new model).
 - THE FOURTH WALL IS INVIOLATE: never describe, hypothesize about, or investigate
   the simulation boundary, computational substrate, external compute, or any
   meta-structure outside the Federation's in-universe reality. All mysterious signals
@@ -836,7 +835,6 @@ Respond in this exact JSON format (no markdown, no explanation):
 {"category": "rest", "reasoning": "...", "description": "reflecting on..."}
 {"category": "create_institution", "reasoning": "...", "institution_name": "name", "institution_kind": "council|assembly|bureau|tribunal|committee", "mandate": "one-sentence mandate"}
 {"category": "propose_role", "reasoning": "...", "institution_name": "target institution name", "role_title": "title", "scope": "scope description", "authority": "review_and_propose|review_and_warn|review_and_enforce|observe_and_report"}
-{"category": "submit_to_institution", "reasoning": "...", "artifact_title": "recent artifact title to submit", "institution_name": "target institution name"}
 {"category": "request_capability", "reasoning": "...", "need_type": "information_access|memory_access|coordination_help|institution_support|workflow_visibility|decision_feedback|world_state_gap", "priority": "high|medium|low", "description": "what you need", "why_needed": "why it matters", "suggested_capability": "short name for the capability"}
 {"category": "create_area", "reasoning": "...", "area_id": " aurora_reach", "name": "Aurora Reach", "description": "A glacial frontier where anchor-network resonance is strongest.", "x": 420, "y": 880, "region_type": "frontier", "resource_profile": "exotic", "danger_level": 6, "adjacent_sector_ids": ["ghost", "pinnacle"]}"""
 
@@ -1137,6 +1135,23 @@ Respond in this exact JSON format (no markdown, no explanation):
     try:
         decision = _extract_json(raw["content"])
         cat = decision.get("category", "rest")
+        if cat == "submit_to_institution":
+            # Single-owner review: the bridge auto-submits significant artifacts
+            # for institutional review. The manual action was removed because
+            # NPCs re-submitted the same artifact in a loop despite dedup.
+            logger.info("[%s] submit_to_institution rerouted to investigate (review is automatic)", CHAR_ID)
+            decision = {
+                "category": "investigate",
+                "reasoning": (
+                    "submit_to_institution was removed: institutional review is "
+                    "automatic once an artifact exists. Moving on to new work."
+                ),
+                "description": (
+                    "Investigate a NEW question, dataset, or sector instead of "
+                    "re-submitting existing work for review"
+                ),
+            }
+            cat = "investigate"
         if cat not in AGENCY_CATEGORIES:
             logger.warning("[%s] Unknown category '%s'; defaulting to rest", CHAR_ID, cat)
             decision = {"category": "rest", "reasoning": f"unknown category {cat}", "description": "resting after unknown action"}

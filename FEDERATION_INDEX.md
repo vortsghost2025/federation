@@ -1,6 +1,20 @@
 # FEDERATION — Agent Quick-Reference Index
-**Last updated:** 2026-06-08
+**Last updated:** 2026-06-08 (2026-11-21 addendum below)
 **Purpose:** 2-second lookup for any agent. No hunting, no guessing.
+
+---
+
+## 🆕 2026-11-21 ADDENDUM (read this first — supersedes stale sections)
+
+- **Moderator CLI:** `scripts/mod.py` + `scripts/mod.ps1` (safe base64 JSON argv transport over SSH — immune to shell quoting/`$`/newlines). One-liners: `health`, `inbox [--all]`, `pins`, `reply <cid> <subj> <body>` (mirrors list + zset inbox), `read <cid> [n]`, `grants`, `execs <cid>`, `publish <title> <file>`, `openq <pair> <question>`, `capreq-close <id> <reason>`. Every write takes a UTC-timestamped backup (`backup:{key}:mod_YYYYMMDD_HHMMSS`, 30d TTL).
+- **Redis schema:** `docs/REDIS_SCHEMA.md` — hot key types/purposes (notably `territory:*:*` is a **JSON string**, `npc_decisions:{cid}` and `npc_actions:{cid}` are **zsets**). Local `federation-game/npc-agent/npc_*.py` uses the **same filenames** as VPS `/docker/federation-game/npc-agent/npc_*.py`; verify parity by MD5/SHA-256 (`local == host == container`), and note `/app` is bind-mounted read-only inside containers.
+- **Core Simulation & Galaxy Awareness (2026-11-20):** Fixed `faction_ai.py` dynamics overwrite (all 8 factions active), `spatial_tick.py` JSON parsing + homeworld self-heal + colony consolidation + exploration footholds, `faction_diplomacy.py` treaty descriptions, wired Step 8.8 (`event_cascade.py`) into `simulation_engine.py`, canonicalized 40-NPC display names in `npc_interactions.py`, and added `live_galaxy_briefing()` in `npc-agent/npc_context.py`.
+- **Living Starmap & TV Zoom Controls (2026-11-20/21):** Connected-cluster Stellaris territory bubbles, pulsing contested rings, glowing hyperlanes + chevron ships, cursor/center-anchored `zoomAt()`, drag-anywhere pan, `getVisibleCanvasBounds()` for 200%–300% 4K TV zoom, and `FULL MAP` / `SHOW PANELS` toggle (`starmap.html` + `starmap.js?v=20261121a`). Sync static deploys to BOTH `/docker/federation-game/public_html/` AND `/docker/federation-game/frontend/`.
+- **Sandbox pilot (`comp_001`/`comp_010` only):** `sandbox_exec` grants via `npc_capability:grants:{cid}`; zero-egress `npc-sandbox` at `172.30.0.10:9002` on internal sandbox-net `172.30.0.0/24`; runner AST gate + dangerous-code pins + quota 3/180s + audit zset `npc_sandbox_exec_log:{cid}`. Containment verified 0 escapes.
+- **Negative-fact pins & open-question guard:** `world_facts:nonexistent` (set) blocks phantom `request_capability` + extract-intent `read_artifacts`; `_is_valid_open_question()` in `npc_redis_helpers.py` blocks short/verb-stub pair open questions (e.g. `"What about write?"`). Real data basis = moderator artifacts `69a0f9ad…` (event aggregates) and `2d0aff4b…` (canonical 22-sector list).
+- **Institutional review is AUTOMATIC (2026-11-20):** `submit_to_institution` was removed as an NPC action; the bridge auto-creates workflows. Manual submissions deterministically reroute to `investigate`.
+- **LLM routing & per-key 429 cooldowns (2026-11-21):** `llm_router.py` cools individual rate-limited NIM keys (`llm_nim_cooldown_key:{hash}`, 90s / `Retry-After`) and retries on another healthy NIM key without tripping the provider-wide `llm_circuit_breaker:nim`. Ollama backup: `OLLAMA_BASE_URL=http://100.95.92.117:11435/v1` (Sean's desktop, Tailscale), model `qwen2.5-coder:3b-instruct-q4_K_M`, `OLLAMA_MAX_ACTIVE=1`.
+- **Tick cadence:** worker `TICK_INTERVAL=600` + tick time (~25–45s) ⇒ ~11-minute cycles are normal, not stalls. Memory summaries capped at 4/tick, ~1200s per NPC.
 
 ---
 

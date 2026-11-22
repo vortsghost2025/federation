@@ -157,7 +157,7 @@ OLLAMA_HEAVY_ENABLED = os.environ.get("OLLAMA_HEAVY_ENABLED", "") == "1"
 # Backpressure: max 2 active calls (Ollama can handle 2 concurrent on most GPUs),
 # max 5 queued, cooldown 60s on 500/client-abort. Increased from 1→2 active
 # to allow parallel NPC thought generation while respecting GPU limits.
-OLLAMA_MAX_ACTIVE = int(os.environ.get("OLLAMA_MAX_ACTIVE", "2"))
+OLLAMA_MAX_ACTIVE = int(os.environ.get("OLLAMA_MAX_ACTIVE", "1"))
 OLLAMA_MAX_QUEUE = int(os.environ.get("OLLAMA_MAX_QUEUE", "5"))
 OLLAMA_COOLDOWN_SECONDS = int(os.environ.get("OLLAMA_COOLDOWN_SECONDS", "60"))
 
@@ -185,17 +185,33 @@ class OllamaLane:
         return time.time() >= self._cooldown_until
 
     def try_acquire(self) -> bool:
-        """Try to enter the Ollama lane. Returns False if at capacity or cooling down."""
+        """Non-queuing acquire: returns False if at capacity or cooling down.
+
+        Never returns a 'queued' success — use wait_for_slot() to actually
+        wait for the GPU to free up instead of firing parallel requests."""
         with self._lock:
             if time.time() < self._cooldown_until:
                 return False
             if self._active >= OLLAMA_MAX_ACTIVE:
-                if self._queue_depth >= OLLAMA_MAX_QUEUE:
-                    return False
-                self._queue_depth += 1
-                return True  # queued — caller must wait
+                return False
             self._active += 1
             return True
+
+    async def wait_for_slot(self, timeout: float = 20.0) -> bool:
+        """Wait for a free active slot up to timeout seconds. Returns False on
+        cooldown or timeout. Guarantees at most OLLAMA_MAX_ACTIVE concurrent
+        requests reach the GPU — no fire-and-forget 'queued' requests."""
+        deadline = time.time() + timeout
+        while True:
+            with self._lock:
+                if time.time() < self._cooldown_until:
+                    return False
+                if self._active < OLLAMA_MAX_ACTIVE:
+                    self._active += 1
+                    return True
+            if time.time() >= deadline:
+                return False
+            await asyncio.sleep(0.25)
 
     def release(self, was_error: bool = False, is_500: bool = False):
         """Release an Ollama lane slot. If 500/client-abort, start cooldown."""
@@ -535,7 +551,7 @@ class NimClient:
             logger.debug("Ollama: lane in cooldown, skipping")
             return None
 
-        if not _ollama_lane.try_acquire():
+        if not await _ollama_lane.wait_for_slot():
             logger.info(
                 "Ollama: lane full (active=%d, queue=%d), template fallback",
                 OLLAMA_MAX_ACTIVE,
@@ -556,6 +572,9 @@ class NimClient:
         try:
             ollama_client = _ollama_lane.get_ollama_client()
             if ollama_client is None:
+                # Release the acquired slot before bailing out — this early
+                # return previously leaked an active slot permanently.
+                _ollama_lane.release(was_error=True)
                 return None
 
             queued_ms = int((time.time() - queue_start) * 1000)

@@ -35,9 +35,10 @@ CASCADE_CHAINS_TTL = 86400 * 7
 FACTION_CASCADE_TTL = 86400 * 7
 DECISION_BIAS_TTL = 300
 CASCADE_SUMMARY_TTL = 60
-MAX_CASCADE_REACTIONS = 500
+MAX_CASCADE_REACTIONS = 60
 MAX_REACTIVE_NPCS = 5
 CASCADE_BUDGET_SECONDS = 5
+MAX_CASCADE_WORLD_EVENTS_PER_TICK = 2
 
 _CRITICAL_KEYWORDS = frozenset(
     {
@@ -48,6 +49,7 @@ _CRITICAL_KEYWORDS = frozenset(
         "death",
         "betrayal",
         "crisis",
+        "border_clash",
     }
 )
 _MAJOR_KEYWORDS = frozenset(
@@ -59,6 +61,10 @@ _MAJOR_KEYWORDS = frozenset(
         "breakthrough",
         "defection",
         "raid",
+        "treaty_signed",
+        "territory_gained",
+        "territory_lost",
+        "game_event",
     }
 )
 _MODERATE_KEYWORDS = frozenset(
@@ -70,6 +76,7 @@ _MODERATE_KEYWORDS = frozenset(
         "promotion",
         "assignment",
         "discovery",
+        "faction_action",
     }
 )
 _MINOR_KEYWORDS = frozenset(
@@ -230,16 +237,18 @@ def _store_cascade_event(event: Dict, target_key: str):
     r.expire(target_key, CASCADE_REACTIONS_TTL)
 
 
+_POSITIVE_MOODS = ("inspired", "optimistic", "determined", "hopeful", "energized")
+_NEGATIVE_MOODS = ("tense", "alert", "wary", "concerned", "defiant")
+
+
 def _apply_mood_shift(char_id: str, delta: float):
+    """Shift an NPC's mood word in Redis (preserving string mood labels, never writing floats)."""
+    if not char_id or abs(delta) < 0.08:
+        return
     r = _get_redis()
     key = f"npc_mood:{char_id}"
-    raw = r.get(key)
-    try:
-        mood = float(raw) if raw else 0.5
-    except (TypeError, ValueError):
-        mood = 0.5
-    mood = max(0.0, min(1.0, mood + delta))
-    r.set(key, str(mood))
+    new_mood = random.choice(_POSITIVE_MOODS if delta > 0 else _NEGATIVE_MOODS)
+    r.set(key, new_mood)
 
 
 def _apply_decision_bias(char_id: str, bias_type: str):
@@ -315,34 +324,35 @@ def find_reactive_npcs(event: Dict, npc_list: List[Dict]) -> List[Dict]:
     results = []
 
     for npc in npc_list:
-        npc_id = npc.get("char_id", "")
-        if npc_id == source_id:
+        npc_id = npc.get("char_id") or npc.get("id", "")
+        if not npc_id or npc_id == source_id:
             continue
 
-    prob = random.uniform(0.05, 0.15)
-    npc_faction = npc.get("affiliation", npc.get("faction", ""))
+        prob = random.uniform(0.05, 0.15)
+        npc_faction = npc.get("affiliation", npc.get("faction", ""))
 
-    if npc_faction and source_faction and npc_faction == source_faction:
-        prob += 0.30  # reduced from 0.80 — was creating near-certain reactions
-    elif npc_faction and source_faction:
-        if _is_allied_faction(npc_faction, source_faction):
-            prob += 0.20  # reduced from 0.50
-        elif _is_rival_faction(npc_faction, source_faction):
-            prob += 0.25  # reduced from 0.60
+        if npc_faction and source_faction and npc_faction == source_faction:
+            prob += 0.30
+        elif npc_faction and source_faction:
+            if _is_allied_faction(npc_faction, source_faction):
+                prob += 0.20
+            elif _is_rival_faction(npc_faction, source_faction):
+                prob += 0.25
 
-    rel = _get_relationship(npc_id, source_id) if source_id else 50.0
-    if rel > 70:
-        prob += 0.25  # reduced from 0.70
-    elif rel < 30:
-        prob += 0.15  # reduced from 0.40
+        rel = _get_relationship(npc_id, source_id) if source_id else 50.0
+        if rel > 70:
+            prob += 0.25
+        elif rel < 30:
+            prob += 0.15
 
-        archetype = npc.get("archetype", npc.get("role", ""))
+        archetype = str(npc.get("archetype", npc.get("role", "")) or "").lower()
         if archetype in _ARCHETYPE_REACT_BONUS:
             prob += _ARCHETYPE_REACT_BONUS[archetype]
 
         prob = min(1.0, prob)
         if random.random() < prob:
             npc_copy = dict(npc)
+            npc_copy["char_id"] = npc_id
             npc_copy["_react_prob"] = prob
             results.append(npc_copy)
 
@@ -357,7 +367,13 @@ def generate_reaction(event: Dict, reacting_npc: Dict) -> Optional[Dict]:
     and decision bias stored in npc_decision_bias:{char_id} (TTL 5 min).
     """
     source_id = event.get("source_char_id", "")
-    source_name = event.get("source_char_name", "Unknown")
+    raw_source_name = (
+        event.get("source_char_name")
+        or event.get("name")
+        or (event.get("faction") or event.get("source_affiliation") or "").replace("_", " ").title()
+        or "the Federation"
+    )
+    source_name = raw_source_name
     npc_id = reacting_npc.get("char_id", "")
     npc_name = reacting_npc.get("char_name", reacting_npc.get("name", "Unknown"))
     npc_faction = reacting_npc.get("affiliation", reacting_npc.get("faction", ""))
@@ -390,6 +406,17 @@ def generate_reaction(event: Dict, reacting_npc: Dict) -> Optional[Dict]:
     mood_delta = _MOOD_DELTA_MAP.get(reaction_type, 0.0)
 
     now = time.time()
+    event_label = (
+        event.get("name")
+        or event.get("description", "")[:60]
+        or event.get("event_type", "event").replace("_", " ")
+    )
+    reaction_label = reaction_type.replace("_", " ")
+    if source_name == event_label or event.get("name"):
+        desc = f"{npc_name} responded with {reaction_label} to {event_label}"
+    else:
+        desc = f"{npc_name} responded with {reaction_label} to {source_name}'s {event.get('event_type', 'event').replace('_', ' ')}"
+
     reaction_event = {
         "event_type": "cascade_reaction",
         "reaction_to": event.get("event_type", "unknown"),
@@ -400,21 +427,13 @@ def generate_reaction(event: Dict, reacting_npc: Dict) -> Optional[Dict]:
         "target_char_id": source_id,
         "target_char_name": source_name,
         "faction": npc_faction,
-        "description": (
-            f"{npc_name} reacted with {reaction_type} to "
-            f"{source_name}'s {event.get('event_type', 'event')}"
-        ),
+        "description": desc[:200],
         "significance": min(0.9, event.get("significance", 0.5) * 0.7),
         "cascade_depth": event.get("cascade_depth", 0) + 1,
         "ts": now,
     }
 
     _store_cascade_event(reaction_event, "cascade_reactions")
-
-    r = _get_redis()
-    world_event = dict(reaction_event)
-    r.zadd("npc_world_events", {json.dumps(world_event): now})
-    r.zremrangebyrank("npc_world_events", 0, -(51))
 
     if source_id and rel_delta != 0.0:
         try:
@@ -503,6 +522,17 @@ def process_cascade(npc_list: List[Dict], max_depth: int = 2) -> Dict:
             stats["most_reactive"][npc_id] = stats["most_reactive"].get(npc_id, 0) + 1
             chain.append(reaction.get("reaction_type", "unknown"))
 
+            # Promote at most MAX_CASCADE_WORLD_EVENTS_PER_TICK high-drama depth-0 reactions
+            # into npc_world_events so the feed stays readable without flooding out treaties/events.
+            if (
+                depth == 0
+                and stats.get("world_events_promoted", 0) < MAX_CASCADE_WORLD_EVENTS_PER_TICK
+                and reaction.get("reaction_type") in ("opposition", "counter_move", "protest", "celebration", "support")
+            ):
+                r.zadd("npc_world_events", {json.dumps(reaction): reaction.get("ts", time.time())})
+                r.zremrangebyrank("npc_world_events", 0, -(51))
+                stats["world_events_promoted"] = stats.get("world_events_promoted", 0) + 1
+
             if sig in ("critical", "major") and depth < max_depth:
                 _cascade_recurse(reaction, depth + 1, chain)
 
@@ -511,9 +541,15 @@ def process_cascade(npc_list: List[Dict], max_depth: int = 2) -> Dict:
         _cascade_recurse(evt, 0, chain)
         if chain:
             stats["chains"].append(chain)
+            chain_source = (
+                evt.get("source_char_name")
+                or evt.get("name")
+                or (evt.get("faction") or evt.get("source_affiliation") or "").replace("_", " ").title()
+                or evt.get("event_type", "Federation").replace("_", " ").title()
+            )
             chain_record = {
                 "source_event": evt.get("event_type", "unknown"),
-                "source_char": evt.get("source_char_name", "unknown"),
+                "source_char": chain_source,
                 "chain": chain,
                 "ts": time.time(),
             }
@@ -525,17 +561,14 @@ def process_cascade(npc_list: List[Dict], max_depth: int = 2) -> Dict:
 
     prev_temp = float(r.get("cascade_temperature") or 0.0)
     # Temperature tracks cascade intensity on a 0-1 scale.
-    # Use a sigmoid-based formula: moderate reactions → ~0.4-0.6,
-    # extreme spikes → approaches 1.0, quiet periods → approaches 0.
-    # This avoids the problem where a fixed cap always produces ratio=1.0.
+    # Calibrated for MAX_CASCADE_REACTIONS=60: 0 -> ~0.12, 25 -> 0.50, 50+ -> ~0.88.
     reaction_count = stats["reactions_generated"]
-    # Sigmoid midpoint at 300 reactions; steepness 0.008 for gradual rise
-    # Typical tick produces 200-500 reactions, so midpoint=300 means
-    # ~300 reactions => heat=0.5, 500 reactions => heat~0.8, 100 => heat~0.2
-    SIGMOID_MIDPOINT = 300.0
-    SIGMOID_STEEPNESS = 0.008
-    new_heat = 1.0 / (
-        1.0 + math.exp(-SIGMOID_STEEPNESS * (reaction_count - SIGMOID_MIDPOINT))
+    SIGMOID_MIDPOINT = 25.0
+    SIGMOID_STEEPNESS = 0.08
+    new_heat = (
+        0.0
+        if reaction_count == 0
+        else 1.0 / (1.0 + math.exp(-SIGMOID_STEEPNESS * (reaction_count - SIGMOID_MIDPOINT)))
     )
     DAMPING_FACTOR = 0.6
     HEAT_GAIN = 0.4

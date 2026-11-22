@@ -147,6 +147,10 @@ def _run_autonomous_tick_background(
             return
     if not _tick_lock.acquire(blocking=False):
         logger.warning("Legacy lock failed for tick %s", tick_id)
+        if WATCHDOG_AVAILABLE:
+            # Release the lease on this early-return path too; previously the
+            # lease could block subsequent ticks until stale/TTL recovery.
+            complete_tick(watchdog_id)
         return
     try:
         _set_tick_redis(
@@ -170,13 +174,9 @@ def _run_autonomous_tick_background(
             logger.warning("Auto-save snapshot after autonomous tick failed")
         result = {"status": "completed", "details": results}
         _set_tick_redis(_AUTO_TICK_REDIS_KEY, {"last_result": result})
-        if WATCHDOG_AVAILABLE:
-            complete_tick(watchdog_id)
     except Exception as e:
         logger.error("Autonomous tick failed: %s", e)
         _set_tick_redis(_AUTO_TICK_REDIS_KEY, {"last_error": str(e)})
-        if WATCHDOG_AVAILABLE:
-            complete_tick(watchdog_id)
     finally:
         _set_tick_redis(
             _AUTO_TICK_REDIS_KEY,

@@ -254,7 +254,15 @@ if (fedEl) {
   }
 }
 
-lastTickTime = Date.now();
+/* Track the simulation's own tick timestamp, not the browser render time.
+   tick_ts / last_tick_timestamp are epoch seconds; ws.tick_count is a small
+   counter, not a timestamp, so it must not be used as one. */
+var tickEpoch = Number(tick);
+if (tick && tick !== '\u2014' && isFinite(tickEpoch) && tickEpoch > 1000000000) {
+  lastTickTime = tickEpoch * 1000;
+} else if (!lastTickTime) {
+  lastTickTime = Date.now();
+}
 }
 
 function updateTimeSince(){if(!lastTickTime)return;var elapsed=(Date.now()-lastTickTime)/1000;var el=document.getElementById('time-since');if(el)el.textContent=formatTime(elapsed)}

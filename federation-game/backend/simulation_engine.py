@@ -1390,12 +1390,20 @@ def consume_pending_political_items() -> Dict:
                     logger.error("Error applying treaty effects: %s", exc)
                     results["errors"].append(str(exc))
 
-            # Record in history
+            # Record in history with human-readable treaty description
             try:
+                treaty_desc = treaty.get("description")
+                if not treaty_desc or treaty_desc == "Unknown treaty":
+                    t_type = str(treaty.get("type", "accord")).replace("_", " ").title()
+                    if len(factions) >= 2:
+                        f_names = [str(f).replace("_", " ").title() for f in factions[:2]]
+                        treaty_desc = f"{f_names[0]} and {f_names[1]} signed a {t_type}"
+                    else:
+                        treaty_desc = f"Federation factions ratified a {t_type}"
                 history_entry = {
                     "event_type": "treaty_signed",
                     "factions": factions,
-                    "description": treaty.get("description", "Unknown treaty"),
+                    "description": treaty_desc,
                     "strength": strength,
                     "ts": now,
                     "source": "political_bridge",
@@ -2233,16 +2241,19 @@ def autonomous_tick(
         step_start = time.time()
         tech_bridge = _get_tech_bridge(r)
         faction_data = {}
+        fd_raw = r.hgetall("faction_dynamics") or {}
         for fid, ideology in FACTION_IDEOLOGY.items():
             power_raw = r.get(f"faction_power:{fid}")
             power = float(power_raw) if power_raw else 50.0
-            fd_raw = r.hgetall(f"faction_dynamics")
             influence = 0.5
             try:
-                fd_key = f"{fid}_influence"
-                if fd_key in (fd_raw or {}):
-                    influence = float(fd_raw[fd_key])
-            except (ValueError, TypeError):
+                if fid in fd_raw:
+                    parsed_fd = json.loads(fd_raw[fid])
+                    if isinstance(parsed_fd, dict) and "influence" in parsed_fd:
+                        influence = max(0.0, min(1.0, float(parsed_fd["influence"]) / 100.0))
+                elif f"{fid}_influence" in fd_raw:
+                    influence = float(fd_raw[f"{fid}_influence"])
+            except (ValueError, TypeError, json.JSONDecodeError):
                 pass
             faction_data[fid] = {
                 "ideology": ideology,
@@ -2316,6 +2327,23 @@ def autonomous_tick(
         logger.error("Step 8.7 (faction AI) failed: %s", exc)
         result["step8_7_faction_ai"] = {"errors": [str(exc)]}
         result["errors"].append(f"step8_7: {exc}")
+
+    # Step 8.8: Event Cascade — propagate public events & faction actions into
+    # NPC reactions, relationship shifts, mood updates, and decision biases.
+    try:
+        _progress("step8_8_event_cascade_start")
+        step_start = time.time()
+        from event_cascade import process_cascade
+
+        result["step8_8_event_cascade"] = process_cascade(npc_list, max_depth=2)
+        result["step8_8_event_cascade"]["duration_ms"] = round(
+            (time.time() - step_start) * 1000, 1
+        )
+        _progress("step8_8_event_cascade_complete", result["step8_8_event_cascade"])
+    except Exception as exc:
+        logger.error("Step 8.8 (event cascade) failed: %s", exc)
+        result["step8_8_event_cascade"] = {"errors": [str(exc)]}
+        result["errors"].append(f"step8_8: {exc}")
 
     # Step 9: Narration — generate dramatic prose summarizing this tick
     # Runs AFTER all world state changes so it can narrate what actually happened.

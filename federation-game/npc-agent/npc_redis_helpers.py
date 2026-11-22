@@ -79,13 +79,14 @@ def match_pinned_artifact_read(r, text: str):
         return None
     tl = text.lower()
     ids = pinned_artifact_ids(r)
-    if not ids or not any(a in tl for a in ids):
+    matched_ids = [a for a in ids if a in tl]
+    if not matched_ids:
         return None
     if not EXTRACT_INTENT_RE.search(text):
         return None
     for f in get_nonexistent_facts(r):
         blob = " ".join(str(f.get(k) or "") for k in ("text", "alternative")).lower()
-        if any(a in blob for a in ids):
+        if any(a in blob for a in matched_ids):
             return f
     return None
 
@@ -329,12 +330,35 @@ def _compact_text(text: str, limit: int = 160) -> str:
     return _trunc(text, limit) if text else ""
 
 
+_STUB_OPEN_QUESTION_RE = re.compile(
+    r"^what\s+about\s+(write|write_code|investigate|rest|think|send_message|create_artifact|read_artifacts|self_improve|code|work|task|next)\s*\??$",
+    re.I,
+)
+_OPEN_QUESTION_WORD_RE = re.compile(r"[A-Za-z]{2,}")
+
+
+def _is_valid_open_question(question: str) -> bool:
+    """Reject degenerate/stub open questions (e.g. 'What about write?', 'Why?',
+    code/JSON fragments) so pair state never anchors on garbage."""
+    q = " ".join((question or "").split()).strip()
+    if len(q) < 16 or len(q) > 240:
+        return False
+    if _STUB_OPEN_QUESTION_RE.match(q):
+        return False
+    if len(_OPEN_QUESTION_WORD_RE.findall(q)) < 4:
+        return False
+    if any(tok in q for tok in ("{", "}", "http://", "https://", "def ", "import ", "```")):
+        return False
+    return True
+
+
 def _extract_open_question(*parts: str) -> str:
     merged = " ".join(_compact_text(part, 220) for part in parts if part)
     if "?" not in merged:
         return ""
     question = merged.split("?", 1)[0].rsplit(". ", 1)[-1].strip()
-    return _trunc(f"{question}?", 180) if question else ""
+    candidate = _trunc(f"{question}?", 180) if question else ""
+    return candidate if _is_valid_open_question(candidate) else ""
 
 
 def _derive_question_from_goal(goal: str) -> str:
@@ -358,8 +382,10 @@ def _derive_question_from_goal(goal: str) -> str:
             break
     core = _trunc(normalized, 120).rstrip(".,;")
     if core.lower().startswith(("what ", "why ", "how ", "where ", "when ", "who ")):
-        return _trunc(core.rstrip(".") + "?", 180)
-    return _trunc("What about " + core + "?", 180)
+        candidate = _trunc(core.rstrip(".") + "?", 180)
+    else:
+        candidate = _trunc("What about " + core + "?", 180)
+    return candidate if _is_valid_open_question(candidate) else ""
 
 
 def _default_open_question() -> str:
@@ -706,6 +732,13 @@ def _sync_pair_workspace(r, decision: dict, result: dict, npc_name: str = "", ch
     action_taken = result.get("action_taken", "none")
     message_target = result.get("target") or decision.get("target", "")
     is_partner_message = cat == "send_message" and message_target == pid
+    # Only a SUCCESSFUL send may move pair-message state (cooldowns, answers,
+    # open questions). Deferred/duplicate sends previously refreshed
+    # last_message_ts and sustained their own cooldown.
+    message_sent = is_partner_message and action_taken == "message_sent"
+    # Only a genuinely created artifact counts as produced work; dedup-deferred
+    # artifacts also carry artifact_title and must not clear obligations.
+    artifact_ok = bool(result.get("artifact_title")) and action_taken == "artifact_created"
     focus = _compact_text(body if cat == "send_message" else desc, 180) or _compact_text(reasoning, 180) or cat
     state = _pair_state(r, pid, cid)
     now = int(result.get("ts") or time.time())
@@ -723,7 +756,7 @@ def _sync_pair_workspace(r, decision: dict, result: dict, npc_name: str = "", ch
     if not state.get("shared_goal") and cat in {"investigate", "create_artifact", "write_code", "self_improve"}:
         mapping["shared_goal"] = focus
     open_question = _extract_open_question(body, desc, reasoning)
-    if is_partner_message and answering_partner_question:
+    if message_sent and answering_partner_question:
         mapping["partner_answer"] = _compact_text(body, 300)
         mapping["partner_answer_ts"] = str(now)
         mapping["partner_answer_from"] = cid
@@ -733,7 +766,7 @@ def _sync_pair_workspace(r, decision: dict, result: dict, npc_name: str = "", ch
         mapping["open_question_ts"] = ""
         mapping["last_open_question_sent_to_partner"] = ""
         mapping["last_open_question_ts"] = ""
-    elif is_partner_message and open_question:
+    elif message_sent and open_question:
         mapping["open_question"] = open_question
         mapping["open_question_from"] = cid
         mapping["open_question_ts"] = str(now)
@@ -743,7 +776,7 @@ def _sync_pair_workspace(r, decision: dict, result: dict, npc_name: str = "", ch
         mapping["partner_answer_ts"] = ""
         mapping["partner_answer_from"] = ""
         mapping["partner_answer_to"] = ""
-    if result.get("artifact_title") and answering_partner_question:
+    if artifact_ok and answering_partner_question:
         mapping["partner_answer"] = f"Artifact created: {result['artifact_title']}"
         mapping["partner_answer_ts"] = str(now)
         mapping["partner_answer_from"] = cid
@@ -753,20 +786,22 @@ def _sync_pair_workspace(r, decision: dict, result: dict, npc_name: str = "", ch
         mapping["open_question_ts"] = ""
         mapping["last_open_question_sent_to_partner"] = ""
         mapping["last_open_question_ts"] = ""
-    if is_partner_message:
+    if message_sent:
         mapping["last_message_ts"] = str(now)
         mapping["last_message_from"] = cid
         mapping["last_message_preview"] = _compact_text(body, 160)
         if result.get("thread_id"):
             mapping["active_thread_id"] = result["thread_id"]
-    if result.get("artifact_title"):
+    if artifact_ok:
         mapping["last_artifact_title"] = result["artifact_title"]
         mapping["last_artifact_from"] = cid
         mapping["last_artifact_ts"] = str(now)
-    # Ensure open_question is always non-blank so the councilors always have
-    # an active inquiry to orbit around. Skip if state already has a real
-    # open_question, or if this action intentionally cleared it.
-    if not state.get("open_question") and mapping.get("open_question") != "":
+    # Ensure open_question is always non-blank and valid so the pair always has
+    # a concrete inquiry to orbit around (self-heals stub questions like
+    # 'What about write?'). Skip if state already has a valid open_question,
+    # or if this action intentionally cleared it.
+    _existing_oq_valid = _is_valid_open_question(state.get("open_question", ""))
+    if not _existing_oq_valid and mapping.get("open_question") != "":
         # Stage 4D: after resolution, do not regenerate open_question from
         # the same resolved shared_goal — that re-anchors to the blocked topic.
         _post_resolution_default = False
@@ -784,7 +819,8 @@ def _sync_pair_workspace(r, decision: dict, result: dict, npc_name: str = "", ch
                 result.get("artifact_title", ""), 120) if result.get("artifact_title") else ""
             mapping["resolved_action"] = action_taken
             mapping["resolved_at_sync"] = str(now)
-            _next_q = _cc.get("next_question", "")
+            _raw_next_q = _cc.get("next_question", "")
+            _next_q = _raw_next_q if _is_valid_open_question(_raw_next_q) else ""
             _blocked_raw = _cc.get("blocked_topic_terms", [])
             if isinstance(_blocked_raw, str) and _blocked_raw.strip():
                 try:

@@ -175,7 +175,7 @@ def _resolve_all_npc_factions(r=None) -> Dict[str, str]:
 
     # Layer on npc_state:* hashes (most authoritative per-NPC)
     try:
-        for key in r.keys("npc_state:*"):
+        for key in r.scan_iter("npc_state:*", count=500):
             parts = key.split(":")
             if len(parts) == 2:
                 npc_id = parts[1]
@@ -208,14 +208,14 @@ def _auto_seed_npc_locations() -> int:
         npc_ids = set()
 
         # Source 1: npc_state:{id} keys
-        state_keys = r.keys("npc_state:*")
+        state_keys = r.scan_iter("npc_state:*", count=500)
         for key in state_keys:
             parts = key.split(":")
             if len(parts) == 2:
                 npc_ids.add(parts[1])
 
         # Source 2: npc_faction_context:{id} keys
-        fc_keys = r.keys("npc_faction_context:*")
+        fc_keys = r.scan_iter("npc_faction_context:*", count=500)
         for key in fc_keys:
             parts = key.split(":")
             if len(parts) == 2:
@@ -383,33 +383,93 @@ def _get_faction_power(faction_id: str) -> float:
 
 
 def _get_faction_cohesion(faction_id: str) -> int:
-    """Get faction cohesion from Redis faction_dynamics hash."""
+    """Get faction cohesion from Redis faction_dynamics hash (JSON blob per faction)."""
     try:
         r = get_redis()
+        raw = r.hget("faction_dynamics", faction_id)
+        if raw is not None:
+            if isinstance(raw, bytes):
+                raw = raw.decode()
+            parsed = json.loads(raw)
+            if isinstance(parsed, dict) and "cohesion" in parsed:
+                return int(float(parsed["cohesion"]))
+        # Legacy fallback field
         cohesion_str = r.hget("faction_dynamics", f"{faction_id}:cohesion")
         return int(float(cohesion_str)) if cohesion_str is not None else 50
-    except (ValueError, TypeError):
+    except (ValueError, TypeError, json.JSONDecodeError):
         return 50
 
 
 def _get_faction_stance(faction_id: str, target_faction_id: str) -> str:
-    """Get stance between two factions from Redis."""
+    """Get normalized stance label ('hostile', 'tense', 'neutral', 'allied') from Redis."""
     try:
         r = get_redis()
         # Check both directions since stance might be stored either way
-        stance = r.hget(f"faction_stances:{faction_id}", target_faction_id)
-        if stance is None:
-            stance = r.hget(f"faction_stances:{target_faction_id}", faction_id)
-        return stance or "neutral"
+        raw = r.hget(f"faction_stances:{faction_id}", target_faction_id)
+        if raw is None:
+            raw = r.hget(f"faction_stances:{target_faction_id}", faction_id)
+        if raw is None:
+            return "neutral"
+        if isinstance(raw, bytes):
+            raw = raw.decode()
+        # faction_dynamics.store_faction_dynamics writes JSON dicts: {"value": 0.35, "label": "tense", ...}
+        try:
+            parsed = json.loads(raw)
+            if isinstance(parsed, dict):
+                label = str(parsed.get("label", "")).lower().strip()
+                if label in ("hostile", "tense", "rival", "wary"):
+                    return "hostile" if label in ("hostile", "rival") else "tense"
+                if label in ("allied", "friendly", "cooperative"):
+                    return "allied"
+                val = parsed.get("value")
+                if val is not None:
+                    val = float(val)
+                    if val <= 0.35:
+                        return "hostile"
+                    if val <= 0.45:
+                        return "tense"
+                    if val >= 0.65:
+                        return "allied"
+                    return "neutral"
+            elif isinstance(parsed, (int, float)):
+                val = float(parsed)
+                if val <= 0.35:
+                    return "hostile"
+                if val <= 0.45:
+                    return "tense"
+                if val >= 0.65:
+                    return "allied"
+                return "neutral"
+        except (json.JSONDecodeError, TypeError, ValueError):
+            pass
+        low = str(raw).lower().strip()
+        if low in ("hostile", "tense", "neutral", "allied"):
+            return low
+        return "neutral"
     except Exception:
         return "neutral"
 
 
+def _count_faction_npcs_in_sector(r, sector_id: str, faction_id: str, npc_factions: Dict[str, str]) -> int:
+    """Count how many NPCs belonging to faction_id are currently stationed in sector_id."""
+    try:
+        members = r.smembers(f"npc_location:sector:{sector_id}") or set()
+        count = 0
+        for m in members:
+            mid = m.decode() if isinstance(m, bytes) else m
+            if npc_factions.get(mid) == faction_id:
+                count += 1
+        return count
+    except Exception:
+        return 0
+
+
 def _process_faction_territory(tick_count: int) -> Dict[str, int]:
-    """Process faction territory expansion and contraction."""
+    """Process faction territory home protection, consolidation, expansion, and contraction."""
     result = {
         "expansions": 0,
         "contractions": 0,
+        "consolidations": 0,
         "border_clashes": 0,
         "events": []
     }
@@ -417,20 +477,99 @@ def _process_faction_territory(tick_count: int) -> Dict[str, int]:
     try:
         # Get all faction homes to know which factions to process
         from spatial_state import get_all_faction_homes
+        r = get_redis()
         faction_homes = get_all_faction_homes()
+        npc_factions = _resolve_all_npc_factions(r)
         
         for home in faction_homes:
             faction_id = home.faction_id
+            home_sec_id = home.home_sector_id
             power = _get_faction_power(faction_id)
             cohesion = _get_faction_cohesion(faction_id)
             
             # Get current territories for this faction
             territories = get_faction_territories(faction_id)
             territory_dict = {t.sector_id: t for t in territories}
+
+            # Self-heal: every faction always retains its capital home sector
+            if home_sec_id and home_sec_id not in territory_dict:
+                restored_home = FactionTerritory(
+                    faction_id=faction_id,
+                    sector_id=home_sec_id,
+                    control_level=100.0,
+                    influence_level=100.0,
+                    claim_type="home",
+                    last_contested_tick=tick_count,
+                )
+                save_faction_territory(restored_home)
+                territories.append(restored_home)
+                territory_dict[home_sec_id] = restored_home
             
+            # Colony consolidation & contested resolution
+            for territory in territories[:]:
+                if territory.sector_id == home_sec_id:
+                    # Capital stays strong
+                    if territory.control_level < 100.0:
+                        territory.control_level = min(100.0, territory.control_level + 5.0)
+                        territory.claim_type = "home"
+                        save_faction_territory(territory)
+                    continue
+
+                sector_territories = get_sector_territories(territory.sector_id)
+                local_npcs = _count_faction_npcs_in_sector(r, territory.sector_id, faction_id, npc_factions)
+
+                if len(sector_territories) <= 1:
+                    # Uncontested colony: consolidate when faction is healthy
+                    if power >= CONTRACTION_POWER_THRESHOLD and cohesion >= CONTRACTION_COHESION_THRESHOLD:
+                        growth = random.uniform(4.0, 8.0) + min(local_npcs * 3.0, 9.0)
+                        new_ctrl = min(100.0, territory.control_level + growth)
+                        if new_ctrl != territory.control_level:
+                            territory.control_level = round(new_ctrl, 1)
+                            territory.influence_level = round(min(100.0, territory.influence_level + growth * 0.8), 1)
+                            territory.claim_type = "controlled" if territory.control_level >= 60.0 else "colony"
+                            save_faction_territory(territory)
+                            result["consolidations"] += 1
+                else:
+                    # Contested sector: faction with stronger power + local NPCs pushes out rivals
+                    my_score = power + local_npcs * 4.0 + (cohesion / 25.0)
+                    best_rival_score = 0.0
+                    for ot in sector_territories:
+                        if ot.faction_id == faction_id:
+                            continue
+                        ot_npcs = _count_faction_npcs_in_sector(r, territory.sector_id, ot.faction_id, npc_factions)
+                        ot_score = _get_faction_power(ot.faction_id) + ot_npcs * 4.0 + (_get_faction_cohesion(ot.faction_id) / 25.0)
+                        if ot_score > best_rival_score:
+                            best_rival_score = ot_score
+
+                    if my_score >= best_rival_score:
+                        gain = random.uniform(3.0, 6.0) + min(local_npcs * 2.0, 6.0)
+                        territory.control_level = round(min(100.0, territory.control_level + gain), 1)
+                        territory.claim_type = "controlled" if territory.control_level >= 60.0 else "contested"
+                        save_faction_territory(territory)
+                        result["consolidations"] += 1
+                    else:
+                        loss = random.uniform(2.5, 5.5)
+                        territory.control_level = round(max(0.0, territory.control_level - loss), 1)
+                        if territory.control_level <= 0.0:
+                            r.delete(f"territory:{faction_id}:{territory.sector_id}")
+                            r.srem(f"territory:sector:{territory.sector_id}", faction_id)
+                            r.srem(f"territory:faction:{faction_id}", territory.sector_id)
+                            territories.remove(territory)
+                            territory_dict.pop(territory.sector_id, None)
+                            result["contractions"] += 1
+                            result["events"].append({
+                                "type": "territory_lost",
+                                "faction_id": faction_id,
+                                "sector_id": territory.sector_id,
+                                "tick": tick_count
+                            })
+                        else:
+                            territory.claim_type = "contested"
+                            save_faction_territory(territory)
+
             # Expansion logic
             if power > EXPANSION_POWER_THRESHOLD and cohesion > EXPANSION_COHESION_THRESHOLD:
-                expansion_chance = min(0.1 + (power - EXPANSION_POWER_THRESHOLD) * 0.02, 0.3)  # Scales with power
+                expansion_chance = min(0.15 + (power - EXPANSION_POWER_THRESHOLD) * 0.02, 0.4)  # Scales with power
                 if random.random() < expansion_chance:
                     # Try to expand into adjacent sectors
                     home_sector = get_faction_home(faction_id)
@@ -441,6 +580,7 @@ def _process_faction_territory(tick_count: int) -> Dict[str, int]:
                             adj_ids = get_adjacent_sector_ids(territory.sector_id)
                             adjacent_ids.extend(adj_ids)
                         adjacent_ids = list(set(adjacent_ids))  # Deduplicate
+                        random.shuffle(adjacent_ids)
                         
                         for sector_id in adjacent_ids:
                             # Skip if already controlled by this faction
@@ -456,12 +596,14 @@ def _process_faction_territory(tick_count: int) -> Dict[str, int]:
                                 new_territory = FactionTerritory(
                                     faction_id=faction_id,
                                     sector_id=sector_id,
-                                    control_level=15.0,
-                                    influence_level=10.0,
+                                    control_level=20.0,
+                                    influence_level=15.0,
                                     claim_type="contested" if len(sector_territories) > 0 else "colony",
                                     last_contested_tick=tick_count
                                 )
                                 save_faction_territory(new_territory)
+                                territories.append(new_territory)
+                                territory_dict[sector_id] = new_territory
                                 result["expansions"] += 1
                                 
                                 # Add territory_gained event
@@ -473,10 +615,12 @@ def _process_faction_territory(tick_count: int) -> Dict[str, int]:
                                 })
                                 break  # Only one expansion per faction per tick for now
             
-            # Contraction logic
+            # Contraction logic (NEVER contract a faction's own capital home sector)
             if power < CONTRACTION_POWER_THRESHOLD or cohesion < CONTRACTION_COHESION_THRESHOLD:
                 # Check frontier and outer sectors for contraction
                 for territory in territories[:]:  # Copy list to allow modification during iteration
+                    if territory.sector_id == home_sec_id:
+                        continue
                     sector = get_sector_by_id(territory.sector_id)
                     if sector and sector.region_type in ["frontier", "outer"]:
                         # Reduce control by 5-10
@@ -485,7 +629,6 @@ def _process_faction_territory(tick_count: int) -> Dict[str, int]:
                         
                         if territory.control_level <= 0.0:
                             # Remove territory
-                            r = get_redis()
                             key = f"territory:{faction_id}:{territory.sector_id}"
                             r.delete(key)
                             # Also update indices
@@ -553,6 +696,7 @@ def _process_npc_movement(tick_count: int) -> Dict[str, int]:
         for npc in npcs:
             # Look up the NPC's faction from Redis, then get faction home sector
             home_sector_id = None
+            npc_faction = None
             try:
                 npc_faction = _resolve_npc_faction(npc.npc_id, get_redis())
                 if npc_faction:
@@ -599,6 +743,33 @@ def _process_npc_movement(tick_count: int) -> Dict[str, int]:
                 r.srem(f"npc_location:sector:{old_sector}", npc.npc_id)
                 r.sadd(f"npc_location:sector:{npc.sector_id}", npc.npc_id)
                 result["moves"] += 1
+
+                # Exploration foothold: affiliated NPC arriving in an unclaimed sector
+                # can stake an outpost so exploration organically expands faction territory.
+                if npc_faction and npc_faction != "independent":
+                    try:
+                        existing_sec_terr = get_sector_territories(npc.sector_id)
+                        already_claimed = any(t.faction_id == npc_faction for t in existing_sec_terr)
+                        max_ctrl = max((t.control_level for t in existing_sec_terr), default=0.0)
+                        if not already_claimed and max_ctrl < 15.0 and random.random() < 0.35:
+                            outpost = FactionTerritory(
+                                faction_id=npc_faction,
+                                sector_id=npc.sector_id,
+                                control_level=20.0,
+                                influence_level=15.0,
+                                claim_type="colony",
+                                last_contested_tick=tick_count,
+                            )
+                            save_faction_territory(outpost)
+                            result["events"].append({
+                                "type": "territory_gained",
+                                "faction_id": npc_faction,
+                                "sector_id": npc.sector_id,
+                                "npc_id": npc.npc_id,
+                                "tick": tick_count,
+                            })
+                    except Exception:
+                        pass
 
             # Handle idle NPCs starting new tasks
             if npc.current_task in ["idle", "garrison"] or not npc.current_task:

@@ -596,7 +596,7 @@ ASYNC_POLL_TIMEOUT = int(os.getenv("ASYNC_POLL_TIMEOUT", "360"))
 ASYNC_POLL_INTERVAL = int(os.getenv("ASYNC_POLL_INTERVAL", "5"))
 
 
-def _poll_async_completion(tick_path, name):
+def _poll_async_completion(tick_path, name, expected_tick_id=None):
     """Poll the status endpoint after an async tick returns 202.
 
     Returns one of: 'completed', 'failed', 'timeout', 'error'
@@ -629,6 +629,23 @@ def _poll_async_completion(tick_path, name):
             else:
                 data = resp.json()
                 tick_status = data.get("status", "unknown")
+
+                # Correlate on tick_id: right after a 202 the status endpoint
+                # can still report the PREVIOUS tick's "completed" state. That
+                # must not count as success for the tick we just started.
+                if expected_tick_id and tick_status in ("completed", "failed"):
+                    returned_id = data.get("tick_id") or ""
+                    if returned_id and returned_id != expected_tick_id:
+                        log.debug(
+                            f" {name}: status is for previous tick "
+                            f"{returned_id}, waiting for {expected_tick_id}"
+                        )
+                        wait_until = min(time.time() + ASYNC_POLL_INTERVAL, deadline)
+                        while time.time() < wait_until:
+                            if not running:
+                                return "timeout"
+                            time.sleep(1)
+                        continue
 
                 if tick_status == "completed":
                     duration = data.get("duration")
@@ -748,7 +765,10 @@ def run_tick():
         ("/political/process-turn", "Political engine", 60, False),
         ("/history-arc/advance", "History arc", 60, False),
         ("/simulation/autonomous/tick", "Autonomous simulation", 15, True),
-        ("/cognition/tick", "LLM cognition", 120, False),
+        # Standalone /cognition/tick removed from the schedule: it is a
+        # testing/observation endpoint whose decisions never merge into the
+        # engine (cognition already runs inside autonomous_tick Step 1.5), so
+        # calling it here only burned extra LLM calls each cycle.
         ("/narrator/generate", "Narrator", 90, False),
     ]
 
@@ -762,7 +782,10 @@ def run_tick():
             if is_async and status == 202:
                 # Backend started the tick in background — poll for completion
                 log.info(f" {name}: 202 (started in background, polling...)")
-                outcome = _poll_async_completion(path, name)
+                started = _safe_json(resp, name) or {}
+                outcome = _poll_async_completion(
+                    path, name, expected_tick_id=started.get("tick_id") or None
+                )
                 async_outcomes[path] = outcome
                 if outcome == "completed":
                     log.info(f" {name}: async tick finished successfully")
@@ -797,7 +820,7 @@ def run_tick():
                 if path == "/history-arc/advance":
                     history_data = data
             if path == "/political/process-turn":
-                political_data = data.get("details") or []
+                political_data = (data or {}).get("details") or []
                 # Log political session results
                 for item in political_data:
                     phase = item.get("phase", "")

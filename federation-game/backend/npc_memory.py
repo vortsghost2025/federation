@@ -387,9 +387,16 @@ def harvest_tick_memories(
             harvested += result.get("recorded", 0)
             summary_tick_key = MEMORY_SUMMARY_TICK_KEY.format(char_id=char_id)
             last_summary_tick = r.get(summary_tick_key)
+            # tick_ts is EPOCH SECONDS, not a tick counter. The old comparison
+            # treated SUMMARY_INTERVAL_TICKS (20) as seconds, so summaries fired
+            # on nearly every tick. Interpret the interval against the nominal
+            # 60s tick cadence (20 ticks ~= 1200s) and cap per-tick spend.
             if (
-                last_summary_tick is None
-                or (tick_ts - int(last_summary_tick)) >= SUMMARY_INTERVAL_TICKS
+                summaries_triggered < 4
+                and (
+                    last_summary_tick is None
+                    or (tick_ts - int(last_summary_tick)) >= SUMMARY_INTERVAL_TICKS * 60
+                )
             ):
                 npc_name = npc.get("name", char_id)
                 try:

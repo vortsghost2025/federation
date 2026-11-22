@@ -109,7 +109,7 @@ OLLAMA_HEAVY_ENABLED = os.environ.get("OLLAMA_HEAVY_ENABLED", "") == "1"
 # Backpressure: max 2 active calls, max 5 queued, cooldown 60s on 500/client-abort
 # (2 active matches nvidia_nim_client.py so both backend clients throttle the
 # same local Ollama consistently; 1 was too restrictive for 37 NPCs per tick).
-OLLAMA_MAX_ACTIVE = int(os.environ.get("OLLAMA_MAX_ACTIVE", "2"))
+OLLAMA_MAX_ACTIVE = int(os.environ.get("OLLAMA_MAX_ACTIVE", "1"))
 OLLAMA_MAX_QUEUE = int(os.environ.get("OLLAMA_MAX_QUEUE", "5"))
 OLLAMA_COOLDOWN_SECONDS = int(os.environ.get("OLLAMA_COOLDOWN_SECONDS", "60"))
 
@@ -138,23 +138,41 @@ class _OllamaLaneSync:
         return time.time() >= self._cooldown_until
 
     def try_acquire(self) -> bool:
-        """Try to enter the Ollama lane. Returns False if at capacity or cooling down."""
+        """Non-queuing acquire: returns False if at capacity or cooling down.
+
+        Never returns a 'queued' success — callers must use wait_for_slot()
+        when they are willing to wait for the GPU to free up."""
         with self._lock:
             if time.time() < self._cooldown_until:
                 return False
             if self._active >= OLLAMA_MAX_ACTIVE:
-                if self._queue_depth >= OLLAMA_MAX_QUEUE:
-                    return False
-                self._queue_depth += 1
-                return True  # queued — caller must wait
+                return False
             self._active += 1
             return True
+
+    def wait_for_slot(self, timeout: float = 20.0) -> bool:
+        """Wait for a free active slot up to timeout seconds. Returns False on
+        cooldown or timeout. Guarantees at most OLLAMA_MAX_ACTIVE concurrent
+        requests reach the GPU — no fire-and-forget 'queued' requests."""
+        deadline = time.time() + timeout
+        while True:
+            with self._lock:
+                if time.time() < self._cooldown_until:
+                    return False
+                if self._active < OLLAMA_MAX_ACTIVE:
+                    self._active += 1
+                    return True
+            if time.time() >= deadline:
+                return False
+            time.sleep(0.25)
 
     def release(self, was_error: bool = False, is_500: bool = False):
         """Release an Ollama lane slot. If 500/client-abort, start cooldown."""
         with self._lock:
             if self._active > 0:
                 self._active -= 1
+            if self._queue_depth > 0:
+                self._queue_depth -= 1  # legacy counter cleanup
             if is_500:
                 self._cooldown_until = time.time() + OLLAMA_COOLDOWN_SECONDS
             cooling = time.time() < self._cooldown_until
@@ -366,7 +384,7 @@ def _call_ollama(
         logger.debug("Ollama: lane cooling down, skipping")
         return _early_failure("Ollama lane cooling down")
 
-    if not _ollama_lane.try_acquire():
+    if not _ollama_lane.wait_for_slot():
         logger.debug(
             "Ollama: lane full (active=%d, queue=%d), skipping",
             OLLAMA_MAX_ACTIVE,
@@ -1113,6 +1131,10 @@ _nim_key_index = 0
 # (e.g. 6h) so a permanently revoked key stops poisoning the rotation
 # without a redeploy, while a transient failure can still recover.
 NIM_DEAD_KEY_TTL = int(os.environ.get("NIM_DEAD_KEY_TTL", "21600"))
+# Per-key 429 rate-limit cooldown: a single rate-limited NIM key cools off
+# briefly so round-robin fails over to another healthy key without tripping
+# the provider-wide NIM circuit breaker.
+NIM_KEY_429_COOLDOWN = int(os.environ.get("NIM_KEY_429_COOLDOWN", "90"))
 
 
 def _nim_key_hash(key: str) -> str:
@@ -1145,12 +1167,49 @@ def _mark_nim_key_dead(key: str):
         pass
 
 
+def _is_nim_key_cooling(key: str) -> bool:
+    try:
+        r = _get_redis()
+        return r.get(f"llm_nim_cooldown_key:{_nim_key_hash(key)}") == "1"
+    except Exception:
+        return False
+
+
+def _mark_nim_key_cooling(key: str, seconds: Optional[int] = None) -> int:
+    ttl = NIM_KEY_429_COOLDOWN if seconds is None else max(30, min(300, int(seconds)))
+    try:
+        r = _get_redis()
+        r.set(
+            f"llm_nim_cooldown_key:{_nim_key_hash(key)}",
+            "1",
+            ex=ttl,
+        )
+        logger.warning(
+            "NIM key %s...%s cooling down for %ds (429 rate limit)",
+            key[:6],
+            key[-4:],
+            ttl,
+        )
+    except Exception:
+        pass
+    return ttl
+
+
+def _has_available_nim_key() -> bool:
+    if not NIM_KEYS:
+        return False
+    for key in NIM_KEYS:
+        if not _is_nim_key_dead(key) and not _is_nim_key_cooling(key):
+            return True
+    return False
+
+
 def _get_nim_key() -> Optional[str]:
     """Get the next NIM API key using round-robin with LRU awareness.
 
     Picks the key that was used longest ago (LRU), falling back to
     simple round-robin if Redis tracking is unavailable. Keys that were
-    previously marked dead (403) are skipped.
+    previously marked dead (403) or cooling down (429) are skipped.
     """
     global _nim_key_index
     if not NIM_KEYS:
@@ -1162,7 +1221,7 @@ def _get_nim_key() -> Optional[str]:
     best_idx = 0
 
     for idx, key in enumerate(NIM_KEYS):
-        if _is_nim_key_dead(key):
+        if _is_nim_key_dead(key) or _is_nim_key_cooling(key):
             continue
         key_hash = _nim_key_hash(key)
         try:
@@ -1461,7 +1520,12 @@ def _call_provider(
             return _early_failure("NIM disabled by env (NIM_DISABLED=1)")
         key = _get_nim_key()
         if not key:
-            return _early_failure("No NIM API keys configured")
+            msg = (
+                "All NIM API keys cooling down or dead"
+                if NIM_KEYS
+                else "No NIM API keys configured"
+            )
+            return _early_failure(msg)
         if not _check_rate_limit("nim", key):
             return _early_failure("NIM rate limit exceeded", key)
         headers = {
@@ -1556,6 +1620,17 @@ def _call_provider(
             # Authorization failed — this key is dead; blacklist it so
             # round-robin rotation stops selecting it.
             _mark_nim_key_dead(key)
+        elif provider == "nim" and e.code == 429 and key:
+            # Per-key rate limit — cool down ONLY this key so other healthy
+            # NIM keys continue serving without tripping the provider breaker.
+            retry_after = None
+            try:
+                ra = e.headers.get("Retry-After") if getattr(e, "headers", None) else None
+                if ra is not None and str(ra).strip().isdigit():
+                    retry_after = int(str(ra).strip())
+            except Exception:
+                retry_after = None
+            _mark_nim_key_cooling(key, retry_after)
         latency_ms = (time.time() - start) * 1000
         err_body = ""
         try:
@@ -1652,15 +1727,22 @@ def _prompt_cache_key(
 
 def _prompt_cache_get(key):
     with _PROMPT_CACHE_LOCK:
-        if key not in _PROMPT_CACHE:
+        entry = _PROMPT_CACHE.get(key)
+        if entry is None:
+            return None
+        ts, result = entry
+        if time.time() - ts > _PROMPT_CACHE_TTL:
+            # TTL was previously never enforced; stale entries could be reused
+            # for minutes/hours. Expire on lookup.
+            del _PROMPT_CACHE[key]
             return None
         _PROMPT_CACHE.move_to_end(key)          # LRU touch
-        return copy.deepcopy(_PROMPT_CACHE[key])
+        return copy.deepcopy(result)
 
 
 def _prompt_cache_put(key, result):
     with _PROMPT_CACHE_LOCK:
-        _PROMPT_CACHE[key] = copy.deepcopy(result)
+        _PROMPT_CACHE[key] = (time.time(), copy.deepcopy(result))
         _PROMPT_CACHE.move_to_end(key)
         while len(_PROMPT_CACHE) > _PROMPT_CACHE_MAX:
             _PROMPT_CACHE.popitem(last=False)   # evict oldest
@@ -1811,7 +1893,44 @@ def route_call(
             system_path=system_path,
         )
 
-        _record_provider_result(provider, ok)
+        # Single-key NIM 429 failover: if this key was rate-limited and
+        # another healthy NIM key is still available, retry once immediately
+        # on the healthy key without penalizing the provider-wide circuit breaker.
+        if (
+            provider == "nim"
+            and not ok
+            and isinstance(content, str)
+            and content.startswith("HTTP 429:")
+            and _has_available_nim_key()
+        ):
+            result["errors"].append(f"{provider}/{model}: {content[:150]}")
+            result["latency_ms"] += latency
+            result["attempts"] += 1
+            ok, content, retry_latency = _call_provider(
+                provider,
+                model,
+                messages,
+                tier_mt,
+                tier_temp,
+                tier_timeout,
+                task_class=task_class,
+                char_id=char_id,
+                source=source,
+                system_path=system_path,
+            )
+            latency = retry_latency
+
+        # Only penalize provider-wide circuit breaker on non-429 failures OR
+        # when no healthy NIM keys remain available.
+        _single_key_429 = (
+            provider == "nim"
+            and not ok
+            and isinstance(content, str)
+            and content.startswith("HTTP 429:")
+            and _has_available_nim_key()
+        )
+        if not _single_key_429:
+            _record_provider_result(provider, ok)
 
         if ok and content:
             result["success"] = True

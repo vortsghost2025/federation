@@ -117,6 +117,61 @@ def _generate_dialogue(npc_a: Dict, npc_b: Dict, interaction_type: str) -> Optio
     return None
 
 
+_CANONICAL_NPC_NAMES: Dict[str, str] = {
+    "char_001": "Archimedes Prime",
+    "char_002": "Commander Valorix",
+    "char_003": "Philosopher Zenith",
+    "char_004": "Ambassador Silven",
+    "char_005": "Conquistador Drake",
+    "char_101": "Chancellor Harmony",
+    "char_102": "Marshal Ironbound",
+    "char_103": "Maestro Celestia",
+    "char_104": "Dr. Prometheus",
+    "char_105": "Oracle Vex",
+    "char_106": "Merchant-Prince Aurelius",
+    "char_107": "Captain Frontier",
+    "char_108": "Archivist Eternal",
+    "char_201": "Lord Malaxis",
+    "char_202": "The Void Oracle",
+    "char_203": "Baroness Greed",
+    "char_204": "General Devastation",
+    "char_301": "The Wanderer",
+    "char_302": "The Jester",
+    "char_303": "The Hermit",
+    "char_304": "The Spectre",
+    "char_305": "The Trickster",
+    "char_306": "The Oracle",
+    "char_401": "Keeper of the Null",
+    "char_402": "The Cartographer",
+    "char_403": "Solace Heartmend",
+    "char_404": "Cipher",
+    "char_405": "Tempus",
+    "char_406": "Paradox",
+    "char_500": "The Custodian",
+    "comp_001": "Lyra Swiftwind",
+    "comp_002": "Thorg Ironhammer",
+    "comp_003": "Elara Moonwhisper",
+    "comp_004": "Captain Valor",
+    "comp_005": "Dr. Sylas Cunningham",
+    "comp_006": "Kyren Frostblade",
+    "comp_007": "Zephyr Silverspeak",
+    "comp_008": "Scout Aria",
+    "comp_009": "Brother Mercy",
+    "comp_010": "Shadowborn",
+}
+
+
+def _resolve_npc_display_name(npc: Dict, char_id: str) -> str:
+    raw = str(npc.get("name") or npc.get("char_name") or "").strip()
+    if raw and not raw.startswith(("char_", "comp_", "faction_home_rep:")) and raw != "Unknown":
+        return raw
+    if char_id in _CANONICAL_NPC_NAMES:
+        return _CANONICAL_NPC_NAMES[char_id]
+    if char_id.startswith("faction_home_rep:"):
+        return char_id.split(":", 1)[1].replace("_", " ").title() + " Envoy"
+    return raw or char_id or "Unknown"
+
+
 def generate_npc_interaction(npc_a: Dict, npc_b: Dict) -> Optional[Dict]:
     from npc_autonomy import MAX_WORLD_EVENTS, _get_redis
     from npc_actions import FILL_VALUES
@@ -131,8 +186,8 @@ def generate_npc_interaction(npc_a: Dict, npc_b: Dict) -> Optional[Dict]:
 
     char_a = npc_a.get("char_id") or npc_a.get("id", "")
     char_b = npc_b.get("char_id") or npc_b.get("id", "")
-    name_a = npc_a.get("name", "Unknown")
-    name_b = npc_b.get("name", "Unknown")
+    name_a = _resolve_npc_display_name(npc_a, char_a)
+    name_b = _resolve_npc_display_name(npc_b, char_b)
 
     dialogue = _generate_dialogue(npc_a, npc_b, interaction_type)
 

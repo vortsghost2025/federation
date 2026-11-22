@@ -24,7 +24,7 @@ from redis_helper import (
     redis_exists,
 )
 
-BACKEND_URL = os.getenv("BACKEND_URL", "http://172.26.0.11:8000")
+BACKEND_URL = os.getenv("BACKEND_URL", "http://127.0.0.1:8000")
 
 
 def check():

@@ -366,6 +366,15 @@ function categoryFromAction(action){
   return '';
 }
 
+function outcomeOf(d){
+  const s = String((d && (d.action_taken || d.summary)) || '').toLowerCase();
+  if(/blocked_nonexistent_fact|dangerous|code_denied|denied|blocked/.test(s)) return 'blocked';
+  if(/deferred|already_in_review|submit_no_artifact|no_institution|cooldown|quota|no_new_evidence/.test(s)) return 'deferred';
+  if(/error|failed|fail/.test(s)) return 'failed';
+  return 'succeeded';
+}
+function successOf(d){const o=outcomeOf(d);return o==='succeeded'||o==='deferred';}
+
 function decisionCategory(d, fallback='unknown'){
   if(!d) return fallback;
   const direct = d.category || d.call_label || '';
@@ -424,7 +433,8 @@ function latestDecision(npc){
       category: decisionCategory(d),
       reasoning: d.reasoning || d.description || d.action_desc || d.summary || d.action_taken || '',
       ts: d.ts || d.created_at || (npc.stats||{}).last_ts || 0,
-      success: !/error|failed|fail/.test(String(d.action_taken || d.summary || '').toLowerCase()),
+      success: successOf(d),
+      outcome: outcomeOf(d),
       raw: JSON.stringify(d)
     };
   }
@@ -651,7 +661,8 @@ function timelineEntries(npc, limit=12){
       category: cat,
       reasoning: d.reasoning || d.description || d.summary || d.action_taken || d.action_desc || '',
       ts: dts,
-      success: !/error|failed|fail/.test(String(d.action_taken || d.summary || '').toLowerCase()),
+      success: successOf(d),
+      outcome: outcomeOf(d),
       raw: JSON.stringify(d),
       source: 'decision'
     });
@@ -684,7 +695,7 @@ function renderTimeline(npc, limit=12){
     const cat = d.category || 'unknown';
     return `<button class="glyph ${colorFor(cat, d.success)}" data-tick="${esc(npc.char_id)}-${i}" aria-label="${esc(labelFor(cat))}">${glyphFor(cat)}</button>
       <div class="tick-detail" id="tick-${esc(npc.char_id)}-${i}">
-        <strong>${esc(labelFor(cat))}</strong> <span class="muted">· ${ts(d.ts)} · ${d.success?'OK':'error'} · ${esc(d.source || 'tick')}</span><br>
+        <strong>${esc(labelFor(cat))}</strong> <span class="muted">· ${ts(d.ts)} · ${esc(d.outcome || (d.success?'OK':'error'))} · ${esc(d.source || 'tick')}</span><br>
         ${esc(firstSentence(d.reasoning || d.raw || 'No reasoning text available.', 320))}
       </div>`;
   }).join('')}</div>`;

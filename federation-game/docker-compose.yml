@@ -1,4 +1,4 @@
-﻿services:
+services:
   reverse-proxy:
     image: traefik:latest
     command:
@@ -59,7 +59,7 @@
       - .env
     environment:
       - PYTHONPATH=/opt/federation_shared
-      - OLLAMA_BASE_URL=
+      - OLLAMA_BASE_URL=http://100.95.92.117:11435/v1
       - EXTERNAL_AGENT_NPCS=char_001,char_306,comp_001,comp_010
       # Backend is NOT on sandbox-net (sandbox must not reach it); it reaches
       # the executor by fixed IP. Sandbox->backend is dropped in DOCKER-USER.
@@ -390,7 +390,7 @@
       - MAX_OUTPUT_TOKENS=1024
       - MAX_TOTAL_BUDGET_MS=120000
       - TICK_INTERVAL=120
-      - OLLAMA_BASE_URL=
+      - OLLAMA_BASE_URL=http://100.95.92.117:11435/v1
       - OLLAMA_API_KEY=${OLLAMA_API_KEY}
       - OLLAMA_MODEL=${OLLAMA_MODEL}
       - OLLAMA_TIMEOUT=${OLLAMA_TIMEOUT}
@@ -429,7 +429,7 @@
       - MAX_OUTPUT_TOKENS=1024
       - MAX_TOTAL_BUDGET_MS=120000
       - TICK_INTERVAL=120
-      - OLLAMA_BASE_URL=
+      - OLLAMA_BASE_URL=http://100.95.92.117:11435/v1
       - OLLAMA_API_KEY=${OLLAMA_API_KEY}
       - OLLAMA_MODEL=${OLLAMA_MODEL}
       - OLLAMA_TIMEOUT=${OLLAMA_TIMEOUT}
@@ -482,7 +482,7 @@
       - MAX_OUTPUT_TOKENS=1024
       - MAX_TOTAL_BUDGET_MS=120000
       - TICK_INTERVAL=180
-      - OLLAMA_BASE_URL=
+      - OLLAMA_BASE_URL=http://100.95.92.117:11435/v1
       - OLLAMA_API_KEY=${OLLAMA_API_KEY}
       - OLLAMA_MODEL=${OLLAMA_MODEL}
       - OLLAMA_TIMEOUT=${OLLAMA_TIMEOUT}
@@ -522,7 +522,7 @@
       - MAX_OUTPUT_TOKENS=1024
       - MAX_TOTAL_BUDGET_MS=120000
       - TICK_INTERVAL=180
-      - OLLAMA_BASE_URL=
+      - OLLAMA_BASE_URL=http://100.95.92.117:11435/v1
       - OLLAMA_API_KEY=${OLLAMA_API_KEY}
       - OLLAMA_MODEL=${OLLAMA_MODEL}
       - OLLAMA_TIMEOUT=${OLLAMA_TIMEOUT}
