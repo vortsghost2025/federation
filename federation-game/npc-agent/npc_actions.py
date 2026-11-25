@@ -122,6 +122,16 @@ _SANDBOX_DENIED_NODES = (
     ast.Starred, ast.Match,
 )
 
+# 2026-11-22: allow a small whitelist of pure-computation stdlib modules so
+# legitimate numeric work (Monte Carlo, stats, JSON handling) can run. The AST
+# gate only permits these names, and the runner's __import__ enforces the same
+# whitelist at runtime. Everything with I/O, OS, network, or interpreter access
+# stays banned.
+_SANDBOX_ALLOWED_MODULES = frozenset({
+    "math", "random", "statistics", "json", "csv", "datetime",
+    "itertools", "collections", "re", "functools", "operator",
+})
+
 # str.format() runs its own mini-language that walks attributes by NAME
 # ("{0.__class__}"), bypassing the AST attribute check. Reject format strings
 # whose fields reference dunder names.
@@ -201,6 +211,14 @@ def _validate_sandbox_code(code: str):
             _collect_target(n.target)
             self.generic_visit(n)
 
+        def visit_Import(self, n):
+            for alias in n.names:
+                bound.add(alias.asname or alias.name.split(".")[0])
+
+        def visit_ImportFrom(self, n):
+            for alias in n.names:
+                bound.add(alias.asname or alias.name)
+
     _Collector().visit(tree)
 
     # Pass 2: enforce the allowlist.
@@ -236,6 +254,18 @@ def _validate_sandbox_code(code: str):
             if n.decorator_list:
                 error.append("decorators are not allowed in the sandbox")
             self.generic_visit(n)
+
+        def visit_Import(self, n):
+            for alias in n.names:
+                if alias.name not in _SANDBOX_ALLOWED_MODULES:
+                    error.append(f"module '{alias.name}' is not allowed in the sandbox")
+
+        def visit_ImportFrom(self, n):
+            if n.module not in _SANDBOX_ALLOWED_MODULES:
+                error.append(f"module '{n.module}' is not allowed in the sandbox")
+            for alias in n.names:
+                if alias.name == "*":
+                    error.append("star imports are not allowed in the sandbox")
 
         def visit_Constant(self, n):
             if isinstance(n.value, str) and _SANDBOX_FORMAT_FIELD_DUNDER_RE.search(n.value):
@@ -278,6 +308,13 @@ _safe = {"print": print, "len": len, "range": range, "int": int, "float": float,
          "ZeroDivisionError": ZeroDivisionError, "OverflowError": OverflowError,
          "RuntimeError": RuntimeError, "StopIteration": StopIteration,
          "NameError": NameError}
+_ALLOWED_MODULES = {"math", "random", "statistics", "json", "csv", "datetime",
+                    "itertools", "collections", "re", "functools", "operator"}
+def _safe_import(name, globals=None, locals=None, fromlist=(), level=0):
+    if name not in _ALLOWED_MODULES:
+        raise ImportError(f"module '{name}' is not allowed in the sandbox")
+    return __import__(name, globals, locals, fromlist, level)
+_safe["__import__"] = _safe_import
 _globals = {"__builtins__": dict(_safe), "__name__": "__main__"}
 exec(compile(sys.argv[1], "<sandbox>", "exec"), _globals)
 """
